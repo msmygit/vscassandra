@@ -1,0 +1,56 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Verifier.java
++++ b/src/java/org/apache/cassandra/db/compaction/Verifier.java
+@@ -238,17 +238,8 @@
+ 
+         try(PartitionIndexIterator indexIterator = sstable.allKeysIterator())
+         {
+-<<<<<<<
+-            ByteBuffer nextIndexKey = ByteBufferUtil.readWithShortLength(indexFile);
+-            {
+-                long firstRowPositionFromIndex = rowIndexEntrySerializer.deserializePositionAndSkip(indexFile);
+-                if (firstRowPositionFromIndex != 0)
+-                    markAndThrow(new RuntimeException("firstRowPositionFromIndex != 0: "+firstRowPositionFromIndex));
+-            }
+-=======
+             if (indexIterator.dataPosition() != 0)
+-                markAndThrow();
+->>>>>>>
++                markAndThrow(new RuntimeException("First row position from index != 0: " + indexIterator.dataPosition()));
+ 
+             List<Range<Token>> ownedRanges = isOffline ? Collections.emptyList() : Range.normalize(tokenLookup.apply(cfs.metadata().keyspace));
+             RangeOwnHelper rangeOwnHelper = new RangeOwnHelper(ownedRanges);
+--- a/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java
++++ b/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java
+@@ -1671,9 +1671,6 @@
+         return bloomFilterTracker.getRecentTruePositiveCount();
+     }
+ 
+-<<<<<<<
+-    public InstrumentingCache<KeyCacheKey, BigTableRowIndexEntry> getKeyCache()
+-=======
+     public long getBloomFilterTrueNegativeCount()
+     {
+         return bloomFilterTracker.getTrueNegativeCount();
+@@ -1684,8 +1681,7 @@
+         return bloomFilterTracker.getRecentTrueNegativeCount();
+     }
+ 
+-    public InstrumentingCache<KeyCacheKey, RowIndexEntry> getKeyCache()
+->>>>>>>
++    public InstrumentingCache<KeyCacheKey, BigTableRowIndexEntry> getKeyCache()
+     {
+         return keyCache;
+     }
+diff --git a/src/java/org/apache/cassandra/db/compaction/Verifier.java b/src/java/org/apache/cassandra/db/compaction/Verifier.java
+index b3a8385122..72a2524d86 100644
+--- a/src/java/org/apache/cassandra/db/compaction/Verifier.java
++++ b/src/java/org/apache/cassandra/db/compaction/Verifier.java
+@@ -239,7 +239,7 @@ public class Verifier implements Closeable
+         try(PartitionIndexIterator indexIterator = sstable.allKeysIterator())
+         {
+             if (indexIterator.dataPosition() != 0)
+-                markAndThrow(new RuntimeException("firstRowPositionFromIndex != 0: "+firstRowPositionFromIndex));
++                markAndThrow(new RuntimeException("First row position from index != 0: " + indexIterator.dataPosition()));
+ 
+             List<Range<Token>> ownedRanges = isOffline ? Collections.emptyList() : Range.normalize(tokenLookup.apply(cfs.metadata().keyspace));
+             RangeOwnHelper rangeOwnHelper = new RangeOwnHelper(ownedRanges);
