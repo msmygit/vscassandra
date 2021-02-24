@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.index.sai.disk.ByteSliceReader;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;

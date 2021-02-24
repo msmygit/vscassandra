@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 

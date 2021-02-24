@@ -46,6 +46,15 @@ public enum IndexComponent
 
     // per-sstable components
     /**
+     * A list of primary keys in the sstable, one for each row, ordered by row ids
+     */
+    PRIMARY_KEYS("PrimaryKeys"),
+    /**
+     * A list of byte offsets into the PrimaryKeys component, in the same order as primary keys.
+     * Allows finding the primary key by row id.
+     */
+    PRIMARY_KEY_OFFSETS("PrimaryKeyOffsets"),
+    /**
      * Partition key token value for rows including row tombstone and static row. (access key is rowId)
      */
     TOKEN_VALUES("TokenValues"),

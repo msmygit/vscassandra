@@ -22,7 +22,7 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.disk.v1.ByteSliceReader;
+import org.apache.cassandra.index.sai.disk.ByteSliceReader;
 import org.apache.cassandra.index.sai.disk.v1.RAMPostingSlices;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.util.Counter;

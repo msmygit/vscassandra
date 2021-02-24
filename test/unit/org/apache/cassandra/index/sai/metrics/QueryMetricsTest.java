@@ -167,7 +167,7 @@ public class QueryMetricsTest extends AbstractMetricsTest
 
         waitForGreaterThanZero(objectNameNoIndex("QueryLatency", keyspace, table, PER_QUERY_METRIC_TYPE));
 
-        waitForEquals(objectNameNoIndex("TotalPartitionReads", keyspace, table, TableQueryMetrics.TABLE_QUERY_METRIC_TYPE), resultCounter);
+        waitForEquals(objectNameNoIndex("TotalRowsRead", keyspace, table, TableQueryMetrics.TABLE_QUERY_METRIC_TYPE), resultCounter);
         waitForEquals(objectName("KDTreeIntersectionLatency", keyspace, table, index, GLOBAL_METRIC_TYPE), queryCounter);
     }
 
@@ -274,7 +274,7 @@ public class QueryMetricsTest extends AbstractMetricsTest
 
         waitForGreaterThanZero(objectNameNoIndex("QueryLatency", keyspace, table, PER_QUERY_METRIC_TYPE));
 
-        waitForEquals(objectNameNoIndex("TotalPartitionReads", keyspace, table, TableQueryMetrics.TABLE_QUERY_METRIC_TYPE), resultCounter);
+        waitForEquals(objectNameNoIndex("TotalRowsRead", keyspace, table, TableQueryMetrics.TABLE_QUERY_METRIC_TYPE), resultCounter);
     }
 
     @Test
@@ -303,9 +303,8 @@ public class QueryMetricsTest extends AbstractMetricsTest
         int actualRows = rows.all().size();
         assertEquals(3, actualRows);
 
-        waitForEquals(objectNameNoIndex("TotalPartitionReads", keyspace, table, TABLE_QUERY_METRIC_TYPE), 2);
-        waitForVerifyHistogram(objectNameNoIndex("RowsFiltered", keyspace, table, PER_QUERY_METRIC_TYPE), 1);
-        waitForEquals(objectNameNoIndex("TotalRowsFiltered", keyspace, table, TABLE_QUERY_METRIC_TYPE), 3);
+        waitForVerifyHistogram(objectNameNoIndex("RowsRead", keyspace, table, PER_QUERY_METRIC_TYPE), 1);
+        waitForEquals(objectNameNoIndex("TotalRowsRead", keyspace, table, TABLE_QUERY_METRIC_TYPE), 3);
     }
 
     @Test

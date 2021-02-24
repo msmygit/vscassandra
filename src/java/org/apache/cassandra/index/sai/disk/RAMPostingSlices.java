@@ -15,11 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
 
-import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.ByteBlockPool;
 import org.apache.lucene.util.Counter;
@@ -71,7 +71,13 @@ class RAMPostingSlices
             }
 
             @Override
-            public long advance(long targetRowID)
+            public long advance(PrimaryKey primaryKey)
+            {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public PrimaryKey mapRowId(long rowId)
             {
                 throw new UnsupportedOperationException();
             }

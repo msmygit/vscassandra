@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
 
