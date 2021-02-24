@@ -20,7 +20,10 @@ package org.apache.cassandra.index.sai.utils;
 import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v1.OrdinalPostingList;
+import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
+import org.apache.cassandra.index.sai.disk.v2.PrimaryKeyMap;
+
+import java.io.IOException;
 
 //TODO Change this whole lot to use longs
 public class ArrayPostingList implements OrdinalPostingList
@@ -56,7 +59,7 @@ public class ArrayPostingList implements OrdinalPostingList
     }
 
     @Override
-    public long advance(long targetRowID)
+    public long advance(PrimaryKey primaryKey)
     {
         for (int i = idx; i < postings.length; ++i)
         {
@@ -64,12 +67,18 @@ public class ArrayPostingList implements OrdinalPostingList
 
             idx++;
 
-            if (segmentRowId >= targetRowID)
+            if (segmentRowId >= primaryKey.sstableRowId())
             {
                 return segmentRowId;
             }
         }
         return PostingList.END_OF_STREAM;
+    }
+
+    @Override
+    public PrimaryKey mapRowId(long rowId) throws IOException
+    {
+        return PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(rowId);
     }
 
     @Override

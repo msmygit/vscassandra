@@ -43,8 +43,7 @@ public class QueryContext
 
     public long sstablesHit = 0;
     public long segmentsHit = 0;
-    public long partitionsRead = 0;
-    public long rowsFiltered = 0;
+    public long rowsRead = 0;
 
     public long trieSegmentsHit = 0;
 
