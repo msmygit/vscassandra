@@ -1,0 +1,12 @@
+--- a/src/java/org/apache/cassandra/net/Verb.java
++++ b/src/java/org/apache/cassandra/net/Verb.java
+@@ -476,9 +476,5 @@
+     static final ToLongFunction<TimeUnit> pingTimeout     = DatabaseDescriptor::getPingTimeout;
+     static final ToLongFunction<TimeUnit> longTimeout     = units -> Math.max(DatabaseDescriptor.getRpcTimeout(units), units.convert(5L, TimeUnit.MINUTES));
+     static final ToLongFunction<TimeUnit> noTimeout       = units -> { throw new IllegalStateException(); };
+-<<<<<<<
+     static final ToLongFunction<TimeUnit> repairMsgTimeout= DatabaseDescriptor::getRepairRpcTimeout;
+ }
+-=======
+-}
+->>>>>>>
