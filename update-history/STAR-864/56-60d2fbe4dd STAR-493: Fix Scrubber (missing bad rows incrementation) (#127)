@@ -1,0 +1,37 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -244,11 +244,7 @@
+                 try
+                 {
+                     if (key == null)
+-<<<<<<<
+-                        throw new IOError(new IOException("Unable to read partition key from data file"));
+-=======
+-                        throw new IOError(new IOException("Unable to read row key from data file", keyReadError));
+->>>>>>>
++                        throw new IOError(new IOException("Unable to read partition key from data file", keyReadError));
+ 
+                     if (currentIndexKey != null && !key.getKey().equals(currentIndexKey))
+                     {
+@@ -431,7 +427,7 @@
+             {
+                 throwIfFatal(th);
+                 outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+-                badRows++;
++                badPartitions++;
+             }
+ 
+             try
+diff --git a/src/java/org/apache/cassandra/db/compaction/Scrubber.java b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+index d46f8dd5b5..d901af1d64 100644
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -427,7 +427,7 @@ public class Scrubber implements Closeable
+             {
+                 throwIfFatal(th);
+                 outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+-                badRows++;
++                badPartitions++;
+             }
+ 
+             try
