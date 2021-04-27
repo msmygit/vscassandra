@@ -1,0 +1,23 @@
+--- a/test/unit/org/apache/cassandra/cql3/CQLTester.java
++++ b/test/unit/org/apache/cassandra/cql3/CQLTester.java
+@@ -760,19 +760,13 @@
+ 
+     protected String createType(String query)
+     {
+-<<<<<<<
+-        String typeName = createTypeName();
+-        String fullQuery = String.format(query, KEYSPACE + "." + typeName);
+-=======
+         return createType(KEYSPACE, query);
+     }
+ 
+     protected String createType(String keyspace, String query)
+     {
+-        String typeName = String.format("type_%02d", seqNumber.getAndIncrement());
++        String typeName = createTypeName();
+         String fullQuery = String.format(query, keyspace + "." + typeName);
+-        types.add(typeName);
+->>>>>>>
+         logger.info(fullQuery);
+         schemaChange(fullQuery);
+         return typeName;
