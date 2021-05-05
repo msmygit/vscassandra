@@ -1,0 +1,14 @@
+--- a/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
++++ b/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
+@@ -220,11 +220,6 @@
+      */
+     public long put(PartitionUpdate update, UpdateTransaction indexer, OpOrder.Group opGroup)
+     {
+-<<<<<<<
+-=======
+-        Cloner cloner = allocator.cloner(opGroup);
+-        BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, cloner, opGroup, indexer);
+->>>>>>>
+         DecoratedKey key = update.partitionKey();
+         MemtableShard shard = shards[boundaries.getShardForKey(key)];
+         long colUpdateTimeDelta = shard.put(key, update, indexer, opGroup);
