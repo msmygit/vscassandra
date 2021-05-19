@@ -64,7 +64,6 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    //private final List<PackedLongValues> postings;
     private final TreeMap<Long,PackedLongValues> leafFilePointerToPostings;
     private final TreeMap<Long, Integer> leafOffsetToNodeID = new TreeMap<>(Long::compareTo);
     private final Multimap<Integer, Integer> nodeToChildLeaves = HashMultimap.create();
@@ -104,26 +103,23 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
     @SuppressWarnings("resource")
     public long finish(IndexOutput out, List<List<BKDWriter.OneDimensionBKDWriter.LeafBlockMeta>> leafBlockMetaGroups) throws IOException
     {
+        // TODO: what to put here now?
 //        checkState(postings.size() == leafOffsetToNodeID.size(),
 //                   "Expected equal number of postings lists (%s) and leaf offsets (%s).",
 //                   postings.size(), leafOffsetToNodeID.size());
 
         final PostingsWriter postingsWriter = new PostingsWriter(out);
 
-        //final Iterator<PackedLongValues> postingsIterator = postings.iterator();
         final Map<Integer, PackedLongValues> leafToPostings = new HashMap<>();
 
         for (Map.Entry<Long, Integer> entry : leafOffsetToNodeID.entrySet())
         {
             final long leafFilePointer = entry.getKey();
             final int leafNodeID = entry.getValue();
-
             final PackedLongValues postings = leafFilePointerToPostings.get(leafFilePointer);
 
             leafToPostings.put(leafNodeID, postings);
         }
-
-        //leafOffsetToNodeID.forEach((fp, nodeID) -> leafToPostings.put(nodeID, postingsIterator.next()));
 
         final long postingsRamBytesUsed = leafFilePointerToPostings.values().stream()
                                                   .mapToLong(PackedLongValues::ramBytesUsed)
@@ -164,7 +160,7 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
             for (Integer leaf : leaves)
             {
                 PackedLongValues leafPostings = leafToPostings.get(leaf);
-                if (leafPostings != null) // some leaves may be a part of a multi-leaf postings list
+                if (leafPostings != null) // some leaves may be a part of a multi-leaf postings list, eg, no leaf posting list
                     postingLists.add(new PackedLongsPostingList(leafPostings).peekable());
             }
 

@@ -115,19 +115,6 @@ public class NumericIndexWriter implements Closeable
         {
             leafFilePointerToPostings.put(leafFilePointer, postings);
         }
-
-//        @Override
-//        // TODO: leafNum isn't used here
-//        public void writeLeafDocs(int leafNum, BKDWriter.RowIDAndIndex[] sortedByRowID, int offset, int count)
-//        {
-//            final PackedLongValues.Builder builder = PackedLongValues.monotonicBuilder(PackedInts.COMPACT);
-//
-//            for (int i = offset; i < count; ++i)
-//            {
-//                builder.add(sortedByRowID[i].rowID);
-//            }
-//            postings.add(builder.build());
-//        }
     }
 
     /**

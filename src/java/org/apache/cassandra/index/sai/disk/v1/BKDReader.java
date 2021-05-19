@@ -33,7 +33,6 @@ import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.agrona.collections.IntHashSet;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -456,8 +455,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
         long lastValidFilePointer = -1;
 
-        final IntHashSet seenMultiLeafNodeIDs = new IntHashSet();
-
         public void collectPostingLists(PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
         {
             context.checkpoint();
@@ -466,17 +463,8 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
             final long multiLeafFilePointer = postingsIndex.getMultiLeafPostingsFilePointer(nodeID);
 
-            if (multiLeafFilePointer != -1)
-            {
-                seenMultiLeafNodeIDs.add(nodeID);
-            }
-
-            System.out.println("seenMultiLeafNodeIDs="+seenMultiLeafNodeIDs+" multiLeafFilePointer="+multiLeafFilePointer+" lastValidFilePointer="+lastValidFilePointer);
-
             if (multiLeafFilePointer != -1 && multiLeafFilePointer != lastValidFilePointer)
             {
-                //assert !seenMultiLeafNodeIDs.contains(nodeID);
-
                 lastValidFilePointer = multiLeafFilePointer;
 
                 postingLists.add(initPostingReader(multiLeafFilePointer).peekable());
@@ -493,7 +481,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             {
                 assert postingsIndex.getMultiLeafPostingsFilePointer(nodeID) == -1;
 
-                //lastValidFilePointer = -1;
                 // if there is pre-built posting for entire subtree
                 if (postingsIndex.exists(nodeID))
                 {

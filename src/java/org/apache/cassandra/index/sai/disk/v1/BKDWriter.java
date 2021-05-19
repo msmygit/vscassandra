@@ -277,8 +277,6 @@ public class BKDWriter implements Closeable
 
     interface OneDimensionBKDWriterCallback
     {
-        //void writeLeafDocs(int leafNum, RowIDAndIndex[] leafDocs, int offset, int count);
-        //void add(long leafFilePointer, PackedLongValues postings);
         void add(long leafFilePointer, PackedLongValues postings);
     }
 
