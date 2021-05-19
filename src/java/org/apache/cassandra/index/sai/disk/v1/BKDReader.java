@@ -52,7 +52,6 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.FutureArrays;
-import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.packed.DirectWriter;
 
 /**
@@ -405,15 +404,12 @@ public class BKDReader extends TraversingBKDReader implements Closeable
                 PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, COMPARATOR);
                 executeInternal(postingLists);
 
-                System.out.println("postingLists.size="+postingLists.size());
-
                 FileUtils.closeQuietly(bkdInput);
 
                 return mergePostings(postingLists);
             }
             catch (Throwable t)
             {
-                t.printStackTrace();
                 if (!(t instanceof AbortedOperationException))
                     logger.error(indexComponents.logMessage("kd-tree intersection failed on {}"), indexFile.path(), t);
 
@@ -472,7 +468,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             }
             else if (multiLeafFilePointer != -1 && multiLeafFilePointer == lastValidFilePointer)
             {
-                System.out.println("nodeid="+nodeID+" skipping index.isLeafNode="+index.isLeafNode());
                  // do nothing as the posting list for this leaf node id has already been added to postingLists
                 if (index.isLeafNode())
                     return;
@@ -711,8 +706,10 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
             int nodeID = index.getNodeID();
 
+            // the relation only cross the node due to the cellMaxPacked not being correct
             if (r == Relation.CELL_INSIDE_QUERY || (r == Relation.CELL_CROSSES_QUERY && postingsIndex.getMultiLeafPostingsFilePointer(nodeID) != -1))
             {
+                // compare using only the cellMinPacked as the cellMaxPacked is actually the min value of the next node
                 Relation r2 = visitor.compare(cellMinPacked, cellMinPacked);
                 if (r2 == Relation.CELL_INSIDE_QUERY)
                 {
@@ -807,8 +804,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
             index.pushLeft();
 
-            System.out.println("visitNode2 cellMinPacked="+NumericUtils.sortableBytesToInt(cellMinPacked, 0)+" splitPackedValue="+NumericUtils.sortableBytesToInt(splitPackedValue, 0));
-
             collectPostingLists(postingLists, cellMinPacked, splitPackedValue);
             index.pop();
 
@@ -818,7 +813,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, packedBytesLength);
             System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * bytesPerDim, bytesPerDim);
             index.pushRight();
-            System.out.println("visitNode2 splitPackedValue="+NumericUtils.sortableBytesToInt(splitPackedValue, 0)+" cellMaxPacked="+NumericUtils.sortableBytesToInt(cellMaxPacked, 0));
             collectPostingLists(postingLists, splitPackedValue, cellMaxPacked);
             index.pop();
         }
