@@ -177,6 +177,11 @@ public class FileHandle extends SharedCloseableImpl
         return rebufferer;
     }
 
+    public void invalidateIfCached(long position)
+    {
+        rebuffererFactory.invalidateIfCached(position);
+    }
+
     /**
      * Perform clean up of all resources held by {@link FileHandle}.
      */
@@ -243,6 +248,7 @@ public class FileHandle extends SharedCloseableImpl
 
         private boolean mmapped = false;
         private boolean compressed = false;
+        private long length = -1;
 
         public Builder(String path)
         {
@@ -322,6 +328,11 @@ public class FileHandle extends SharedCloseableImpl
             return this;
         }
 
+        public void withLength(long length)
+        {
+            this.length = length;
+        }
+
         /**
          * Complete building {@link FileHandle} without overriding file length.
          *
@@ -329,7 +340,7 @@ public class FileHandle extends SharedCloseableImpl
          */
         public FileHandle complete()
         {
-            return complete(-1L);
+            return complete(length);
         }
 
         /**
@@ -358,7 +369,11 @@ public class FileHandle extends SharedCloseableImpl
                 long length = overrideLength > 0 ? overrideLength : compressed ? compressionMetadata.compressedFileLength : channelCopy.size();
 
                 RebuffererFactory rebuffererFactory;
-                if (mmapped)
+                if (length == 0)
+                {
+                    rebuffererFactory = new EmptyRebufferer(channelCopy);
+                }
+                else if (mmapped)
                 {
                     if (compressed)
                     {

@@ -34,7 +34,7 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTableMultiWriter;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
-import org.apache.cassandra.io.sstable.format.big.BigTableZeroCopyWriter;
+import org.apache.cassandra.io.sstable.format.SSTableZeroCopyWriter;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.schema.TableId;
@@ -61,9 +61,6 @@ public class CassandraEntireSSTableStreamReader implements IStreamReader
 
     public CassandraEntireSSTableStreamReader(StreamMessageHeader messageHeader, CassandraStreamHeader streamHeader, StreamSession session)
     {
-        if (streamHeader.format != SSTableFormat.Type.BIG)
-            throw new AssertionError("Unsupported SSTable format " + streamHeader.format);
-
         if (session.getPendingRepair() != null)
         {
             // we should only ever be streaming pending repair sstables if the session has a pending repair id
@@ -104,7 +101,7 @@ public class CassandraEntireSSTableStreamReader implements IStreamReader
                      prettyPrintMemory(totalSize),
                      cfs.metadata());
 
-        BigTableZeroCopyWriter writer = null;
+        SSTableZeroCopyWriter writer = null;
 
         try
         {
@@ -167,7 +164,7 @@ public class CassandraEntireSSTableStreamReader implements IStreamReader
     }
 
     @SuppressWarnings("resource")
-    protected BigTableZeroCopyWriter createWriter(ColumnFamilyStore cfs, long totalSize, Collection<Component> components) throws IOException
+    protected SSTableZeroCopyWriter createWriter(ColumnFamilyStore cfs, long totalSize, Collection<Component> components) throws IOException
     {
         File dataDir = getDataDir(cfs, totalSize);
 
@@ -180,6 +177,6 @@ public class CassandraEntireSSTableStreamReader implements IStreamReader
 
         logger.debug("[Table #{}] {} Components to write: {}", cfs.metadata(), desc.filenameFor(Component.DATA), components);
 
-        return new BigTableZeroCopyWriter(desc, cfs.metadata, lifecycleNewTracker, components);
+        return new SSTableZeroCopyWriter(desc, cfs.metadata, lifecycleNewTracker, components);
     }
 }

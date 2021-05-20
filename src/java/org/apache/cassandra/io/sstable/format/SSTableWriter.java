@@ -18,14 +18,26 @@
 
 package org.apache.cassandra.io.sstable.format;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.RowIndexEntry;
+import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.SerializationHeader;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
@@ -43,6 +55,7 @@ import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.concurrent.Transactional;
 
 /**
@@ -53,13 +66,14 @@ import org.apache.cassandra.utils.concurrent.Transactional;
  */
 public abstract class SSTableWriter extends SSTable implements Transactional
 {
+    private static final Logger logger = LoggerFactory.getLogger(SSTableWriter.class);
+
     protected long repairedAt;
     protected UUID pendingRepair;
     protected boolean isTransient;
     protected long maxDataAge = -1;
     protected final long keyCount;
     protected final MetadataCollector metadataCollector;
-    protected final RowIndexEntry.IndexSerializer rowIndexEntrySerializer;
     protected final SerializationHeader header;
     protected final TransactionalProxy txnProxy = txnProxy();
     protected final Collection<SSTableFlushObserver> observers;
@@ -75,6 +89,7 @@ public abstract class SSTableWriter extends SSTable implements Transactional
     }
 
     protected SSTableWriter(Descriptor descriptor,
+                            Set<Component> components,
                             long keyCount,
                             long repairedAt,
                             UUID pendingRepair,
@@ -91,7 +106,6 @@ public abstract class SSTableWriter extends SSTable implements Transactional
         this.isTransient = isTransient;
         this.metadataCollector = metadataCollector;
         this.header = header;
-        this.rowIndexEntrySerializer = descriptor.version.getSSTableFormat().getIndexSerializer(metadata.get(), descriptor.version, header);
         this.observers = observers == null ? Collections.emptySet() : observers;
     }
 
@@ -152,7 +166,10 @@ public abstract class SSTableWriter extends SSTable implements Transactional
         return create(descriptor, keyCount, repairedAt, pendingRepair, isTransient, 0, header, indexes, lifecycleNewTracker);
     }
 
-    private static Set<Component> components(TableMetadata metadata)
+    /**
+     * BigTable SSTable components. Should be moved to BigTableWriter but is left here for painless upstream merges.
+     */
+    public static Set<Component> components(TableMetadata metadata)
     {
         Set<Component> components = new HashSet<Component>(Arrays.asList(Component.DATA,
                 Component.PRIMARY_INDEX,
@@ -244,7 +261,7 @@ public abstract class SSTableWriter extends SSTable implements Transactional
     /**
      * Open the resultant SSTableReader before it has been fully written
      */
-    public abstract SSTableReader openEarly();
+    public abstract boolean openEarly(Consumer<SSTableReader> callWhenReady);
 
     /**
      * Open the resultant SSTableReader once it has been fully written, but before the
@@ -341,7 +358,8 @@ public abstract class SSTableWriter extends SSTable implements Transactional
         FileUtils.renameWithConfirm(tmpdesc.filenameFor(Component.DATA), newdesc.filenameFor(Component.DATA));
 
         // rename it without confirmation because summary can be available for loadNewSSTables but not for closeAndOpenReader
-        FileUtils.renameWithOutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
+        if (components.contains(Component.SUMMARY))
+            FileUtils.renameWithOutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
     }
 
     public static void copy(Descriptor tmpdesc, Descriptor newdesc, Set<Component> components)
@@ -355,7 +373,8 @@ public abstract class SSTableWriter extends SSTable implements Transactional
         FileUtils.copyWithConfirm(tmpdesc.filenameFor(Component.DATA), newdesc.filenameFor(Component.DATA));
 
         // copy it without confirmation because summary can be available for loadNewSSTables but not for closeAndOpenReader
-        FileUtils.copyWithOutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
+        if (components.contains(Component.SUMMARY))
+            FileUtils.copyWithOutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
     }
 
     public static void hardlink(Descriptor tmpdesc, Descriptor newdesc, Set<Component> components)
@@ -369,7 +388,8 @@ public abstract class SSTableWriter extends SSTable implements Transactional
         FileUtils.createHardLinkWithConfirm(tmpdesc.filenameFor(Component.DATA), newdesc.filenameFor(Component.DATA));
 
         // copy it without confirmation because summary can be available for loadNewSSTables but not for closeAndOpenReader
-        FileUtils.createHardLinkWithoutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
+        if (components.contains(Component.SUMMARY))
+            FileUtils.createHardLinkWithoutConfirm(tmpdesc.filenameFor(Component.SUMMARY), newdesc.filenameFor(Component.SUMMARY));
     }
 
     public static abstract class Factory
@@ -384,5 +404,14 @@ public abstract class SSTableWriter extends SSTable implements Transactional
                                            SerializationHeader header,
                                            Collection<SSTableFlushObserver> observers,
                                            LifecycleNewTracker lifecycleNewTracker);
+    }
+
+    protected void maybeLogLargePartitionWarning(DecoratedKey key, long rowSize)
+    {
+        if (rowSize > DatabaseDescriptor.getCompactionLargePartitionWarningThreshold())
+        {
+            String keyString = metadata().partitionKeyType.getString(key.getKey());
+            logger.warn("Writing large partition {}/{}:{} ({}) to sstable {}", metadata.keyspace, metadata.name, keyString, FBUtilities.prettyPrintMemory(rowSize), getFilename());
+        }
     }
 }

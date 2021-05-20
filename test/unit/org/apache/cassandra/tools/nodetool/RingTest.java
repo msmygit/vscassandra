@@ -78,8 +78,9 @@ public class RingTest extends CQLTester
 
     private void validateRingOutput(String hostForm, String... args)
     {
-        ToolRunner.ToolResult nodetool = ToolRunner.invokeNodetool(args);
-        nodetool.assertOnCleanExit();
+        ToolRunner.ToolResult tool = ToolRunner.invokeNodetool(args);
+        logger.info(tool.getStdout());
+        tool.assertOnCleanExit();
         /*
          Datacenter: datacenter1
          ==========
@@ -88,7 +89,7 @@ public class RingTest extends CQLTester
          127.0.0.1       rack1       Up     Normal  45.71 KiB       100.00%             4652409154190094022
 
          */
-        String[] lines = nodetool.getStdout().split("\\R");
+        String[] lines = tool.getStdout().split("\\R");
         assertThat(lines[1].trim(), endsWith(SimpleSnitch.DATA_CENTER_NAME));
         assertThat(lines[3], matchesPattern("Address *Rack *Status *State *Load *Owns *Token *"));
         String hostRing = lines[lines.length-4].trim(); // this command has a couple extra newlines and an empty error message at the end. Not messing with it.

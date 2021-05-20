@@ -63,8 +63,10 @@ import org.apache.cassandra.distributed.impl.InstanceKiller;
 import org.apache.cassandra.io.sstable.CorruptSSTableException;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.format.ForwardingSSTableReader;
+import org.apache.cassandra.io.sstable.format.PartitionIndexIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.format.SSTableReadsListener;
+import org.apache.cassandra.io.sstable.format.ScrubPartitionIterator;
 import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.repair.RepairParallelism;
@@ -273,6 +275,12 @@ public class FailingRepairTest extends TestBaseImpl implements Serializable
             super(delegate);
         }
 
+        @Override
+        public PartitionIndexIterator allKeysIterator() throws IOException
+        {
+            throw new IOException("Fail");
+        }
+
         public ISSTableScanner getScanner()
         {
             return new FailingISSTableScanner();
@@ -296,6 +304,18 @@ public class FailingRepairTest extends TestBaseImpl implements Serializable
         public ChannelProxy getDataChannel()
         {
             throw new RuntimeException();
+        }
+
+        @Override
+        public boolean hasIndex()
+        {
+            return false;
+        }
+
+        @Override
+        public ScrubPartitionIterator scrubPartitionsIterator() throws IOException
+        {
+            return null;
         }
 
         public String toString()

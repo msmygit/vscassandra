@@ -27,7 +27,8 @@ import org.apache.cassandra.cache.KeyCacheKey;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.RowIndexEntry;
+import org.apache.cassandra.io.sstable.format.RowIndexEntry;
+import org.apache.cassandra.io.sstable.format.big.BigTableRowIndexEntry;
 import org.apache.cassandra.db.lifecycle.ILifecycleTransaction;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -69,7 +70,7 @@ public class SSTableRewriter extends Transactional.AbstractTransactional impleme
     private final boolean eagerWriterMetaRelease; // true if the writer metadata should be released when switch is called
 
     private SSTableWriter writer;
-    private Map<DecoratedKey, RowIndexEntry> cachedKeys = new HashMap<>();
+    private Map<DecoratedKey, BigTableRowIndexEntry> cachedKeys = new HashMap<>();
 
     // for testing (TODO: remove when have byteman setup)
     private boolean throwEarly, throwLate;
@@ -125,13 +126,13 @@ public class SSTableRewriter extends Transactional.AbstractTransactional impleme
         RowIndexEntry index = writer.append(partition);
         if (DatabaseDescriptor.shouldMigrateKeycacheOnCompaction())
         {
-            if (!transaction.isOffline() && index != null)
+            if (!transaction.isOffline() && index instanceof BigTableRowIndexEntry)
             {
                 for (SSTableReader reader : transaction.originals())
                 {
                     if (reader.getCachedPosition(key, false) != null)
                     {
-                        cachedKeys.put(key, index);
+                        cachedKeys.put(key, (BigTableRowIndexEntry) index);
                         break;
                     }
                 }
@@ -169,14 +170,12 @@ public class SSTableRewriter extends Transactional.AbstractTransactional impleme
             }
             else
             {
-                SSTableReader reader = writer.setMaxDataAge(maxAge).openEarly();
-                if (reader != null)
-                {
+                writer.setMaxDataAge(maxAge).openEarly(reader -> {
                     transaction.update(reader, false);
                     currentlyOpenedEarlyAt = writer.getFilePointer();
                     moveStarts(reader, reader.last);
                     transaction.checkpoint();
-                }
+                });
             }
         }
     }
@@ -223,7 +222,7 @@ public class SSTableRewriter extends Transactional.AbstractTransactional impleme
         if (!cachedKeys.isEmpty())
         {
             invalidateKeys = new ArrayList<>(cachedKeys.size());
-            for (Map.Entry<DecoratedKey, RowIndexEntry> cacheKey : cachedKeys.entrySet())
+            for (Map.Entry<DecoratedKey, BigTableRowIndexEntry> cacheKey : cachedKeys.entrySet())
             {
                 invalidateKeys.add(cacheKey.getKey());
                 newReader.cacheKey(cacheKey.getKey(), cacheKey.getValue());

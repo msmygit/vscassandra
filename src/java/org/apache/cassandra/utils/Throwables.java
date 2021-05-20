@@ -172,6 +172,8 @@ public final class Throwables
     {
         for (AutoCloseable closeable : closeables)
         {
+            if (closeable != null)
+            {
             try
             {
                 closeable.close();
@@ -180,6 +182,7 @@ public final class Throwables
             {
                 accumulate = merge(accumulate, t);
             }
+        }
         }
         return accumulate;
     }
