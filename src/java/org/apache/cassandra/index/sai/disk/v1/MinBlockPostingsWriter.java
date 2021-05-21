@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -34,7 +35,6 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.lang.Math.max;
 import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZE;
 
 /**
@@ -51,7 +51,7 @@ import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZ
  * </p>
  *
  * <p>
- * Packed blocks are favoured, meaning when the postings are long enough, {@link PostingsWriter} will try
+ * Packed blocks are favoured, meaning when the postings are long enough, {@link MinBlockPostingsWriter} will try
  * to encode most data as a packed block. Take a term with 259 row IDs as an example, the first 256 IDs are encoded
  * as two packed blocks, while the remaining 3 are encoded as one VLong block.
  * </p>
@@ -79,47 +79,47 @@ import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZ
  *  </pre>
  */
 @NotThreadSafe
-//TODO Review this for DSP-19608
-public class PostingsWriter implements Closeable
+public class MinBlockPostingsWriter implements Closeable
 {
     private final static String POSTINGS_MUST_BE_SORTED_ERROR_MSG = "Postings must be sorted ascending, got [%s] after [%s]";
 
     private final IndexOutput dataOutput;
     private final int blockSize;
-    private final long[] deltaBuffer;
-    private final LongArrayList blockOffsets = new LongArrayList();
-    private final LongArrayList blockMaxIDs = new LongArrayList();
+    private final long[] rowIDBuffer;
+    private final LongArrayList blockOffsets = new LongArrayList(BLOCK_SIZE, -1);
+    private final LongArrayList blockMinIDs = new LongArrayList(BLOCK_SIZE, -1);
     private final RAMIndexOutput inMemoryOutput = new RAMIndexOutput("blockOffsets");
 
     private final long startOffset;
 
     private int bufferUpto;
     private long lastSegmentRowId;
+    private long minBlockRowID;
     private long maxDelta;
     private long totalPostings;
 
     @VisibleForTesting
-    PostingsWriter(IndexComponents components, boolean segmented) throws IOException
+    MinBlockPostingsWriter(IndexComponents components, boolean segmented) throws IOException
     {
         this(components, BLOCK_SIZE, segmented);
     }
 
-    PostingsWriter(IndexOutput dataOutput) throws IOException
+    MinBlockPostingsWriter(IndexOutput dataOutput) throws IOException
     {
         this(dataOutput, BLOCK_SIZE);
     }
 
-    PostingsWriter(IndexComponents components, int blockSize, boolean segmented) throws IOException
+    MinBlockPostingsWriter(IndexComponents components, int blockSize, boolean segmented) throws IOException
     {
         this(components.createOutput(components.postingLists, true, segmented), blockSize);
     }
 
-    private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
+    private MinBlockPostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
     {
         this.blockSize = blockSize;
         this.dataOutput = dataOutput;
         startOffset = dataOutput.getFilePointer();
-        deltaBuffer = new long[blockSize];
+        rowIDBuffer = new long[blockSize];
         SAICodecUtils.writeHeader(dataOutput);
     }
 
@@ -167,7 +167,7 @@ public class PostingsWriter implements Closeable
 
         resetBlockCounters();
         blockOffsets.clear();
-        blockMaxIDs.clear();
+        blockMinIDs.clear();
 
         long segmentRowId;
         // When postings list are merged, we don't know exact size, just an upper bound.
@@ -199,13 +199,19 @@ public class PostingsWriter implements Closeable
         if (!(segmentRowId >= lastSegmentRowId || lastSegmentRowId == 0))
             throw new IllegalArgumentException(String.format(POSTINGS_MUST_BE_SORTED_ERROR_MSG, segmentRowId, lastSegmentRowId));
 
-        final long delta = segmentRowId - lastSegmentRowId;
-        maxDelta = max(maxDelta, delta);
-        deltaBuffer[bufferUpto++] = delta;
+        if (bufferUpto == 0)
+        {
+            minBlockRowID = segmentRowId;
+        }
+
+        final long delta = segmentRowId - minBlockRowID;
+        maxDelta = Math.max(maxDelta, delta);
+        rowIDBuffer[bufferUpto++] = segmentRowId;
 
         if (bufferUpto == blockSize)
         {
-            addBlockToSkipTable(segmentRowId);
+            assert minBlockRowID == rowIDBuffer[0];
+            addBlockToSkipTable(minBlockRowID);
             writePostingsBlock(maxDelta, bufferUpto);
             resetBlockCounters();
         }
@@ -216,7 +222,7 @@ public class PostingsWriter implements Closeable
     {
         if (bufferUpto > 0)
         {
-            addBlockToSkipTable(lastSegmentRowId);
+            addBlockToSkipTable(minBlockRowID);
 
             writePostingsBlock(maxDelta, bufferUpto);
         }
@@ -227,12 +233,13 @@ public class PostingsWriter implements Closeable
         bufferUpto = 0;
         lastSegmentRowId = 0;
         maxDelta = 0;
+        Arrays.fill(rowIDBuffer, 0);
     }
 
-    private void addBlockToSkipTable(long maxSegmentRowID)
+    private void addBlockToSkipTable(long minSegmentRowID)
     {
         blockOffsets.add(dataOutput.getFilePointer());
-        blockMaxIDs.add(maxSegmentRowID);
+        blockMinIDs.add(minSegmentRowID);
     }
 
     private void writeSummary(int exactSize) throws IOException
@@ -244,7 +251,7 @@ public class PostingsWriter implements Closeable
 
     private void writeSkipTable() throws IOException
     {
-        assert blockOffsets.size() == blockMaxIDs.size();
+        assert blockOffsets.size() == blockMinIDs.size();
         dataOutput.writeVInt(blockOffsets.size());
 
         // compressing offsets in memory first, to know the exact length (with padding)
@@ -253,7 +260,7 @@ public class PostingsWriter implements Closeable
         writeSortedFoRBlock(blockOffsets, inMemoryOutput);
         dataOutput.writeVLong(inMemoryOutput.getFilePointer());
         inMemoryOutput.writeTo(dataOutput);
-        writeSortedFoRBlock(blockMaxIDs, dataOutput);
+        writeSortedFoRBlock(blockMinIDs, dataOutput);
     }
 
     private void writePostingsBlock(long maxValue, int blockSize) throws IOException
@@ -268,7 +275,8 @@ public class PostingsWriter implements Closeable
             final DirectWriter writer = DirectWriter.getInstance(dataOutput, blockSize, bitsPerValue);
             for (int i = 0; i < blockSize; ++i)
             {
-                writer.add(deltaBuffer[i]);
+                long delta = rowIDBuffer[i] - minBlockRowID;
+                writer.add(delta);
             }
             writer.finish();
         }
@@ -278,7 +286,6 @@ public class PostingsWriter implements Closeable
     {
         final long maxValue = values.getLong(values.size() - 1);
 
-        assert values.size() > 0;
         final int bitsPerValue = maxValue == 0 ? 0 : DirectWriter.unsignedBitsRequired(maxValue);
         output.writeByte((byte) bitsPerValue);
         if (bitsPerValue > 0)

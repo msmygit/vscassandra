@@ -24,7 +24,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.ReversePostingList;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
@@ -40,13 +39,13 @@ import org.apache.lucene.store.RandomAccessInput;
  * load.
  */
 @NotThreadSafe
-public class PostingsReader implements OrdinalPostingList
+public class MinBlockPostingsReader implements OrdinalPostingList
 {
     protected final IndexInput input;
     private final int blockSize;
     private final long numPostings;
     private final LongArray blockOffsets;
-    private final LongArray blockMaxValues;
+    private final LongArray blockMinValues;
     private final SeekingRandomAccessInput seekingInput;
     private final QueryEventListener.PostingListEventListener listener;
 
@@ -56,33 +55,188 @@ public class PostingsReader implements OrdinalPostingList
     private int postingsBlockIdx;
     private int blockIdx; // position in block
     private long totalPostingsRead;
-    private long actualSegmentRowId;
 
     private long currentPosition;
     private DirectReaders.Reader currentFORValues;
     private long postingsDecoded = 0;
+    private long minRowID;
 
     @VisibleForTesting
-    PostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
+    MinBlockPostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
         this(input, new BlocksSummary(input, summaryOffset, () -> {}), listener);
     }
 
     @VisibleForTesting
-    public PostingsReader(IndexInput input, BlocksSummary summary, QueryEventListener.PostingListEventListener listener) throws IOException
+    public MinBlockPostingsReader(IndexInput input, BlocksSummary summary, QueryEventListener.PostingListEventListener listener) throws IOException
     {
         this.input = input;
         this.seekingInput = new SeekingRandomAccessInput(input);
         this.blockOffsets = summary.offsets;
         this.blockSize = summary.blockSize;
         this.numPostings = summary.numPostings;
-        this.blockMaxValues = summary.maxValues;
+        this.blockMinValues = summary.minValues;
         this.listener = listener;
 
         this.summary = summary;
 
         reBuffer();
     }
+
+//    public static class ReversePostingListImpl implements ReversePostingList
+//    {
+//        final MinBlockPostingsReader parent;
+//        int revBlockIdx = 0;
+//        int revPostingsBlockIdx;
+//        long minRowID;
+//        long ordinal;
+//
+//        public ReversePostingListImpl(MinBlockPostingsReader parent) throws IOException
+//        {
+//            this.parent = parent;
+//            int lastBlockIdx = (int) (parent.numPostings / parent.blockSize) - 1;
+//            lastPosInBlock(lastBlockIdx);
+//            reBuffer();
+//        }
+//
+//        private void reBuffer() throws IOException
+//        {
+//            final long pointer = parent.blockOffsets.get(revPostingsBlockIdx);
+//            minRowID = parent.blockMinValues.get(revPostingsBlockIdx);
+//
+//            parent.input.seek(pointer);
+//
+//            //final long left = parent.numPostings - (parent.numPostings - totalPostingsRead);
+//            //assert left > 0;
+//
+//            parent.readFoRBlock(parent.input);
+//
+//            revBlockIdx = (int)Math.min(ordinal, parent.blockSize - 1);
+//        }
+//
+//        private void minusOnePosition()
+//        {
+//            ordinal--;
+//            revBlockIdx--;
+//        }
+//
+//        @Override
+//        public long nextPosting() throws IOException
+//        {
+//            final long next = peekNext();
+//            if (next != ReversePostingList.REVERSE_END_OF_STREAM)
+//            {
+//                minusOnePosition();
+//            }
+//            return next;
+//        }
+//
+//        @VisibleForTesting
+//        int getBlockSize()
+//        {
+//            return parent.blockSize;
+//        }
+//
+//        private long peekNext() throws IOException
+//        {
+//            if ( (parent.numPostings - ordinal) >= parent.numPostings)
+//            {
+//                return ReversePostingList.REVERSE_END_OF_STREAM;
+//            }
+//            if (revBlockIdx == -1)
+//            {
+//                if (revPostingsBlockIdx == 0)
+//                {
+//                    return ReversePostingList.REVERSE_END_OF_STREAM;
+//                }
+//                lastPosInBlock(revPostingsBlockIdx - 1);
+//                reBuffer();
+//            }
+//
+//            return minRowID + nextRowID();
+//        }
+//
+//        private long nextRowID()
+//        {
+//            // currentFORValues is null when the all the values in the block are the same
+//            if (parent.currentFORValues == null)
+//            {
+//                return 0;
+//            }
+//            else
+//            {
+//                final long id = parent.currentFORValues.get(parent.seekingInput, parent.currentPosition, revBlockIdx);
+//                parent.postingsDecoded++;
+//                return id;
+//            }
+//        }
+//
+//        private void lastPosInBlock(int block)
+//        {
+//            //totalPostingsRead += (parent.blockSize - blockIdx) + (block - postingsBlockIdx + 1) * blockSize;
+//            revPostingsBlockIdx = block;
+//            ordinal = ( (revPostingsBlockIdx + 1) * parent.blockSize) - 1;
+//            revBlockIdx = parent.blockSize;
+//        }
+//
+//        @Override
+//        public void close() throws IOException
+//        {
+//            parent.close();
+//        }
+//
+//        @Override
+//        public long size()
+//        {
+//            return parent.size();
+//        }
+//
+//        @Override
+//        public long advance(long targetRowID) throws IOException
+//        {
+//            parent.listener.onAdvance();
+//            int block = parent.binarySearchBlock(targetRowID);
+//
+//            if (block < 0)
+//            {
+//                block = -block - 1;
+//            }
+//
+//            block = block > 0 ? block - 1 : block;
+//
+//            if (revPostingsBlockIdx == block)
+//            {
+//                // we're in the same block, just iterate through
+//                return slowAdvance(targetRowID);
+//            }
+//            //assert block > 0;
+//            // Even if there was an exact match, block might contain duplicates.
+//            // We iterate to the target token from the beginning.
+//            lastPosInBlock(block);
+//            return slowAdvance(targetRowID);
+//        }
+//
+//        private long slowAdvance(long targetRowID) throws IOException
+//        {
+//            while (ordinal < parent.numPostings)
+//            {
+//                final long segmentRowId = peekNext();
+//
+//                minusOnePosition();
+//
+//                if (segmentRowId <= targetRowID)
+//                {
+//                    return segmentRowId;
+//                }
+//            }
+//            return REVERSE_END_OF_STREAM;
+//        }
+//    }
+
+//    public ReversePostingList reversePostingList() throws IOException
+//    {
+//        return new ReversePostingListImpl(this);
+//    }
 
     @Override
     public long getOrdinal()
@@ -101,7 +255,7 @@ public class PostingsReader implements OrdinalPostingList
         final int blockSize;
         final int numPostings;
         final LongArray offsets;
-        final LongArray maxValues;
+        final LongArray minValues;
 
         private final InputCloser runOnClose;
 
@@ -122,8 +276,8 @@ public class PostingsReader implements OrdinalPostingList
 
             final SeekingRandomAccessInput randomAccessInput = new SeekingRandomAccessInput(input);
             final int numBlocks = input.readVInt();
-            final long maxBlockValuesLength = input.readVLong();
-            final long maxBlockValuesOffset = input.getFilePointer() + maxBlockValuesLength;
+            final long minBlockValuesLength = input.readVLong();
+            final long minBlockValuesOffset = input.getFilePointer() + minBlockValuesLength;
 
             final byte offsetBitsPerValue = input.readByte();
             if (offsetBitsPerValue > 64)
@@ -133,14 +287,14 @@ public class PostingsReader implements OrdinalPostingList
             }
             this.offsets = new LongArrayReader(randomAccessInput, DirectReaders.getReaderForBitsPerValue(offsetBitsPerValue), input.getFilePointer(), numBlocks);
 
-            input.seek(maxBlockValuesOffset);
+            input.seek(minBlockValuesOffset);
             final byte valuesBitsPerValue = input.readByte();
             if (valuesBitsPerValue > 64)
             {
                 throw new CorruptIndexException(
                         String.format("Postings list header is corrupted: Bits per value for values samples must be no more than 64 and is %d.", valuesBitsPerValue), input);
             }
-            this.maxValues = new LongArrayReader(randomAccessInput, DirectReaders.getReaderForBitsPerValue(valuesBitsPerValue), input.getFilePointer(), numBlocks);
+            this.minValues = new LongArrayReader(randomAccessInput, DirectReaders.getReaderForBitsPerValue(valuesBitsPerValue), input.getFilePointer(), numBlocks);
         }
 
         void close() throws IOException
@@ -228,6 +382,8 @@ public class PostingsReader implements OrdinalPostingList
             block = -block - 1;
         }
 
+        block = block > 0 ? block - 1 : block;
+
         if (postingsBlockIdx == block + 1)
         {
             // we're in the same block, just iterate through
@@ -259,17 +415,17 @@ public class PostingsReader implements OrdinalPostingList
     private int binarySearchBlock(long targetRowID)
     {
         int low = postingsBlockIdx - 1;
-        int high = Math.toIntExact(blockMaxValues.length()) - 1;
+        int high = Math.toIntExact(blockMinValues.length()) - 1;
 
         // in current block
-        if (low <= high && targetRowID <= blockMaxValues.get(low))
+        if (low <= high && targetRowID <= blockMinValues.get(low))
             return low;
 
         while (low <= high)
         {
-            int mid = low + ((high - low) >> 1) ;
+            int mid = low + ((high - low) >> 1);
 
-            long midVal = blockMaxValues.get(mid);
+            long midVal = blockMinValues.get(mid);
 
             if (midVal < targetRowID)
             {
@@ -282,7 +438,7 @@ public class PostingsReader implements OrdinalPostingList
             else
             {
                 // target found, but we need to check for duplicates
-                if (mid > 0 && blockMaxValues.get(mid - 1L) == targetRowID)
+                if (mid > 0 && blockMinValues.get(mid - 1L) == targetRowID)
                 {
                     // there are duplicates, pivot left
                     high = mid - 1;
@@ -300,7 +456,7 @@ public class PostingsReader implements OrdinalPostingList
     private void lastPosInBlock(int block)
     {
         // blockMaxValues is integer only
-        actualSegmentRowId = blockMaxValues.get(block);
+        //actualSegmentRowId = blockMinValues.get(block);
         //upper bound, since we might've advanced to the last block, but upper bound is enough
         totalPostingsRead += (blockSize - blockIdx) + (block - postingsBlockIdx + 1) * blockSize;
 
@@ -325,20 +481,6 @@ public class PostingsReader implements OrdinalPostingList
         return blockSize;
     }
 
-    private long reversePeekNext() throws IOException
-    {
-        if (totalPostingsRead >= numPostings)
-        {
-            return ReversePostingList.REVERSE_END_OF_STREAM;
-        }
-        if (blockIdx == -1)
-        {
-            reBuffer();
-        }
-
-        return actualSegmentRowId - nextRowID();
-    }
-
     private long peekNext() throws IOException
     {
         if (totalPostingsRead >= numPostings)
@@ -350,7 +492,7 @@ public class PostingsReader implements OrdinalPostingList
             reBuffer();
         }
 
-        return actualSegmentRowId + nextRowID();
+        return minRowID + nextRowID();
     }
 
     private int nextRowID()
@@ -368,16 +510,9 @@ public class PostingsReader implements OrdinalPostingList
         }
     }
 
-    private void minusOnePosition(long nextRowID)
-    {
-        actualSegmentRowId = nextRowID;
-        totalPostingsRead++;
-        blockIdx--;
-    }
-
     private void advanceOnePosition(long nextRowID)
     {
-        actualSegmentRowId = nextRowID;
+        //actualSegmentRowId = nextRowID;
         totalPostingsRead++;
         blockIdx++;
     }
@@ -385,6 +520,7 @@ public class PostingsReader implements OrdinalPostingList
     private void reBuffer() throws IOException
     {
         final long pointer = blockOffsets.get(postingsBlockIdx);
+        minRowID = blockMinValues.get(postingsBlockIdx);
 
         input.seek(pointer);
 
