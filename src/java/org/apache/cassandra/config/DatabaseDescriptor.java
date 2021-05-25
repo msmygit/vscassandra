@@ -662,7 +662,7 @@ public class DatabaseDescriptor
 
         if (conf.memtable_flush_writers == 0)
         {
-            conf.memtable_flush_writers = conf.data_file_directories.length == 1 ? 2 : 1;
+            conf.memtable_flush_writers = 8;
         }
 
         if (conf.memtable_flush_writers < 1)
