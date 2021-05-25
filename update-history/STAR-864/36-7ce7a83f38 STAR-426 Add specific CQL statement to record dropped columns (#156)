@@ -1,0 +1,51 @@
+--- a/src/java/org/apache/cassandra/schema/ColumnMetadata.java
++++ b/src/java/org/apache/cassandra/schema/ColumnMetadata.java
+@@ -190,7 +190,7 @@
+     {
+         this(ksName, cfName, name, type, position, kind, false);
+     }
+-    
++
+     public ColumnMetadata(String ksName,
+                           String cfName,
+                           ColumnIdentifier name,
+@@ -239,31 +239,6 @@
+         };
+     }
+ 
+-<<<<<<<
+-=======
+-    private static class Placeholder extends ColumnMetadata
+-    {
+-        Placeholder(TableMetadata table, ByteBuffer name, AbstractType<?> type, int position, Kind kind)
+-        {
+-            super(table, name, type, position, kind);
+-        }
+-
+-        public boolean isPlaceholder()
+-        {
+-            return true;
+-        }
+-    }
+-
+-    public static ColumnMetadata placeholder(TableMetadata table, ByteBuffer name, boolean isStatic)
+-    {
+-        return new Placeholder(table, name, EmptyType.instance, NO_POSITION, isStatic ? Kind.STATIC : Kind.REGULAR);
+-    }
+-
+-    public boolean isPlaceholder()
+-    {
+-        return false;
+-    }
+-
+     /**
+      * Whether that is the column metadata of a dropped column.
+      */
+@@ -272,7 +247,6 @@
+         return isDropped;
+     }
+ 
+->>>>>>>
+     public ColumnMetadata copy()
+     {
+         return new ColumnMetadata(ksName, cfName, name, type, position, kind, isDropped);
