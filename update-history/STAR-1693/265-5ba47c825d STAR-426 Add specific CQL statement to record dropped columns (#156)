@@ -1,0 +1,70 @@
+--- a/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java
++++ b/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java
+@@ -490,7 +490,6 @@
+ 
+         execute(dropStatement);
+ 
+-<<<<<<<
+         String tableCreateStatementAfterDrop = "CREATE TABLE " + KEYSPACE + "." + table + " (\n" +
+                                       "    pk1 text,\n" +
+                                       "    pk2 int,\n" +
+@@ -502,12 +501,8 @@
+                                       ") WITH ID = " + id + "\n" +
+                                       "    AND CLUSTERING ORDER BY (c ASC)\n";
+ 
+-        assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE + "." + table + " WITH INTERNALS"),
+-                      row(KEYSPACE,
+-=======
+         assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE_PER_TEST + "." + table + " WITH INTERNALS"),
+                       row(KEYSPACE_PER_TEST,
+->>>>>>>
+                           "table",
+                           table,
+                           tableCreateStatementAfterDrop +
+@@ -582,33 +577,15 @@
+                                       "    v1 text,\n" +
+                                       "    v2 int,\n" +
+                                       "    v3 int\n" +
+-<<<<<<<
+-                                      ") WITH ID = " + id + "\n" +
+-                                      "    AND " + tableParametersCql();
+-
+-        assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE_PER_TEST + "." + table + " WITH INTERNALS"),
+-                      row(KEYSPACE_PER_TEST,
+-                          "table",
+-                          table,
+-                          tableCreateStatement));
+-
+-        String dropStatement = "ALTER TABLE " + KEYSPACE_PER_TEST + "." + table + " DROP v3 USING TIMESTAMP 1589286942065000;";
+-
+-        execute(dropStatement);
++                                      ") WITH ID = " + id;
+ 
+         assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE_PER_TEST + "." + table + " WITH INTERNALS"),
+                       row(KEYSPACE_PER_TEST,
+-=======
+-                                      ") WITH ID = " + id;
+-        
+-        assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE + "." + table + " WITH INTERNALS"),
+-                      row(KEYSPACE,
+->>>>>>>
+                           "table",
+                           table,
+                           tableCreateStatement + "\n" +
+                           "    AND " + tableParametersCql()));
+-        String dropStatement = "ALTER TABLE " + KEYSPACE + "." + table + " DROP v3 USING TIMESTAMP 1589286942065000;";
++        String dropStatement = "ALTER TABLE " + KEYSPACE_PER_TEST + "." + table + " DROP v3 USING TIMESTAMP 1589286942065000;";
+ 
+         execute(dropStatement);
+ 
+@@ -618,8 +595,8 @@
+                                       "    v2 int\n" +
+                                       ") WITH ID = " + id;
+ 
+-        assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE + "." + table + " WITH INTERNALS"),
+-                      row(KEYSPACE,
++        assertRowsNet(executeDescribeNet("DESCRIBE TABLE " + KEYSPACE_PER_TEST + "." + table + " WITH INTERNALS"),
++                      row(KEYSPACE_PER_TEST,
+                           "table",
+                           table,
+                           tableCreateStatementAfterDrop + "\n" +

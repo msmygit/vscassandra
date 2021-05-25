@@ -1,0 +1,22 @@
+diff --git a/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java b/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java
+index 5facfbea4f..713bff2cc6 100644
+--- a/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java
++++ b/test/unit/org/apache/cassandra/cql3/statements/DescribeStatementTest.java
+@@ -490,7 +490,7 @@ public class DescribeStatementTest extends CQLTester
+ 
+         execute(dropStatement);
+ 
+-        String tableCreateStatementAfterDrop = "CREATE TABLE " + KEYSPACE + "." + table + " (\n" +
++        String tableCreateStatementAfterDrop = "CREATE TABLE " + KEYSPACE_PER_TEST + "." + table + " (\n" +
+                                       "    pk1 text,\n" +
+                                       "    pk2 int,\n" +
+                                       "    c int,\n" +
+@@ -589,7 +589,7 @@ public class DescribeStatementTest extends CQLTester
+ 
+         execute(dropStatement);
+ 
+-        String tableCreateStatementAfterDrop = "CREATE TABLE " + KEYSPACE + "." + table + " (\n" +
++        String tableCreateStatementAfterDrop = "CREATE TABLE " + KEYSPACE_PER_TEST + "." + table + " (\n" +
+                                       "    pk text PRIMARY KEY,\n" +
+                                       "    v1 text,\n" +
+                                       "    v2 int\n" +
