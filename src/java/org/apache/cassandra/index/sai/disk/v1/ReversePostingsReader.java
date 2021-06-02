@@ -48,7 +48,6 @@ public class ReversePostingsReader implements ReversePostingList
     private final SeekingRandomAccessInput seekingInput;
     private final QueryEventListener.PostingListEventListener listener;
 
-    // TODO: Expose more things through the summary, now that it's an actual field?
     private final PostingsReader.BlocksSummary summary;
 
     private int postingsBlockIdx;
@@ -143,8 +142,6 @@ public class ReversePostingsReader implements ReversePostingList
         {
             final long segmentRowId = peekNext();
 
-            System.out.println("targetRowID="+targetRowID+" segmentRowId="+segmentRowId);
-
             if (segmentRowId == REVERSE_END_OF_STREAM) return segmentRowId;
 
             minusOnePosition(segmentRowId);
@@ -171,8 +168,6 @@ public class ReversePostingsReader implements ReversePostingList
             int mid = low + ((high - low) >> 1) ;
 
             long midVal = blockMaxValues.get(mid);
-
-            System.out.println("mid="+mid+" midVal="+midVal);
 
             if (midVal > targetRowID)
             {
@@ -291,7 +286,7 @@ public class ReversePostingsReader implements ReversePostingList
 
         readFoRBlock(input);
 
-        if (postingsBlockIdx == blockOffsets.length() - 1)//(numPostings / blockSize)) // TODO: not sure about this, though seems to work?
+        if (postingsBlockIdx == blockOffsets.length() - 1)
         {
             blockIdx = (int) (numPostings % blockSize);
             if (blockIdx == 0)
