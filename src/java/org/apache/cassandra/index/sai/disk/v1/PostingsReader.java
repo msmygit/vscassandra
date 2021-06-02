@@ -24,7 +24,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.ReversePostingList;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
@@ -325,20 +324,6 @@ public class PostingsReader implements OrdinalPostingList
         return blockSize;
     }
 
-    private long reversePeekNext() throws IOException
-    {
-        if (totalPostingsRead >= numPostings)
-        {
-            return ReversePostingList.REVERSE_END_OF_STREAM;
-        }
-        if (blockIdx == -1)
-        {
-            reBuffer();
-        }
-
-        return actualSegmentRowId - nextRowID();
-    }
-
     private long peekNext() throws IOException
     {
         if (totalPostingsRead >= numPostings)
@@ -366,13 +351,6 @@ public class PostingsReader implements OrdinalPostingList
             postingsDecoded++;
             return Math.toIntExact(id);
         }
-    }
-
-    private void minusOnePosition(long nextRowID)
-    {
-        actualSegmentRowId = nextRowID;
-        totalPostingsRead++;
-        blockIdx--;
     }
 
     private void advanceOnePosition(long nextRowID)
