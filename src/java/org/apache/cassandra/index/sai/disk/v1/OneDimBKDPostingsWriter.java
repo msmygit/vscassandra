@@ -180,11 +180,12 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
         {
             for (List<BKDWriter.OneDimensionBKDWriter.LeafBlockMeta> leafBlockMetaGroup : leafBlockMetaGroups)
             {
-                BKDWriter.OneDimensionBKDWriter.LeafBlockMeta firstMeta = leafBlockMetaGroup.get(0);
+                final BKDWriter.OneDimensionBKDWriter.LeafBlockMeta firstMeta = leafBlockMetaGroup.get(0);
                 final int firstLeafNodeID = leafOffsetToNodeID.get(firstMeta.leafFilePointer);
-                PackedLongValues postingList = leafToPostings.get(firstLeafNodeID);
 
-                final long postingFilePointer = postingsWriter.write(new PackedLongsPostingList(postingList));
+                final long postingFilePointer = nodeIDToPostingsFilePointer.getOrDefault(firstLeafNodeID, -1l);
+
+                assert postingFilePointer != -1;
 
                 for (int blockOrdinal = 0; blockOrdinal < leafBlockMetaGroup.size(); blockOrdinal++)
                 {

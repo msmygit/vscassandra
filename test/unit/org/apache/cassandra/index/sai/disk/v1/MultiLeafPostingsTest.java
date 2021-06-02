@@ -53,7 +53,7 @@ public class MultiLeafPostingsTest extends NdiRandomizedTest
             NumericUtils.intToSortableBytes(800, scratch, 0);
             ramBuffer.addPackedValue(i, new BytesRef(scratch));
         }
-        for (int i = 60; i < 90; ++i)
+        for (int i = 60; i < 84; ++i)
         {
             byte[] scratch = new byte[Integer.BYTES];
             NumericUtils.intToSortableBytes(1000, scratch, 0);

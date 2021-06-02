@@ -585,7 +585,8 @@ public class BKDWriter implements Closeable
 
                 for (int i = 0; i < leafCount; ++i)
                 {
-                    postingsBuilder.add(rowIDAndIndexes[i].rowID);
+                    final long rowID = rowIDAndIndexes[i].rowID;
+                    postingsBuilder.add(rowID);
                 }
             }
             else
@@ -594,7 +595,8 @@ public class BKDWriter implements Closeable
 
                 for (int i = 0; i < leafCount; ++i)
                 {
-                    postingsBuilder.add(rowIDAndIndexes[i].rowID);
+                    final long rowID = rowIDAndIndexes[i].rowID;
+                    postingsBuilder.add(rowID);
                 }
             }
             final boolean allLeafValuesSame = writeLeafBlockPackedValues(scratchOut, commonPrefixLengths, leafCount, 0, packedValues);
