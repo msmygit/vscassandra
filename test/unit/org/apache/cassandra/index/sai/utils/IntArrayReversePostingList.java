@@ -56,7 +56,7 @@ public class IntArrayReversePostingList implements ReversePostingList
     @Override
     public long size()
     {
-        return 0;
+        return array.length;
     }
 
     protected final long slowAdvance(long target) throws IOException
