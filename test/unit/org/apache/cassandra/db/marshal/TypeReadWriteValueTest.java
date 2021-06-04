@@ -192,7 +192,7 @@ public class TypeReadWriteValueTest
         DataInputPlus in = mock(DataInputPlus.class);
         doAnswer(copyAnswer(valueWrite)).when(in).readFully(any(byte[].class));
 
-        ByteBuffer valueRead = type.readValue(in);
+        ByteBuffer valueRead = type.readBuffer(in);
 
         verify(in).readFully(any(byte[].class));
         assertEquals(valueWrite.clear(), valueRead.clear());
@@ -227,7 +227,7 @@ public class TypeReadWriteValueTest
         when(in.readUnsignedVInt()).thenReturn(length);
         doAnswer(copyAnswer(valueWrite)).when(in).readFully(any(byte[].class));
 
-        ByteBuffer valueRead = type.readValue(in);
+        ByteBuffer valueRead = type.readBuffer(in);
 
         verify(in).readUnsignedVInt();
         verify(in).readFully(any(byte[].class));
