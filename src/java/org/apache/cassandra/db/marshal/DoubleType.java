@@ -32,7 +32,7 @@ public class DoubleType extends NumberType<Double>
 {
     public static final DoubleType instance = new DoubleType();
 
-    DoubleType() {super(ComparisonType.CUSTOM);} // singleton
+    DoubleType() {super(ComparisonType.PRIMITIVE_COMPARE, 8, PrimitiveType.DOUBLE);} // singleton
 
     public boolean isEmptyValueMeaningless()
     {
@@ -45,9 +45,9 @@ public class DoubleType extends NumberType<Double>
         return true;
     }
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        return compareComposed(left, accessorL, right, accessorR, this);
+        return Double.compare(accessorL.toDouble(left), accessorR.toDouble(right));
     }
 
     public ByteBuffer fromString(String source) throws MarshalException
@@ -103,12 +103,6 @@ public class DoubleType extends NumberType<Double>
     public TypeSerializer<Double> getSerializer()
     {
         return DoubleSerializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 8;
     }
 
     @Override

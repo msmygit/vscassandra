@@ -36,18 +36,15 @@ public class BooleanType extends AbstractType<Boolean>
 
     public static final BooleanType instance = new BooleanType();
 
-    BooleanType() {super(ComparisonType.CUSTOM);} // singleton
+    BooleanType() {super(ComparisonType.PRIMITIVE_COMPARE, 1, PrimitiveType.BOOLEAN, 0);} // singleton
 
     public boolean isEmptyValueMeaningless()
     {
         return true;
     }
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         // False is 0, True is anything else, makes False sort before True.
         int v1 = accessorL.getByte(left, 0) == 0 ? 0 : 1;
         int v2 = accessorR.getByte(right, 0) == 0 ? 0 : 1;
@@ -92,11 +89,5 @@ public class BooleanType extends AbstractType<Boolean>
     public TypeSerializer<Boolean> getSerializer()
     {
         return BooleanSerializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 1;
     }
 }

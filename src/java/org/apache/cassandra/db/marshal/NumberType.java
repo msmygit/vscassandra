@@ -26,9 +26,14 @@ import java.nio.ByteBuffer;
  */
 public abstract class NumberType<T extends Number> extends AbstractType<T>
 {
-    protected NumberType(ComparisonType comparisonType)
+    protected NumberType(ComparisonType comparisonType, int valueLength)
     {
-        super(comparisonType);
+        super(comparisonType, valueLength);
+    }
+
+    public NumberType(ComparisonType comparisonType, int valueLength, PrimitiveType primitiveType)
+    {
+        super(comparisonType, valueLength, primitiveType, 0);
     }
 
     /**

@@ -65,7 +65,7 @@ public class TupleType extends AbstractType<ByteBuffer>
 
     protected TupleType(List<AbstractType<?>> types, boolean freezeInner)
     {
-        super(ComparisonType.CUSTOM);
+        super(ComparisonType.CUSTOM, VARIABLE_LENGTH);
 
         if (freezeInner)
             this.types = Lists.newArrayList(transform(types, AbstractType::freeze));
@@ -143,11 +143,9 @@ public class TupleType extends AbstractType<ByteBuffer>
         return true;
     }
 
+    @Override
     public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         int offsetL = 0;
         int offsetR = 0;
 

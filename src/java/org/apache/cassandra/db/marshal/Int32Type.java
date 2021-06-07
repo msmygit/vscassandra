@@ -35,7 +35,7 @@ public class Int32Type extends NumberType<Integer>
 
     Int32Type()
     {
-        super(ComparisonType.CUSTOM);
+        super(ComparisonType.PRIMITIVE_COMPARE, 4, PrimitiveType.INT32);
     } // singleton
 
     public boolean isEmptyValueMeaningless()
@@ -43,11 +43,8 @@ public class Int32Type extends NumberType<Integer>
         return true;
     }
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         int diff = accessorL.getByte(left, 0) - accessorR.getByte(right, 0);
         if (diff != 0)
             return diff;
@@ -110,12 +107,6 @@ public class Int32Type extends NumberType<Integer>
     public TypeSerializer<Integer> getSerializer()
     {
         return Int32Serializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 4;
     }
 
     @Override

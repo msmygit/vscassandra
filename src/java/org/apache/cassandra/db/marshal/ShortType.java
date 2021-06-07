@@ -35,10 +35,11 @@ public class ShortType extends NumberType<Short>
 
     ShortType()
     {
-        super(ComparisonType.CUSTOM);
+        // VAR_LENGTH due to compatibility reasons, should be 2
+        super(ComparisonType.PRIMITIVE_COMPARE, VARIABLE_LENGTH, PrimitiveType.SHORT);
     } // singleton
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
         int diff = accessorL.getByte(left, 0) - accessorR.getByte(right, 0);
         if (diff != 0)

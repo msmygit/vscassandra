@@ -27,9 +27,9 @@ import org.apache.cassandra.cql3.Duration;
  */
 public abstract class TemporalType<T> extends AbstractType<T>
 {
-    protected TemporalType(ComparisonType comparisonType)
+    public TemporalType(ComparisonType comparisonType, int fixedValueLength)
     {
-        super(comparisonType);
+        super(comparisonType, fixedValueLength);
     }
 
     /**

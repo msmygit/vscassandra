@@ -41,7 +41,7 @@ public class DecimalType extends NumberType<BigDecimal>
     private static final int MAX_SCALE = 1000;
     private static final MathContext MAX_PRECISION = new MathContext(10000);
 
-    DecimalType() {super(ComparisonType.CUSTOM);} // singleton
+    DecimalType() {super(ComparisonType.CUSTOM, VARIABLE_LENGTH);} // singleton
 
     public boolean isEmptyValueMeaningless()
     {
@@ -54,6 +54,7 @@ public class DecimalType extends NumberType<BigDecimal>
         return true;
     }
 
+    @Override
     public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
         return compareComposed(left, accessorL, right, accessorR, this);

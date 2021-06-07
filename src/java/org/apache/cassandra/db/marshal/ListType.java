@@ -172,10 +172,6 @@ public class ListType<T> extends CollectionType<List<T>>
 
     static <VL, VR> int compareListOrSet(AbstractType<?> elementsComparator, VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        // Note that this is only used if the collection is frozen
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         int sizeL = CollectionSerializer.readCollectionSize(left, accessorL, ProtocolVersion.V3);
         int offsetL = CollectionSerializer.sizeOfCollectionSize(sizeL, ProtocolVersion.V3);
         int sizeR = CollectionSerializer.readCollectionSize(right, accessorR, ProtocolVersion.V3);

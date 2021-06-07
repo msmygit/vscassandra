@@ -54,18 +54,13 @@ public class ReversedType<T> extends AbstractType<T>
 
     private ReversedType(AbstractType<T> baseType)
     {
-        super(ComparisonType.CUSTOM);
+        super(baseType.comparisonType, baseType.valueLengthIfFixed(), baseType.primitiveType, baseType.fixedCompareReturns, true);
         this.baseType = baseType;
     }
 
     public boolean isEmptyValueMeaningless()
     {
         return baseType.isEmptyValueMeaningless();
-    }
-
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
-    {
-        return baseType.compare(right, accessorR, left, accessorL);
     }
 
     @Override
@@ -143,18 +138,6 @@ public class ReversedType<T> extends AbstractType<T>
         instances.remove(baseType);
 
         return getInstance(baseType.withUpdatedUserType(udt));
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return baseType.valueLengthIfFixed();
-    }
-
-    @Override
-    public boolean isReversed()
-    {
-        return true;
     }
 
     @Override

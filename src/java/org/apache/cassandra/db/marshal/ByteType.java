@@ -34,10 +34,11 @@ public class ByteType extends NumberType<Byte>
 
     ByteType()
     {
-        super(ComparisonType.CUSTOM);
+        // VAR_LENGTH due to compatibility reasons, should be 1
+        super(ComparisonType.PRIMITIVE_COMPARE, VARIABLE_LENGTH, PrimitiveType.BYTE);
     } // singleton
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
         return accessorL.getByte(left, 0) - accessorR.getByte(right, 0);
     }

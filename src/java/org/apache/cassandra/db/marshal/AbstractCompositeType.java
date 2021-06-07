@@ -40,14 +40,12 @@ public abstract class AbstractCompositeType extends AbstractType<ByteBuffer>
 {
     protected AbstractCompositeType()
     {
-        super(ComparisonType.CUSTOM);
+        super(ComparisonType.CUSTOM, VARIABLE_LENGTH);
     }
 
+    @Override
     public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         boolean isStaticL = readIsStatic(left, accessorL);
         boolean isStaticR = readIsStatic(right, accessorR);
         if (isStaticL != isStaticR)

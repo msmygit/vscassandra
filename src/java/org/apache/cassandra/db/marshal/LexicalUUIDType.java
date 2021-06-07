@@ -33,7 +33,7 @@ public class LexicalUUIDType extends AbstractType<UUID>
 
     LexicalUUIDType()
     {
-        super(ComparisonType.CUSTOM);
+        super(ComparisonType.CUSTOM, 16);
     } // singleton
 
     public boolean isEmptyValueMeaningless()
@@ -43,8 +43,6 @@ public class LexicalUUIDType extends AbstractType<UUID>
 
     public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
         return accessorL.toUUID(left).compareTo(accessorR.toUUID(right));
     }
 
@@ -81,11 +79,5 @@ public class LexicalUUIDType extends AbstractType<UUID>
     public TypeSerializer<UUID> getSerializer()
     {
         return UUIDSerializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 16;
     }
 }

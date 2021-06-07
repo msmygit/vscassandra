@@ -185,10 +185,6 @@ public class MapType<K, V> extends CollectionType<Map<K, V>>
 
     public static <TL, TR> int compareMaps(AbstractType<?> keysComparator, AbstractType<?> valuesComparator, TL left, ValueAccessor<TL> accessorL, TR right, ValueAccessor<TR> accessorR)
     {
-        if (accessorL.isEmpty(left) || accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
-
         ProtocolVersion protocolVersion = ProtocolVersion.V3;
         int sizeL = CollectionSerializer.readCollectionSize(left, accessorL, protocolVersion);
         int sizeR = CollectionSerializer.readCollectionSize(right, accessorR, protocolVersion);

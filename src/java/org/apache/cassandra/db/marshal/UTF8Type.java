@@ -21,14 +21,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 
-import org.apache.cassandra.cql3.Constants;
-import org.apache.cassandra.cql3.Json;
-
-import org.apache.cassandra.cql3.CQL3Type;
-import org.apache.cassandra.cql3.Term;
-import org.apache.cassandra.serializers.MarshalException;
-import org.apache.cassandra.serializers.TypeSerializer;
-import org.apache.cassandra.serializers.UTF8Serializer;
+import org.apache.cassandra.cql3.*;
+import org.apache.cassandra.serializers.*;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
@@ -36,7 +30,7 @@ public class UTF8Type extends AbstractType<String>
 {
     public static final UTF8Type instance = new UTF8Type();
 
-    UTF8Type() {super(ComparisonType.BYTE_ORDER);} // singleton
+    UTF8Type() {super(ComparisonType.BYTE_ORDER, VARIABLE_LENGTH);} // singleton
 
     public ByteBuffer fromString(String source)
     {

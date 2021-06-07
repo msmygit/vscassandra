@@ -61,13 +61,14 @@ public final class IntegerType extends NumberType<BigInteger>
         return i;
     }
 
-    IntegerType() {super(ComparisonType.CUSTOM);}/* singleton */
+    IntegerType() {super(ComparisonType.CUSTOM, VARIABLE_LENGTH);}/* singleton */
 
     public boolean isEmptyValueMeaningless()
     {
         return true;
     }
 
+    @Override
     public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
         return IntegerType.compareIntegers(left, accessorL, right, accessorR);

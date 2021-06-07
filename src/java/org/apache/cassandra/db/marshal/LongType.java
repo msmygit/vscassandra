@@ -33,23 +33,20 @@ public class LongType extends NumberType<Long>
 {
     public static final LongType instance = new LongType();
 
-    LongType() {super(ComparisonType.CUSTOM);} // singleton
+    LongType() {super(ComparisonType.PRIMITIVE_COMPARE, 8, PrimitiveType.LONG);} // singleton
 
     public boolean isEmptyValueMeaningless()
     {
         return true;
     }
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
         return compareLongs(left, accessorL, right, accessorR);
     }
 
     public static <VL, VR> int compareLongs(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        if (accessorL.isEmpty(left)|| accessorR.isEmpty(right))
-            return Boolean.compare(accessorR.isEmpty(right), accessorL.isEmpty(left));
-
         int diff = accessorL.getByte(left, 0) - accessorR.getByte(right, 0);
         if (diff != 0)
             return diff;
@@ -118,12 +115,6 @@ public class LongType extends NumberType<Long>
     public TypeSerializer<Long> getSerializer()
     {
         return LongSerializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 8;
     }
 
     @Override

@@ -33,7 +33,7 @@ public class FloatType extends NumberType<Float>
 {
     public static final FloatType instance = new FloatType();
 
-    FloatType() {super(ComparisonType.CUSTOM);} // singleton
+    FloatType() {super(ComparisonType.PRIMITIVE_COMPARE, 4, PrimitiveType.FLOAT);} // singleton
 
     public boolean isEmptyValueMeaningless()
     {
@@ -46,9 +46,9 @@ public class FloatType extends NumberType<Float>
         return true;
     }
 
-    public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
+    public static <VL, VR> int compareType(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)
     {
-        return compareComposed(left, accessorL, right, accessorR, this);
+        return Float.compare(accessorL.toFloat(left), accessorR.toFloat(right));
     }
 
     public ByteBuffer fromString(String source) throws MarshalException
@@ -104,12 +104,6 @@ public class FloatType extends NumberType<Float>
     public TypeSerializer<Float> getSerializer()
     {
         return FloatSerializer.instance;
-    }
-
-    @Override
-    public int valueLengthIfFixed()
-    {
-        return 4;
     }
 
     @Override

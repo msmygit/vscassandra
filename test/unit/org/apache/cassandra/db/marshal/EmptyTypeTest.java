@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.db.marshal;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.junit.Test;
@@ -60,7 +61,7 @@ public class EmptyTypeTest
     }
 
     @Test
-    public void read()
+    public void read() throws IOException
     {
         DataInputPlus input = Mockito.mock(DataInputPlus.class);
 
