@@ -1,0 +1,30 @@
+--- a/src/java/org/apache/cassandra/config/Config.java
++++ b/src/java/org/apache/cassandra/config/Config.java
+@@ -236,17 +236,12 @@
+     @Deprecated
+     public Integer unlogged_batch_across_partitions_warn_threshold = 0;
+     public volatile Integer concurrent_compactors;
+-<<<<<<<
+-    public volatile int compaction_throughput_mb_per_sec = 16;
++    public volatile int compaction_throughput_mb_per_sec = 64;
+     /**
+      * @deprecated Migrated to 'guardrails.compaction_large_partition_warning_threshold_mb'
+      */
+     @Deprecated
+     public int compaction_large_partition_warning_threshold_mb = 0;
+-=======
+-    public volatile int compaction_throughput_mb_per_sec = 64;
+-    public volatile int compaction_large_partition_warning_threshold_mb = 100;
+->>>>>>>
+     public int min_free_space_per_drive_in_mb = 50;
+ 
+     public volatile int concurrent_materialized_view_builders = 1;
+@@ -555,7 +550,7 @@
+     public volatile int validation_preview_purge_head_start_in_sec = 60 * 60;
+ 
+     public boolean emulate_dbaas_defaults = false;
+-    
++
+     public GuardrailsConfig guardrails = new GuardrailsConfig();
+ 
+     /**
