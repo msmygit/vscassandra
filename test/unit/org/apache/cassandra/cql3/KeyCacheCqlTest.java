@@ -30,6 +30,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.cache.KeyCacheKey;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.index.Index;
@@ -40,6 +41,7 @@ import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.service.StorageService;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -567,7 +569,7 @@ public class KeyCacheCqlTest extends CQLTester
 
             if (i % 10 == 9)
             {
-                Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush().get();
+                Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(UNIT_TESTS).get();
                 if (index != null)
                     triggerBlockingFlush(Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).indexManager.getIndexByName(index));
             }
@@ -577,7 +579,7 @@ public class KeyCacheCqlTest extends CQLTester
     private static void prepareTable(String table) throws IOException, InterruptedException, java.util.concurrent.ExecutionException
     {
         StorageService.instance.disableAutoCompaction(KEYSPACE_PER_TEST, table);
-        Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush().get();
+        Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(UNIT_TESTS).get();
         Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).truncateBlocking();
     }
 

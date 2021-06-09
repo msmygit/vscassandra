@@ -39,6 +39,7 @@ import org.jboss.byteman.contrib.bmunit.BMRule;
 import org.jboss.byteman.contrib.bmunit.BMRules;
 import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -129,7 +130,7 @@ public class CompactionsBytemanTest extends CQLTester
 
         execute("INSERT INTO %s (k, c, v) VALUES (?, ?, ?)", 0, 1, 1);
         Util.spinAssertEquals(true, () -> CompactionManager.instance.compactingCF.count(cfs) == 0, 5);
-        cfs.forceBlockingFlush();
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         Util.spinAssertEquals(true, () -> CompactionManager.instance.compactingCF.count(cfs) == 0, 5);
         FBUtilities.waitOnFutures(CompactionManager.instance.submitBackground(cfs));
@@ -147,7 +148,7 @@ public class CompactionsBytemanTest extends CQLTester
         {
             execute("INSERT INTO %s (id, val) values (2, 'immortal')");
         }
-        cfs.forceBlockingFlush();
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     private void createLowGCGraceTable(){
@@ -194,7 +195,7 @@ public class CompactionsBytemanTest extends CQLTester
             {
                 execute("insert into %s (k, c, v) values (?, ?, ?)", i, j, i*j);
             }
-            cfs.forceBlockingFlush();
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         cfs.getCompactionStrategyManager().mutateRepaired(cfs.getLiveSSTables(), System.currentTimeMillis(), null, false);
         for (int i = 0; i < 5; i++)
@@ -203,7 +204,7 @@ public class CompactionsBytemanTest extends CQLTester
             {
                 execute("insert into %s (k, c, v) values (?, ?, ?)", i, j, i*j);
             }
-            cfs.forceBlockingFlush();
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
         assertTrue(cfs.getTracker().getCompacting().isEmpty());
