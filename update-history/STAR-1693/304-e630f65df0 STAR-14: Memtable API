@@ -1,0 +1,773 @@
+--- a/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java
++++ b/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java
+@@ -47,29 +47,6 @@
+         this.partitionKey = partitionKey;
+     }
+ 
+-<<<<<<<
+-=======
+-    @VisibleForTesting
+-    public static final class Holder
+-    {
+-        public final RegularAndStaticColumns columns;
+-        public final DeletionInfo deletionInfo;
+-        // the btree of rows
+-        public final Object[] tree;
+-        public final Row staticRow;
+-        public final EncodingStats stats;
+-
+-        Holder(RegularAndStaticColumns columns, Object[] tree, DeletionInfo deletionInfo, Row staticRow, EncodingStats stats)
+-        {
+-            this.columns = columns;
+-            this.tree = tree;
+-            this.deletionInfo = deletionInfo;
+-            this.staticRow = staticRow == null ? Rows.EMPTY_STATIC_ROW : staticRow;
+-            this.stats = stats;
+-        }
+-    }
+-
+->>>>>>>
+     public DeletionInfo deletionInfo()
+     {
+         return holder().deletionInfo;
+@@ -353,11 +330,7 @@
+ 
+     // Note that when building with a RowIterator, deletion will generally be LIVE, but we allow to pass it nonetheless because PartitionUpdate
+     // passes a MutableDeletionInfo that it mutates later.
+-<<<<<<<
+-    protected static BTreePartitionData build(RowIterator rows, DeletionInfo deletion, boolean buildEncodingStats, int initialRowCapacity)
+-=======
+-    protected static Holder build(RowIterator rows, DeletionInfo deletion, boolean buildEncodingStats)
+->>>>>>>
++    protected static BTreePartitionData build(RowIterator rows, DeletionInfo deletion, boolean buildEncodingStats)
+     {
+         RegularAndStaticColumns columns = rows.columns();
+         boolean reversed = rows.isReverseOrder();
+@@ -368,22 +341,14 @@
+                 builder.add(rows.next());
+ 
+ 
+-<<<<<<<
+             Object[] tree = reversed ? builder.buildReverse()
+                                      : builder.build();
+ 
+             Row staticRow = rows.staticRow();
+             EncodingStats stats = buildEncodingStats ? EncodingStats.Collector.collect(staticRow, BTree.iterator(tree), deletion)
+                                                      : EncodingStats.NO_STATS;
+-            return new Holder(columns, tree, deletion, staticRow, stats);
++            return new BTreePartitionData(columns, tree, deletion, staticRow, stats);
+         }
+-=======
+-        Row staticRow = rows.staticRow();
+-        Object[] tree = builder.build();
+-        EncodingStats stats = buildEncodingStats ? EncodingStats.Collector.collect(staticRow, BTree.iterator(tree), deletion)
+-                                                 : EncodingStats.NO_STATS;
+-        return new BTreePartitionData(columns, tree, deletion, staticRow, stats);
+->>>>>>>
+     }
+ 
+     @Override
+@@ -429,14 +394,14 @@
+     }
+ 
+     @VisibleForTesting
+-    public static Holder unsafeGetEmptyHolder()
++    public static BTreePartitionData unsafeGetEmptyHolder()
+     {
+-        return EMPTY;
++        return BTreePartitionData.EMPTY;
+     }
+ 
+     @VisibleForTesting
+-    public static Holder unsafeConstructHolder(RegularAndStaticColumns columns, Object[] tree, DeletionInfo deletionInfo, Row staticRow, EncodingStats stats)
++    public static BTreePartitionData unsafeConstructHolder(RegularAndStaticColumns columns, Object[] tree, DeletionInfo deletionInfo, Row staticRow, EncodingStats stats)
+     {
+-        return new Holder(columns, tree, deletionInfo, staticRow, stats);
++        return new BTreePartitionData(columns, tree, deletionInfo, staticRow, stats);
+     }
+ }
+--- a/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java
++++ b/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java
+@@ -32,11 +32,7 @@
+ import org.apache.cassandra.db.rows.*;
+ import org.apache.cassandra.utils.ObjectSizes;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
+-<<<<<<<
+-=======
+ import org.apache.cassandra.utils.memory.Cloner;
+-import org.apache.cassandra.utils.memory.HeapCloner;
+->>>>>>>
+ import org.apache.cassandra.utils.memory.MemtableAllocator;
+ 
+ import com.google.common.annotations.VisibleForTesting;
+@@ -110,85 +106,27 @@
+         return true;
+     }
+ 
+-<<<<<<<
+-=======
+-    private long[] addAllWithSizeDeltaInternal(RowUpdater updater, PartitionUpdate update, UpdateTransaction indexer)
+-    {
+-        Holder current = ref;
+-        updater.reset();
+-
+-        if (!update.deletionInfo().getPartitionDeletion().isLive())
+-            indexer.onPartitionDeletion(update.deletionInfo().getPartitionDeletion());
+-
+-        if (update.deletionInfo().hasRanges())
+-            update.deletionInfo().rangeIterator(false).forEachRemaining(indexer::onRangeTombstone);
+-
+-        DeletionInfo deletionInfo;
+-        if (update.deletionInfo().mayModify(current.deletionInfo))
+-        {
+-            if (updater.inputDeletionInfoCopy == null)
+-                updater.inputDeletionInfoCopy = update.deletionInfo().clone(HeapCloner.instance);
+-
+-            deletionInfo = current.deletionInfo.mutableCopy().add(updater.inputDeletionInfoCopy);
+-            updater.onAllocatedOnHeap(deletionInfo.unsharedHeapSize() - current.deletionInfo.unsharedHeapSize());
+-        }
+-        else
+-        {
+-            deletionInfo = current.deletionInfo;
+-        }
+-
+-        RegularAndStaticColumns columns = update.columns().mergeTo(current.columns);
+-        updater.onAllocatedOnHeap(columns.unsharedHeapSize() - current.columns.unsharedHeapSize());
+-        Row newStatic = update.staticRow();
+-        Row staticRow = newStatic.isEmpty()
+-                        ? current.staticRow
+-                        : (current.staticRow.isEmpty() ? updater.insert(newStatic) : updater.merge(current.staticRow, newStatic));
+-        Object[] tree = BTree.update(current.tree, update.holder().tree, update.metadata().comparator, updater);
+-        EncodingStats newStats = current.stats.mergeWith(update.stats());
+-        updater.onAllocatedOnHeap(newStats.unsharedHeapSize() - current.stats.unsharedHeapSize());
+-
+-        if (tree != null && refUpdater.compareAndSet(this, current, new Holder(columns, tree, deletionInfo, staticRow, newStats)))
+-        {
+-            updater.finish();
+-            return new long[]{ updater.dataSize, updater.colUpdateTimeDelta };
+-        }
+-        else
+-        {
+-            return null;
+-        }
+-    }
+->>>>>>>
+     /**
+      * Adds a given update to this in-memtable partition.
+      *
+      * @return an array containing first the difference in size seen after merging the updates, and second the minimum
+      * time detla between updates.
+      */
+-<<<<<<<
+-    public BTreePartitionUpdater addAll(final PartitionUpdate update, OpOrder.Group writeOp, UpdateTransaction indexer)
+-    {
+-        return new Updater(allocator, writeOp, indexer).addAll(update);
+-    }
+-=======
+-    public long[] addAllWithSizeDelta(final PartitionUpdate update,
++    public BTreePartitionUpdater addAll(final PartitionUpdate update,
+                                       Cloner cloner,
+                                       OpOrder.Group writeOp,
+                                       UpdateTransaction indexer)
+     {
+-        RowUpdater updater = new RowUpdater(allocator, cloner, writeOp, indexer);
+-        try
+-        {
+-            boolean shouldLock = shouldLock(writeOp);
+-            indexer.start();
+->>>>>>>
++        return new Updater(allocator, cloner, writeOp, indexer).addAll(update);
++    }
+ 
+     class Updater extends BTreePartitionUpdater
+     {
+         BTreePartitionData current;
+ 
+-        public Updater(MemtableAllocator allocator, OpOrder.Group writeOp, UpdateTransaction indexer)
++        public Updater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
+         {
+-            super(allocator, writeOp, indexer);
++            super(allocator, cloner, writeOp, indexer);
+         }
+ 
+         Updater addAll(final PartitionUpdate update)
+@@ -372,122 +310,16 @@
+             return wasteTracker + 1;
+         return wasteTracker;
+     }
+-<<<<<<<
+-=======
+ 
+     @VisibleForTesting
+-    public void unsafeSetHolder(Holder holder)
++    public void unsafeSetHolder(BTreePartitionData holder)
+     {
+         ref = holder;
+     }
+ 
+     @VisibleForTesting
+-    public Holder unsafeGetHolder()
++    public BTreePartitionData unsafeGetHolder()
+     {
+         return ref;
+     }
+-
+-    // the function we provide to the btree utilities to perform any column replacements
+-    private static final class RowUpdater implements UpdateFunction<Row, Row>, ColumnData.PostReconciliationFunction
+-    {
+-        final MemtableAllocator allocator;
+-        final OpOrder.Group writeOp;
+-        final UpdateTransaction indexer;
+-        final Cloner cloner;
+-        long dataSize;
+-        long heapSize;
+-        long colUpdateTimeDelta = Long.MAX_VALUE;
+-        List<Row> inserted; // TODO: replace with walk of aborted BTree
+-
+-        DeletionInfo inputDeletionInfoCopy = null;
+-
+-        private RowUpdater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
+-        {
+-            this.allocator = allocator;
+-            this.writeOp = writeOp;
+-            this.indexer = indexer;
+-            this.cloner = cloner;
+-        }
+-
+-        @Override
+-        public Row insert(Row insert)
+-        {
+-            Row data = insert.clone(cloner); 
+-            indexer.onInserted(insert);
+-
+-            this.dataSize += data.dataSize();
+-            onAllocatedOnHeap(data.unsharedHeapSizeExcludingData());
+-            if (inserted == null)
+-                inserted = new ArrayList<>();
+-            inserted.add(data);
+-            return data;
+-        }
+-
+-        public Row merge(Row existing, Row update)
+-        {
+-            Row reconciled = Rows.merge(existing, update, this);
+-            indexer.onUpdated(existing, reconciled);
+-
+-            if (inserted == null)
+-                inserted = new ArrayList<>();
+-            inserted.add(reconciled);
+-
+-            return reconciled;
+-        }
+-
+-        public Row retain(Row existing)
+-        {
+-            return existing;
+-        }
+-
+-        protected void reset()
+-        {
+-            this.dataSize = 0;
+-            this.heapSize = 0;
+-            if (inserted != null)
+-                inserted.clear();
+-        }
+-
+-        public Cell<?> merge(Cell<?> previous, Cell<?> insert)
+-        {
+-            if (insert != previous)
+-            {
+-                long timeDelta = Math.abs(insert.timestamp() - previous.timestamp());
+-                if (timeDelta < colUpdateTimeDelta)
+-                    colUpdateTimeDelta = timeDelta;
+-            }
+-            if (cloner != null)
+-                insert = cloner.clone(insert);
+-            dataSize += insert.dataSize() - previous.dataSize();
+-            heapSize += insert.unsharedHeapSizeExcludingData() - previous.unsharedHeapSizeExcludingData();
+-            return insert;
+-        }
+-
+-        public ColumnData insert(ColumnData insert)
+-        {
+-            if (cloner != null)
+-                insert = insert.clone(cloner);
+-            dataSize += insert.dataSize();
+-            heapSize += insert.unsharedHeapSizeExcludingData();
+-            return insert;
+-        }
+-
+-        @Override
+-        public void delete(ColumnData existing)
+-        {
+-            dataSize -= existing.dataSize();
+-            heapSize -= existing.unsharedHeapSizeExcludingData();
+-        }
+-
+-        public void onAllocatedOnHeap(long heapSize)
+-        {
+-            this.heapSize += heapSize;
+-        }
+-
+-        protected void finish()
+-        {
+-            allocator.onHeap().adjust(heapSize, writeOp);
+-        }
+-    }
+->>>>>>>
+ }
+--- a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
++++ b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+@@ -201,11 +201,7 @@
+     {
+         iterator = RowIterators.withOnlyQueriedData(iterator, filter);
+         MutableDeletionInfo deletionInfo = MutableDeletionInfo.live();
+-<<<<<<<
+-        BTreePartitionData holder = build(iterator, deletionInfo, true, 16);
+-=======
+-        Holder holder = build(iterator, deletionInfo, true);
+->>>>>>>
++        BTreePartitionData holder = build(iterator, deletionInfo, true);
+         return new PartitionUpdate(iterator.metadata(), iterator.partitionKey(), holder, deletionInfo, false);
+     }
+ 
+@@ -481,7 +477,7 @@
+     @VisibleForTesting
+     public static PartitionUpdate unsafeConstruct(TableMetadata metadata,
+                                                   DecoratedKey key,
+-                                                  Holder holder,
++                                                  BTreePartitionData holder,
+                                                   MutableDeletionInfo deletionInfo,
+                                                   boolean canHaveShadowedData)
+     {
+@@ -677,11 +673,7 @@
+             MutableDeletionInfo deletionInfo = deletionBuilder.build();
+             return new PartitionUpdate(metadata,
+                                        header.key,
+-<<<<<<<
+-                                       new BTreePartitionData(header.sHeader.columns(), rows.build(), deletionInfo, header.staticRow, header.sHeader.stats()),
+-=======
+-                                       new Holder(header.sHeader.columns(), rows, deletionInfo, header.staticRow, header.sHeader.stats()),
+->>>>>>>
++                                       new BTreePartitionData(header.sHeader.columns(), rows, deletionInfo, header.staticRow, header.sHeader.stats()),
+                                        deletionInfo,
+                                        false);
+         }
+--- a/src/java/org/apache/cassandra/db/rows/Rows.java
++++ b/src/java/org/apache/cassandra/db/rows/Rows.java
+@@ -246,13 +246,7 @@
+      * @param existing
+      * @param update
+      *
+-<<<<<<<
+      * @return the row resulting from the merge.
+-=======
+-     * @return the smallest timestamp delta between corresponding rows from existing and update. A
+-     * timestamp delta being computed as the difference between the cells and DeletionTimes from {@code existing}
+-     * and those in {@code update}.
+->>>>>>>
+      */
+     public static Row merge(Row existing, Row update, ColumnData.PostReconciliationFunction onReconcile)
+     {
+--- a/src/java/org/apache/cassandra/utils/memory/HeapPool.java
++++ b/src/java/org/apache/cassandra/utils/memory/HeapPool.java
+@@ -39,14 +39,7 @@
+     @VisibleForTesting
+     public static class Allocator extends MemtableBufferAllocator
+     {
+-<<<<<<<
+-        Allocator(HeapPool pool)
+-=======
+-        private static final EnsureOnHeap ENSURE_NOOP = new EnsureOnHeap.NoOp();
+-
+-        @VisibleForTesting
+         public Allocator(HeapPool pool)
+->>>>>>>
+         {
+             super(pool.onHeap.newAllocator(), pool.offHeap.newAllocator());
+         }
+--- a/test/unit/org/apache/cassandra/db/ScrubTest.java
++++ b/test/unit/org/apache/cassandra/db/ScrubTest.java
+@@ -94,11 +94,8 @@
+ import static org.apache.cassandra.SchemaLoader.getCompressionParameters;
+ import static org.apache.cassandra.SchemaLoader.loadSchema;
+ import static org.apache.cassandra.SchemaLoader.standardCFMD;
+-<<<<<<<
+ import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+-=======
+ import static org.assertj.core.api.Assertions.assertThat;
+->>>>>>>
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.assertTrue;
+diff --git a/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java b/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java
+index cd2b7eaee6..70385d9936 100644
+--- a/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java
++++ b/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java
+@@ -55,6 +55,7 @@ import org.apache.cassandra.schema.TableMetadataRef;
+ import org.apache.cassandra.utils.ByteBufferUtil;
+ import org.apache.cassandra.utils.ObjectSizes;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
++import org.apache.cassandra.utils.memory.Cloner;
+ import org.apache.cassandra.utils.memory.MemtableAllocator;
+ 
+ public class SkipListMemtable extends AbstractAllocatorMemtable
+@@ -119,12 +120,13 @@ public class SkipListMemtable extends AbstractAllocatorMemtable
+      */
+     public long put(PartitionUpdate update, UpdateTransaction indexer, OpOrder.Group opGroup)
+     {
++        Cloner cloner = allocator.cloner(opGroup);
+         AtomicBTreePartition previous = partitions.get(update.partitionKey());
+ 
+         long initialSize = 0;
+         if (previous == null)
+         {
+-            final DecoratedKey cloneKey = allocator.clone(update.partitionKey(), opGroup);
++            final DecoratedKey cloneKey = cloner.clone(update.partitionKey());
+             AtomicBTreePartition empty = new AtomicBTreePartition(metadata, cloneKey, allocator);
+             // We'll add the columns later. This avoids wasting works if we get beaten in the putIfAbsent
+             previous = partitions.putIfAbsent(cloneKey, empty);
+@@ -139,7 +141,7 @@ public class SkipListMemtable extends AbstractAllocatorMemtable
+             }
+         }
+ 
+-        BTreePartitionUpdater updater = previous.addAll(update, opGroup, indexer);
++        BTreePartitionUpdater updater = previous.addAll(update, cloner, opGroup, indexer);
+         updateMin(minTimestamp, previous.stats().minTimestamp);
+         liveDataSize.addAndGet(initialSize + updater.dataSize);
+         columnsCollector.update(update.columns());
+@@ -210,10 +212,11 @@ public class SkipListMemtable extends AbstractAllocatorMemtable
+         {
+             int rowOverhead;
+             MemtableAllocator allocator = MEMORY_POOL.newAllocator();
++            Cloner cloner = allocator.cloner(group);
+             ConcurrentNavigableMap<PartitionPosition, Object> partitions = new ConcurrentSkipListMap<>();
+             final Object val = new Object();
+             for (int i = 0 ; i < count ; i++)
+-                partitions.put(allocator.clone(new BufferDecoratedKey(new LongToken(i), ByteBufferUtil.EMPTY_BYTE_BUFFER), group), val);
++                partitions.put(cloner.clone(new BufferDecoratedKey(new LongToken(i), ByteBufferUtil.EMPTY_BYTE_BUFFER)), val);
+             double avgSize = ObjectSizes.measureDeep(partitions) / (double) count;
+             rowOverhead = (int) ((avgSize - Math.floor(avgSize)) < 0.05 ? Math.floor(avgSize) : Math.ceil(avgSize));
+             rowOverhead -= ObjectSizes.measureDeep(new LongToken(0));
+diff --git a/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java b/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
+index ebbfe7cd78..56d9058d00 100644
+--- a/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
++++ b/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
+@@ -61,6 +61,7 @@ import org.apache.cassandra.schema.TableMetadata;
+ import org.apache.cassandra.schema.TableMetadataRef;
+ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
++import org.apache.cassandra.utils.memory.Cloner;
+ import org.apache.cassandra.utils.memory.EnsureOnHeap;
+ 
+ public class TrieMemtable extends AbstractAllocatorMemtable
+@@ -128,7 +129,8 @@ public class TrieMemtable extends AbstractAllocatorMemtable
+      */
+     public long put(PartitionUpdate update, UpdateTransaction indexer, OpOrder.Group opGroup)
+     {
+-        BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, opGroup, indexer);
++        Cloner cloner = allocator.cloner(opGroup);
++        BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, cloner, opGroup, indexer);
+         DecoratedKey key = update.partitionKey();
+ 
+         // TODO: Improve locking.
+diff --git a/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java b/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java
+index 5aa85ebe17..188bc09125 100644
+--- a/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java
++++ b/src/java/org/apache/cassandra/db/partitions/AbstractBTreePartition.java
+@@ -394,14 +394,14 @@ public abstract class AbstractBTreePartition implements Partition, Iterable<Row>
+     }
+ 
+     @VisibleForTesting
+-    public static Holder unsafeGetEmptyHolder()
++    public static BTreePartitionData unsafeGetEmptyHolder()
+     {
+-        return EMPTY;
++        return BTreePartitionData.EMPTY;
+     }
+ 
+     @VisibleForTesting
+-    public static Holder unsafeConstructHolder(RegularAndStaticColumns columns, Object[] tree, DeletionInfo deletionInfo, Row staticRow, EncodingStats stats)
++    public static BTreePartitionData unsafeConstructHolder(RegularAndStaticColumns columns, Object[] tree, DeletionInfo deletionInfo, Row staticRow, EncodingStats stats)
+     {
+-        return new Holder(columns, tree, deletionInfo, staticRow, stats);
++        return new BTreePartitionData(columns, tree, deletionInfo, staticRow, stats);
+     }
+ }
+diff --git a/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java b/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java
+index 8c126cf0c6..b8da4c73ad 100644
+--- a/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java
++++ b/src/java/org/apache/cassandra/db/partitions/AtomicBTreePartition.java
+@@ -33,7 +33,6 @@ import org.apache.cassandra.db.rows.*;
+ import org.apache.cassandra.utils.ObjectSizes;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
+ import org.apache.cassandra.utils.memory.Cloner;
+-import org.apache.cassandra.utils.memory.HeapCloner;
+ import org.apache.cassandra.utils.memory.MemtableAllocator;
+ 
+ import com.google.common.annotations.VisibleForTesting;
+@@ -118,16 +117,16 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
+                                       OpOrder.Group writeOp,
+                                       UpdateTransaction indexer)
+     {
+-        return new Updater(allocator, writeOp, indexer).addAll(update);
++        return new Updater(allocator, cloner, writeOp, indexer).addAll(update);
+     }
+ 
+     class Updater extends BTreePartitionUpdater
+     {
+         BTreePartitionData current;
+ 
+-        public Updater(MemtableAllocator allocator, OpOrder.Group writeOp, UpdateTransaction indexer)
++        public Updater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
+         {
+-            super(allocator, writeOp, indexer);
++            super(allocator, cloner, writeOp, indexer);
+         }
+ 
+         Updater addAll(final PartitionUpdate update)
+@@ -311,4 +310,16 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
+             return wasteTracker + 1;
+         return wasteTracker;
+     }
++
++    @VisibleForTesting
++    public void unsafeSetHolder(BTreePartitionData holder)
++    {
++        ref = holder;
++    }
++
++    @VisibleForTesting
++    public BTreePartitionData unsafeGetHolder()
++    {
++        return ref;
++    }
+ }
+diff --git a/src/java/org/apache/cassandra/db/partitions/BTreePartitionData.java b/src/java/org/apache/cassandra/db/partitions/BTreePartitionData.java
+index 1f0320d37f..8508f38587 100644
+--- a/src/java/org/apache/cassandra/db/partitions/BTreePartitionData.java
++++ b/src/java/org/apache/cassandra/db/partitions/BTreePartitionData.java
+@@ -36,11 +36,11 @@ public final class BTreePartitionData
+     public static final long UNSHARED_HEAP_SIZE = ObjectSizes.measure(EMPTY);
+ 
+ 
+-    final RegularAndStaticColumns columns;
+-    final DeletionInfo deletionInfo;
++    public final RegularAndStaticColumns columns;
++    public final DeletionInfo deletionInfo;
+     // the btree of rows
+-    final Object[] tree;
+-    final Row staticRow;
++    public final Object[] tree;
++    public final Row staticRow;
+     public final EncodingStats stats;
+ 
+     BTreePartitionData(RegularAndStaticColumns columns,
+diff --git a/src/java/org/apache/cassandra/db/partitions/BTreePartitionUpdater.java b/src/java/org/apache/cassandra/db/partitions/BTreePartitionUpdater.java
+index c1984580f1..97bbf449dc 100644
+--- a/src/java/org/apache/cassandra/db/partitions/BTreePartitionUpdater.java
++++ b/src/java/org/apache/cassandra/db/partitions/BTreePartitionUpdater.java
+@@ -21,6 +21,9 @@ package org.apache.cassandra.db.partitions;
+ import org.apache.cassandra.db.Clustering;
+ import org.apache.cassandra.db.DeletionInfo;
+ import org.apache.cassandra.db.RegularAndStaticColumns;
++import org.apache.cassandra.db.rows.BTreeRow;
++import org.apache.cassandra.db.rows.Cell;
++import org.apache.cassandra.db.rows.ColumnData;
+ import org.apache.cassandra.db.rows.EncodingStats;
+ import org.apache.cassandra.db.rows.Row;
+ import org.apache.cassandra.db.rows.Rows;
+@@ -28,46 +31,37 @@ import org.apache.cassandra.index.transactions.UpdateTransaction;
+ import org.apache.cassandra.utils.btree.BTree;
+ import org.apache.cassandra.utils.btree.UpdateFunction;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
+-import org.apache.cassandra.utils.memory.HeapAllocator;
++import org.apache.cassandra.utils.memory.Cloner;
++import org.apache.cassandra.utils.memory.HeapCloner;
+ import org.apache.cassandra.utils.memory.MemtableAllocator;
+ 
+ /**
+  *  the function we provide to the trie and btree utilities to perform any row and column replacements
+  */
+-public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
++public class BTreePartitionUpdater implements UpdateFunction<Row, Row>, ColumnData.PostReconciliationFunction
+ {
+     final MemtableAllocator allocator;
+     final OpOrder.Group writeOp;
+     final UpdateTransaction indexer;
+-    Row.Builder regularBuilder;
++    final Cloner cloner;
+     public long dataSize;
+     long heapSize;
+     public long colUpdateTimeDelta = Long.MAX_VALUE;
+ 
+-    public BTreePartitionUpdater(MemtableAllocator allocator, OpOrder.Group writeOp, UpdateTransaction indexer)
++    public BTreePartitionUpdater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
+     {
+         this.allocator = allocator;
+         this.writeOp = writeOp;
+         this.indexer = indexer;
++        this.cloner = cloner;
+         this.heapSize = 0;
+         this.dataSize = 0;
+     }
+ 
+-    private Row.Builder builder(Clustering<?> clustering)
++    @Override
++    public Row insert(Row insert)
+     {
+-        boolean isStatic = clustering == Clustering.STATIC_CLUSTERING;
+-        // We know we only insert/update one static per PartitionUpdate, so no point in saving the builder
+-        if (isStatic)
+-            return allocator.rowBuilder(writeOp);
+-
+-        if (regularBuilder == null)
+-            regularBuilder = allocator.rowBuilder(writeOp);
+-        return regularBuilder;
+-    }
+-
+-    public Row apply(Row insert)
+-    {
+-        Row data = Rows.copy(insert, builder(insert.clustering())).build();
++        Row data = insert.clone(cloner);
+         indexer.onInserted(insert);
+ 
+         this.dataSize += data.dataSize();
+@@ -75,13 +69,10 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+         return data;
+     }
+ 
+-    public Row apply(Row existing, Row update)
++    @Override
++    public Row merge(Row existing, Row update)
+     {
+-        Row.Builder builder = builder(existing.clustering());
+-        colUpdateTimeDelta = Math.min(colUpdateTimeDelta, Rows.merge(existing, update, builder));
+-
+-        Row reconciled = builder.build();
+-
++        Row reconciled = Rows.merge(existing, update, this);
+         indexer.onUpdated(existing, reconciled);
+ 
+         dataSize += reconciled.dataSize() - existing.dataSize();
+@@ -104,7 +95,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+         // Like for rows, we have to clone the update in case internal buffers (when it has range tombstones) reference
+         // memory we shouldn't hold into. But we don't ever store this off-heap currently so we just default to the
+         // HeapAllocator (rather than using 'allocator').
+-        DeletionInfo newInfo = existing.mutableCopy().add(update.copy(HeapAllocator.instance));
++        DeletionInfo newInfo = existing.mutableCopy().add(update.clone(HeapCloner.instance));
+         onAllocatedOnHeap(newInfo.unsharedHeapSize() - existing.unsharedHeapSize());
+         return newInfo;
+     }
+@@ -141,8 +132,8 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+         newStatic = newStatic.isEmpty()
+                     ? current.staticRow
+                     : (current.staticRow.isEmpty()
+-                       ? this.apply(newStatic)
+-                       : this.apply(current.staticRow, newStatic));
++                       ? this.insert(newStatic)
++                       : this.merge(current.staticRow, newStatic));
+ 
+         Object[] tree = BTree.update(current.tree, update.holder().tree, update.metadata().comparator, this);
+         EncodingStats newStats = current.stats.mergeWith(update.stats());
+@@ -156,6 +147,37 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+         return false;
+     }
+ 
++    public Cell<?> merge(Cell<?> previous, Cell<?> insert)
++    {
++        if (insert != previous)
++        {
++            long timeDelta = Math.abs(insert.timestamp() - previous.timestamp());
++            if (timeDelta < colUpdateTimeDelta)
++                colUpdateTimeDelta = timeDelta;
++        }
++        if (cloner != null)
++            insert = cloner.clone(insert);
++        dataSize += insert.dataSize() - previous.dataSize();
++        heapSize += insert.unsharedHeapSizeExcludingData() - previous.unsharedHeapSizeExcludingData();
++        return insert;
++    }
++
++    public ColumnData insert(ColumnData insert)
++    {
++        if (cloner != null)
++            insert = insert.clone(cloner);
++        dataSize += insert.dataSize();
++        heapSize += insert.unsharedHeapSizeExcludingData();
++        return insert;
++    }
++
++    @Override
++    public void delete(ColumnData existing)
++    {
++        dataSize -= existing.dataSize();
++        heapSize -= existing.unsharedHeapSizeExcludingData();
++    }
++
+     public void onAllocatedOnHeap(long heapSize)
+     {
+         this.heapSize += heapSize;
+@@ -165,4 +187,6 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+     {
+         allocator.onHeap().adjust(heapSize, writeOp);
+     }
++
++
+ }
+diff --git a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+index e8c9da31b4..832ed81744 100644
+--- a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
++++ b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+@@ -477,7 +477,7 @@ public class PartitionUpdate extends AbstractBTreePartition
+     @VisibleForTesting
+     public static PartitionUpdate unsafeConstruct(TableMetadata metadata,
+                                                   DecoratedKey key,
+-                                                  Holder holder,
++                                                  BTreePartitionData holder,
+                                                   MutableDeletionInfo deletionInfo,
+                                                   boolean canHaveShadowedData)
+     {
+diff --git a/src/java/org/apache/cassandra/utils/memory/HeapPool.java b/src/java/org/apache/cassandra/utils/memory/HeapPool.java
+index b5b74b0a4e..4b344a5c81 100644
+--- a/src/java/org/apache/cassandra/utils/memory/HeapPool.java
++++ b/src/java/org/apache/cassandra/utils/memory/HeapPool.java
+@@ -39,7 +39,7 @@ public class HeapPool extends MemtablePool
+     @VisibleForTesting
+     public static class Allocator extends MemtableBufferAllocator
+     {
+-        Allocator(HeapPool pool)
++        public Allocator(HeapPool pool)
+         {
+             super(pool.onHeap.newAllocator(), pool.offHeap.newAllocator());
+         }
+diff --git a/test/microbench/org/apache/cassandra/test/microbench/btree/AtomicBTreePartitionUpdateBench.java b/test/microbench/org/apache/cassandra/test/microbench/btree/AtomicBTreePartitionUpdateBench.java
+index c32b1e3182..23a5e0e916 100644
+--- a/test/microbench/org/apache/cassandra/test/microbench/btree/AtomicBTreePartitionUpdateBench.java
++++ b/test/microbench/org/apache/cassandra/test/microbench/btree/AtomicBTreePartitionUpdateBench.java
+@@ -53,6 +53,7 @@ import org.apache.cassandra.db.marshal.Int32Type;
+ import org.apache.cassandra.db.marshal.MapType;
+ import org.apache.cassandra.db.partitions.AbstractBTreePartition;
+ import org.apache.cassandra.db.partitions.AtomicBTreePartition;
++import org.apache.cassandra.db.partitions.BTreePartitionData;
+ import org.apache.cassandra.db.partitions.PartitionUpdate;
+ import org.apache.cassandra.db.rows.BTreeRow;
+ import org.apache.cassandra.db.rows.BufferCell;
+@@ -343,7 +344,7 @@ public class AtomicBTreePartitionUpdateBench
+                         {
+                             if (invalidateOn > 0 && --invalidateOn == 0)
+                             {
+-                                AbstractBTreePartition.Holder holder = update.unsafeGetHolder();
++                                BTreePartitionData holder = update.unsafeGetHolder();
+                                 if (!BTree.isEmpty(holder.tree))
+                                     update.unsafeSetHolder(AbstractBTreePartition.unsafeConstructHolder(
+                                         holder.columns, Arrays.copyOf(holder.tree, holder.tree.length), holder.deletionInfo, holder.staticRow, holder.stats));
+@@ -397,7 +398,7 @@ public class AtomicBTreePartitionUpdateBench
+                         ThreadLocalRandom.current().nextLong();
+                 }
+                 invokeBefore.accept(this);
+-                update.addAllWithSizeDelta(insert[index], cloner, NO_ORDER.getCurrent(), UpdateTransaction.NO_OP);
++                update.addAll(insert[index], cloner, NO_ORDER.getCurrent(), UpdateTransaction.NO_OP);
+                 return true;
+             }
+             finally
