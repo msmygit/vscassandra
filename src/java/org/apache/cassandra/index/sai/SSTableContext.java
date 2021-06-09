@@ -129,7 +129,7 @@ public class SSTableContext extends SharedCloseableImpl
         private final PrimaryKeyMap primaryKeyMap;
         private final Ref<? extends SSTableReader> sstableRef;
 
-        private Cleanup(FileHandle token, PrimaryKeyMap primaryKeyMap, Ref<SSTableReader> sstableRef)
+        private Cleanup(FileHandle token, PrimaryKeyMap primaryKeyMap, Ref<? extends SSTableReader> sstableRef)
         {
             this.token = token;
             this.primaryKeyMap = primaryKeyMap;
