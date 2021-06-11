@@ -1,0 +1,19 @@
+--- a/src/java/org/apache/cassandra/utils/memory/EnsureOnHeap.java
++++ b/src/java/org/apache/cassandra/utils/memory/EnsureOnHeap.java
+@@ -57,16 +57,10 @@
+ 
+         public Row applyToRow(Row row)
+         {
+-<<<<<<<
+             // If current "row" is Rows.EMPTY_STATIC_ROW, don't copy it again, as "copied_empty_static_row" != EMPTY_STATIC_ROW
+             if (row == null || row == Rows.EMPTY_STATIC_ROW)
+                 return row;
+-            return Rows.copy(row, HeapAllocator.instance.cloningBTreeRowBuilder()).build();
+-=======
+-            if (row == null)
+-                return null;
+             return row.clone(HeapCloner.instance);
+->>>>>>>
+         }
+ 
+         public Row applyToStatic(Row row)
