@@ -1,0 +1,76 @@
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -90,13 +90,9 @@
+     public static final String CF_STANDARD2 = "Standard2";
+     public static final String CF_COMPRESSED = "Compressed";
+     public static final String CF_INDEXED = "Indexed1";
+-<<<<<<<
+-    public static final String CF_STANDARDLOWINDEXINTERVAL = "StandardLowIndexInterval";
+-    public static final String CF_STANDARDNOBLOOMFILTER = "StandardNoBloomFilter";
+-=======
+     public static final String CF_STANDARD_LOW_INDEX_INTERVAL = "StandardLowIndexInterval";
+     public static final String CF_STANDARD_SMALL_BLOOM_FILTER = "StandardSmallBloomFilter";
+->>>>>>>
++    public static final String CF_STANDARD_NO_BLOOM_FILTER = "StandardNoBloomFilter";
+ 
+     private IPartitioner partitioner;
+ 
+@@ -121,15 +117,12 @@
+                                                 .minIndexInterval(8)
+                                                 .maxIndexInterval(256)
+                                                 .caching(CachingParams.CACHE_NOTHING),
+-<<<<<<<
+-                                    SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARDNOBLOOMFILTER)
+-                                                .bloomFilterFpChance(1));
+-=======
+                                     SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARD_SMALL_BLOOM_FILTER)
+                                                 .minIndexInterval(4)
+                                                 .maxIndexInterval(4)
+-                                                .bloomFilterFpChance(0.99));
+->>>>>>>
++                                                .bloomFilterFpChance(0.99),
++                                    SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARD_NO_BLOOM_FILTER)
++                                                .bloomFilterFpChance(1));
+     }
+ 
+     @After
+@@ -1012,7 +1005,7 @@
+ 
+         final int numKeys = 100;
+         final Keyspace keyspace = Keyspace.open(KEYSPACE1);
+-        final ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARDNOBLOOMFILTER);
++        final ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARD_NO_BLOOM_FILTER);
+ 
+         SSTableReader sstable = getNewSSTable(cfs, numKeys, 1);
+         Assert.assertTrue(sstable.getBloomFilterSerializedSize() == 0);
+diff --git a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+index f133a37e6d..36d690cff7 100644
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -92,7 +92,7 @@ public class SSTableReaderTest
+     public static final String CF_INDEXED = "Indexed1";
+     public static final String CF_STANDARD_LOW_INDEX_INTERVAL = "StandardLowIndexInterval";
+     public static final String CF_STANDARD_SMALL_BLOOM_FILTER = "StandardSmallBloomFilter";
+-    public static final String CF_STANDARDNOBLOOMFILTER = "StandardNoBloomFilter";
++    public static final String CF_STANDARD_NO_BLOOM_FILTER = "StandardNoBloomFilter";
+ 
+     private IPartitioner partitioner;
+ 
+@@ -121,7 +121,7 @@ public class SSTableReaderTest
+                                                 .minIndexInterval(4)
+                                                 .maxIndexInterval(4)
+                                                 .bloomFilterFpChance(0.99),
+-                                    SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARDNOBLOOMFILTER)
++                                    SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARD_NO_BLOOM_FILTER)
+                                                 .bloomFilterFpChance(1));
+     }
+ 
+@@ -1005,7 +1005,7 @@ public class SSTableReaderTest
+ 
+         final int numKeys = 100;
+         final Keyspace keyspace = Keyspace.open(KEYSPACE1);
+-        final ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARDNOBLOOMFILTER);
++        final ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARD_NO_BLOOM_FILTER);
+ 
+         SSTableReader sstable = getNewSSTable(cfs, numKeys, 1);
+         Assert.assertTrue(sstable.getBloomFilterSerializedSize() == 0);
