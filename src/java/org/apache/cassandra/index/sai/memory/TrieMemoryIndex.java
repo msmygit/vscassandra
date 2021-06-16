@@ -106,13 +106,16 @@ public class TrieMemoryIndex extends MemoryIndex
             final long initialSizeOffHeap = data.sizeOffHeap();
             final long reducerHeapSize = primaryKeysReducer.heapAllocations();
 
-
             while (analyzer.hasNext())
             {
                 final ByteBuffer term = analyzer.next();
                 setMinMaxTerm(term);
 
                 final ByteComparable encodedTerm = encode(term);
+
+                int length = ByteComparable.length(encodedTerm, ByteComparable.Version.OSS41);
+                maxLength = Math.max(maxLength, length);
+
                 try
                 {
                     if (term.limit() <= MAX_RECURSIVE_KEY_LENGTH)

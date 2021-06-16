@@ -57,6 +57,11 @@ public class MemtableIndex
         this.clusteringComparator = columnContext.clusteringComparator();
     }
 
+    public int maxLength()
+    {
+        return index.maxLength;
+    }
+
     public long writeCount()
     {
         return writeCount.sum();

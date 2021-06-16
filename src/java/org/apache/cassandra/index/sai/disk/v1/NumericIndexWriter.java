@@ -19,22 +19,17 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import com.google.common.base.MoreObjects;
-
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
-import org.apache.cassandra.index.sai.disk.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.lucene.codecs.MutablePointValues;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
+
+import org.apache.cassandra.index.sai.disk.*;
+import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -125,6 +120,11 @@ public class NumericIndexWriter implements Closeable
         }
     }
 
+    public SegmentMetadata.ComponentMetadataMap writeAll(MutableOneDimPointValues values) throws IOException
+    {
+        return writeAll(null, values);
+    }
+
     /**
      * Writes a k-d tree and posting lists from a {@link MutablePointValues}.
      *
@@ -132,7 +132,7 @@ public class NumericIndexWriter implements Closeable
      *
      * @return metadata describing the location and size of this kd-tree in the overall SSTable kd-tree component file
      */
-    public SegmentMetadata.ComponentMetadataMap writeAll(MutableOneDimPointValues values) throws IOException
+    public SegmentMetadata.ComponentMetadataMap writeAll(final TermsIterator termsIterator, MutableOneDimPointValues values) throws IOException
     {
         long bkdPosition;
         final SegmentMetadata.ComponentMetadataMap components = new SegmentMetadata.ComponentMetadataMap();
@@ -144,8 +144,10 @@ public class NumericIndexWriter implements Closeable
             // The SSTable kd-tree component file is opened in append mode, so our offset is the current file pointer.
             final long bkdOffset = bkdOutput.getFilePointer();
 
-            bkdPosition = writer.writeField(bkdOutput, values, leafCallback);
-
+            if (termsIterator != null)
+                bkdPosition = writer.writeField(bkdOutput, termsIterator, leafCallback);
+            else
+                bkdPosition = writer.writeField(bkdOutput, values, leafCallback);
             // If the bkdPosition is less than 0 then we didn't write any values out
             // and the index is empty
             if (bkdPosition < 0)

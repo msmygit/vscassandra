@@ -311,8 +311,8 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         DecoratedKey minKey = segments.get(0).minKey;
         DecoratedKey maxKey = segments.get(segments.size() - 1).maxKey;
 
-        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(columnContext.isLiteral());
-             SSTableIndex.PerIndexFiles perIndexFiles = new SSTableIndex.PerIndexFiles(indexComponents, columnContext.isLiteral(), true))
+        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger();
+             SSTableIndex.PerIndexFiles perIndexFiles = new SSTableIndex.PerIndexFiles(indexComponents, false, true))
         {
             for (final SegmentMetadata segment : segments)
             {
@@ -320,6 +320,10 @@ public class SSTableIndexWriter implements ColumnIndexWriter
             }
             segments.clear();
             segments.add(segmentMerger.merge(columnContext, indexComponents, minKey, maxKey, maxSSTableRowId));
+        }
+        catch (Throwable th)
+        {
+            th.printStackTrace();
         }
         finally
         {
@@ -345,9 +349,8 @@ public class SSTableIndexWriter implements ColumnIndexWriter
 
     private SegmentBuilder newSegmentBuilder()
     {
-        SegmentBuilder builder = TypeUtil.isLiteral(columnContext.getValidator())
-                                 ? new SegmentBuilder.RAMStringSegmentBuilder(columnContext.getValidator(), limiter)
-                                 : new SegmentBuilder.KDTreeSegmentBuilder(columnContext.getValidator(), limiter, columnContext.getIndexWriterConfig());
+        boolean literal = TypeUtil.isLiteral(columnContext.getValidator());
+        SegmentBuilder builder = new SegmentBuilder.RAMStringSegmentBuilder(literal, columnContext.getValidator(), limiter, columnContext.getIndexWriterConfig());
 
         long globalBytesUsed = limiter.increment(builder.totalBytesAllocated());
         logger.debug(columnContext.logMessage("Created new segment builder while flushing SSTable {}. Global segment memory usage now at {}."),

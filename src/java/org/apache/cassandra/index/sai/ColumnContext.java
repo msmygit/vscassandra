@@ -122,8 +122,9 @@ public class ColumnContext
 
         String fullIndexName = String.format("%s.%s.%s", this.keyspace, this.table, this.config.name);
         this.indexWriterConfig = IndexWriterConfig.fromOptions(fullIndexName, validator, config.options);
-        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(getIndexName(), tableMeta)
-                                              : new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
+        this.columnQueryMetrics = new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
+                //        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(getIndexName(), tableMeta)
+//                                              : new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
 
         logger.info(logMessage("Initialized column context with index writer config: {}"),
                 this.indexWriterConfig.toString());

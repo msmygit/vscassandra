@@ -22,17 +22,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.index.sai.ColumnContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.disk.v1.BKDReader;
-import org.apache.cassandra.index.sai.disk.v1.InvertedIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.TermsReader;
-import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 
 /**
@@ -47,84 +43,86 @@ public interface SegmentMerger extends Closeable
     SegmentMetadata merge(ColumnContext context, IndexComponents components, DecoratedKey minKey, DecoratedKey maxKey, long maxSSTableRowId) throws IOException;
 
     @SuppressWarnings("resource")
-    static SegmentMerger newSegmentMerger(boolean literal)
+    static SegmentMerger newSegmentMerger()
     {
-        return literal ? new LiteralSegmentMerger() : new NumericSegmentMerger();
+        //return literal ? new LiteralSegmentMerger() : new NumericSegmentMerger();
+        return new NumericSegmentMerger();
     }
 
-    class LiteralSegmentMerger implements SegmentMerger
-    {
-        final List<TermsReader> readers = new ArrayList<>();
-        final List<TermsIterator> segmentTermsIterators = new ArrayList<>();
-
-        @Override
-        public void addSegment(ColumnContext context, SegmentMetadata segment, SSTableIndex.PerIndexFiles indexFiles) throws IOException
-        {
-            segmentTermsIterators.add(createTermsIterator(segment, indexFiles));
-        }
-
-        @Override
-        public boolean isEmpty()
-        {
-            return segmentTermsIterators.isEmpty();
-        }
-
-        @Override
-        public SegmentMetadata merge(ColumnContext context, IndexComponents components, DecoratedKey minKey, DecoratedKey maxKey, long maxSSTableRowId) throws IOException
-        {
-            try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), context.getValidator()))
-            {
-
-                SegmentMetadata.ComponentMetadataMap indexMetas;
-                long numRows;
-
-                try (InvertedIndexWriter indexWriter = new InvertedIndexWriter(components, false))
-                {
-                    indexMetas = indexWriter.writeAll(merger);
-                    numRows = indexWriter.getPostingsCount();
-                }
-                return new SegmentMetadata(0,
-                                           numRows,
-                                           merger.minSSTableRowId,
-                                           merger.maxSSTableRowId,
-                                           minKey,
-                                           maxKey,
-                                           merger.getMinTerm(),
-                                           merger.getMaxTerm(),
-                                           indexMetas);
-            }
-        }
-
-        @Override
-        public void close() throws IOException
-        {
-            readers.forEach(TermsReader::close);
-        }
-
-        @SuppressWarnings("resource")
-        private TermsIterator createTermsIterator(SegmentMetadata segment, SSTableIndex.PerIndexFiles indexFiles) throws IOException
-        {
-            final long root = segment.getIndexRoot(indexFiles.components().termsData);
-            assert root >= 0;
-
-            final Map<String, String> map = segment.componentMetadatas.get(IndexComponents.NDIType.TERMS_DATA).attributes;
-            final String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
-            final long footerPointer = footerPointerString == null ? -1 : Long.parseLong(footerPointerString);
-
-            final TermsReader termsReader = new TermsReader(indexFiles.components(),
-                                                            indexFiles.termsData().sharedCopy(),
-                                                            indexFiles.postingLists().sharedCopy(),
-                                                            root,
-                                                            footerPointer);
-            readers.add(termsReader);
-            return termsReader.allTerms(segment.segmentRowIdOffset, QueryEventListeners.NO_OP_TRIE_LISTENER);
-        }
-    }
+//    class LiteralSegmentMerger implements SegmentMerger
+//    {
+//        final List<TermsReader> readers = new ArrayList<>();
+//        final List<TermsIterator> segmentTermsIterators = new ArrayList<>();
+//
+//        @Override
+//        public void addSegment(ColumnContext context, SegmentMetadata segment, SSTableIndex.PerIndexFiles indexFiles) throws IOException
+//        {
+//            segmentTermsIterators.add(createTermsIterator(segment, indexFiles));
+//        }
+//
+//        @Override
+//        public boolean isEmpty()
+//        {
+//            return segmentTermsIterators.isEmpty();
+//        }
+//
+//        @Override
+//        public SegmentMetadata merge(ColumnContext context, IndexComponents components, DecoratedKey minKey, DecoratedKey maxKey, long maxSSTableRowId) throws IOException
+//        {
+//            try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), context.getValidator()))
+//            {
+//
+//                SegmentMetadata.ComponentMetadataMap indexMetas;
+//                long numRows;
+//
+//                try (InvertedIndexWriter indexWriter = new InvertedIndexWriter(components, false))
+//                {
+//                    indexMetas = indexWriter.writeAll(merger);
+//                    numRows = indexWriter.getPostingsCount();
+//                }
+//                return new SegmentMetadata(0,
+//                                           numRows,
+//                                           merger.minSSTableRowId,
+//                                           merger.maxSSTableRowId,
+//                                           minKey,
+//                                           maxKey,
+//                                           merger.getMinTerm(),
+//                                           merger.getMaxTerm(),
+//                                           indexMetas);
+//            }
+//        }
+//
+//        @Override
+//        public void close() throws IOException
+//        {
+//            readers.forEach(TermsReader::close);
+//        }
+//
+//        @SuppressWarnings("resource")
+//        private TermsIterator createTermsIterator(SegmentMetadata segment, SSTableIndex.PerIndexFiles indexFiles) throws IOException
+//        {
+//            final long root = segment.getIndexRoot(indexFiles.components().termsData);
+//            assert root >= 0;
+//
+//            final Map<String, String> map = segment.componentMetadatas.get(IndexComponents.NDIType.TERMS_DATA).attributes;
+//            final String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
+//            final long footerPointer = footerPointerString == null ? -1 : Long.parseLong(footerPointerString);
+//
+//            final TermsReader termsReader = new TermsReader(indexFiles.components(),
+//                                                            indexFiles.termsData().sharedCopy(),
+//                                                            indexFiles.postingLists().sharedCopy(),
+//                                                            root,
+//                                                            footerPointer);
+//            readers.add(termsReader);
+//            return termsReader.allTerms(segment.segmentRowIdOffset, QueryEventListeners.NO_OP_TRIE_LISTENER);
+//        }
+//    }
 
     class NumericSegmentMerger implements SegmentMerger
     {
         final List<BKDReader.IteratorState> segmentIterators = new ArrayList<>();
         final List<BKDReader> readers = new ArrayList<>();
+        int maxLength = 0;
 
         ByteBuffer minTerm = null, maxTerm = null;
 
@@ -144,19 +142,23 @@ public interface SegmentMerger extends Closeable
         }
 
         @Override
-        public SegmentMetadata merge(ColumnContext context, IndexComponents components, DecoratedKey minKey, DecoratedKey maxKey, long maxSSTableRowId) throws IOException
+        public SegmentMetadata merge(ColumnContext context,
+                                     IndexComponents components,
+                                     DecoratedKey minKey,
+                                     DecoratedKey maxKey,
+                                     long maxSSTableRowId) throws IOException
         {
             final MergeOneDimPointValues merger = new MergeOneDimPointValues(segmentIterators, context.getValidator());
 
             final SegmentMetadata.ComponentMetadataMap componentMetadataMap;
             try (NumericIndexWriter indexWriter = new NumericIndexWriter(components,
-                                                                         TypeUtil.fixedSizeOf(context.getValidator()),
+                                                                         maxLength,//TypeUtil.fixedSizeOf(context.getValidator()),
                                                                          maxSSTableRowId,
                                                                          Integer.MAX_VALUE,
                                                                          context.getIndexWriterConfig(),
                                                                          false))
             {
-                componentMetadataMap = indexWriter.writeAll(merger);
+                componentMetadataMap = indexWriter.writeAll(null, merger);
             }
             return new SegmentMetadata(0,
                                        merger.getNumRows(),
@@ -190,6 +192,7 @@ public interface SegmentMerger extends Closeable
                                                       indexFiles.kdtreePostingLists().sharedCopy(),
                                                       postingsPosition);
             readers.add(bkdReader);
+            maxLength = Math.max(maxLength, bkdReader.getBytesPerDimension());
             return bkdReader.iteratorState(rowid -> rowid + segment.segmentRowIdOffset);
         }
     }

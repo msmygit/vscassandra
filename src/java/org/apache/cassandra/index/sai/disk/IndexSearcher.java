@@ -25,16 +25,13 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.*;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 
 /**
  * Abstract reader for individual segments of an on-disk index.
@@ -65,8 +62,9 @@ public abstract class IndexSearcher implements Closeable
 
     public static IndexSearcher open(boolean isString, Segment segment, ColumnQueryMetrics listener) throws IOException
     {
-        return isString ? open(segment, (QueryEventListener.TrieIndexEventListener) listener)
-                        : open(segment, (QueryEventListener.BKDIndexEventListener) listener);
+        return open(segment, (QueryEventListener.BKDIndexEventListener) listener);
+//        return isString ? open(segment, (QueryEventListener.TrieIndexEventListener) listener)
+//                        : open(segment, (QueryEventListener.BKDIndexEventListener) listener);
     }
 
     public static InvertedIndexSearcher open(Segment segment, QueryEventListener.TrieIndexEventListener listener) throws IOException
@@ -84,7 +82,8 @@ public abstract class IndexSearcher implements Closeable
      */
     public static int openPerIndexFiles(AbstractType<?> columnType)
     {
-        return TypeUtil.isLiteral(columnType) ? InvertedIndexSearcher.openPerIndexFiles() : KDTreeIndexSearcher.openPerIndexFiles();
+        return KDTreeIndexSearcher.openPerIndexFiles();
+        //return TypeUtil.isLiteral(columnType) ? InvertedIndexSearcher.openPerIndexFiles() : KDTreeIndexSearcher.openPerIndexFiles();
     }
 
     /**

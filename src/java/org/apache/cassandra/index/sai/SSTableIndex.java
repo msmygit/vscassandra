@@ -91,7 +91,8 @@ public class SSTableIndex
 
         try
         {
-            this.indexFiles = new PerIndexFiles(components, columnContext.isLiteral());
+            //this.indexFiles = new PerIndexFiles(components, columnContext.isLiteral());
+            this.indexFiles = new PerIndexFiles(components, false);
 
             ImmutableList.Builder<Segment> segmentsBuilder = ImmutableList.builder();
 

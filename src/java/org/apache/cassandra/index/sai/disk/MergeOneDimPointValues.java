@@ -18,15 +18,15 @@
 package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.lucene.util.PriorityQueue;
+import org.apache.lucene.util.bkd.BKDWriter;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.v1.BKDReader;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
-import org.apache.lucene.util.PriorityQueue;
-import org.apache.lucene.util.bkd.BKDWriter;
 
 /**
  * {@link MutableOneDimPointValues} that prevents buffered points from reordering, and always skips sorting phase in Lucene
@@ -45,18 +45,20 @@ public class MergeOneDimPointValues extends MutableOneDimPointValues
     public long minRowID = Long.MAX_VALUE;
     public long maxRowID = Long.MIN_VALUE;
     public long numRows = 0;
+    public int maxLength = 0;
 
     public MergeOneDimPointValues(List<BKDReader.IteratorState> iterators, AbstractType termComparator) throws IOException
     {
         queue = new MergeQueue(iterators.size());
-        this.scratch = new byte[TypeUtil.fixedSizeOf(termComparator)];
         for (BKDReader.IteratorState iterator : iterators)
         {
+            maxLength = Math.max(maxLength, iterator.reader.getBytesPerDimension());
             if (iterator.hasNext())
             {
                 queue.add(iterator);
             }
         }
+        this.scratch = new byte[maxLength];//TypeUtil.fixedSizeOf(termComparator)];
     }
 
     @VisibleForTesting
@@ -102,6 +104,8 @@ public class MergeOneDimPointValues extends MutableOneDimPointValues
                 minRowID = Math.min(minRowID, rowID);
                 maxRowID = Math.max(maxRowID, rowID);
                 numRows++;
+
+                System.out.println("reader.scratch="+Arrays.toString(reader.scratch));
 
                 visitor.visit(rowID, reader.scratch);
 

@@ -23,21 +23,19 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
+import com.carrotsearch.hppc.IntArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.carrotsearch.hppc.IntArrayList;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.ColumnContext;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.InvertedIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.Pair;
@@ -141,28 +139,29 @@ public class MemtableIndexWriter implements ColumnIndexWriter
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
-        if (TypeUtil.isLiteral(termComparator))
-        {
-            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexComponents, false))
-            {
-                indexMetas = writer.writeAll(terms);
-                numRows = writer.getPostingsCount();
-            }
-        }
-        else
-        {
+//        if (TypeUtil.isLiteral(termComparator))
+//        {
+//            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexComponents, false))
+//            {
+//                indexMetas = writer.writeAll(terms);
+//                numRows = writer.getPostingsCount();
+//            }
+//        }
+//        else
+//        {
             try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
+                                                                    memtable.maxLength(),
+                                                                    //TypeUtil.fixedSizeOf(termComparator),
                                                                     maxSegmentRowId,
                                                                     // Due to stale entries in IndexMemtable, we may have more indexed rows than num of rowIds.
                                                                     Integer.MAX_VALUE,
                                                                     context.getIndexWriterConfig(),
                                                                     false))
             {
-                indexMetas = writer.writeAll(ImmutableOneDimPointValues.fromTermEnum(terms, termComparator));
+                indexMetas = writer.writeAll(terms, null);//ImmutableOneDimPointValues.fromTermEnum(terms, termComparator));
                 numRows = writer.getPointCount();
             }
-        }
+        //}
 
         // If no rows were written we need to delete any created column index components
         // so that the index is correctly identified as being empty (only having a completion marker)

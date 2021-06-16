@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,13 +32,9 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.io.BytesRefUtil;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.BKDTreeRamBuffer;
-import org.apache.cassandra.index.sai.disk.v1.InvertedIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.BytesRefBuilder;
 
 /**
  * Creates an on-heap index data structure to be flushed to an SSTable index.
@@ -77,58 +75,67 @@ public abstract class SegmentBuilder
     // in termComparator order
     private ByteBuffer minTerm, maxTerm;
 
-    public static class KDTreeSegmentBuilder extends SegmentBuilder
-    {
-        protected final byte[] buffer;
-        private final BKDTreeRamBuffer kdTreeRamBuffer;
-        private final IndexWriterConfig indexWriterConfig;
-
-        KDTreeSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter, IndexWriterConfig indexWriterConfig)
-        {
-            super(termComparator, limiter);
-
-            int typeSize = TypeUtil.fixedSizeOf(termComparator);
-            this.kdTreeRamBuffer = new BKDTreeRamBuffer(1, typeSize);
-            this.buffer = new byte[typeSize];
-            this.totalBytesAllocated = this.kdTreeRamBuffer.ramBytesUsed();
-            this.indexWriterConfig = indexWriterConfig;
-        }
-
-        public boolean isEmpty()
-        {
-            return kdTreeRamBuffer.numRows() == 0;
-        }
-
-        protected long addInternal(ByteBuffer term, int segmentRowId)
-        {
-            TypeUtil.toComparableBytes(term, termComparator, buffer);
-            return kdTreeRamBuffer.addPackedValue(segmentRowId, new BytesRef(buffer));
-        }
-
-        @Override
-        protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexComponents indexComponents) throws IOException
-        {
-            try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
-                                                                    maxSegmentRowId,
-                                                                    rowCount,
-                                                                    indexWriterConfig,
-                                                                    true))
-            {
-                return writer.writeAll(kdTreeRamBuffer.asPointValues());
-            }
-        }
-    }
+//    public static class KDTreeSegmentBuilder extends SegmentBuilder
+//    {
+//        protected final byte[] buffer;
+//        private final BKDTreeRamBuffer kdTreeRamBuffer;
+//        private final IndexWriterConfig indexWriterConfig;
+//
+//        KDTreeSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter, IndexWriterConfig indexWriterConfig)
+//        {
+//            super(termComparator, limiter);
+//
+//            int typeSize = TypeUtil.fixedSizeOf(termComparator);
+//            this.kdTreeRamBuffer = new BKDTreeRamBuffer(1, typeSize);
+//            this.buffer = new byte[typeSize];
+//            this.totalBytesAllocated = this.kdTreeRamBuffer.ramBytesUsed();
+//            this.indexWriterConfig = indexWriterConfig;
+//        }
+//
+//        public boolean isEmpty()
+//        {
+//            return kdTreeRamBuffer.numRows() == 0;
+//        }
+//
+//        protected long addInternal(ByteBuffer term, int segmentRowId)
+//        {
+//            TypeUtil.toComparableBytes(term, termComparator, buffer);
+//            return kdTreeRamBuffer.addPackedValue(segmentRowId, new BytesRef(buffer));
+//        }
+//
+//        @Override
+//        protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexComponents indexComponents) throws IOException
+//        {
+//            try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+//                                                                    TypeUtil.fixedSizeOf(termComparator),
+//                                                                    maxSegmentRowId,
+//                                                                    rowCount,
+//                                                                    indexWriterConfig,
+//                                                                    true))
+//            {
+//                return writer.writeAll(kdTreeRamBuffer.asPointValues());
+//            }
+//        }
+//    }
 
     public static class RAMStringSegmentBuilder extends SegmentBuilder
     {
         final RAMStringIndexer ramIndexer;
 
         final BytesRefBuilder stringBuffer = new BytesRefBuilder();
+        final boolean literal;
+        final IndexWriterConfig indexWriterConfig;
+        int maxLength = 0;
 
-        RAMStringSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
+        RAMStringSegmentBuilder(boolean literal,
+                                AbstractType<?> termComparator,
+                                NamedMemoryLimiter limiter,
+                                IndexWriterConfig indexWriterConfig)
         {
             super(termComparator, limiter);
+
+            this.literal = literal;
+            this.indexWriterConfig = indexWriterConfig;
 
             ramIndexer = new RAMStringIndexer(termComparator);
             totalBytesAllocated = ramIndexer.estimatedBytesUsed();
@@ -142,16 +149,33 @@ public abstract class SegmentBuilder
         protected long addInternal(ByteBuffer term, int segmentRowId)
         {
             BytesRefUtil.copyBufferToBytesRef(term, stringBuffer);
-            return ramIndexer.add(stringBuffer.get(), segmentRowId);
+            BytesRef bytes = stringBuffer.get();
+            maxLength = Math.max(bytes.length, maxLength);
+            return ramIndexer.add(bytes, segmentRowId);
         }
 
         @Override
         protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexComponents indexComponents) throws IOException
         {
-            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexComponents, true))
-            {
-                return writer.writeAll(ramIndexer.getTermsWithPostings());
-            }
+//            if (!literal)
+//            {
+                try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+                                                                        maxLength,
+                                                                        maxSegmentRowId,
+                                                                        rowCount,
+                                                                        indexWriterConfig,
+                                                                        true))
+                {
+                    return writer.writeAll(ramIndexer.getTermsWithPostings(), null);
+                }
+//            }
+//            else
+//            {
+//                try (InvertedIndexWriter writer = new InvertedIndexWriter(indexComponents, true))
+//                {
+//                    return writer.writeAll(ramIndexer.getTermsWithPostings());
+//                }
+//            }
         }
     }
 

@@ -45,6 +45,7 @@ public abstract class MemoryIndex
 
     private ByteBuffer minTerm;
     private ByteBuffer maxTerm;
+    int maxLength = 0;
 
     protected MemoryIndex(ColumnContext columnContext)
     {

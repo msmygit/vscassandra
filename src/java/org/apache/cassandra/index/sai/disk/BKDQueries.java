@@ -19,12 +19,14 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.nio.ByteBuffer;
 
+import org.apache.lucene.index.PointValues.Relation;
+import org.apache.lucene.util.FutureArrays;
+
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.v1.BKDReader;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
-import org.apache.lucene.index.PointValues.Relation;
-import org.apache.lucene.util.FutureArrays;
+import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
 import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 
@@ -73,9 +75,12 @@ class BKDQueries
     // TODO: probably move this to TypeUtil
     private static byte[] toComparableBytes(int numDim, int bytesPerDim, ByteBuffer value, AbstractType<?> type)
     {
-        byte[] buffer = new byte[TypeUtil.fixedSizeOf(type)];
-        assert buffer.length == bytesPerDim * numDim;
-        TypeUtil.toComparableBytes(value, type, buffer);
+        //byte[] buffer = new byte[TypeUtil.fixedSizeOf(type)];
+        byte[] buffer = new byte[bytesPerDim];
+        ByteBufferUtil.toBytes(type.asComparableBytes(value, ByteComparable.Version.OSS41), buffer);
+
+        //assert buffer.length == bytesPerDim * numDim;
+        //TypeUtil.toComparableBytes(value, type, buffer);
         return buffer;
     }
 

@@ -20,39 +20,32 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
+import org.agrona.collections.LongArrayList;
+import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.PointValues.Relation;
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.*;
+import org.apache.lucene.util.packed.DirectWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.AbortedOperationException;
-import org.apache.cassandra.index.sai.utils.AbstractIterator;
-import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
+import org.apache.cassandra.index.sai.utils.*;
 import org.apache.cassandra.io.compress.ICompressor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
-import org.apache.lucene.index.CorruptIndexException;
-import org.apache.lucene.index.PointValues.Relation;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.FutureArrays;
-import org.apache.lucene.util.packed.DirectWriter;
 
 /**
  * Handles intersection of a multi-dimensional shape in byte[] space with a block KD-tree previously written with
@@ -143,9 +136,11 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         final DocMapper docMapper;
         public final byte[] scratch;
         final Iterator<Map.Entry<Long,Integer>> iterator;
+        public final BKDReader reader;
 
         public IteratorState(DocMapper docMapper) throws IOException
         {
+            this.reader = BKDReader.this;
             this.docMapper = docMapper;
 
             scratch = new byte[packedBytesLength];

@@ -24,31 +24,23 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.function.IntFunction;
 
 import com.google.common.base.MoreObjects;
+import org.apache.lucene.codecs.MutablePointValues;
+import org.apache.lucene.store.*;
+import org.apache.lucene.util.*;
+import org.apache.lucene.util.bkd.MutablePointsReaderUtils;
 
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.*;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.compress.ICompressor;
-import org.apache.lucene.codecs.MutablePointValues;
-import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.GrowableByteArrayDataOutput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.RAMOutputStream;
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.BytesRefBuilder;
-import org.apache.lucene.util.FutureArrays;
-import org.apache.lucene.util.IntroSorter;
-import org.apache.lucene.util.LongBitSet;
-import org.apache.lucene.util.Sorter;
-import org.apache.lucene.util.bkd.MutablePointsReaderUtils;
+import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
 // TODO
 //   - allow variable length byte[] (across docs and dims), but this is quite a bit more hairy
@@ -227,6 +219,52 @@ public class BKDWriter implements Closeable
     public long getPointCount()
     {
         return pointCount;
+    }
+
+    public long writeField(IndexOutput out,
+                           TermsIterator termsIterator,
+                           final OneDimensionBKDWriterCallback callback) throws IOException
+    {
+        if (numDims == 1)
+        {
+            SAICodecUtils.writeHeader(out);
+            final long fp = writeField1Dim(out, termsIterator, callback);
+            SAICodecUtils.writeFooter(out);
+            return fp;
+        }
+        else
+        {
+            throw new IllegalArgumentException("Only 1 dimension is supported.");
+        }
+    }
+
+    /* In the 1D case, we can simply sort points in ascending order and use the
+     * same writing logic as we use at merge time. */
+    private long writeField1Dim(IndexOutput out,
+                                TermsIterator termsIterator,
+                                OneDimensionBKDWriterCallback callback) throws IOException
+    {
+        final OneDimensionBKDWriter oneDimWriter = new OneDimensionBKDWriter(out, callback);
+
+        final byte[] bytes = new byte[bytesPerDim];
+
+        while (termsIterator.hasNext())
+        {
+            final ByteComparable term = termsIterator.next();
+            final PostingList list = termsIterator.postings();
+            ByteSource source = term.asComparableBytes(ByteComparable.Version.OSS41);
+            ByteBufferUtil.toBytes(source, bytes);
+
+            while (true)
+            {
+                final long rowID = list.nextPosting();
+                System.out.println("rowID="+rowID);
+                if (rowID == PostingList.END_OF_STREAM) break;
+                oneDimWriter.add(bytes, rowID);
+            }
+        }
+
+        return oneDimWriter.finish();
     }
 
     /**
@@ -903,33 +941,6 @@ public class BKDWriter implements Closeable
                 assert i <= count;
             }
         }
-    }
-
-    /**
-     * Return an array that contains the min and max values for the [offset, offset+length] interval
-     * of the given {@link BytesRef}s.
-     */
-    private static BytesRef[] computeMinMax(int count, IntFunction<BytesRef> packedValues, int offset, int length)
-    {
-        assert length > 0;
-        BytesRefBuilder min = new BytesRefBuilder();
-        BytesRefBuilder max = new BytesRefBuilder();
-        BytesRef first = packedValues.apply(0);
-        min.copyBytes(first.bytes, first.offset + offset, length);
-        max.copyBytes(first.bytes, first.offset + offset, length);
-        for (int i = 1; i < count; ++i)
-        {
-            BytesRef candidate = packedValues.apply(i);
-            if (FutureArrays.compareUnsigned(min.bytes(), 0, length, candidate.bytes, candidate.offset + offset, candidate.offset + offset + length) > 0)
-            {
-                min.copyBytes(candidate.bytes, candidate.offset + offset, length);
-            }
-            else if (FutureArrays.compareUnsigned(max.bytes(), 0, length, candidate.bytes, candidate.offset + offset, candidate.offset + offset + length) < 0)
-            {
-                max.copyBytes(candidate.bytes, candidate.offset + offset, length);
-            }
-        }
-        return new BytesRef[]{ min.get(), max.get() };
     }
 
     private void writeLeafBlockPackedValuesRange(DataOutput out, int[] commonPrefixLengths, int start, int end, IntFunction<BytesRef> packedValues) throws IOException

@@ -20,14 +20,11 @@ package org.apache.cassandra.index.sai.disk;
 import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
+import org.apache.lucene.util.*;
+
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.ByteBlockPool;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.BytesRefHash;
-import org.apache.lucene.util.Counter;
 
 /**
  * Indexes strings into an on-heap inverted index to be flushed in an SSTable attached index later.
@@ -44,7 +41,7 @@ public class RAMStringIndexer
 
     private int[] lastSegmentRowID = new int[RAMPostingSlices.DEFAULT_TERM_DICT_SIZE];
 
-    RAMStringIndexer(AbstractType<?> termComparator)
+    public RAMStringIndexer(AbstractType<?> termComparator)
     {
         this.termComparator = termComparator;
         bytesUsed = Counter.newCounter();
@@ -65,7 +62,7 @@ public class RAMStringIndexer
      * EXPENSIVE OPERATION due to sorting the terms, only call once.
      */
     // TODO: assert or throw and exception if getTermsWithPostings is called > 1
-    TermsIterator getTermsWithPostings()
+    public TermsIterator getTermsWithPostings()
     {
         final int[] sortedTermIDs = termsHash.sort();
 
@@ -107,6 +104,7 @@ public class RAMStringIndexer
 
             @Override
             public boolean hasNext() {
+                System.out.println("ordUpto="+ordUpto+" valueCount="+valueCount);
                 return ordUpto < valueCount;
             }
 
