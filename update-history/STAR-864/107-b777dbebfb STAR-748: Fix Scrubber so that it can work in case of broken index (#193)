@@ -1,0 +1,105 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -189,7 +189,7 @@
+             {
+                 throwIfFatal(ex);
+                 nextIndexKey = null;
+-                nextRowPositionFromIndex = dataFile.length();
++                nextPartitionPositionFromIndex = dataFile.length();
+                 if (indexFile != null)
+                     indexFile.seek(indexFile.length());
+             }
+@@ -225,28 +225,17 @@
+ 
+                 if (indexAvailable())
+                 {
+-<<<<<<<
+-                    dataStartFromIndex = currentPartitionPositionFromIndex + 2 + currentIndexKey.remaining();
+-                    dataSizeFromIndex = nextPartitionPositionFromIndex - dataStartFromIndex;
+-                }
+-
+-                String keyName = key == null ? "(unreadable key)" : keyString(key);
+-                outputHandler.debug(String.format("partition %s is %s", keyName, FBUtilities.prettyPrintMemory(dataSizeFromIndex)));
+-=======
+                     if (currentIndexKey != null)
+                     {
+-                        dataStartFromIndex = currentRowPositionFromIndex + 2 + currentIndexKey.remaining();
+-                        dataSizeFromIndex = nextRowPositionFromIndex - dataStartFromIndex;
++                        dataStartFromIndex = currentPartitionPositionFromIndex + 2 + currentIndexKey.remaining();
++                        dataSizeFromIndex = nextPartitionPositionFromIndex - dataStartFromIndex;
+                     }
+                 }
+ 
+                 long dataStart = dataFile.getFilePointer();
+ 
+-                // avoid an NPE if key is null
+-                String keyName = key == null ? "(unreadable key)" : ByteBufferUtil.bytesToHex(key.getKey());
+-                outputHandler.debug(String.format("row %s is %s", keyName, FBUtilities.prettyPrintMemory(dataSizeFromIndex)));
+-
+->>>>>>>
++                String keyName = key == null ? "(unreadable key)" : keyString(key);
++                outputHandler.debug(String.format("partition %s is %s", keyName, FBUtilities.prettyPrintMemory(dataSizeFromIndex)));
+                 assert currentIndexKey != null || !indexAvailable();
+ 
+                 try
+@@ -329,13 +318,8 @@
+             }
+ 
+             // finish obsoletes the old sstable
+-<<<<<<<
+-            finished.addAll(writer.setRepairedAt(badPartitions > 0 ? ActiveRepairService.UNREPAIRED_SSTABLE : sstable.getSSTableMetadata().repairedAt).finish());
+-=======
+             transaction.obsoleteOriginals();
+-            finished.addAll(writer.setRepairedAt(badRows > 0 ? ActiveRepairService.UNREPAIRED_SSTABLE : sstable.getSSTableMetadata().repairedAt).finish());
+-            completed = true;
+->>>>>>>
++            finished.addAll(writer.setRepairedAt(badPartitions > 0 ? ActiveRepairService.UNREPAIRED_SSTABLE : sstable.getSSTableMetadata().repairedAt).finish());
+         }
+         finally
+         {
+@@ -413,28 +397,18 @@
+         {
+             nextIndexKey = !indexAvailable() ? null : ByteBufferUtil.readWithShortLength(indexFile);
+ 
+-<<<<<<<
+             nextPartitionPositionFromIndex = !indexAvailable()
+                                              ? dataFile.length()
+                                              : rowIndexEntrySerializer.deserializePositionAndSkip(indexFile);
+-=======
+-            nextRowPositionFromIndex = !indexAvailable()
+-                                       ? dataFile.length()
+-                                       : rowIndexEntrySerializer.deserializePositionAndSkip(indexFile);
+->>>>>>>
+         }
+         catch (Throwable th)
+         {
+             JVMStabilityInspector.inspectThrowable(th);
+             outputHandler.warn("Error reading index file", th);
+             nextIndexKey = null;
+-<<<<<<<
+             nextPartitionPositionFromIndex = dataFile.length();
+-=======
+-            nextRowPositionFromIndex = dataFile.length();
+             if (indexFile != null)
+                 indexFile.seek(indexFile.length());
+->>>>>>>
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/db/ScrubTest.java
++++ b/test/unit/org/apache/cassandra/db/ScrubTest.java
+@@ -227,13 +227,8 @@
+         }
+         else
+         {
+-<<<<<<<
+             assertEquals(1, scrubResult.badPartitions);
+-            assertEquals(numPartitions-1, scrubResult.goodPartitions);
+-=======
+-            assertEquals(1, scrubResult.badRows);
+-            assertEquals(numPartitions - 1, scrubResult.goodRows);
+->>>>>>>
++            assertEquals(numPartitions - 1, scrubResult.goodPartitions);
+         }
+         assertEquals(1, cfs.getLiveSSTables().size());
+ 
