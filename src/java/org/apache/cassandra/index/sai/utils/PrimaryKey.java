@@ -126,7 +126,7 @@ public class PrimaryKey implements Comparable<PrimaryKey>
             DecoratedKey key =  new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
 
             if ((comparator.size() == 0) || peekable.peek() == ByteSource.TERMINATOR)
-                return new PrimaryKey(key, Clustering.EMPTY, comparator);
+                return new PrimaryKey(key, Clustering.EMPTY, comparator, sstableRowId);
 
             ByteBuffer[] values = new ByteBuffer[comparator.size()];
 

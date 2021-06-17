@@ -29,6 +29,7 @@ import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
@@ -187,14 +188,9 @@ public class PostingsReader implements OrdinalPostingList
     public void close() throws IOException
     {
         listener.postingDecoded(postingsDecoded);
-        try
-        {
-            input.close();
-        }
-        finally
-        {
-            summary.close();
-        }
+        FileUtils.closeQuietly(primaryKeyMap);
+        FileUtils.closeQuietly(input);
+        summary.close();
     }
 
     @Override
