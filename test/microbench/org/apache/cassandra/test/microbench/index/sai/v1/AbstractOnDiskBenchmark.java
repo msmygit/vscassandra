@@ -161,10 +161,8 @@ public abstract class AbstractOnDiskBenchmark
     {
         IndexInput input = indexComponents.openInput(postings);
         IndexInput summaryInput = indexComponents.openInput(postings);
-        PrimaryKeyMap pkMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, metadata);
-
         PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(summaryInput, summaryPosition);
-        return new PostingsReader(input, summary, QueryEventListener.PostingListEventListener.NO_OP, pkMap);
+        return new PostingsReader(input, summary, QueryEventListener.PostingListEventListener.NO_OP, primaryKeyMap);
     }
 
     /**
