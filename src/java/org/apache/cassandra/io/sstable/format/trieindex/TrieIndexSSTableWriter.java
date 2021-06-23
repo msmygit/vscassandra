@@ -495,7 +495,7 @@ public class TrieIndexSSTableWriter extends SSTableWriter
                      DataOutputStreamPlus stream = new BufferedDataOutputStreamPlus(fos))
                 {
                     // bloom filter
-                    BloomFilterSerializer.serialize((BloomFilter) bf, stream);
+                    BloomFilter.serializer.serialize((BloomFilter) bf, stream);
                     stream.flush();
                     SyncUtil.sync((FileChannel) fos);
                 }

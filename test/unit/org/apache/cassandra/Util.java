@@ -19,13 +19,13 @@ package org.apache.cassandra;
  *
  */
 
-import java.io.Closeable;
-import java.io.EOFException;
-import java.io.File;
-import java.io.IOError;
+import java.io.*;
+import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.file.*;
+import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -93,6 +93,8 @@ public class Util
     private static final Logger logger = LoggerFactory.getLogger(Util.class);
 
     private static List<UUID> hostIdPool = new ArrayList<>();
+
+    public final static TimeUnit supportedMTimeGranularity = getSupportedMTimeGranularity();
 
     public static IPartitioner testPartitioner()
     {
@@ -1009,5 +1011,21 @@ public class Util
         Gossiper.instance.addLocalApplicationState(ApplicationState.RELEASE_VERSION,
                                                    VersionedValue.unsafeMakeVersionedValue(version, v + 1));
         Gossiper.instance.expireUpgradeFromVersion();
+    }
+
+    private static TimeUnit getSupportedMTimeGranularity() {
+        try
+        {
+            Path p = Files.createTempFile(Util.class.getSimpleName(), "dummy-file");
+            FileTime ft = Files.getLastModifiedTime(p);
+            Files.deleteIfExists(p);
+            Field f = FileTime.class.getDeclaredField("unit");
+            f.setAccessible(true);
+            return (TimeUnit) f.get(ft);
+        }
+        catch (IOException |  NoSuchFieldException | IllegalAccessException e)
+        {
+            throw new AssertionError("Failed to read supported file modification time granularity");
+        }
     }
 }

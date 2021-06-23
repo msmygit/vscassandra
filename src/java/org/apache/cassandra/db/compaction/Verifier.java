@@ -45,7 +45,7 @@ import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.utils.BloomFilterSerializer;
+import org.apache.cassandra.utils.BloomFilter;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.IFilter;
@@ -141,7 +141,7 @@ public class Verifier implements Closeable
         }
         catch (Throwable t)
         {
-            outputHandler.warn(t.getMessage());
+            outputHandler.warn(t);
             markAndThrow(t, false);
         }
 
@@ -152,7 +152,7 @@ public class Verifier implements Closeable
         }
         catch (Throwable t)
         {
-            outputHandler.warn(t.getMessage());
+            outputHandler.warn(t);
             markAndThrow(t);
         }
 
@@ -166,7 +166,7 @@ public class Verifier implements Closeable
             catch (Throwable t)
             {
                 outputHandler.output("Index summary is corrupt - if it is removed it will get rebuilt on startup " + sstable.descriptor.filenameFor(Component.SUMMARY));
-                outputHandler.warn(t.getMessage());
+                outputHandler.warn(t);
             markAndThrow(t, false);
             }
         }
@@ -179,7 +179,7 @@ public class Verifier implements Closeable
         }
         catch (Throwable t)
         {
-            outputHandler.warn(t.getMessage());
+            outputHandler.warn(t);
             markAndThrow(t);
         }
 
@@ -200,7 +200,7 @@ public class Verifier implements Closeable
             }
             catch (Throwable t)
             {
-                outputHandler.warn(t.getMessage());
+                outputHandler.warn(t);
                 markAndThrow(t);
             }
         }
@@ -227,7 +227,7 @@ public class Verifier implements Closeable
         }
         catch (IOException e)
         {
-            outputHandler.warn(e.getMessage());
+            outputHandler.warn(e);
             markAndThrow(e);
         }
         finally
@@ -444,7 +444,7 @@ public class Verifier implements Closeable
         if (Files.exists(bfPath))
         {
             try (DataInputStream stream = new DataInputStream(new BufferedInputStream(Files.newInputStream(bfPath)));
-                 IFilter bf = BloomFilterSerializer.deserialize(stream, sstable.descriptor.version.hasOldBfFormat()))
+                 IFilter bf = BloomFilter.serializer.deserialize(stream, sstable.descriptor.version.hasOldBfFormat()))
             {
             }
         }

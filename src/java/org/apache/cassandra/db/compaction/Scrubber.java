@@ -132,9 +132,16 @@ public class Scrubber implements Closeable
                         ? sstable.openDataReader()
                         : sstable.openDataReader(CompactionManager.instance.getRateLimiter());
 
-        this.indexIterator = hasIndexFile
-                             ? openIndexIterator()
-                             : null;
+        try
+        {
+            this.indexIterator = hasIndexFile
+                                 ? openIndexIterator()
+                                 : null;
+        }
+        catch (RuntimeException ex)
+        {
+            outputHandler.warn("Detected corruption in the index file - cannot open index iterator", ex);
+        }
 
         this.scrubInfo = new ScrubInfo(dataFile, sstable, fileAccessLock.readLock());
 
@@ -327,6 +334,7 @@ public class Scrubber implements Closeable
             }
 
             // finish obsoletes the old sstable
+            transaction.obsoleteOriginals();
             finished.addAll(writer.setRepairedAt(badRows > 0 ? ActiveRepairService.UNREPAIRED_SSTABLE : sstable.getSSTableMetadata().repairedAt).finish());
             completed = true;
         }

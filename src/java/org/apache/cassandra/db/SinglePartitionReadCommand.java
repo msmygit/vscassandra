@@ -933,8 +933,6 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         NavigableSet<Clustering<?>> clusterings = filter.requestedRows();
 
         // We want to remove rows for which we have values for all requested columns. We have to deal with both static and regular rows.
-        // TODO: we could also remove a selected column if we've found values for every requested row but we'll leave
-        // that for later.
 
         boolean removeStatic = false;
         if (!columns.statics.isEmpty())
@@ -994,11 +992,10 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
      */
     private boolean isRowComplete(Row row, Columns requestedColumns, long sstableTimestamp)
     {
-        // Note that compact tables will always have an empty primary key liveness info.
-        if (!row.primaryKeyLivenessInfo().isEmpty() && row.primaryKeyLivenessInfo().timestamp() <= sstableTimestamp)
-            return false;
 
-        boolean hasLiveCell = false;
+        // Note that compact tables will always have an empty primary key liveness info.
+        if (!metadata().isCompactTable() && (row.primaryKeyLivenessInfo().isEmpty() || row.primaryKeyLivenessInfo().timestamp() <= sstableTimestamp))
+            return false;
 
         for (ColumnMetadata column : requestedColumns)
         {
@@ -1006,14 +1003,9 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
 
             if (cell == null || cell.timestamp() <= sstableTimestamp)
                 return false;
-
-            if (!cell.isTombstone())
-                hasLiveCell = true;
         }
 
-        // If we've gotten here w/ a compact table or at least one non-tombstone cell, the row is considered
-        // complete and we can avoid any further searching of older SSTables.
-        return hasLiveCell || metadata().isCompactTable();
+        return true;
     }
 
     @Override

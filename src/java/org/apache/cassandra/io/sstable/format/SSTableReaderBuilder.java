@@ -23,10 +23,12 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,14 +37,9 @@ import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.SerializationHeader;
-import org.apache.cassandra.io.sstable.Component;
-import org.apache.cassandra.io.sstable.CorruptSSTableException;
-import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.Downsampling;
-import org.apache.cassandra.io.sstable.IndexSummary;
-import org.apache.cassandra.io.sstable.IndexSummaryBuilder;
-import org.apache.cassandra.io.sstable.SSTable;
+import org.apache.cassandra.io.sstable.*;
 import org.apache.cassandra.io.sstable.format.big.BigTableReader;
+import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
 import org.apache.cassandra.io.util.DiskOptimizationStrategy;
@@ -50,11 +47,7 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
-import org.apache.cassandra.utils.BloomFilterSerializer;
-import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.cassandra.utils.FBUtilities;
-import org.apache.cassandra.utils.FilterFactory;
-import org.apache.cassandra.utils.IFilter;
+import org.apache.cassandra.utils.*;
 
 public abstract class SSTableReaderBuilder
 {
@@ -98,44 +91,20 @@ public abstract class SSTableReaderBuilder
 
     public abstract SSTableReader build();
 
-    public SSTableReaderBuilder dfile(FileHandle dfile)
-    {
-        this.dfile = dfile;
-        return this;
-    }
-
-    public SSTableReaderBuilder ifile(FileHandle ifile)
-    {
-        this.ifile = ifile;
-        return this;
-    }
-
-    public SSTableReaderBuilder bf(IFilter bf)
-    {
-        this.bf = bf;
-        return this;
-    }
-
-    public SSTableReaderBuilder summary(IndexSummary summary)
-    {
-        this.summary = summary;
-        return this;
-    }
-
     @SuppressWarnings("resource")
     public static FileHandle.Builder defaultIndexHandleBuilder(Descriptor descriptor, Component component)
     {
         return new FileHandle.Builder(descriptor.filenameFor(component))
-               .mmapped(DatabaseDescriptor.getIndexAccessMode() == Config.DiskAccessMode.mmap)
-               .withChunkCache(ChunkCache.instance);
+                .mmapped(DatabaseDescriptor.getIndexAccessMode() == Config.DiskAccessMode.mmap)
+                .withChunkCache(ChunkCache.instance);
     }
 
     @SuppressWarnings("resource")
     public static FileHandle.Builder defaultDataHandleBuilder(Descriptor descriptor)
     {
         return new FileHandle.Builder(descriptor.filenameFor(Component.DATA))
-               .mmapped(DatabaseDescriptor.getDiskAccessMode() == Config.DiskAccessMode.mmap)
-               .withChunkCache(ChunkCache.instance);
+                .mmapped(DatabaseDescriptor.getDiskAccessMode() == Config.DiskAccessMode.mmap)
+                .withChunkCache(ChunkCache.instance);
     }
 
     /**
@@ -208,7 +177,10 @@ public abstract class SSTableReaderBuilder
                                  ? histogramCount
                                  : SSTable.estimateRowsFromIndex(indexIterator); // statistics is supposed to be optional
             if (recreateBloomFilter)
+            {
+                logger.debug("Recreating bloom filter for {} with fpChance={}", descriptor, metadata.params.bloomFilterFpChance);
                 bf = FilterFactory.getFilter(estimatedKeys, metadata.params.bloomFilterFpChance);
+            }
 
             // we read the positions in a BRAF so we don't have to worry about an entry spanning a mmap boundary.
             try (IndexSummaryBuilder summaryBuilder = summaryLoaded ? null : new IndexSummaryBuilder(estimatedKeys, metadata.params.minIndexInterval, Downsampling.BASE_SAMPLING_LEVEL))
@@ -244,17 +216,30 @@ public abstract class SSTableReaderBuilder
         }
     }
 
-    /**
-     * Load bloom filter from Filter.db file.
-     *
-     * @throws IOException
-     */
-    IFilter loadBloomFilter() throws IOException
+    public static IFilter loadBloomFilter(Path path, boolean oldFormat)
     {
-        try (DataInputStream stream = new DataInputStream(new BufferedInputStream(Files.newInputStream(Paths.get(descriptor.filenameFor(Component.FILTER))))))
+        if (Files.exists(path))
         {
-            return BloomFilterSerializer.deserialize(stream, descriptor.version.hasOldBfFormat());
+            logger.debug("Loading bloom filter from {}", path);
+            IFilter filter = null;
+            try (DataInputStream stream = new DataInputStream(new BufferedInputStream(Files.newInputStream(path))))
+            {
+                filter = BloomFilter.serializer.deserialize(stream, oldFormat);
+                return filter;
+            }
+            catch (Throwable t)
+            {
+                JVMStabilityInspector.inspectThrowable(t);
+                logger.error("Failed to deserialize Bloom filter: {}", t.getMessage());
+                if (filter != null)
+                    filter.close();
+            }
         }
+        else
+        {
+            logger.error("Bloom filter {} not found", path);
+        }
+        return null;
     }
 
     public static class ForWriter extends SSTableReaderBuilder
@@ -268,6 +253,30 @@ public abstract class SSTableReaderBuilder
                          SerializationHeader header)
         {
             super(descriptor, metadataRef, maxDataAge, components, statsMetadata, openReason, header);
+        }
+
+        public SSTableReaderBuilder.ForWriter dfile(FileHandle dfile)
+        {
+            this.dfile = dfile;
+            return this;
+        }
+
+        public SSTableReaderBuilder.ForWriter ifile(FileHandle ifile)
+        {
+            this.ifile = ifile;
+            return this;
+        }
+
+        public SSTableReaderBuilder.ForWriter bf(IFilter bf)
+        {
+            this.bf = bf;
+            return this;
+        }
+
+        public SSTableReaderBuilder.ForWriter summary(IndexSummary summary)
+        {
+            this.summary = summary;
+            return this;
         }
 
         @Override
@@ -294,6 +303,7 @@ public abstract class SSTableReaderBuilder
         @Override
         public SSTableReader build()
         {
+            assert dfile == null && ifile == null && summary == null && bf == null;
             String dataFilePath = descriptor.filenameFor(Component.DATA);
             long fileLength = new File(dataFilePath).length();
             logger.info("Opening {} ({})", descriptor, FBUtilities.prettyPrintMemory(fileLength));
@@ -341,7 +351,7 @@ public abstract class SSTableReaderBuilder
 
     public static class ForRead extends SSTableReaderBuilder
     {
-        private final ValidationMetadata validationMetadata;
+        private volatile ValidationMetadata validationMetadata;
         private final boolean isOffline;
 
         public ForRead(Descriptor descriptor,
@@ -360,6 +370,7 @@ public abstract class SSTableReaderBuilder
         @Override
         public SSTableReader build()
         {
+            assert dfile == null && ifile == null && summary == null && bf == null;
             String dataFilePath = descriptor.filenameFor(Component.DATA);
             long fileLength = new File(dataFilePath).length();
             logger.info("Opening {} ({})", descriptor, FBUtilities.prettyPrintMemory(fileLength));
@@ -395,30 +406,21 @@ public abstract class SSTableReaderBuilder
                           DiskOptimizationStrategy optimizationStrategy,
                           StatsMetadata statsMetadata) throws IOException
         {
-            if (metadata.params.bloomFilterFpChance == 1.0)
+            double currentFPChance = validation != null ? validation.bloomFilterFPChance : Double.NaN;
+            double desiredFPChance = metadata.params.bloomFilterFpChance;
+
+            if (SSTableReader.shouldLoadBloomFilter(descriptor, components, currentFPChance, desiredFPChance))
+                bf = loadBloomFilter(Paths.get(descriptor.filenameFor(Component.FILTER)), descriptor.version.hasOldBfFormat());
+
+            boolean recreateBloomFilter = bf == null && SSTableReader.mayRecreateBloomFilter(descriptor, components, currentFPChance, isOffline, desiredFPChance);
+            load(recreateBloomFilter, !isOffline, optimizationStrategy, statsMetadata, components);
+
+            // if the filter was neither loaded nor created, or we encountered some problems, we fallback to pass-through filter
+            if (bf == null)
             {
-                // bf is disabled.
-                load(false, !isOffline, optimizationStrategy, statsMetadata, components);
                 bf = FilterFactory.AlwaysPresent;
-            }
-            else if (!components.contains(Component.PRIMARY_INDEX)) // What happens if filter component and primary index is missing?
-            {
-                // avoid any reading of the missing primary index component.
-                // this should only happen during StandaloneScrubber
-                load(false, !isOffline, optimizationStrategy, statsMetadata, components);
-            }
-            else if (!components.contains(Component.FILTER) || validation == null)
-            {
-                // bf is enabled, but filter component is missing.
-                load(!isOffline, !isOffline, optimizationStrategy, statsMetadata, components);
-                if (isOffline)
-                    bf = FilterFactory.AlwaysPresent;
-            }
-            else
-            {
-                // bf is enabled and fp chance matches the currently configured value.
-                load(false, !isOffline, optimizationStrategy, statsMetadata, components);
-                bf = loadBloomFilter();
+                logger.warn("Could not recreate or deserialize existing bloom filter, continuing with a pass-through " +
+                            "bloom filter but this will significantly impact reads performance");
             }
         }
 
@@ -459,7 +461,12 @@ public abstract class SSTableReaderBuilder
                     if (saveSummaryIfCreated)
                         SSTableReader.saveSummary(descriptor, first, last, summary);
                     if (recreateBloomFilter)
+                    {
                         SSTableReader.saveBloomFilter(descriptor, bf);
+                        ValidationMetadata updatedValidationMetadata = new ValidationMetadata(validationMetadata.partitioner, metadata.params.bloomFilterFpChance);
+                        descriptor.getMetadataSerializer().updateSSTableMetadata(descriptor, ImmutableMap.of(MetadataType.VALIDATION, updatedValidationMetadata));
+                        validationMetadata = updatedValidationMetadata;
+                    }
                 }
             }
             catch (Throwable t)
@@ -472,6 +479,12 @@ public abstract class SSTableReaderBuilder
                 if (dfile != null)
                 {
                     dfile.close();
+                }
+
+                if (bf != null)
+                {
+                    bf.close();
+                    bf = null;
                 }
 
                 if (summary != null)
