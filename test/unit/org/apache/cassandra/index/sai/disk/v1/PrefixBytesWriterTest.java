@@ -23,7 +23,7 @@ import java.util.List;
 
 import com.carrotsearch.hppc.IntArrayList;
 import org.apache.lucene.store.*;
-import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.BytesRef;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
@@ -34,19 +34,14 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
 public class PrefixBytesWriterTest
 {
-    public static Pair<ByteComparable, IntArrayList> add(String term, int[] array)
-    {
-        IntArrayList list = new IntArrayList();
-        list.add(array, 0, array.length);
-        return Pair.create(ByteComparable.fixedLength(UTF8Type.instance.decompose(term)), list);
-    }
-
     @Test
     public void test() throws Exception
     {
         List<Pair<ByteComparable, IntArrayList>> list = new ArrayList();
-        list.add(add("aaabbb", new int[] {0, 2}));
-        list.add(add("aaabbbbbb", new int[] {1, 3}));
+        list.add(add("aaabbb", new int[] {0, 2})); // 2
+        list.add(add("aaabbbbbb", new int[] {1, 3})); // 2
+        list.add(add("aaabbbccccc", new int[] {4, 5, 6})); // 3
+        list.add(add("zzzzzzzggg", new int[] {10, 11, 12})); // 3
 
         PrefixBytesWriter prefixBytesWriter = new PrefixBytesWriter();
 
@@ -59,10 +54,26 @@ public class PrefixBytesWriterTest
         prefixBytesWriter.write(terms, out, 1024);
         out.close();
 
-        IndexInput input = dir.openInput("file", IOContext.DEFAULT);
-        IndexInput input2 = dir.openInput("file", IOContext.DEFAULT);
-        BytesRefBuilder builder = new BytesRefBuilder();
-        PrefixBytesReader reader = new PrefixBytesReader(input, input2,  3, builder);
+        try (IndexInput input = dir.openInput("file", IOContext.DEFAULT);
+             IndexInput input2 = dir.openInput("file", IOContext.DEFAULT))
+        {
+            PrefixBytesReader reader = new PrefixBytesReader(input, input2);
 
+            List<String> outTerms = new ArrayList();
+            for (int x = 0; x < 10; x++)
+            {
+                BytesRef term = reader.seek(x);
+
+                outTerms.add(term.utf8ToString());
+            }
+            System.out.println("outTerms=" + outTerms);
+        }
+    }
+
+    public static Pair<ByteComparable, IntArrayList> add(String term, int[] array)
+    {
+        IntArrayList list = new IntArrayList();
+        list.add(array, 0, array.length);
+        return Pair.create(ByteComparable.fixedLength(UTF8Type.instance.decompose(term)), list);
     }
 }

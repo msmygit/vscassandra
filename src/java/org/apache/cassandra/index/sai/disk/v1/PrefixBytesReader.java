@@ -28,67 +28,113 @@ import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 
 public class PrefixBytesReader
 {
-    public PrefixBytesReader(final IndexInput input, final IndexInput input2, int index, BytesRefBuilder builder) throws IOException
+    final DirectReaders.Reader lengthsReader, prefixesReader;
+    final int lengthsBytesLen;
+    final int prefixBytesLen;
+    final byte lengthsBits;
+    final byte prefixBits;
+    final long arraysFilePointer;
+    final SeekingRandomAccessInput seekingInput;
+    final IndexInput input;
+    final BytesRefBuilder builder = new BytesRefBuilder();
+    final int leafSize;
+
+    private int index = 0;
+    private long bytesPosition;
+    private final long bytesPositionStart;
+    int bytesLength = 0;
+    int lastLen = 0;
+    int lastPrefix = 0;
+    byte[] firstTerm;
+
+    public PrefixBytesReader(final IndexInput input, final IndexInput input2) throws IOException
     {
-        builder.clear();
+        this.input = input;
 
-        final SeekingRandomAccessInput seekingInput = new SeekingRandomAccessInput(input2);
+        seekingInput = new SeekingRandomAccessInput(input2);
         final long filePointer = input.getFilePointer();
-        final int lengthsBytesLen = input.readInt();
-        final int prefixBytesLen = input.readInt();
-        final byte lengthsBits = input.readByte();
-        final byte prefixBits = input.readByte();
+        leafSize = input.readInt();
+        lengthsBytesLen = input.readInt();
+        prefixBytesLen = input.readInt();
+        lengthsBits = input.readByte();
+        prefixBits = input.readByte();
 
-        final long arraysFilePointer = input.getFilePointer();
+        arraysFilePointer = input.getFilePointer();
 
         System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
 
-        final DirectReaders.Reader lengthsReader = DirectReaders.getReaderForBitsPerValue(lengthsBits);
-        final DirectReaders.Reader prefixesReader = DirectReaders.getReaderForBitsPerValue(prefixBits);
+        lengthsReader = DirectReaders.getReaderForBitsPerValue(lengthsBits);
+        prefixesReader = DirectReaders.getReaderForBitsPerValue(prefixBits);
 
         input.seek(arraysFilePointer + lengthsBytesLen + prefixBytesLen);
 
-        long bytesPosition = input.getFilePointer();
-        int bytesLength = 0;
-        int lastLen = 0;
-        int lastPrefix = 0;
+        bytesPositionStart = bytesPosition = input.getFilePointer();
+    }
 
-        byte[] firstTerm = null;
+    public BytesRef seek(int seekIndex) throws IOException
+    {
+        if (seekIndex < index) throw new IllegalArgumentException("seekIndex="+seekIndex+" must be greater than index="+index);
+        if (seekIndex >= leafSize) throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+leafSize);
 
-        for (int x=0; x <= index; x++)
+        int len = 0;
+        int prefix = 0;
+
+        for (int x = index; x <= seekIndex; x++)
         {
-            int len = LeafOrderMap.getValue(seekingInput, arraysFilePointer, x, lengthsReader);
-            System.out.println("x="+x+" len="+len);
+            len = LeafOrderMap.getValue(seekingInput, arraysFilePointer, x, lengthsReader);
+            prefix = LeafOrderMap.getValue(seekingInput, arraysFilePointer + lengthsBytesLen, x, prefixesReader);
+
+            System.out.println("x="+x+" len="+len+" prefix="+prefix);
 
             if (x == 0)
             {
                 firstTerm = new byte[len];
-                long filePointer44 = input.getFilePointer();
                 input.readBytes(firstTerm, 0, len);
-                System.out.println("bytes file pointer="+filePointer44);
+                lastPrefix = len;
                 System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
+                bytesLength = 0;
+                bytesPosition += len;
             }
 
-            int prefix = LeafOrderMap.getValue(seekingInput, arraysFilePointer + lengthsBytesLen, x, prefixesReader);
-
-            if (prefix > 0 && x > 0)
+            if (len > 0 && x > 0)
             {
-                bytesLength = (len - prefix);
+                bytesLength = len - prefix;
                 lastLen = len;
                 lastPrefix = prefix;
                 System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
-                bytesPosition += bytesLength;
+            }
+            else
+            {
+                bytesLength = 0;
             }
         }
 
-        input.seek(bytesPosition);
-        System.out.println("lastlen="+lastLen+" bytesLength="+bytesLength);
-        byte[] bytes = new byte[bytesLength];
-        input.readBytes(bytes, 0, bytesLength);
+        this.index = seekIndex + 1;
 
-        builder.append(firstTerm, 0, lastPrefix);
-        builder.append(bytes, 0, bytes.length);
+        if (len == 0 && prefix == 0)
+        {
+
+        }
+        else
+        {
+            builder.clear();
+
+            System.out.println("bytesPosition=" + bytesPosition + " bytesPositionStart=" + bytesPositionStart + " total=" + (bytesPosition - bytesPositionStart));
+
+            System.out.println("lastlen=" + lastLen + " lastPrefix=" + lastPrefix + " bytesLength=" + bytesLength);
+            final byte[] bytes = new byte[bytesLength];
+            input.seek(bytesPosition);
+            input.readBytes(bytes, 0, bytesLength);
+
+            bytesPosition += bytesLength;
+
+            System.out.println("bytes read=" + new BytesRef(bytes).utf8ToString());
+
+            builder.append(firstTerm, 0, lastPrefix);
+            builder.append(bytes, 0, bytes.length);
+        }
 
         System.out.println("str="+builder.get().utf8ToString());
+        return builder.get();
     }
 }

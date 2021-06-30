@@ -210,6 +210,42 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         }
     }
 
+    public int readLeaf(final long filePointer,
+                        final IndexInput bkdInput,
+                        final byte[] packedValues,
+                        final short[] origIndex,
+                        final int[] commonPrefixLengths,
+                        final byte[] scratchPackedValue1) throws IOException
+    {
+        bkdInput.seek(filePointer);
+        final int count = bkdInput.readVInt();
+        // loading doc ids occurred here prior
+        final int orderMapLength = bkdInput.readVInt();
+        final long orderMapPointer = bkdInput.getFilePointer();
+        bkdInput.seek(orderMapPointer + orderMapLength);
+
+        final IntersectVisitor visitor = new IntersectVisitor() {
+            int i = 0;
+
+            @Override
+            public boolean visit(byte[] packedValue)
+            {
+                System.arraycopy(packedValue, 0, packedValues, i * packedBytesLength, packedBytesLength);
+                i++;
+                return true;
+            }
+
+            @Override
+            public Relation compare(byte[] minPackedValue, byte[] maxPackedValue) {
+                return Relation.CELL_CROSSES_QUERY;
+            }
+        };
+
+        visitDocValues(commonPrefixLengths, scratchPackedValue1, bkdInput, count, visitor, null, origIndex);
+
+        return count;
+    }
+
     @SuppressWarnings("resource")
     public int readLeaf(long filePointer,
                         int nodeID,

@@ -85,7 +85,7 @@ public class PrefixBytesWriter
             else
             {
                 final int prefix = StringHelper.bytesDifference(prefixTermBuilder.get(), builder.get());
-                System.out.println("prefix="+prefixTermBuilder.get().utf8ToString()+" prefixindex="+prefix);
+                System.out.println("prefix="+prefixTermBuilder.get().utf8ToString()+" prefix="+prefix);
                 prefixes[index] = prefix;
                 lengths[index] = builder.get().length;
             }
@@ -93,6 +93,12 @@ public class PrefixBytesWriter
 
             int start = prefixes[index];
             int len = builder.get().length - prefixes[index];
+
+            if (index == 0)
+            {
+                prefixes[index] = builder.get().length;
+            }
+
             System.out.println("write index="+index+" start="+start+" len="+len);
             scratchOut.writeBytes(builder.get().bytes, start, len);
 
@@ -128,6 +134,7 @@ public class PrefixBytesWriter
         //prefixScratchOut.writeByte((byte)DirectWriter.unsignedBitsRequired(maxPrefix));
         LeafOrderMap.write(prefixes, index, maxPrefix, prefixScratchOut);
 
+        out.writeInt(index); // value count
         out.writeInt(lengthsScratchOut.getPosition());
         out.writeInt(prefixScratchOut.getPosition());
         out.writeByte((byte)DirectWriter.unsignedBitsRequired(maxLength));
