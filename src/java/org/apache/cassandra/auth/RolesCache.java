@@ -17,6 +17,8 @@
  */
 package org.apache.cassandra.auth;
 
+import java.util.Collection;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
@@ -61,5 +63,31 @@ public class RolesCache extends AuthCache<RoleResource, Set<Role>>
     Set<Role> getRoles(RoleResource primaryRole)
     {
         return get(primaryRole);
+    }
+
+    /**
+     * Invalidate all RoleResource entries in the given collection. If the collection is null, then
+     * the entire cache is invalidated.
+     *
+     * @param roles collection of Roles to be invalidated 
+     */
+    public void invalidate(Collection<RoleResource> roles)
+    {
+        if (roles == null)
+            invalidate();
+        else
+            for (RoleResource role: roles)
+                invalidate(role);
+    }
+
+    public void invalidate(RoleResource primaryRole)
+    {
+        // Invalidate the primary role
+        super.invalidate(primaryRole);
+        
+        // Invalidate roles containing this role
+        super.maybeInvalidateByFilter((entry) -> entry.getValue().stream()
+                                                      .anyMatch(role -> Objects.equals(role.resource, primaryRole))
+        );
     }
 }

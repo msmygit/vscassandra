@@ -88,6 +88,21 @@ public class CassandraAuthorizer implements IAuthorizer
     {
         modifyRolePermissions(permissions, resource, grantee, "+");
         addLookupEntry(resource, grantee);
+        invalidateRolesAndPermissions(Collections.singleton(grantee), resource);
+    }
+
+    private void invalidateRolesAndPermissions(Collection<RoleResource> roles, IResource resource)
+    {
+        Roles.cache.invalidate(roles);
+        // All permission entries associated with the resource need to be cleared as they may be
+        // transitively applied to user/roles besides those directly affected by the grant/revoke/drop operation 
+        AuthenticatedUser.permissionsCache.invalidate(resource);
+    }
+
+    private void invalidateRolesAndPermissions(Collection<RoleResource> roles)
+    {
+        Roles.cache.invalidate(roles);
+        AuthenticatedUser.permissionsCache.invalidate(roles);
     }
 
     public void revoke(AuthenticatedUser performer, Set<Permission> permissions, IResource resource, RoleResource revokee)
@@ -95,6 +110,7 @@ public class CassandraAuthorizer implements IAuthorizer
     {
         modifyRolePermissions(permissions, resource, revokee, "-");
         removeLookupEntry(resource, revokee);
+        invalidateRolesAndPermissions(Collections.singleton(revokee), resource);
     }
 
     // Called when deleting a role with DROP ROLE query.
@@ -131,6 +147,8 @@ public class CassandraAuthorizer implements IAuthorizer
                                                        ClientState.forInternalCalls()));
 
             executeLoggedBatch(statements);
+            
+            invalidateRolesAndPermissions(Collections.singleton(revokee));
         }
         catch (RequestExecutionException | RequestValidationException e)
         {
@@ -151,12 +169,15 @@ public class CassandraAuthorizer implements IAuthorizer
                                                           escape(droppedResource.getName())));
 
             List<CQLStatement> statements = new ArrayList<>();
+            Set<RoleResource> roles = new HashSet<>(rows.size());
             for (UntypedResultSet.Row row : rows)
             {
+                String role = row.getString("role");
+                roles.add(RoleResource.role(role));
                 statements.add(QueryProcessor.getStatement(String.format("DELETE FROM %s.%s WHERE role = '%s' AND resource = '%s'",
                                                                          SchemaConstants.AUTH_KEYSPACE_NAME,
                                                                          AuthKeyspace.ROLE_PERMISSIONS,
-                                                                         escape(row.getString("role")),
+                                                                         escape(role),
                                                                          escape(droppedResource.getName())),
                                                            ClientState.forInternalCalls()));
             }
@@ -168,6 +189,8 @@ public class CassandraAuthorizer implements IAuthorizer
                                                       ClientState.forInternalCalls()));
 
             executeLoggedBatch(statements);
+
+            invalidateRolesAndPermissions(roles, droppedResource);
         }
         catch (RequestExecutionException | RequestValidationException e)
         {
