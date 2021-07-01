@@ -330,6 +330,12 @@ public class StorageAttachedIndex implements Index
         return () -> startInitialBuild(baseCfs, StorageService.instance.isStarting()).get();
     }
 
+    @Override
+    public boolean supportsReplicaFilteringProtection(RowFilter rowFilter)
+    {
+        return false;
+    }
+
     private Future<?> startInitialBuild(ColumnFamilyStore baseCfs, boolean validate)
     {
         if (baseCfs.indexManager.isIndexQueryable(this))
