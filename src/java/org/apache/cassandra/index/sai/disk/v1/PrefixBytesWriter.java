@@ -127,11 +127,9 @@ public class PrefixBytesWriter
         }
         System.out.println("lengths=" + Arrays.toString(Arrays.copyOf(lengths, index))+" scratchOut.length="+scratchOut.getPosition());
         final int maxLength = Arrays.stream(lengths).max().getAsInt();
-        //lengthsScratchOut.writeByte((byte)DirectWriter.unsignedBitsRequired(maxLength));
         LeafOrderMap.write(lengths, index, maxLength, lengthsScratchOut);
         final int maxPrefix = Arrays.stream(prefixes).max().getAsInt();
         System.out.println("prefixes=" + Arrays.toString(Arrays.copyOf(prefixes, index)));
-        //prefixScratchOut.writeByte((byte)DirectWriter.unsignedBitsRequired(maxPrefix));
         LeafOrderMap.write(prefixes, index, maxPrefix, prefixScratchOut);
 
         out.writeInt(index); // value count
