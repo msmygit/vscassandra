@@ -1,0 +1,95 @@
+--- a/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java
++++ b/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java
+@@ -153,14 +153,10 @@
+         }
+     }
+ 
+-<<<<<<<
+-    @VisibleForTesting
+-    public AbstractAllocator allocator(OpOrder.Group writeOp)
+-=======
+-    public Cloner cloner(OpOrder.Group writeOp)
+->>>>>>>
++    @Override
++    public Cloner cloner(OpOrder.Group opGroup)
+     {
+-        return allocator(writeOp);
++        return allocator(opGroup);
+     }
+ 
+     /**
+diff --git a/src/java/org/apache/cassandra/db/NativeClustering.java b/src/java/org/apache/cassandra/db/NativeClustering.java
+index 8ac81520bf..d4eea43be7 100644
+--- a/src/java/org/apache/cassandra/db/NativeClustering.java
++++ b/src/java/org/apache/cassandra/db/NativeClustering.java
+@@ -25,7 +25,7 @@ import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+ import org.apache.cassandra.db.marshal.ValueAccessor;
+ import org.apache.cassandra.utils.ObjectSizes;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
+-import org.apache.cassandra.utils.memory.HeapAllocator;
++import org.apache.cassandra.utils.memory.HeapCloner;
+ import org.apache.cassandra.utils.memory.MemoryUtil;
+ import org.apache.cassandra.utils.memory.NativeAllocator;
+ 
+@@ -163,7 +163,7 @@ public class NativeClustering implements Clustering<ByteBuffer>
+         for (int i = 0; i < values.length; ++i)
+         {
+             ByteBuffer value = get(i);
+-            values[i] = value != null ? HeapAllocator.instance.clone(value) : null;
++            values[i] = value != null ? HeapCloner.instance.clone(value) : null;
+         }
+ 
+         return accessor().factory().clustering(values);
+diff --git a/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java b/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
+index a8852c622e..53fe008faa 100644
+--- a/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
++++ b/src/java/org/apache/cassandra/db/memtable/TrieMemtable.java
+@@ -461,7 +461,8 @@ public class TrieMemtable extends AbstractAllocatorMemtable
+ 
+         public long put(DecoratedKey key, PartitionUpdate update, UpdateTransaction indexer, OpOrder.Group opGroup)
+         {
+-            BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, opGroup, indexer);
++            Cloner cloner = allocator.cloner(opGroup);
++            BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, cloner, opGroup, indexer);
+             boolean locked = writeLock.tryLock();
+             if (locked)
+             {
+diff --git a/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java b/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java
+index a591c0eca7..59db12a145 100644
+--- a/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java
++++ b/src/java/org/apache/cassandra/utils/memory/SlabAllocator.java
+@@ -153,10 +153,10 @@ public class SlabAllocator extends MemtableBufferAllocator
+         }
+     }
+ 
+-    @VisibleForTesting
+-    public Cloner allocator(OpOrder.Group writeOp)
++    @Override
++    public Cloner cloner(OpOrder.Group opGroup)
+     {
+-        return new ContextAllocator(writeOp);
++        return allocator(opGroup);
+     }
+ 
+     /**
+diff --git a/test/unit/org/apache/cassandra/db/ClusteringPrefixTest.java b/test/unit/org/apache/cassandra/db/ClusteringPrefixTest.java
+index 04585de143..adedd7840d 100644
+--- a/test/unit/org/apache/cassandra/db/ClusteringPrefixTest.java
++++ b/test/unit/org/apache/cassandra/db/ClusteringPrefixTest.java
+@@ -34,7 +34,6 @@ import org.apache.cassandra.db.marshal.ByteArrayAccessor;
+ import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+ import org.apache.cassandra.db.marshal.ValueAccessor;
+ import org.apache.cassandra.utils.ByteBufferUtil;
+-import org.apache.cassandra.utils.memory.AbstractAllocator;
+ import org.apache.cassandra.utils.memory.MemtablePool;
+ import org.apache.cassandra.utils.memory.NativeAllocator;
+ import org.apache.cassandra.utils.memory.NativePool;
+@@ -133,7 +132,7 @@ public class ClusteringPrefixTest
+     public void testRetainableSlab(boolean onHeap) throws InterruptedException, TimeoutException
+     {
+         MemtablePool pool = new SlabPool(1L << 24, onHeap ? 0 : 1L << 24, 1.0f, () -> CompletableFuture.completedFuture(false));
+-        AbstractAllocator allocator = ((SlabAllocator) pool.newAllocator()).allocator(null);
++        SlabAllocator allocator = (SlabAllocator) pool.newAllocator();
+         try
+         {
+             testRetainable(ByteBufferAccessor.instance.factory(), x ->
