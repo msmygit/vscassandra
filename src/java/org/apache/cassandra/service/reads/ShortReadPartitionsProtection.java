@@ -152,7 +152,7 @@ public class ShortReadPartitionsProtection extends Transformation<UnfilteredRowI
 
         ColumnFamilyStore.metricsFor(command.metadata().id).shortReadProtectionRequests.mark();
         Tracing.trace("Requesting {} extra rows from {} for short read protection", toQuery, source);
-        logger.info("Requesting {} extra rows from {} for short read protection", toQuery, source);
+//        logger.info("Requesting {} extra rows from {} for short read protection", toQuery, source);
 
         // If we've arrived here, all responses have been consumed, and we're about to request more.
         preFetchCallback.run();
