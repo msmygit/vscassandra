@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -508,6 +509,9 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
                 FileUtils.closeQuietly(bkdInput);
 
+                final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+                listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
+                listener.postingListsHit(postingLists.size());
                 return postingLists;
             }
             catch (Throwable t)
