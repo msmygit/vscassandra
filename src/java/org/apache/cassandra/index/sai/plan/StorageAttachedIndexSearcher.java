@@ -225,8 +225,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             // SPRC should only return UnfilteredRowIterator, but it returns UnfilteredPartitionIterator due to Flow.
             try (UnfilteredRowIterator partition = controller.getPartition(key, executionController))
             {
-                queryContext.partitionsRead++;
-
                 return applyIndexFilter(key, partition, filterTree, queryContext);
             }
         }
@@ -240,14 +238,14 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             {
                 Unfiltered row = partition.next();
 
-                queryContext.rowsFiltered++;
+                queryContext.rowsRead++;
                 if (tree.isSatisfiedBy(key.partitionKey(), row, staticRow))
                     clusters.add(row);
             }
 
             if (clusters.isEmpty())
             {
-                queryContext.rowsFiltered++;
+                queryContext.rowsRead++;
                 if (tree.isSatisfiedBy(key.partitionKey(), staticRow, staticRow))
                     clusters.add(staticRow);
             }
@@ -376,7 +374,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                         while (hasNext = delegate.hasNext())
                         {
                             next = delegate.next();
-                            queryContext.rowsFiltered++;
+                            queryContext.rowsRead++;
                             if (tree.isSatisfiedBy(delegate.partitionKey(), next, staticRow))
                                 return true;
                         }

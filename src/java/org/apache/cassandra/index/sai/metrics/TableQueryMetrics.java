@@ -42,8 +42,7 @@ public class TableQueryMetrics extends AbstractMetrics
     private final PerQueryMetrics perQueryMetrics;
 
     private final Counter totalQueryTimeouts;
-    private final Counter totalPartitionReads;
-    private final Counter totalRowsFiltered;
+    private final Counter totalRowsRead;
     private final Counter totalQueriesCompleted;
 
     private final Meter tokenSkippingLookups;
@@ -55,8 +54,7 @@ public class TableQueryMetrics extends AbstractMetrics
 
         perQueryMetrics = new PerQueryMetrics(table);
 
-        totalPartitionReads = Metrics.counter(createMetricName("TotalPartitionReads"));
-        totalRowsFiltered = Metrics.counter(createMetricName("TotalRowsFiltered"));
+        totalRowsRead = Metrics.counter(createMetricName("TotalRowsRead"));
         totalQueriesCompleted = Metrics.counter(createMetricName("TotalQueriesCompleted"));
         totalQueryTimeouts = Metrics.counter(createMetricName("TotalQueryTimeouts"));
 
@@ -97,8 +95,7 @@ public class TableQueryMetrics extends AbstractMetrics
          */
         private final Histogram sstablesHit;
         private final Histogram segmentsHit;
-        private final Histogram partitionReads;
-        private final Histogram rowsFiltered;
+        private final Histogram rowsRead;
 
         /**
          * BKD index metrics.
@@ -132,8 +129,7 @@ public class TableQueryMetrics extends AbstractMetrics
             postingsSkips = Metrics.histogram(createMetricName("PostingsSkips"), false);
             postingsDecodes = Metrics.histogram(createMetricName("PostingsDecodes"), false);
 
-            partitionReads = Metrics.histogram(createMetricName("PartitionReads"), false);
-            rowsFiltered = Metrics.histogram(createMetricName("RowsFiltered"), false);
+            rowsRead = Metrics.histogram(createMetricName("RowsRead"), false);
         }
 
         private void recordStringIndexCacheMetrics(QueryContext events)
@@ -158,23 +154,20 @@ public class TableQueryMetrics extends AbstractMetrics
 
             final long ssTablesHit = queryContext.sstablesHit;
             final long segmentsHit = queryContext.segmentsHit;
-            final long partitionsRead = queryContext.partitionsRead;
-            final long rowsFiltered = queryContext.rowsFiltered;
+            final long rowsRead = queryContext.rowsRead;
 
             sstablesHit.update(ssTablesHit);
             this.segmentsHit.update(segmentsHit);
 
-            partitionReads.update(partitionsRead);
-            totalPartitionReads.inc(partitionsRead);
 
-            this.rowsFiltered.update(rowsFiltered);
-            totalRowsFiltered.inc(rowsFiltered);
+            this.rowsRead.update(rowsRead);
+            totalRowsRead.inc(rowsRead);
 
             if (Tracing.isTracing())
             {
                 Tracing.trace("Index query accessed memtable indexes, {}, and {}, post-filtered {} in {}, and took {} microseconds.",
                               pluralize(ssTablesHit, "SSTable index", "es"), pluralize(segmentsHit, "segment", "s"),
-                              pluralize(rowsFiltered, "row", "s"), pluralize(partitionsRead, "partition", "s"),
+                              pluralize(rowsRead, "row", "s"),
                               queryLatencyMicros);
             }
 
