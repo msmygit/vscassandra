@@ -29,6 +29,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,7 +58,6 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Expression;
@@ -99,8 +99,8 @@ public class NativeIndexDDLTest extends SAITester
                                                                           .add(ActionBuilder.newActionBuilder().actions().doThrow(RuntimeException.class, Expression.quote("Injected failure!")))
                                                                           .build();
 
-    private static final Injection failPerSSTableTokenAdd = Injections.newCustom("fail_token_writer")
-                                                                      .add(InvokePointBuilder.newInvokePoint().onClass(NumericValuesWriter.class).onMethod("add"))
+    private static final Injection failNumericIndexWriter = Injections.newCustom("fail_numeric_index_writer")
+                                                                      .add(InvokePointBuilder.newInvokePoint().onClass(NumericIndexWriter.class).onMethod("writeIndex"))
                                                                       .add(ActionBuilder.newActionBuilder().actions().doThrow(IOException.class, Expression.quote("Injected failure!")))
                                                                       .build();
 
@@ -1012,7 +1012,7 @@ public class NativeIndexDDLTest extends SAITester
     }
 
     @Test
-    public void verifyCleanupFailedTokenOffsetFiles() throws Throwable
+    public void verifyCleanupFailedPrimaryKeyMapFiles() throws Throwable
     {
         createTable(CREATE_TABLE_TEMPLATE);
         disableCompaction(KEYSPACE);
@@ -1023,8 +1023,8 @@ public class NativeIndexDDLTest extends SAITester
         flush();
 
         // Inject failure
-        Injections.inject(failPerSSTableTokenAdd);
-        failPerSSTableTokenAdd.enable();
+        Injections.inject(failNumericIndexWriter);
+        failNumericIndexWriter.enable();
 
         try
         {
@@ -1042,7 +1042,7 @@ public class NativeIndexDDLTest extends SAITester
         }
         finally
         {
-            failPerSSTableTokenAdd.disable();
+            failNumericIndexWriter.disable();
         }
     }
 
