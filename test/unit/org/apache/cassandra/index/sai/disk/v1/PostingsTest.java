@@ -75,7 +75,8 @@ public class PostingsTest extends NdiRandomizedTest
             }
             assertEquals(PostingList.END_OF_STREAM, expectedPostingList.nextPosting());
             assertEquals(0, listener.advances);
-            assertEquals(reader.size(), listener.decodes);
+            reader.close();
+            assertEquals(expectedPostingList.size(), listener.decodes);
         }
 
         sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
@@ -83,12 +84,10 @@ public class PostingsTest extends NdiRandomizedTest
         try (PostingsReader reader = new PostingsReader(sharedInput, postingPointer, listener))
         {
             assertEquals(50, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(45)));
-
             assertEquals(60, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(60)));
             assertEquals(PostingList.END_OF_STREAM, reader.nextPosting());
             assertEquals(2, listener.advances);
             reader.close();
-
             assertEquals(reader.size(), listener.decodes); // nothing more was decoded
         }
     }
