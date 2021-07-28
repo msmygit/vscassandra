@@ -86,7 +86,7 @@ public class SequentialWriter extends BufferedDataOutputStreamPlus implements Tr
 
         protected void doPrepare()
         {
-            syncInternal();
+            sync();
         }
 
         protected Throwable doCommit(Throwable accumulate)
@@ -177,17 +177,21 @@ public class SequentialWriter extends BufferedDataOutputStreamPlus implements Tr
 
     /**
      * Synchronize file contents with disk.
+     * <p/>
+     * This is only safe to call before truncation or close for CompressedSequentialWriter
+     * Otherwise it will leave a non-uniform size compressed block in the middle of the file
+     * and the compressed format can't handle that.
      */
     public void sync()
     {
-        syncInternal();
+        doFlush(true);
     }
 
-    protected void syncDataOnlyInternal()
+    private void forceSync(boolean syncMetadata)
     {
         try
         {
-            SyncUtil.force(fchannel, false);
+            SyncUtil.forceAlways(fchannel, syncMetadata);
         }
         catch (IOException e)
         {
@@ -195,30 +199,30 @@ public class SequentialWriter extends BufferedDataOutputStreamPlus implements Tr
         }
     }
 
-    /*
-     * This is only safe to call before truncation or close for CompressedSequentialWriter
-     * Otherwise it will leave a non-uniform size compressed block in the middle of the file
-     * and the compressed format can't handle that.
-     */
-    protected void syncInternal()
-    {
-        doFlush(0);
-        syncDataOnlyInternal();
-    }
-
     @Override
     protected void doFlush(int count)
     {
+        doFlush(false);
+    }
+
+    private void doFlush(boolean forceSyncWithMetadata)
+    {
         flushData();
 
+        boolean sync = forceSyncWithMetadata;
         if (option.trickleFsync())
         {
             bytesSinceTrickleFsync += buffer.position();
             if (bytesSinceTrickleFsync >= option.trickleFsyncByteInterval())
             {
-                syncDataOnlyInternal();
+                sync = true;
                 bytesSinceTrickleFsync = 0;
             }
+        }
+
+        if (sync)
+        {
+            forceSync(forceSyncWithMetadata);
         }
 
         // Remember that we wrote, so we don't write it again on next flush().
@@ -333,7 +337,7 @@ public class SequentialWriter extends BufferedDataOutputStreamPlus implements Tr
         }
 
         // synchronize current buffer with disk - we don't want any data loss
-        syncInternal();
+        sync();
 
         // truncate file to given position
         truncate(truncateTarget);
