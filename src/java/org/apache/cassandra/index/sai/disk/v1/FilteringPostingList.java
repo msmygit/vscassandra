@@ -31,19 +31,24 @@ import org.apache.lucene.util.FixedBitSet;
  */
 public class FilteringPostingList implements PostingList
 {
-    private final FixedBitSet filter;
+    private final Filter filter;
     private final OrdinalPostingList delegate;
     private final int cardinality;
     private int position = 0;
 
-    FilteringPostingList(FixedBitSet filter, OrdinalPostingList delegate)
+    public FilteringPostingList(int cardinality, Filter filter, OrdinalPostingList delegate)
     {
-        cardinality = filter.cardinality();
+        this.cardinality = cardinality;
 
         Preconditions.checkArgument(cardinality > 0, "Filter must contain at least one match.");
 
         this.filter = filter;
         this.delegate = delegate;
+    }
+
+    public interface Filter
+    {
+        boolean matches(int ordinal, long rowID);
     }
 
     @Override
@@ -68,7 +73,7 @@ public class FilteringPostingList implements PostingList
                 return PostingList.END_OF_STREAM;
             }
 
-            if (filter.get(position++))
+            if (filter.matches(position++, segmentRowId))
             {
                 return segmentRowId;
             }
@@ -78,7 +83,7 @@ public class FilteringPostingList implements PostingList
     @Override
     public long size()
     {
-        return cardinality;
+        return delegate.size();
     }
 
     @Override
@@ -95,7 +100,7 @@ public class FilteringPostingList implements PostingList
         position = (int)delegate.getOrdinal();
 
         // If the ordinal of the ID we just read satisfies the filter, just return it...
-        if (filter.get(position - 1))
+        if (filter.matches(position - 1, segmentRowId))
         {
             return segmentRowId;
         }
