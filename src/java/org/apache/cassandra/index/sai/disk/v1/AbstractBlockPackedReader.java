@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index.sai.disk.v1;
 
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.lucene.store.IndexInput;
 

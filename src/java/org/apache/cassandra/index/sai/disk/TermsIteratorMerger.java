@@ -23,7 +23,6 @@ import java.util.Comparator;
 import java.util.PriorityQueue;
 
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;

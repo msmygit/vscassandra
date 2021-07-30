@@ -19,11 +19,10 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
-import org.apache.cassandra.index.sai.utils.LongArray;
+import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
-import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.lucene.index.CorruptIndexException;
@@ -39,7 +38,6 @@ import static org.apache.cassandra.index.sai.utils.SAICodecUtils.numBlocks;
  */
 public class MonotonicBlockPackedReader implements LongArray.Factory
 {
-    private final IndexComponents components;
     private final FileHandle file;
     private final int blockShift, blockMask;
     private final long valueCount;
@@ -48,15 +46,14 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
     private final PackedLongValues minValues;
     private final float[] averages;
 
-    public MonotonicBlockPackedReader(FileHandle file, Component component, IndexComponents components, MetadataSource source) throws IOException
+    public MonotonicBlockPackedReader(FileHandle file, IndexComponent component, MetadataSource source) throws IOException
     {
-        this(file, components, new NumericValuesMeta(source.get(component.name())));
+        this(file, new NumericValuesMeta(source.get(component.name())));
     }
 
     @SuppressWarnings("resource")
-    public MonotonicBlockPackedReader(FileHandle file, IndexComponents components, NumericValuesMeta meta) throws IOException
+    public MonotonicBlockPackedReader(FileHandle file, NumericValuesMeta meta) throws IOException
     {
-        this.components = components;
         this.valueCount = meta.valueCount;
         blockShift = checkBlockSize(meta.blockSize, AbstractBlockPackedWriter.MIN_BLOCK_SIZE, AbstractBlockPackedWriter.MAX_BLOCK_SIZE);
         blockMask = meta.blockSize - 1;
@@ -96,7 +93,7 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
     @SuppressWarnings("resource")
     public LongArray open()
     {
-        final IndexInput indexInput = components.openInput(file);
+        final IndexInput indexInput = IndexFileUtils.instance.openInput(file);
         return new AbstractBlockPackedReader(indexInput, blockBitsPerValue, blockShift, blockMask, 0, valueCount)
         {
             @Override

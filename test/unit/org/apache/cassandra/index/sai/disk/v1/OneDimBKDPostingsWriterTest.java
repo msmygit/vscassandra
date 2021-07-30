@@ -22,13 +22,21 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import org.agrona.collections.IntArrayList;
+import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
+import org.apache.cassandra.index.sai.disk.v1.BKDPostingsIndex;
+import org.apache.cassandra.index.sai.disk.v1.OneDimBKDPostingsWriter;
+import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.store.IndexInput;
@@ -39,13 +47,25 @@ import static org.apache.cassandra.index.sai.metrics.QueryEventListeners.NO_OP_P
 
 public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
 {
+    private IndexDescriptor indexDescriptor;
+    private String index;
+    private IndexContext indexContext;
+
+    @Before
+    public void setup() throws Throwable
+    {
+        indexDescriptor = newIndexDescriptor();
+        index = newIndex();
+        indexContext = SAITester.createIndexContext(index, Int32Type.instance);
+    }
+
     @Test
     public void shouldWritePostingsForEligibleNodes() throws IOException
     {
         List<PackedLongValues> leaves =
                 Arrays.asList(postings(1, 5, 7), postings(3, 4, 6), postings(2, 8, 10), postings(11, 12, 13));
 
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 1), newIndexComponents());
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 1), indexContext);
 
         // should build postings for nodes 2 & 3 (lvl 2) and 8, 10, 12, 14 (lvl 4)
         writer.onLeaf(64, 1, pathToRoot(1, 2, 4, 8, 16));
@@ -53,14 +73,13 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(96, 3, pathToRoot(1, 3, 6, 12, 24));
         writer.onLeaf(112, 4, pathToRoot(1, 3, 7, 14, 28));
 
-        IndexComponents indexComponents = newIndexComponents();
         long fp;
-        try (IndexOutputWriter output = indexComponents.createOutput(indexComponents.kdTreePostingLists))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexComponents.createFileHandle(indexComponents.kdTreePostingLists), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(10, postingsIndex.size());
 
         // Internal postings...
@@ -71,12 +90,12 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         assertTrue(postingsIndex.exists(12));
         assertTrue(postingsIndex.exists(14));
 
-        assertPostingReaderEquals(indexComponents, postingsIndex, 2, new int[]{ 1, 3, 4, 5, 6, 7 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 3, new int[]{ 2, 8, 10, 11, 12, 13 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 8, new int[]{ 1, 5, 7 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 10, new int[]{ 3, 4, 6 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 12, new int[]{ 2, 8, 10 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 14, new int[]{ 11, 12, 13 });
+        assertPostingReaderEquals(postingsIndex, 2, new int[]{ 1, 3, 4, 5, 6, 7 });
+        assertPostingReaderEquals(postingsIndex, 3, new int[]{ 2, 8, 10, 11, 12, 13 });
+        assertPostingReaderEquals(postingsIndex, 8, new int[]{ 1, 5, 7 });
+        assertPostingReaderEquals(postingsIndex, 10, new int[]{ 3, 4, 6 });
+        assertPostingReaderEquals(postingsIndex, 12, new int[]{ 2, 8, 10 });
+        assertPostingReaderEquals(postingsIndex, 14, new int[]{ 11, 12, 13 });
 
         // Leaf postings...
         assertTrue(postingsIndex.exists(64));
@@ -84,30 +103,29 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         assertTrue(postingsIndex.exists(96));
         assertTrue(postingsIndex.exists(112));
 
-        assertPostingReaderEquals(indexComponents, postingsIndex, 64, new int[]{ 1, 5, 7 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 80, new int[]{ 3, 4, 6 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 96, new int[]{ 2, 8, 10 });
-        assertPostingReaderEquals(indexComponents, postingsIndex, 112, new int[]{ 11, 12, 13 });
+        assertPostingReaderEquals(postingsIndex, 64, new int[]{ 1, 5, 7 });
+        assertPostingReaderEquals(postingsIndex, 80, new int[]{ 3, 4, 6 });
+        assertPostingReaderEquals(postingsIndex, 96, new int[]{ 2, 8, 10 });
+        assertPostingReaderEquals(postingsIndex, 112, new int[]{ 11, 12, 13 });
     }
 
     @Test
     public void shouldSkipPostingListWhenSamplingMisses() throws IOException
     {
         List<PackedLongValues> leaves = Collections.singletonList(postings(1, 2, 3));
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 5, 1), newIndexComponents());
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 5, 1), indexContext);
 
         // The tree is too short to have any internal posting lists.
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
-        IndexComponents indexComponents = newIndexComponents();
         long fp;
-        try (IndexOutputWriter output = indexComponents.createOutput(indexComponents.kdTreePostingLists))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexComponents.createFileHandle(indexComponents.kdTreePostingLists), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(1, postingsIndex.size());
     }
 
@@ -115,26 +133,25 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
     public void shouldSkipPostingListWhenTooFewLeaves() throws IOException
     {
         List<PackedLongValues> leaves = Collections.singletonList(postings(1, 2, 3));
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 2), newIndexComponents());
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 2), indexContext);
 
         // The tree is too short to have any internal posting lists.
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
-        IndexComponents indexComponents = newIndexComponents();
         long fp;
-        try (IndexOutputWriter output = indexComponents.createOutput(indexComponents.kdTreePostingLists))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexComponents.createFileHandle(indexComponents.kdTreePostingLists), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(1, postingsIndex.size());
     }
 
-    private void assertPostingReaderEquals(IndexComponents indexComponents, BKDPostingsIndex postingsIndex, int nodeID, int[] postings) throws IOException
+    private void assertPostingReaderEquals(BKDPostingsIndex postingsIndex, int nodeID, int[] postings) throws IOException
     {
-        assertPostingReaderEquals(indexComponents.openBlockingInput(indexComponents.kdTreePostingLists),
+        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, index),
                                   postingsIndex.getPostingsFilePointer(nodeID),
                                   new ArrayPostingList(postings));
     }

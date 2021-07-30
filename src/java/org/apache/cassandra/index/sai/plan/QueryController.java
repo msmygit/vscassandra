@@ -48,7 +48,7 @@ import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -127,11 +127,11 @@ public class QueryController
     /**
      * @return indexed {@code ColumnContext} if index is found; otherwise return non-indexed {@code ColumnContext}.
      */
-    public ColumnContext getContext(RowFilter.Expression expression)
+    public IndexContext getContext(RowFilter.Expression expression)
     {
         StorageAttachedIndex index = getBestIndexFor(expression);
 
-        return index != null ? index.getContext() : new ColumnContext(cfs.metadata(), expression.column());
+        return index != null ? index.getIndexContext() : new IndexContext(cfs.metadata(), expression.column());
     }
 
     public StorageAttachedIndex getBestIndexFor(RowFilter.Expression expression)
@@ -209,7 +209,7 @@ public class QueryController
         }
         catch (Throwable e)
         {
-            logger.error(index.getColumnContext().logMessage("Failed to release index on SSTable {}"), index.getSSTable().descriptor, e);
+            logger.error(index.getIndexContext().logMessage("Failed to release index on SSTable {}"), index.getSSTable().descriptor, e);
         }
     }
 
@@ -242,7 +242,7 @@ public class QueryController
 
                 for (SSTableIndex index : view.values().stream().flatMap(Collection::stream).collect(Collectors.toList()))
                 {
-                    indexNames.add(index.getColumnContext().getIndexName());
+                    indexNames.add(index.getIndexContext().getIndexName());
 
                     if (index.reference())
                     {

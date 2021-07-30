@@ -34,13 +34,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.LongArrayList;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
+import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.io.compress.ICompressor;
 import org.apache.cassandra.io.util.FileHandle;
@@ -64,6 +66,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
     private static final Comparator<PostingList.PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
 
+    private final IndexContext indexContext;
     private final FileHandle postingsFile, kdtreeFile;
     private final BKDPostingsIndex postingsIndex;
     private final ICompressor compressor;
@@ -72,13 +75,14 @@ public class BKDReader extends TraversingBKDReader implements Closeable
     /**
      * Performs a blocking read.
      */
-    public BKDReader(IndexComponents indexComponents,
+    public BKDReader(IndexContext indexContext,
                      FileHandle kdtreeFile,
                      long bkdIndexRoot,
                      FileHandle postingsFile,
                      long bkdPostingsRoot) throws IOException
     {
-        super(indexComponents, kdtreeFile, bkdIndexRoot);
+        super(kdtreeFile, bkdIndexRoot);
+        this.indexContext = indexContext;
         this.postingsFile = postingsFile;
         this.kdtreeFile = kdtreeFile;
         this.postingsIndex = new BKDPostingsIndex(postingsFile, bkdPostingsRoot);
@@ -151,8 +155,8 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             scratch = new byte[packedBytesLength];
 
             final long firstLeafFilePointer = getMinLeafBlockFP();
-            bkdInput = indexComponents.openInput(kdtreeFile);
-            bkdPostingsInput = indexComponents.openInput(postingsFile);
+            bkdInput = IndexFileUtils.instance.openInput(kdtreeFile);
+            bkdPostingsInput = IndexFileUtils.instance.openInput(postingsFile);
             bkdInput.seek(firstLeafFilePointer);
 
             final TreeMap<Long,Integer> leafNodeToLeafFP = getLeafOffsets();
@@ -341,9 +345,9 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         }
 
         listener.onSegmentHit();
-        IndexInput bkdInput = indexComponents.openInput(indexFile);
-        IndexInput postingsInput = indexComponents.openInput(postingsFile);
-        IndexInput postingsSummaryInput = indexComponents.openInput(postingsFile);
+        IndexInput bkdInput = IndexFileUtils.instance.openInput(indexFile);
+        IndexInput postingsInput = IndexFileUtils.instance.openInput(postingsFile);
+        IndexInput postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
         PackedIndexTree index = new PackedIndexTree();
 
         Intersection completable =
@@ -394,7 +398,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             catch (Throwable t)
             {
                 if (!(t instanceof AbortedOperationException))
-                    logger.error(indexComponents.logMessage("kd-tree intersection failed on {}"), indexFile.path(), t);
+                    logger.error(indexContext.logMessage("kd-tree intersection failed on {}"), indexFile.path(), t);
 
                 closeOnException();
                 throw Throwables.cleaned(t);
@@ -426,7 +430,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             else
             {
                 if (logger.isTraceEnabled())
-                    logger.trace(indexComponents.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
+                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
                                  indexFile.path(), elapsedMicros, postingLists.size());
                 return MergePostingList.merge(postingLists, () -> FileUtils.close(postingsInput, postingsSummaryInput));
             }

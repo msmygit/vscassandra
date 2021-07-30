@@ -29,10 +29,13 @@ import org.junit.Test;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
+import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
@@ -183,12 +186,12 @@ public class SegmentMergerTest extends SAITester
         File dataFolder = new Directories(cfs.metadata()).getDirectoryForNewSSTables();
         Descriptor descriptor = new Descriptor(dataFolder, cfs.keyspace.getName(), cfs.getTableName(), generation, SSTableFormat.Type.current());
         TableMetadata table = currentTableMetadata();
-        assertTrue(IndexComponents.isGroupIndexComplete(descriptor));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
+        assertTrue(indexDescriptor.isGroupIndexComplete());
         IndexMetadata index = table.indexes.get(indexName).get();
-        ColumnContext context = new ColumnContext(table, index);
-        assertTrue(IndexComponents.isColumnIndexComplete(descriptor, context.getIndexName()));
-        IndexComponents components = IndexComponents.create(context.getIndexName(), descriptor, table.params.compression);
-        final MetadataSource source = MetadataSource.loadColumnMetadata(components);
+        IndexContext indexContext = new IndexContext(table, index);
+        assertTrue(indexDescriptor.isColumnIndexComplete(indexContext));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexName));
         return SegmentMetadata.load(source, null);
     }
 }

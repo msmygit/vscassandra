@@ -20,7 +20,6 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.Closeable;
 
 import org.agrona.collections.IntArrayList;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.util.FileHandle;
@@ -41,7 +40,6 @@ import org.apache.lucene.util.MathUtil;
  */
 public class TraversingBKDReader implements Closeable
 {
-    final IndexComponents indexComponents;
     final FileHandle indexFile;
     final int bytesPerDim;
     final int numLeaves;
@@ -56,9 +54,8 @@ public class TraversingBKDReader implements Closeable
     final int packedBytesLength;
 
     @SuppressWarnings("resource")
-    TraversingBKDReader(IndexComponents indexComponents, FileHandle indexFile, long root)
+    public TraversingBKDReader(FileHandle indexFile, long root)
     {
-        this.indexComponents = indexComponents;
         this.indexFile = indexFile;
 
         try (final RandomAccessReader reader = indexFile.createReader())
@@ -155,7 +152,7 @@ public class TraversingBKDReader implements Closeable
         indexFile.close();
     }
 
-    interface IndexTreeTraversalCallback
+    public interface IndexTreeTraversalCallback
     {
         void onLeaf(int leafNodeID, long leafBlockFP, IntArrayList pathToRoot);
     }
@@ -416,7 +413,7 @@ public class TraversingBKDReader implements Closeable
     }
 
 
-    void traverse(IndexTreeTraversalCallback callback)
+    public void traverse(IndexTreeTraversalCallback callback)
     {
         traverse(callback,
                  new PackedIndexTree(),

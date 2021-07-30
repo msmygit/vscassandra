@@ -29,12 +29,12 @@ import static org.apache.cassandra.index.sai.utils.SAICodecUtils.checkBlockSize;
  * Modified copy of {@link org.apache.lucene.util.packed.AbstractBlockPackedWriter} to use {@link DirectWriter} for
  * optimised reads that doesn't require seeking through the whole file to open a thread-exclusive reader.
  */
-abstract class AbstractBlockPackedWriter
+public abstract class AbstractBlockPackedWriter
 {
-    static final int MIN_BLOCK_SIZE = 64;
-    static final int MAX_BLOCK_SIZE = 1 << (30 - 3);
-    static final int MIN_VALUE_EQUALS_0 = 1;
-    static final int BPV_SHIFT = 1;
+    public static final int MIN_BLOCK_SIZE = 64;
+    public static final int MAX_BLOCK_SIZE = 1 << (30 - 3);
+    public static final int MIN_VALUE_EQUALS_0 = 1;
+    public static final int BPV_SHIFT = 1;
 
     protected final IndexOutput out;
     protected final long[] values;

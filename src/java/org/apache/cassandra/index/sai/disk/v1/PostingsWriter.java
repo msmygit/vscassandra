@@ -27,7 +27,8 @@ import com.google.common.annotations.VisibleForTesting;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.lucene.store.DataOutput;
@@ -100,9 +101,9 @@ public class PostingsWriter implements Closeable
     private long totalPostings;
 
     @VisibleForTesting
-    public PostingsWriter(IndexComponents components, boolean segmented) throws IOException
+    public PostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
     {
-        this(components, BLOCK_SIZE, segmented);
+        this(indexDescriptor, index, BLOCK_SIZE, segmented);
     }
 
     PostingsWriter(IndexOutput dataOutput) throws IOException
@@ -110,9 +111,9 @@ public class PostingsWriter implements Closeable
         this(dataOutput, BLOCK_SIZE);
     }
 
-    PostingsWriter(IndexComponents components, int blockSize, boolean segmented) throws IOException
+    public PostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
     {
-        this(components.createOutput(components.postingLists, true, segmented), blockSize);
+        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index, true, segmented), blockSize);
     }
 
     private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException

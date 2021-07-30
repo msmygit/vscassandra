@@ -34,7 +34,7 @@ import java.util.Set;
 
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -50,7 +50,7 @@ public class View implements Iterable<SSTableIndex>
     private final AbstractType<?> keyValidator;
     private final IntervalTree<Key, SSTableIndex, Interval<Key, SSTableIndex>> keyIntervalTree;
 
-    public View(ColumnContext context, Collection<SSTableIndex> indexes) {
+    public View(IndexContext context, Collection<SSTableIndex> indexes) {
         this.view = new HashMap<>();
         this.keyValidator = context.keyValidator();
 

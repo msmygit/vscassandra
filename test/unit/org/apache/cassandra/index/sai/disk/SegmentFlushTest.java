@@ -37,11 +37,17 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.rows.BTreeRow;
 import org.apache.cassandra.db.rows.BufferCell;
 import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
+import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.TermsReader;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -103,16 +109,21 @@ public class SegmentFlushTest
     private void testFlushBetweenRowIds(long sstableRowId1, long sstableRowId2, int segments) throws Exception
     {
         Path tmpDir = Files.createTempDirectory("SegmentFlushTest");
-        Descriptor descriptor = new Descriptor(tmpDir.toFile(), "ks", "cf", 1);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(tmpDir.toFile(), "ks", "cf", 1));
 
         ColumnMetadata column = ColumnMetadata.regularColumn("sai", "internal", "column", UTF8Type.instance);
         IndexMetadata config = IndexMetadata.fromSchemaMetadata("index_name", IndexMetadata.Kind.CUSTOM, null);
 
-        ColumnContext context = new ColumnContext("ks", "cf",
-                                                  UTF8Type.instance, new ClusteringComparator(),
-                                                  column, config, IndexWriterConfig.defaultConfig("test"));
+        IndexContext context = new IndexContext("ks",
+                                                "cf",
+                                                UTF8Type.instance,
+                                                new ClusteringComparator(),
+                                                column,
+                                                config,
+                                                IndexWriterConfig.defaultConfig("test"),
+                                                QueryEventListeners.NO_OP_TRIE_LISTENER);
 
-        SSTableIndexWriter writer = new SSTableIndexWriter(descriptor, context, StorageAttachedIndex.SEGMENT_BUILD_MEMORY_LIMITER, () -> true, null);
+        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor, context, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER, () -> true, null);
 
         List<DecoratedKey> keys = Arrays.asList(dk("1"), dk("2"));
         Collections.sort(keys);
@@ -130,8 +141,7 @@ public class SegmentFlushTest
 
         writer.flush();
 
-        IndexComponents components = IndexComponents.create(context.getIndexName(), descriptor, null);
-        MetadataSource source = MetadataSource.loadColumnMetadata(components);
+        MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, context.getIndexName()));
 
         // verify segment count
         List<SegmentMetadata> segmentMetadatas = SegmentMetadata.load(source, null);
@@ -148,20 +158,23 @@ public class SegmentFlushTest
         maxTerm = term2;
         numRows = 2;
         verifySegmentMetadata(segmentMetadata);
-        verifyStringIndex(components, segmentMetadata);
+        verifyStringIndex(indexDescriptor, context, segmentMetadata);
     }
 
-    private void verifyStringIndex(IndexComponents components, SegmentMetadata segmentMetadata) throws IOException
+    private void verifyStringIndex(IndexDescriptor indexDescriptor, IndexContext indexContext, SegmentMetadata segmentMetadata) throws IOException
     {
-        FileHandle termsData = components.createFileHandle(components.termsData);
-        FileHandle postingLists = components.createFileHandle(components.postingLists);
+        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext.getIndexName());
+        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext.getIndexName());
 
-        long termsFooterPointer = Long.parseLong(segmentMetadata.componentMetadatas.get(IndexComponents.NDIType.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
+        long termsFooterPointer = Long.parseLong(segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
 
-        try (TermsReader reader = new TermsReader(components, termsData, postingLists,
-                                                  segmentMetadata.componentMetadatas.get(components.termsData.ndiType).root, termsFooterPointer))
+        try (TermsReader reader = new TermsReader(indexContext,
+                                                  termsData,
+                                                  postingLists,
+                                                  segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).root,
+                                                  termsFooterPointer))
         {
-            TermsIterator iterator = reader.allTerms(0, QueryEventListeners.NO_OP_TRIE_LISTENER);
+            TermsIterator iterator = reader.allTerms(0, (QueryEventListener.TrieIndexEventListener)QueryEventListeners.NO_OP_TRIE_LISTENER);
             assertEquals(minTerm, iterator.getMinTerm());
             assertEquals(maxTerm, iterator.getMaxTerm());
 
