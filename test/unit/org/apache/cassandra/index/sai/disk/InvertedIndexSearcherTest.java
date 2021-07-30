@@ -32,16 +32,17 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.InvertedIndexWriter;
-import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.writers.InvertedIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.LongArrays;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.service.StorageService;
@@ -56,7 +57,7 @@ import static org.hamcrest.Matchers.is;
 
 public class InvertedIndexSearcherTest extends NdiRandomizedTest
 {
-    private static final SSTableContext.KeyFetcher KEY_FETCHER = new SSTableContext.KeyFetcher() {
+    private static final V1SSTableContext.KeyFetcher KEY_FETCHER = new V1SSTableContext.KeyFetcher() {
         @Override
         public DecoratedKey apply(RandomAccessReader reader, long keyOffset)
         {
@@ -92,7 +93,7 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
         {
             for (int t = 0; t < numTerms; ++t)
             {
-                try (RangeIterator results = searcher.search(new Expression(SAITester.createColumnContext("meh", UTF8Type.instance))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest(), false))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
@@ -108,7 +109,7 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
                     assertFalse(results.hasNext());
                 }
 
-                try (RangeIterator results = searcher.search(new Expression(SAITester.createColumnContext("meh", UTF8Type.instance))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest(), false))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
@@ -131,12 +132,12 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
 
             // try searching for terms that weren't indexed
             final String tooLongTerm = randomSimpleString(10, 12);
-            RangeIterator results = searcher.search(new Expression(SAITester.createColumnContext("meh", UTF8Type.instance))
+            RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                                                                 .add(Operator.EQ, UTF8Type.instance.decompose(tooLongTerm)), SSTableQueryContext.forTest(), false);
             assertFalse(results.hasNext());
 
             final String tooShortTerm = randomSimpleString(1, 2);
-            results = searcher.search(new Expression(SAITester.createColumnContext("meh", UTF8Type.instance))
+            results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                                                       .add(Operator.EQ, UTF8Type.instance.decompose(tooShortTerm)), SSTableQueryContext.forTest(), false);
             assertFalse(results.hasNext());
         }
@@ -150,7 +151,7 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
 
         try (IndexSearcher searcher = buildIndexAndOpenSearcher(numTerms, numPostings, termsEnum))
         {
-            searcher.search(new Expression(SAITester.createColumnContext("meh", UTF8Type.instance)).add(Operator.GT, UTF8Type.instance.decompose("a")), SSTableQueryContext.forTest(), false);
+            searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance)).add(Operator.GT, UTF8Type.instance.decompose("a")), SSTableQueryContext.forTest(), false);
 
             fail("Expect IllegalArgumentException thrown, but didn't");
         }
@@ -163,10 +164,11 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
     private IndexSearcher buildIndexAndOpenSearcher(int terms, int postings, List<Pair<ByteComparable, IntArrayList>> termsEnum) throws IOException
     {
         final int size = terms * postings;
-        final IndexComponents indexComponents = newIndexComponents();
+        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+        final String index = newIndex();
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexComponents, false))
+        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, index, false))
         {
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }
@@ -181,11 +183,11 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
                                                                     wrap(termsEnum.get(terms - 1).left),
                                                                     indexMetas);
 
-        try (SSTableIndex.PerIndexFiles indexFiles = new SSTableIndex.PerIndexFiles(indexComponents, true))
+        try (PerIndexFiles indexFiles = new PerIndexFiles(indexDescriptor, SAITester.createIndexContext(index, UTF8Type.instance), false))
         {
             final LongArray.Factory factory = () -> LongArrays.identity().build();
             Segment segment = new Segment(factory, factory, KEY_FETCHER, indexFiles, segmentMetadata, UTF8Type.instance);
-            final IndexSearcher searcher = IndexSearcher.open(segment, QueryEventListeners.NO_OP_TRIE_LISTENER);
+            final IndexSearcher searcher = IndexSearcher.open(segment, SAITester.createIndexContext(index, UTF8Type.instance));
             assertThat(searcher, is(instanceOf(InvertedIndexSearcher.class)));
             return searcher;
         }

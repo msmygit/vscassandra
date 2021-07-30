@@ -37,13 +37,12 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.compaction.CompactionManager;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTable;
@@ -71,7 +70,7 @@ public class IndexViewManagerTest extends SAITester
         String indexName = createIndex("CREATE CUSTOM INDEX ON %s(v) USING 'StorageAttachedIndex'");
         waitForIndexQueryable();
 
-        ColumnContext columnContext = columnIndex(getCurrentColumnFamilyStore(), indexName);
+        IndexContext columnContext = columnIndex(getCurrentColumnFamilyStore(), indexName);
         View initialView = columnContext.getView();
 
         execute("INSERT INTO %s(k, v) VALUES (1, 10)");
@@ -91,7 +90,7 @@ public class IndexViewManagerTest extends SAITester
         waitForIndexQueryable();
 
         ColumnFamilyStore store = getCurrentColumnFamilyStore();
-        ColumnContext columnContext = columnIndex(store, indexName);
+        IndexContext columnContext = columnIndex(store, indexName);
         store.disableAutoCompaction();
 
         execute("INSERT INTO %s(k, v) VALUES (1, 10)");
@@ -123,7 +122,7 @@ public class IndexViewManagerTest extends SAITester
         waitForIndexQueryable();
 
         ColumnFamilyStore store = getCurrentColumnFamilyStore();
-        ColumnContext columnContext = columnIndex(store, indexName);
+        IndexContext columnContext = columnIndex(store, indexName);
         Path tmpDir = Files.createTempDirectory("IndexViewManagerTest");
         store.disableAutoCompaction();
 
@@ -162,7 +161,7 @@ public class IndexViewManagerTest extends SAITester
         for (int i = 0; i < CONCURRENT_UPDATES; i++)
         {
             // mock the initial view indexes to track the number of releases
-            List<SSTableContext> initialContexts = sstables.stream().limit(2).map(SSTableContext::create).collect(Collectors.toList());
+            List<SSTableContext> initialContexts = sstables.stream().limit(2).map(s -> SSTableContext.create(s, IndexDescriptor.create(s.descriptor))).collect(Collectors.toList());
             List<SSTableIndex> initialIndexes = new ArrayList<>();
 
             for (SSTableContext initialContext : initialContexts)
@@ -175,8 +174,8 @@ public class IndexViewManagerTest extends SAITester
             View initialView = tracker.getView();
             assertEquals(2, initialView.size());
 
-            List<SSTableContext> compacted = sstables.stream().skip(2).limit(1).map(SSTableContext::create).collect(Collectors.toList());
-            List<SSTableContext> flushed = sstables.stream().skip(3).limit(1).map(SSTableContext::create).collect(Collectors.toList());
+            List<SSTableContext> compacted = sstables.stream().skip(2).limit(1).map(s -> SSTableContext.create(s, IndexDescriptor.create(s.descriptor))).collect(Collectors.toList());
+            List<SSTableContext> flushed = sstables.stream().skip(3).limit(1).map(s -> SSTableContext.create(s, IndexDescriptor.create(s.descriptor))).collect(Collectors.toList());
 
             // concurrently update from both flush and compaction
             Future<?> compaction = executor.submit(() -> tracker.update(initial, compacted, true, false));
@@ -209,20 +208,20 @@ public class IndexViewManagerTest extends SAITester
         executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
-    private ColumnContext columnIndex(ColumnFamilyStore store, String indexName)
+    private IndexContext columnIndex(ColumnFamilyStore store, String indexName)
     {
         assert store.indexManager != null;
         StorageAttachedIndex sai = (StorageAttachedIndex) store.indexManager.getIndexByName(indexName);
-        return sai.getContext();
+        return sai.getIndexContext();
     }
 
     public static class MockSSTableIndex extends SSTableIndex
     {
         int releaseCount = 0;
 
-        MockSSTableIndex(SSTableContext group, ColumnContext context) throws IOException
+        MockSSTableIndex(SSTableContext group, IndexContext context) throws IOException
         {
-            super(group, context, IndexComponents.create(context.getIndexName(), group.descriptor(), CryptoUtils.getCompressionParams(group.sstable())));
+            super(group, context);
         }
 
         @Override

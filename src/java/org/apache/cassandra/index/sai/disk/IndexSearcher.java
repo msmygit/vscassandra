@@ -25,12 +25,11 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
-import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -46,37 +45,26 @@ public abstract class IndexSearcher implements Closeable
 {
     private final LongArray.Factory rowIdToTokenFactory;
     private final LongArray.Factory rowIdToOffsetFactory;
-    private final SSTableContext.KeyFetcher keyFetcher;
-    final SSTableIndex.PerIndexFiles indexFiles;
+    private final V1SSTableContext.KeyFetcher keyFetcher;
 
+    final PerIndexFiles indexFiles;
     final SegmentMetadata metadata;
+    final IndexContext indexContext;
 
-    final IndexComponents indexComponents;
-
-    IndexSearcher(Segment segment)
+    IndexSearcher(Segment segment, IndexContext indexContext)
     {
-        this.indexComponents = segment.indexFiles.components();
         this.rowIdToTokenFactory = segment.segmentRowIdToTokenFactory;
         this.rowIdToOffsetFactory = segment.segmentRowIdToOffsetFactory;
         this.keyFetcher = segment.keyFetcher;
         this.indexFiles = segment.indexFiles;
         this.metadata = segment.metadata;
+        this.indexContext = indexContext;
     }
 
-    public static IndexSearcher open(boolean isString, Segment segment, ColumnQueryMetrics listener) throws IOException
+    public static IndexSearcher open(Segment segment, IndexContext columnContext) throws IOException
     {
-        return isString ? open(segment, (QueryEventListener.TrieIndexEventListener) listener)
-                        : open(segment, (QueryEventListener.BKDIndexEventListener) listener);
-    }
-
-    public static InvertedIndexSearcher open(Segment segment, QueryEventListener.TrieIndexEventListener listener) throws IOException
-    {
-        return new InvertedIndexSearcher(segment, listener);
-    }
-
-    public static KDTreeIndexSearcher open(Segment segment, QueryEventListener.BKDIndexEventListener listener) throws IOException
-    {
-        return new KDTreeIndexSearcher(segment, listener);
+        return columnContext.isLiteral() ? new InvertedIndexSearcher(segment, columnContext)
+                                         : new KDTreeIndexSearcher(segment, columnContext);
     }
 
     /**
@@ -114,7 +102,7 @@ public abstract class IndexSearcher implements Closeable
         if (searcherContext.noOverlap)
             return RangeIterator.empty();
 
-        RangeIterator iterator = new PostingListRangeIterator(searcherContext, keyFetcher, indexComponents);
+        RangeIterator iterator = new PostingListRangeIterator(indexContext, searcherContext, keyFetcher);
 
         return iterator;
     }

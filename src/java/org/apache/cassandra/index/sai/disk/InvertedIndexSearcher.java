@@ -32,16 +32,17 @@ import com.google.common.base.MoreObjects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.TermsReader;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.readers.TermsReader;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * Executes {@link Expression}s against the trie-based terms dictionary for an individual index segment.
@@ -53,23 +54,24 @@ public class InvertedIndexSearcher extends IndexSearcher
     private final TermsReader reader;
     private final QueryEventListener.TrieIndexEventListener perColumnEventListener;
 
-    InvertedIndexSearcher(Segment segment, QueryEventListener.TrieIndexEventListener listener) throws IOException
+    InvertedIndexSearcher(Segment segment, IndexContext indexContext) throws IOException
     {
-        super(segment);
+        super(segment, indexContext);
 
-        long root = metadata.getIndexRoot(indexComponents.termsData);
+        long root = metadata.getIndexRoot(IndexComponent.Type.TERMS_DATA);
         assert root >= 0;
 
-        perColumnEventListener = listener;
+        perColumnEventListener = (QueryEventListener.TrieIndexEventListener)indexContext.getColumnQueryMetrics();
 
-        Map<String,String> map = metadata.componentMetadatas.get(IndexComponents.NDIType.TERMS_DATA).attributes;
+        Map<String,String> map = metadata.componentMetadatas.get(IndexComponent.Type.TERMS_DATA).attributes;
         String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
         long footerPointer = footerPointerString == null ? -1 : Long.parseLong(footerPointerString);
 
-        reader = new TermsReader(indexComponents,
-                                 indexFiles.termsData().sharedCopy(),
-                                 indexFiles.postingLists().sharedCopy(),
-                                 root, footerPointer);
+        reader = new TermsReader(indexContext,
+                                 indexFiles.get(IndexComponent.Type.TERMS_DATA).sharedCopy(),
+                                 indexFiles.get(IndexComponent.Type.POSTING_LISTS).sharedCopy(),
+                                 root,
+                                 footerPointer);
     }
 
     @Override
@@ -85,10 +87,10 @@ public class InvertedIndexSearcher extends IndexSearcher
     public RangeIterator search(Expression exp, SSTableQueryContext context, boolean defer)
     {
         if (logger.isTraceEnabled())
-            logger.trace(indexComponents.logMessage("Searching on expression '{}'..."), exp);
+            logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
 
         if (!exp.getOp().isEquality())
-            throw new IllegalArgumentException(indexComponents.logMessage("Unsupported expression: " + exp));
+            throw new IllegalArgumentException(indexContext.logMessage("Unsupported expression: " + exp));
 
         final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
         QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
@@ -107,8 +109,7 @@ public class InvertedIndexSearcher extends IndexSearcher
     public String toString()
     {
         return MoreObjects.toStringHelper(this)
-                          .add("indexComponents", indexComponents)
-                          .add("diskSize", RamUsageEstimator.humanReadableUnits(indexComponents.sizeOfPerColumnComponents()))
+                          .add("indexContext", indexContext)
                           .toString();
     }
 
