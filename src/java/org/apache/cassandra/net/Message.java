@@ -52,6 +52,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.cassandra.db.TypeSizes.sizeof;
 import static org.apache.cassandra.db.TypeSizes.sizeofUnsignedVInt;
 import static org.apache.cassandra.locator.InetAddressAndPort.Serializer.inetAddressAndPortSerializer;
+import static org.apache.cassandra.net.MessagingService.VERSION_41;
 import static org.apache.cassandra.net.MessagingService.VERSION_SG_10;
 import static org.apache.cassandra.net.MessagingService.VERSION_3014;
 import static org.apache.cassandra.net.MessagingService.VERSION_30;
@@ -1352,6 +1353,7 @@ public class Message<T>
     private int serializedSize30;
     private int serializedSize3014;
     private int serializedSize40;
+    private int serializedSize41;
     private int serializedSizeSG10;
 
     /**
@@ -1373,6 +1375,10 @@ public class Message<T>
                 if (serializedSize40 == 0)
                     serializedSize40 = serializer.serializedSize(this, VERSION_40);
                 return serializedSize40;
+            case VERSION_41:
+                if (serializedSize41 == 0)
+                    serializedSize41 = serializer.serializedSize(this, VERSION_41);
+                return serializedSize41;
             case VERSION_SG_10:
                 if (serializedSizeSG10 == 0)
                     serializedSizeSG10 = (int) serializer.serializedSize(this, VERSION_SG_10);
@@ -1385,6 +1391,7 @@ public class Message<T>
     private int payloadSize30   = -1;
     private int payloadSize3014 = -1;
     private int payloadSize40   = -1;
+    private int payloadSize41   = -1;
     private int payloadSizeSG10 = -1;
 
     private int payloadSize(int version)
@@ -1403,6 +1410,10 @@ public class Message<T>
                 if (payloadSize40 < 0)
                     payloadSize40 = serializer.payloadSize(this, VERSION_40);
                 return payloadSize40;
+            case VERSION_41:
+                if (payloadSize41 < 0)
+                    payloadSize41 = serializer.payloadSize(this, VERSION_41);
+                return payloadSize41;
             case VERSION_SG_10:
                 if (payloadSizeSG10 < 0)
                     payloadSizeSG10 = serializer.payloadSize(this, VERSION_SG_10);
