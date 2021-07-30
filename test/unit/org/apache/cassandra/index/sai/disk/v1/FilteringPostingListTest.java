@@ -23,6 +23,7 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.util.FixedBitSet;

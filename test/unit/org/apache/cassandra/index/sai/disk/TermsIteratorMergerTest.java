@@ -29,7 +29,6 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 

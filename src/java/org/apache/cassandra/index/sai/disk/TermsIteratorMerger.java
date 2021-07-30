@@ -24,7 +24,6 @@ import java.util.PriorityQueue;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;

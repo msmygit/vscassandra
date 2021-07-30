@@ -27,10 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.utils.Throwables;
@@ -50,12 +49,13 @@ public class PostingListRangeIterator extends RangeIterator
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final Stopwatch timeToExhaust = Stopwatch.createStarted();
+    private final IndexContext indexContext;
     private final SSTableQueryContext queryContext;
-    private final IndexComponents components;
 
     private final PostingList postingList;
     private final PrimaryKeyMap primaryKeyMap;
-    private final IndexSearcher.SearcherContext context;
+//    private final V1SSTableContext.KeyFetcher keyFetcher;
+//    private final IndexSearcher.SearcherContext context;
 
     private boolean needsSkipping = false;
     private PrimaryKey skipToToken = null;
@@ -65,16 +65,18 @@ public class PostingListRangeIterator extends RangeIterator
      * Create a direct PostingListRangeIterator where the underlying PostingList is materialised
      * immediately so the posting list size can be used.
      */
-    public PostingListRangeIterator(IndexSearcher.SearcherContext context,
-                                    IndexComponents components)
+    public PostingListRangeIterator(IndexContext indexContext,
+                                    IndexSearcher.SearcherContext context)
+//                                    V1SSTableContext.KeyFetcher keyFetcher)
     {
         super(context.minimumKey, context.maximumKey, context.count());
 
         this.primaryKeyMap = context.primaryKeyMap;
+        this.indexContext = indexContext;
+        //this.keyFetcher = keyFetcher;
         this.postingList = context.postingList;
-        this.context = context;
+        //this.context = context;
         this.queryContext = context.context;
-        this.components = components;
     }
 
     @Override
@@ -108,7 +110,7 @@ public class PostingListRangeIterator extends RangeIterator
         {
             //TODO We aren't tidying up resources here
             if (!(t instanceof AbortedOperationException))
-                logger.error(components.logMessage("Unable to provide next token!"), t);
+                logger.error(indexContext.logMessage("Unable to provide next token!"), t);
 
             throw Throwables.cleaned(t);
         }
@@ -120,7 +122,7 @@ public class PostingListRangeIterator extends RangeIterator
         if (logger.isTraceEnabled())
         {
             final long exhaustedInMills = timeToExhaust.stop().elapsed(TimeUnit.MILLISECONDS);
-            logger.trace(components.logMessage("PostinListRangeIterator exhausted after {} ms"), exhaustedInMills);
+            logger.trace(indexContext.logMessage("PostinListRangeIterator exhausted after {} ms"), exhaustedInMills);
         }
 
         postingList.close();

@@ -20,8 +20,7 @@ package org.apache.cassandra.test.microbench.index.sai.v1;
 
 import java.util.concurrent.TimeUnit;
 
-import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
-import org.apache.cassandra.index.sai.utils.LongArray;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -66,14 +65,14 @@ public class PostingsReaderBenchmark extends AbstractOnDiskBenchmark
     @Override
     public void beforeInvocation() throws Throwable
     {
-        reader = openPostingsReader();
-
-        primaryKeys = new PrimaryKey[NUM_INVOCATIONS];
-        for (int i = 0; i < primaryKeys.length; i++)
-        {
-            int rowId = toPosting(i * skippingDistance);
-            primaryKeys[i] = primaryKeyMap.primaryKeyFromRowId(rowId);
-        }
+//        reader = openPostingsReader();
+//
+//        primaryKeys = new PrimaryKey[NUM_INVOCATIONS];
+//        for (int i = 0; i < primaryKeys.length; i++)
+//        {
+//            int rowId = toPosting(i * skippingDistance);
+//            primaryKeys[i] = primaryKeyMap.primaryKeyFromRowId(rowId);
+//        }
     }
 
     @Override

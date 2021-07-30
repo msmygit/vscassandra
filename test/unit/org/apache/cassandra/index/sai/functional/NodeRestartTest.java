@@ -50,7 +50,7 @@ public class NodeRestartTest extends SAITester
                           .add(InvokePointBuilder.newInvokePoint().atExceptionExit().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
                           .build();
 
-        Injections.inject(ssTableIndexValidationError, initTaskLatch, perSSTableValidationCounter, perColumnValidationCounter);
+        Injections.inject(ssTableIndexValidationError, initTaskLatch, perSSTableValidationCounter, perIndexValidationCounter);
 
         simulateNodeRestart(false);
 
@@ -84,7 +84,7 @@ public class NodeRestartTest extends SAITester
                           .build();
 
         // Make sure we re-introduce existing counter injections...
-        Injections.inject(initTaskLatch, initTaskLatchExit, perSSTableValidationCounter, perColumnValidationCounter);
+        Injections.inject(initTaskLatch, initTaskLatchExit, perSSTableValidationCounter, perIndexValidationCounter);
 
         simulateNodeRestart(false);
 
@@ -155,7 +155,7 @@ public class NodeRestartTest extends SAITester
                           .add(InvokePointBuilder.newInvokePoint().atExit().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
                           .build();
         // Make sure we re-introduce existing counter injections...
-        Injections.inject(preJoinPause, preJoinTaskLatch, initTaskLatch, perSSTableValidationCounter, perColumnValidationCounter);
+        Injections.inject(preJoinPause, preJoinTaskLatch, initTaskLatch, perSSTableValidationCounter, perIndexValidationCounter);
 
         simulateNodeRestart(false);
 

@@ -19,25 +19,21 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
-import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.trie.InvertedIndexSearcher;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 
@@ -50,39 +46,29 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
 public abstract class IndexSearcher implements Closeable
 {
     private final PrimaryKeyMap primaryKeyMap;
-    final SSTableIndex.PerIndexFiles indexFiles;
+    private final V1SSTableContext.KeyFetcher keyFetcher;
+    protected final PerIndexFiles indexFiles;
+    protected final SegmentMetadata metadata;
+    protected final IndexContext indexContext;
 
-    final SegmentMetadata metadata;
-
-    final IndexComponents indexComponents;
-
-    IndexSearcher(Segment segment) throws IOException
+    public IndexSearcher(Segment segment, IndexContext indexContext)
     {
-        this.indexComponents = segment.indexFiles.components();
-        this.primaryKeyMap = segment.primaryKeyMap;
+        this.keyFetcher = segment.keyFetcher;
         this.indexFiles = segment.indexFiles;
         this.metadata = segment.metadata;
+        this.indexContext = indexContext;
+        this.primaryKeyMap = segment.primaryKeyMap;
     }
 
-    public static IndexSearcher open(boolean isString, Segment segment, ColumnQueryMetrics listener) throws IOException
+    public static IndexSearcher open(Segment segment, IndexContext columnContext) throws IOException
     {
-        return isString ? open(segment, (QueryEventListener.TrieIndexEventListener) listener)
-                        : open(segment, (QueryEventListener.BKDIndexEventListener) listener);
-    }
-
-    public static InvertedIndexSearcher open(Segment segment, QueryEventListener.TrieIndexEventListener listener) throws IOException
-    {
-        return new InvertedIndexSearcher(segment, listener);
-    }
-
-    public static KDTreeIndexSearcher open(Segment segment, QueryEventListener.BKDIndexEventListener listener) throws IOException
-    {
-        return new KDTreeIndexSearcher(segment, listener);
+        return segment.indexFiles.indexDescriptor.version.onDiskFormat().newIndexSearcher(segment, columnContext);
     }
 
     /**
      * @return number of per-index open files attached to a sstable
      */
+    // TODO: needs to be per OnDiskFormat
     public static int openPerIndexFiles(AbstractType<?> columnType)
     {
         return TypeUtil.isLiteral(columnType) ? InvertedIndexSearcher.openPerIndexFiles() : KDTreeIndexSearcher.openPerIndexFiles();
@@ -103,7 +89,7 @@ public abstract class IndexSearcher implements Closeable
      */
     public abstract List<RangeIterator> search(Expression expression, SSTableQueryContext queryContext) throws IOException;
 
-    List<RangeIterator> toIterators(List<PostingList.PeekablePostingList> postingLists, SSTableQueryContext queryContext) throws IOException
+    public List<RangeIterator> toIterators(List<PostingList.PeekablePostingList> postingLists, SSTableQueryContext queryContext) throws IOException
     {
         if (postingLists == null || postingLists.isEmpty())
             return Collections.EMPTY_LIST;
@@ -114,9 +100,11 @@ public abstract class IndexSearcher implements Closeable
         {
             SearcherContext searcherContext = new SearcherContext(queryContext, postingList);
             if (!searcherContext.noOverlap)
-                iterators.add(new PostingListRangeIterator(searcherContext, indexComponents));
+            {
+                RangeIterator iterator = new PostingListRangeIterator(indexContext, searcherContext);
+                iterators.add(iterator);
+            }
         }
-
         return iterators;
     }
 
@@ -134,7 +122,7 @@ public abstract class IndexSearcher implements Closeable
         {
             this.context = context;
             this.postingList = postingList;
-            this.primaryKeyMap = IndexSearcher.this.primaryKeyMap.copyOf();
+            this.primaryKeyMap = IndexSearcher.this.primaryKeyMap;
 
             minimumKey = this.primaryKeyMap.primaryKeyFromRowId(postingList.peek());
 

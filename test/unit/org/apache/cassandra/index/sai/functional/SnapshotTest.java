@@ -32,7 +32,7 @@ public class SnapshotTest extends SAITester
     @Before
     public void injectCounters() throws Throwable
     {
-        Injections.inject(perSSTableValidationCounter, perColumnValidationCounter);
+        Injections.inject(perSSTableValidationCounter, perIndexValidationCounter);
     }
 
     @After
@@ -53,6 +53,8 @@ public class SnapshotTest extends SAITester
         waitForIndexQueryable();
         flush();
         verifyIndexFiles(1, 0);
+        // Note: This test will fail here if it is run on its own because the per-index validation
+        // is run if the node is starting up but validatation isn't done once the node is started
         assertValidationCount(0, 0);
         resetValidationCount();
 
@@ -82,6 +84,8 @@ public class SnapshotTest extends SAITester
 
         // Truncate the table
         truncate(false);
+        Thread.sleep(1000);
+        System.out.println();
         waitForAssert(() -> verifyIndexFiles(0, 0));
         assertNumRows(0, "SELECT * FROM %%s WHERE v1 >= 0");
         assertValidationCount(0, 0);

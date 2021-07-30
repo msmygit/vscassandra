@@ -21,12 +21,17 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
@@ -39,23 +44,40 @@ public class PostingsTest extends NdiRandomizedTest
     @Rule
     public final ExpectedException expectedException = ExpectedException.none();
 
+    private IndexDescriptor indexDescriptor;
+    private String index;
+    private IndexComponent postingLists;
+
+    @Before
+    public void setup() throws Throwable
+    {
+        indexDescriptor = newIndexDescriptor();
+        index = newIndex();
+        postingLists = IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index);
+    }
+
     @Test
     public void testSingleBlockPostingList() throws Exception
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int blockSize = 1 << between(3, 8);
         final ArrayPostingList expectedPostingList = new ArrayPostingList(new int[]{ 10, 20, 30, 40, 50, 60 });
 
         long postingPointer;
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
         {
             postingPointer = writer.write(expectedPostingList);
             writer.complete();
         }
 
-        SharedIndexInput sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
+//<<<<<<< HEAD
+        SharedIndexInput sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists));
         SAICodecUtils.validate(sharedInput);
         sharedInput.seek(postingPointer);
+//=======
+//        IndexInput input = indexDescriptor.openInput(postingLists);
+//        SAICodecUtils.validate(input);
+//        input.seek(postingPointer);
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
 
         final PostingsReader.BlocksSummary summary = assertBlockSummary(blockSize, expectedPostingList, sharedInput);
         assertEquals(1, summary.offsets.length());
@@ -79,7 +101,11 @@ public class PostingsTest extends NdiRandomizedTest
             assertEquals(expectedPostingList.size(), listener.decodes);
         }
 
-        sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
+//<<<<<<< HEAD
+        sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists));
+//=======
+//        input = indexDescriptor.openInput(postingLists);
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
         listener = new CountingPostingListEventListener();
         try (PostingsReader reader = new PostingsReader(sharedInput, postingPointer, listener))
         {
@@ -95,14 +121,13 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testMultiBlockPostingList() throws Exception
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int numPostingLists = 1 << between(1, 5);
         final int blockSize = 1 << between(5, 10);
         final int numPostings = between(1 << 11, 1 << 15);
         final ArrayPostingList[] expected = new ArrayPostingList[numPostingLists];
         final long[] postingPointers = new long[numPostingLists];
 
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
         {
             for (int i = 0; i < numPostingLists; ++i)
             {
@@ -114,15 +139,20 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexComponents.openBlockingInput(indexComponents.postingLists))
+        try (IndexInput input = indexDescriptor.openInput(postingLists))
         {
             SAICodecUtils.validate(input);
         }
 
         for (int i = 0; i < numPostingLists; ++i)
         {
-            SharedIndexInput sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
+//<<<<<<< HEAD
+            SharedIndexInput sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists));
             sharedInput.seek(postingPointers[i]);
+//=======
+//            IndexInput input = indexDescriptor.openInput(postingLists);
+//            input.seek(postingPointers[i]);
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
             final ArrayPostingList expectedPostingList = expected[i];
             final PostingsReader.BlocksSummary summary = assertBlockSummary(blockSize, expectedPostingList, sharedInput);
             assertTrue(summary.offsets.length() > 1);
@@ -139,8 +169,13 @@ public class PostingsTest extends NdiRandomizedTest
             }
 
             // test skipping to the last block
-            sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
+//<<<<<<< HEAD
+            sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists));
             try (PostingsReader reader = new PostingsReader(sharedInput, postingPointers[i], listener))
+//=======
+//            input = indexDescriptor.openInput(postingLists);
+//            try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
             {
                 long tokenToAdvance = -1;
                 expectedPostingList.reset();
@@ -162,20 +197,23 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testAdvance() throws Exception
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int blockSize = 4; // 4 postings per FoR block
         final int maxSegmentRowID = 30;
         final int[] postings = IntStream.range(0, maxSegmentRowID).toArray(); // 30 postings = 7 FoR blocks + 1 VLong block
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
         long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (SharedIndexInput sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists)))
+//<<<<<<< HEAD
+        try (SharedIndexInput sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists)))
+//=======
+//        try (IndexInput input = indexDescriptor.openInput(postingLists))
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
         {
             SAICodecUtils.validate(sharedInput);
             sharedInput.seek(fp);
@@ -190,34 +228,37 @@ public class PostingsTest extends NdiRandomizedTest
         }
 
         // exact advance
-        testAdvance(indexComponents, fp, expected, new int[]{ 3, 7, 11, 15, 19 });
+        testAdvance(fp, expected, new int[]{ 3, 7, 11, 15, 19 });
         // non-exact advance
-        testAdvance(indexComponents, fp, expected, new int[]{ 2, 6, 12, 17, 25 });
+        testAdvance(fp, expected, new int[]{ 2, 6, 12, 17, 25 });
 
         // exact advance
-        testAdvance(indexComponents, fp, expected, new int[]{ 3, 5, 7, 12 });
+        testAdvance(fp, expected, new int[]{ 3, 5, 7, 12 });
         // non-exact advance
-        testAdvance(indexComponents, fp, expected, new int[]{ 2, 7, 9, 11 });
+        testAdvance(fp, expected, new int[]{ 2, 7, 9, 11 });
     }
 
     @Test
     public void testAdvanceOnRandomizedData() throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int blockSize = 4;
         final int numPostings = nextInt(64, 64_000);
         final int[] postings = randomPostings(numPostings);
 
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
-        long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, blockSize, false))
+        long fp = -1;
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (SharedIndexInput sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists)))
+//<<<<<<< HEAD
+        try (SharedIndexInput sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists)))
+//=======
+//        try (IndexInput input = indexDescriptor.openInput(postingLists))
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
         {
             SAICodecUtils.validate(sharedInput);
             sharedInput.seek(fp);
@@ -231,14 +272,13 @@ public class PostingsTest extends NdiRandomizedTest
             }
         }
 
-        testAdvance(indexComponents, fp, expected, postings);
+        testAdvance(fp, expected, postings);
     }
 
     @Test
     public void testNullPostingList() throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(null);
@@ -249,8 +289,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testEmptyPostingList() throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[0]));
@@ -260,19 +299,18 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testNonAscendingPostingList() throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[]{ 1, 0 }));
         }
     }
 
-    private void testAdvance(IndexComponents indexComponents, long fp, ArrayPostingList expected, int[] targetIDs) throws IOException
+    private void testAdvance(long fp, ArrayPostingList expected, int[] targetIDs) throws IOException
     {
         expected.reset();
         final CountingPostingListEventListener listener = new CountingPostingListEventListener();
-        PostingsReader reader = openReader(indexComponents, fp, listener);
+        PostingsReader reader = openReader(fp, listener);
         for (int i = 0; i < 2; ++i)
         {
             assertEquals(expected.nextPosting(), reader.nextPosting());
@@ -297,11 +335,17 @@ public class PostingsTest extends NdiRandomizedTest
         reader.close();
     }
 
-    private PostingsReader openReader(IndexComponents indexComponents, long fp, QueryEventListener.PostingListEventListener listener) throws IOException
+    private PostingsReader openReader(long fp, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        SharedIndexInput sharedInput = new SharedIndexInput(indexComponents.openBlockingInput(indexComponents.postingLists));
+//<<<<<<< HEAD
+        SharedIndexInput sharedInput = new SharedIndexInput(indexDescriptor.openInput(postingLists));
         sharedInput.seek(fp);
         return new PostingsReader(sharedInput, fp, listener);
+//=======
+//        IndexInput input = indexDescriptor.openInput(postingLists);
+//        input.seek(fp);
+//        return new PostingsReader(input, fp, listener);
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
     }
 
     private PostingsReader.BlocksSummary assertBlockSummary(int blockSize, PostingList expected, SharedIndexInput sharedInput) throws IOException

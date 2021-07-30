@@ -22,19 +22,26 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.ImmutableOneDimPointValues;
+import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.ImmutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDTreeRamBuffer;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
+import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
@@ -50,6 +57,22 @@ import org.apache.lucene.util.NumericUtils;
 
 public class NumericIndexWriterTest extends NdiRandomizedTest
 {
+    private IndexDescriptor indexDescriptor;
+    private String index;
+    private IndexContext columnContext;
+    private IndexComponent kdtree;
+    private IndexComponent kdtreePostings;
+
+    @Before
+    public void setup() throws Throwable
+    {
+        indexDescriptor = newIndexDescriptor();
+        index = newIndex();
+        columnContext = SAITester.createIndexContext(index, Int32Type.instance);
+        kdtree = IndexComponent.create(IndexComponent.Type.KD_TREE, index);
+        kdtreePostings = IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index);
+    }
+
     @Test
     public void shouldFlushFromRamBuffer() throws Exception
     {
@@ -70,12 +93,12 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
 
         final MutableOneDimPointValues pointValues = ramBuffer.asPointValues();
 
-        final IndexComponents indexComponents = newIndexComponents();
         int docCount = pointValues.getDocCount();
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                                columnContext,
                                                                 Integer.BYTES,
                                                                 docCount, docCount,
                                                                 IndexWriterConfig.defaultConfig("test"),
@@ -84,15 +107,24 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(pointValues);
         }
 
-        final FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-        final FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
+        final FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
+        final FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
 
-        try (BKDReader reader = new BKDReader(indexComponents,
-                                              kdtree,
-                                              indexMetas.get(indexComponents.kdTree.ndiType).root,
-                                              kdtreePostings,
-                                              indexMetas.get(indexComponents.kdTreePostingLists.ndiType).root,
+//<<<<<<< HEAD
+//        try (BKDReader reader = new BKDReader(indexComponents,
+//                                              kdtree,
+//                                              indexMetas.get(indexComponents.kdTree.ndiType).root,
+//                                              kdtreePostings,
+//                                              indexMetas.get(indexComponents.kdTreePostingLists.ndiType).root,
+//                                              null
+//=======
+        try (BKDReader reader = new BKDReader(columnContext,
+                                              kdtreeHandle,
+                                              indexMetas.get(IndexComponent.Type.KD_TREE).root,
+                                              kdtreePostingsHandle,
+                                              indexMetas.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root,
                                               null
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
         ))
         {
             final Counter visited = Counter.newCounter();
@@ -112,7 +144,11 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext())))
+//<<<<<<< HEAD
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext())))
+//=======
+//            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext()))
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
             {
                 assertEquals(numRows, visited.get());
             }
@@ -127,10 +163,9 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         final ImmutableOneDimPointValues pointValues = ImmutableOneDimPointValues
                 .fromTermEnum(termEnum, Int32Type.instance);
 
-        final IndexComponents indexComponents = newIndexComponents();
-
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                                columnContext,
                                                                 TypeUtil.fixedSizeOf(Int32Type.instance),
                                                                 maxSegmentRowId, maxSegmentRowId,
                                                                 IndexWriterConfig.defaultConfig("test"), false))
@@ -138,15 +173,24 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(pointValues);
         }
 
-        final FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-        final FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
+        final FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
+        final FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
 
-        try (BKDReader reader = new BKDReader(indexComponents,
-                                              kdtree,
-                                              indexMetas.get(indexComponents.kdTree.ndiType).root,
-                                              kdtreePostings,
-                                              indexMetas.get(indexComponents.kdTreePostingLists.ndiType).root,
-                                              null
+//<<<<<<< HEAD
+//        try (BKDReader reader = new BKDReader(indexComponents,
+//                                              kdtree,
+//                                              indexMetas.get(indexComponents.kdTree.ndiType).root,
+//                                              kdtreePostings,
+//                                              indexMetas.get(indexComponents.kdTreePostingLists.ndiType).root,
+//                                              null
+//=======
+        try (BKDReader reader = new BKDReader(columnContext,
+                                              kdtreeHandle,
+                                              indexMetas.get(IndexComponent.Type.KD_TREE).root,
+                                              kdtreePostingsHandle,
+                                              indexMetas.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root,
+null
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
         ))
         {
             final Counter visited = Counter.newCounter();
@@ -169,7 +213,11 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext())))
+//<<<<<<< HEAD
+//            }, QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext())))
+//=======
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext())))
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
             {
                 assertEquals(maxSegmentRowId, visited.get());
             }

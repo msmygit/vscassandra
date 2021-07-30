@@ -23,6 +23,8 @@ import java.util.Set;
 
 import org.junit.Test;
 
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FilterDirectory;
@@ -42,9 +44,10 @@ public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
     public void shouldSortPointsOnDisk() throws IOException
     {
         final int numRows = between(300_000, 500_000);
-        final IndexComponents indexComponents = newIndexComponents();
-        final TempFileTrackingDirectoryWrapper directoryWrapper = 
-                new TempFileTrackingDirectoryWrapper(new BKDTempFilesDirectory(indexComponents, randomLong()));
+        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+        final String index = newIndex();
+        final TempFileTrackingDirectoryWrapper directoryWrapper =
+                new TempFileTrackingDirectoryWrapper(new BKDTempFilesDirectory(indexDescriptor, index, randomLong()));
 
         try (final BKDWriter w = new BKDWriter(numRows,
                                                directoryWrapper,
@@ -66,15 +69,15 @@ public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
             }
 
             long indexFP;
-            
-            try (IndexOutput out = indexComponents.createOutput(indexComponents.kdTree))
+
+            try (IndexOutput out = indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
             {
                 indexFP = w.finish(out);
             }
-            
+
             assertThat(directoryWrapper.createdTempFiles.size(), is(greaterThan(0)));
-    
-            try (final IndexInput indexInput = indexComponents.openBlockingInput(indexComponents.kdTree))
+
+            try (final IndexInput indexInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
             {
                 indexInput.seek(indexFP);
                 final BKDReader bkdReader = new BKDReader(indexInput);

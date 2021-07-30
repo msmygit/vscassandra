@@ -32,7 +32,8 @@ import org.apache.cassandra.config.StorageAttachedIndexOptions;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.disk.SSTableIndexWriter;
-import org.apache.cassandra.index.sai.disk.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeSegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
@@ -84,7 +85,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
             newFailureOnEntry("segmentFlushIOFailure", SegmentBuilder.class, "flush", IOException.class);
 
     private static final Injection kdTreeSegmentFlushFailure =
-            newFailureOnEntry("kdTreeSegmentFlushFailure", SegmentBuilder.KDTreeSegmentBuilder.class, "flushInternal", IOException.class);
+            newFailureOnEntry("kdTreeSegmentFlushFailure", KDTreeSegmentBuilder.class, "flushInternal", IOException.class);
 
     @After
     public void resetCounters()

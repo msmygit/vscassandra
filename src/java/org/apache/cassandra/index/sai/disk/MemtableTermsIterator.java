@@ -22,11 +22,8 @@ import java.util.Iterator;
 
 import com.google.common.base.Preconditions;
 
-import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
-import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -131,12 +128,12 @@ public class MemtableTermsIterator implements TermsIterator
         return current.left;
     }
 
-    long getMaxSSTableRowId()
+    public long getMaxSSTableRowId()
     {
         return maxSSTableRowId;
     }
 
-    long getMinSSTableRowId()
+    public long getMinSSTableRowId()
     {
         return minSSTableRowId;
     }

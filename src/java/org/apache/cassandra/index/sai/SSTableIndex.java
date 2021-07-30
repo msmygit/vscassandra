@@ -18,38 +18,31 @@
 
 package org.apache.cassandra.index.sai;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.ImmutableList;
-import org.apache.commons.lang3.builder.HashCodeBuilder;
+import com.google.common.base.Objects;
 
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.disk.Segment;
-import org.apache.cassandra.index.sai.disk.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.RangeConcatIterator;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 
@@ -64,40 +57,37 @@ public class SSTableIndex
                                                                         .thenComparing(s -> s.getSSTable().last)
                                                                         .thenComparing(s -> s.getSSTable().descriptor.generation);
 
-    private final Version version;
     private final SSTableContext sstableContext;
-    private final ColumnContext columnContext;
+    private final IndexContext indexContext;
     private final SSTableReader sstable;
-    private final IndexComponents components;
 
     private final Segment segment;
     private PerIndexFiles indexFiles;
 
-    private final SegmentMetadata metadata;
+    private final SegmentMetadata segmentMetadata;
 
     private final AtomicInteger references = new AtomicInteger(1);
     private final AtomicBoolean obsolete = new AtomicBoolean(false);
 
-    public SSTableIndex(SSTableContext sstableContext, ColumnContext columnContext, IndexComponents components)
+    public SSTableIndex(SSTableContext sstableContext, IndexContext indexContext)
     {
         this.sstableContext = sstableContext.sharedCopy();
-        this.columnContext = columnContext;
+        this.indexContext = indexContext;
         this.sstable = sstableContext.sstable;
-        this.components = components;
 
-        final AbstractType<?> validator = columnContext.getValidator();
+        final AbstractType<?> validator = indexContext.getValidator();
         assert validator != null;
 
         try
         {
-            this.indexFiles = new PerIndexFiles(components, columnContext.isLiteral());
+            this.indexFiles = sstableContext.perIndexFiles(indexContext);
 
-            final MetadataSource source = MetadataSource.loadColumnMetadata(components);
-            version = source.getVersion();
+            final MetadataSource source = MetadataSource.load(sstableContext.indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.META,
+                                                                                                                             indexContext.getIndexName())));
+            segmentMetadata = SegmentMetadata.load(source, indexContext.keyFactory(), null);
 
             //TODO Need a compressor here
-            metadata = SegmentMetadata.load(source, columnContext.keyFactory(), null);
-            segment = new Segment(columnContext, this.sstableContext, indexFiles, metadata);
+            segment = new Segment(indexContext, (V1SSTableContext)this.sstableContext, indexFiles, segmentMetadata);
 
         }
         catch (Throwable t)
@@ -108,9 +98,9 @@ public class SSTableIndex
         }
     }
 
-    public ColumnContext getColumnContext()
+    public IndexContext getIndexContext()
     {
-        return columnContext;
+        return indexContext;
     }
 
     public SSTableContext getSSTableContext()
@@ -128,7 +118,7 @@ public class SSTableIndex
      */
     public long getRowCount()
     {
-        return metadata.numRows;
+        return segmentMetadata.numRows;
     }
 
     /**
@@ -136,7 +126,7 @@ public class SSTableIndex
      */
     public long sizeOfPerColumnComponents()
     {
-        return components.sizeOfPerColumnComponents();
+        return sstableContext.indexDescriptor.sizeOfPerColumnComponents(indexContext.getIndexName());
     }
 
     /**
@@ -144,7 +134,7 @@ public class SSTableIndex
      */
     public long minSSTableRowId()
     {
-        return metadata.minSSTableRowId;
+        return segmentMetadata.minSSTableRowId;
     }
 
     /**
@@ -152,27 +142,27 @@ public class SSTableIndex
      */
     public long maxSSTableRowId()
     {
-        return metadata.maxSSTableRowId;
+        return segmentMetadata.maxSSTableRowId;
     }
 
     public ByteBuffer minTerm()
     {
-        return metadata.minTerm;
+        return segmentMetadata.minTerm;
     }
 
     public ByteBuffer maxTerm()
     {
-        return metadata.maxTerm;
+        return segmentMetadata.maxTerm;
     }
 
     public PrimaryKey minKey()
     {
-        return metadata.minKey;
+        return segmentMetadata.minKey;
     }
 
     public PrimaryKey maxKey()
     {
-        return metadata.maxKey;
+        return segmentMetadata.maxKey;
     }
 
     public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
@@ -182,81 +172,12 @@ public class SSTableIndex
 
     public SegmentMetadata segment()
     {
-        return metadata;
+        return segmentMetadata;
     }
 
     public Version getVersion()
     {
-        return version;
-    }
-
-    /**
-     * container to share per-index file handles(kdtree, terms data, posting lists) among segments.
-     */
-    public static class PerIndexFiles implements Closeable
-    {
-        private final Map<IndexComponent, FileHandle> files = new HashMap<>(2);
-        private final IndexComponents components;
-
-        public PerIndexFiles(IndexComponents components, boolean isStringIndex)
-        {
-            this(components, isStringIndex, false);
-        }
-
-        public PerIndexFiles(IndexComponents components, boolean isStringIndex, boolean temporary)
-        {
-            this.components = components;
-            if (isStringIndex)
-            {
-                files.put(components.postingLists, components.createFileHandle(components.postingLists, temporary));
-                files.put(components.termsData, components.createFileHandle(components.termsData, temporary));
-            }
-            else
-            {
-                files.put(components.kdTree, components.createFileHandle(components.kdTree, temporary));
-                files.put(components.kdTreePostingLists, components.createFileHandle(components.kdTreePostingLists, temporary));
-            }
-        }
-
-        public FileHandle kdtree()
-        {
-            return getFile(components.kdTree);
-        }
-
-        public FileHandle postingLists()
-        {
-            return getFile(components.postingLists);
-        }
-
-        public FileHandle termsData()
-        {
-            return getFile(components.termsData);
-        }
-
-        public FileHandle kdtreePostingLists()
-        {
-            return getFile(components.kdTreePostingLists);
-        }
-
-        private FileHandle getFile(IndexComponent type)
-        {
-            FileHandle file = files.get(type);
-            if (file == null)
-                throw new IllegalArgumentException(String.format("Component %s not found for SSTable %s", type.name, components.descriptor));
-
-            return file;
-        }
-
-        public IndexComponents components()
-        {
-            return this.components;
-        }
-
-        @Override
-        public void close()
-        {
-            FileUtils.closeQuietly(files.values());
-        }
+        return sstableContext.indexDescriptor.version;
     }
 
     public SSTableReader getSSTable()
@@ -299,7 +220,7 @@ public class SSTableIndex
              */
             if (obsolete.get())
             {
-                components.deleteColumnIndex();
+                sstableContext.indexDescriptor.deleteColumnIndex(indexContext);
             }
         }
     }
@@ -310,20 +231,26 @@ public class SSTableIndex
         release();
     }
 
+    @Override
     public boolean equals(Object o)
     {
-        return o instanceof SSTableIndex && components.equals(((SSTableIndex) o).components);
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SSTableIndex other = (SSTableIndex)o;
+        return Objects.equal(sstableContext, other.sstableContext) && Objects.equal(indexContext, other.indexContext);
     }
 
+    @Override
     public int hashCode()
     {
-        return new HashCodeBuilder().append(components.hashCode()).build();
+        return Objects.hashCode(sstableContext, indexContext);
     }
 
     public String toString()
     {
         return MoreObjects.toStringHelper(this)
-                          .add("column", columnContext.getColumnName())
+                          .add("column", indexContext.getColumnName())
+                          .add("index", indexContext.getIndexName())
                           .add("sstable", sstable.descriptor)
                           .add("totalRows", sstable.getTotalRows())
                           .toString();

@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -31,10 +30,7 @@ import java.util.stream.Stream;
 
 import org.junit.Assert;
 
-import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
-import org.apache.cassandra.db.Clustering;
-import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.DecimalType;
@@ -44,16 +40,20 @@ import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.db.marshal.ShortType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.ImmutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexSearcher;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.LongArrays;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.utils.Pair;
@@ -61,6 +61,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
 import static org.apache.cassandra.Util.dk;
+import static org.hamcrest.Matchers.in;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
@@ -68,7 +69,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KDTreeIndexBuilder
 {
-    private final IndexComponents indexComponents;
+    private final IndexDescriptor indexDescriptor;
     private final AbstractType<?> type;
     private final AbstractIterator<Pair<ByteComparable, LongArrayList>> terms;
     private final int size;
@@ -76,16 +77,30 @@ public class KDTreeIndexBuilder
     private final int maxSegmentRowId;
     private final LongArray segmentRowIdToToken = LongArrays.identity().build();
     private final LongArray segmentRowIdToOffset = LongArrays.identity().build();
+
+    private final V1SSTableContext.KeyFetcher keyFetcher = new V1SSTableContext.KeyFetcher() {
+        @Override
+        public DecoratedKey apply(RandomAccessReader reader, long keyOffset)
+        {
+            return dk(String.format("pkvalue_%07d", keyOffset));
+        }
+
+        @Override
+        public RandomAccessReader createReader()
+        {
+            return null;
+        }
+    };
     private static final BigDecimal ONE_TENTH = BigDecimal.valueOf(1, 1);
 
-    public KDTreeIndexBuilder(IndexComponents indexComponents,
+    public KDTreeIndexBuilder(IndexDescriptor indexDescriptor,
                               AbstractType<?> type,
                               AbstractIterator<Pair<ByteComparable, LongArrayList>> terms,
                               int size,
                               int minSegmentRowId,
                               int maxSegmentRowId)
     {
-        this.indexComponents = indexComponents;
+        this.indexDescriptor = indexDescriptor;
         this.type = type;
         this.terms = terms;
         this.size = size;
@@ -99,7 +114,9 @@ public class KDTreeIndexBuilder
         final ImmutableOneDimPointValues pointValues = ImmutableOneDimPointValues.fromTermEnum(termEnum, type);
 
         final SegmentMetadata metadata;
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexComponents, TypeUtil.fixedSizeOf(type), maxSegmentRowId, size, IndexWriterConfig.defaultConfig("test"), false))
+
+        IndexContext columnContext = SAITester.createIndexContext("test", Int32Type.instance);
+        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor, columnContext, TypeUtil.fixedSizeOf(type), maxSegmentRowId, size, IndexWriterConfig.defaultConfig("test"), false))
         {
             final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(pointValues);
             metadata = new SegmentMetadata(0,
@@ -114,10 +131,10 @@ public class KDTreeIndexBuilder
                                            indexMetas);
         }
 
-        try (SSTableIndex.PerIndexFiles indexFiles = new SSTableIndex.PerIndexFiles(indexComponents, false))
+        try (PerIndexFiles indexFiles = new PerIndexFiles(indexDescriptor, SAITester.createIndexContext("test", Int32Type.instance), false))
         {
-            Segment segment = new Segment(PrimaryKeyMap.IDENTITY, indexFiles, metadata, type);
-            KDTreeIndexSearcher searcher = IndexSearcher.open(segment, QueryEventListeners.NO_OP_BKD_LISTENER);
+            Segment segment = new Segment(PrimaryKeyMap.IDENTITY, null, indexFiles, metadata, type);
+            IndexSearcher searcher = IndexSearcher.open(segment, columnContext);
             assertThat(searcher, is(instanceOf(KDTreeIndexSearcher.class)));
             return (KDTreeIndexSearcher) searcher;
         }
@@ -129,12 +146,12 @@ public class KDTreeIndexBuilder
      * 2. term value is equal to {@code startTermInclusive} + row id;
      * 3. tokens and offsets are equal to row id;
      */
-    public static IndexSearcher buildInt32Searcher(IndexComponents indexComponents, int startTermInclusive, int endTermExclusive)
+    public static IndexSearcher buildInt32Searcher(IndexDescriptor indexDescriptor, int startTermInclusive, int endTermExclusive)
             throws IOException
     {
         final int size = endTermExclusive - startTermInclusive;
         Assert.assertTrue(size > 0);
-        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexComponents,
+        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexDescriptor,
                                                                  Int32Type.instance,
                                                                  singleOrd(int32Range(startTermInclusive, endTermExclusive), Int32Type.instance, startTermInclusive, size),
                                                                  size,
@@ -143,13 +160,13 @@ public class KDTreeIndexBuilder
         return indexBuilder.flushAndOpen();
     }
 
-    public static IndexSearcher buildDecimalSearcher(IndexComponents indexComponents, BigDecimal startTermInclusive, BigDecimal endTermExclusive)
+    public static IndexSearcher buildDecimalSearcher(IndexDescriptor indexDescriptor, BigDecimal startTermInclusive, BigDecimal endTermExclusive)
             throws IOException
     {
         BigDecimal bigDifference = endTermExclusive.subtract(startTermInclusive);
         int size = bigDifference.intValueExact() * 10;
         Assert.assertTrue(size > 0);
-        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexComponents,
+        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexDescriptor,
                                                                  DecimalType.instance,
                                                                  singleOrd(decimalRange(startTermInclusive, endTermExclusive), DecimalType.instance, startTermInclusive.intValueExact() * 10, size),
                                                                  size,
@@ -158,13 +175,13 @@ public class KDTreeIndexBuilder
         return indexBuilder.flushAndOpen();
     }
 
-    public static IndexSearcher buildBigIntegerSearcher(IndexComponents indexComponents, BigInteger startTermInclusive, BigInteger endTermExclusive)
+    public static IndexSearcher buildBigIntegerSearcher(IndexDescriptor indexDescriptor, BigInteger startTermInclusive, BigInteger endTermExclusive)
             throws IOException
     {
         BigInteger bigDifference = endTermExclusive.subtract(startTermInclusive);
         int size = bigDifference.intValueExact();
         Assert.assertTrue(size > 0);
-        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexComponents,
+        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexDescriptor,
                                                                  IntegerType.instance,
                                                                  singleOrd(bigIntegerRange(startTermInclusive, endTermExclusive), IntegerType.instance, startTermInclusive.intValueExact(), size),
                                                                  size,
@@ -179,12 +196,12 @@ public class KDTreeIndexBuilder
      * 2. term value is equal to {@code startTermInclusive} + row id;
      * 3. tokens and offsets are equal to row id;
      */
-    public static IndexSearcher buildLongSearcher(IndexComponents indexComponents, long startTermInclusive, long endTermExclusive)
+    public static IndexSearcher buildLongSearcher(IndexDescriptor indexDescriptor, long startTermInclusive, long endTermExclusive)
             throws IOException
     {
         final long size = endTermExclusive - startTermInclusive;
         Assert.assertTrue(size > 0);
-        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexComponents,
+        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexDescriptor,
                                                                  LongType.instance,
                                                                  singleOrd(longRange(startTermInclusive, endTermExclusive), LongType.instance, Math.toIntExact(startTermInclusive), Math.toIntExact(size)),
                                                                  Math.toIntExact(size),
@@ -199,12 +216,12 @@ public class KDTreeIndexBuilder
      * 2. term value is equal to {@code startTermInclusive} + row id;
      * 3. tokens and offsets are equal to row id;
      */
-    public static IndexSearcher buildShortSearcher(IndexComponents indexComponents, short startTermInclusive, short endTermExclusive)
+    public static IndexSearcher buildShortSearcher(IndexDescriptor indexDescriptor, short startTermInclusive, short endTermExclusive)
             throws IOException
     {
         final int size = endTermExclusive - startTermInclusive;
         Assert.assertTrue(size > 0);
-        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexComponents,
+        KDTreeIndexBuilder indexBuilder = new KDTreeIndexBuilder(indexDescriptor,
                                                                  ShortType.instance,
                                                                  singleOrd(shortRange(startTermInclusive, endTermExclusive), ShortType.instance, startTermInclusive, size),
                                                                  size,

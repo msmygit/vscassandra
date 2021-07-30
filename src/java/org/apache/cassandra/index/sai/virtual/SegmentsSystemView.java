@@ -30,11 +30,11 @@ import org.apache.cassandra.db.virtual.VirtualTable;
 import org.apache.cassandra.dht.LocalPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
-import org.apache.cassandra.index.sai.disk.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.Schema;
@@ -118,7 +118,7 @@ public class SegmentsSystemView extends AbstractVirtualTable
         return dataset;
     }
 
-    private void forEachIndex(Consumer<ColumnContext> process)
+    private void forEachIndex(Consumer<IndexContext> process)
     {
         for (String ks : Schema.instance.getUserKeyspaces())
         {
@@ -134,7 +134,7 @@ public class SegmentsSystemView extends AbstractVirtualTable
                 {
                     for (Index index : group.getIndexes())
                     {
-                        process.accept(((StorageAttachedIndex)index).getContext());
+                        process.accept(((StorageAttachedIndex)index).getIndexContext());
                     }
                 }
             }

@@ -20,7 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 
 public class ArrayPostingListTest extends NdiRandomizedTest
 {

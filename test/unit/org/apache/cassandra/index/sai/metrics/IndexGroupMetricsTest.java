@@ -20,9 +20,8 @@ package org.apache.cassandra.index.sai.metrics;
 import org.junit.Before;
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.disk.InvertedIndexSearcher;
-import org.apache.cassandra.index.sai.disk.KDTreeIndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.trie.InvertedIndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexSearcher;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -60,7 +59,8 @@ public class IndexGroupMetricsTest extends AbstractMetricsTest
 
         // with 10 sstable
         int indexopenFileCountWithOnlyNumeric = getOpenIndexFiles();
-        assertEquals(sstables * (SSTableContext.openFilesPerSSTable() + KDTreeIndexSearcher.openPerIndexFiles()), indexopenFileCountWithOnlyNumeric);
+        // Note: The 2 (per-SSTable files) is only valid for V1
+        assertEquals(sstables * (2 + KDTreeIndexSearcher.openPerIndexFiles()), indexopenFileCountWithOnlyNumeric);
 
         long diskUsageWithOnlyNumeric = getDiskUsage();
         assertNotEquals(0, diskUsageWithOnlyNumeric);
@@ -81,12 +81,12 @@ public class IndexGroupMetricsTest extends AbstractMetricsTest
         compact();
 
         long perSSTableFileDiskUsage = getDiskUsage();
-        assertEquals(SSTableContext.openFilesPerSSTable() + KDTreeIndexSearcher.openPerIndexFiles() + InvertedIndexSearcher.openPerIndexFiles(),
+        assertEquals(2 + KDTreeIndexSearcher.openPerIndexFiles() + InvertedIndexSearcher.openPerIndexFiles(),
                      getOpenIndexFiles());
 
         // drop string index, reduce open string index files, per-sstable file disk usage remains the same
         dropIndex("DROP INDEX %s." + v2IndexName);
-        assertEquals(SSTableContext.openFilesPerSSTable() + KDTreeIndexSearcher.openPerIndexFiles(), getOpenIndexFiles());
+        assertEquals(2 + KDTreeIndexSearcher.openPerIndexFiles(), getOpenIndexFiles());
         assertEquals(perSSTableFileDiskUsage, getDiskUsage());
 
         // drop last index, no open index files

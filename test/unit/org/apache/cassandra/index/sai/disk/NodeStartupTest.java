@@ -35,15 +35,17 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.SecondaryIndexManager;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.inject.InvokePointBuilder;
-import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.schema.Schema;
 
 import static org.junit.Assert.assertTrue;
@@ -95,7 +97,7 @@ public class NodeStartupTest extends SAITester
                                                                      .build();
 
     private static final Injections.Counter deleteComponentCounter = Injections.newCounter("deletedComponentCounter")
-                                                                               .add(InvokePointBuilder.newInvokePoint().onClass(IndexComponents.class).onMethod("deleteComponent").atEntry())
+                                                                               .add(InvokePointBuilder.newInvokePoint().onClass(IndexDescriptor.class).onMethod("deleteComponent").atEntry())
                                                                                .build();
 
     private static final Injections.Counter[] counters = new Injections.Counter[] { buildCounter, deleteComponentCounter };
@@ -103,6 +105,7 @@ public class NodeStartupTest extends SAITester
     private static Throwable error = null;
 
     private String indexName = null;
+    private IndexContext indexContext = null;
 
     enum Populator
     {
@@ -169,6 +172,7 @@ public class NodeStartupTest extends SAITester
     {
         createTable("CREATE TABLE %s (id text PRIMARY KEY, v1 int)");
         indexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(v1) USING '%s'", StorageAttachedIndex.class.getName()));
+        indexContext = createIndexContext(indexName, Int32Type.instance);
         Injections.inject(ObjectArrays.concat(barriers, counters, Injection.class));
         Stream.of(barriers).forEach(Injections.Barrier::reset);
         Stream.of(barriers).forEach(Injections.Barrier::disable);
@@ -297,16 +301,16 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private boolean isGroupIndexComplete() throws Exception
+    private boolean isGroupIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexComponents.isGroupIndexComplete(sstable.descriptor));
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isGroupIndexComplete());
     }
 
-    private boolean isColumnIndexComplete() throws Exception
+    private boolean isColumnIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexComponents.isColumnIndexComplete(sstable.descriptor, indexName));
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isColumnIndexComplete(indexContext));
     }
 
     private void setState(IndexStateOnRestart state)
@@ -319,33 +323,36 @@ public class NodeStartupTest extends SAITester
                 allIndexComponents().forEach(this::remove);
                 break;
             case PER_SSTABLE_INCOMPLETE:
-                remove(IndexComponents.GROUP_COMPLETION_MARKER);
+                remove(IndexComponent.GROUP_COMPLETION_MARKER);
                 break;
             case PER_COLUMN_INCOMPLETE:
-                remove(IndexComponents.NDIType.COLUMN_COMPLETION_MARKER.newComponent(indexName));
+                remove(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexName));
                 break;
             case PER_SSTABLE_CORRUPT:
-                corrupt(IndexComponents.GROUP_META);
+                corrupt(IndexComponent.GROUP_META);
                 break;
             case PER_COLUMN_CORRUPT:
-                corrupt(IndexComponents.NDIType.META.newComponent(indexName));
+                corrupt(IndexComponent.create(IndexComponent.Type.META, indexName));
                 break;
         }
     }
 
-    private Set<Component> allIndexComponents()
+    private Set<IndexComponent> allIndexComponents()
     {
-        Set<Component> components = new HashSet<>();
-        components.addAll(IndexComponents.PER_SSTABLE_COMPONENTS);
-        components.addAll(IndexComponents.perColumnComponents(indexName, false));
+        Set<IndexComponent> components = new HashSet<>();
+        components.addAll(IndexComponent.PER_SSTABLE);
+        components.add(IndexComponent.create(IndexComponent.Type.META, indexName));
+        components.add(IndexComponent.create(IndexComponent.Type.KD_TREE, indexName));
+        components.add(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName));
+        components.add(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexName));
         return components;
     }
 
-    private void remove(Component component)
+    private void remove(IndexComponent component)
     {
         try
         {
-            corruptNDIComponent(component, CorruptionType.REMOVED);
+            corruptIndexComponent(component, CorruptionType.REMOVED);
         }
         catch (Exception e)
         {
@@ -354,11 +361,11 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private void corrupt(Component component)
+    private void corrupt(IndexComponent component)
     {
         try
         {
-            corruptNDIComponent(component, CorruptionType.TRUNCATED_HEADER);
+            corruptIndexComponent(component, CorruptionType.TRUNCATED_HEADER);
         }
         catch (Exception e)
         {

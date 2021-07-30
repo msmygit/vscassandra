@@ -29,8 +29,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,12 +51,14 @@ import org.apache.cassandra.db.marshal.ReversedType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
-import org.apache.cassandra.index.sai.disk.SegmentBuilder;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.v1.numerics.NumericValuesWriter;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Expression;
@@ -402,12 +402,12 @@ public class NativeIndexDDLTest extends SAITester
 
         SecondaryIndexManager sim = getCurrentColumnFamilyStore().indexManager;
         StorageAttachedIndex index = (StorageAttachedIndex) sim.getIndexByName(indexNameCk1);
-        ColumnContext context = index.getContext();
+        IndexContext context = index.getIndexContext();
         assertTrue(context.isLiteral());
         assertTrue(context.getValidator() instanceof ReversedType);
 
         index = (StorageAttachedIndex) sim.getIndexByName(indexNameCk2);
-        context = index.getContext();
+        context = index.getIndexContext();
         assertFalse(context.isLiteral());
         assertTrue(context.getValidator() instanceof ReversedType);
     }
@@ -875,19 +875,19 @@ public class NativeIndexDDLTest extends SAITester
                                              CorruptionType corruptionType,
                                              boolean rebuild) throws Throwable
     {
-        for (IndexComponents.IndexComponent component : IndexComponents.PER_SSTABLE_COMPONENTS)
+        for (IndexComponent component : Version.LATEST.onDiskFormat().perSSTableComponents())
             verifyRebuildIndexComponent(numericIndexName, stringIndexName, component, corruptionType, true, true, rebuild);
 
-        for (IndexComponents.IndexComponent component : IndexComponents.perColumnComponents(numericIndexName, false))
+        for (IndexComponent component : Version.LATEST.onDiskFormat().perIndexComponents(createIndexContext(numericIndexName, Int32Type.instance)))
             verifyRebuildIndexComponent(numericIndexName, stringIndexName, component, corruptionType, false, true, rebuild);
 
-        for (IndexComponents.IndexComponent component : IndexComponents.perColumnComponents(stringIndexName, true))
+        for (IndexComponent component : Version.LATEST.onDiskFormat().perIndexComponents(createIndexContext(stringIndexName, UTF8Type.instance)))
             verifyRebuildIndexComponent(numericIndexName, stringIndexName, component, corruptionType, true, false, rebuild);
     }
 
     private void verifyRebuildIndexComponent(String numericIndexName,
                                              String stringIndexName,
-                                             IndexComponents.IndexComponent component,
+                                             IndexComponent component,
                                              CorruptionType corruptionType,
                                              boolean failedStringIndex,
                                              boolean failedNumericIndex,
@@ -899,7 +899,10 @@ public class NativeIndexDDLTest extends SAITester
         // their removal. If we are testing with encryption then we don't want to test any components
         // that are encryptable unless they have been removed because encrypted components aren't
         // checksum validated.
-        if ((component.ndiType.completionMarker() || (encrypted && component.ndiType.encryptable())) && (corruptionType != CorruptionType.REMOVED))
+
+        if ((Version.LATEST.onDiskFormat().isCompletionMarker(component) ||
+             (encrypted && Version.LATEST.onDiskFormat().isEncryptable(component))) &&
+             (corruptionType != CorruptionType.REMOVED))
             return;
 
         int rowCount = 2;
@@ -908,8 +911,8 @@ public class NativeIndexDDLTest extends SAITester
         verifySSTableIndexes(numericIndexName, 1);
         verifySSTableIndexes(stringIndexName, 1);
         verifyIndexFiles(1, 1, 1, 2);
-        assertTrue(verifyChecksum(createColumnContext("v1", numericIndexName, Int32Type.instance)));
-        assertTrue(verifyChecksum(createColumnContext("v2", stringIndexName, UTF8Type.instance)));
+        assertTrue(verifyChecksum(createIndexContext("v1", numericIndexName, Int32Type.instance)));
+        assertTrue(verifyChecksum(createIndexContext("v2", stringIndexName, UTF8Type.instance)));
 
         ResultSet rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(rowCount, rows.all().size());
@@ -917,15 +920,15 @@ public class NativeIndexDDLTest extends SAITester
         assertEquals(rowCount, rows.all().size());
 
         // corrupt file
-        corruptNDIComponent(component, corruptionType);
+        corruptIndexComponent(component, corruptionType);
 
         // If we are removing completion markers then the rest of the components should still have
         // valid checksums.
-        boolean expectedNumericState = !failedNumericIndex || component.ndiType.completionMarker();
-        boolean expectedLiteralState = !failedStringIndex || component.ndiType.completionMarker();
+        boolean expectedNumericState = !failedNumericIndex || Version.LATEST.onDiskFormat().isCompletionMarker(component);
+        boolean expectedLiteralState = !failedStringIndex || Version.LATEST.onDiskFormat().isCompletionMarker(component);
 
-        assertEquals(expectedNumericState, verifyChecksum(createColumnContext("v1", numericIndexName, Int32Type.instance)));
-        assertEquals(expectedLiteralState, verifyChecksum(createColumnContext("v2", stringIndexName, UTF8Type.instance)));
+        assertEquals(expectedNumericState, verifyChecksum(createIndexContext("v1", numericIndexName, Int32Type.instance)));
+        assertEquals(expectedLiteralState, verifyChecksum(createIndexContext("v2", stringIndexName, UTF8Type.instance)));
 
         if (rebuild)
         {
@@ -937,8 +940,8 @@ public class NativeIndexDDLTest extends SAITester
             reloadSSTableIndex();
 
             // Verify the index cannot be read:
-            verifySSTableIndexes(numericIndexName, component.ndiType.perSSTable() ? 0 : 1, failedNumericIndex ? 0 : 1);
-            verifySSTableIndexes(stringIndexName, component.ndiType.perSSTable() ? 0 : 1, failedStringIndex ? 0 : 1);
+            verifySSTableIndexes(numericIndexName, component.type.perSSTable ? 0 : 1, failedNumericIndex ? 0 : 1);
+            verifySSTableIndexes(stringIndexName, component.type.perSSTable ? 0 : 1, failedStringIndex ? 0 : 1);
 
             try
             {
@@ -1250,9 +1253,9 @@ public class NativeIndexDDLTest extends SAITester
         for (Index i : cfs.indexManager.listIndexes())
         {
             StorageAttachedIndex index = (StorageAttachedIndex) i;
-            assertTrue(index.getContext().getLiveMemtables().isEmpty());
+            assertTrue(index.getIndexContext().getLiveMemtables().isEmpty());
 
-            View view = index.getContext().getView();
+            View view = index.getIndexContext().getView();
             assertTrue("Expect index build stopped", view.getIndexes().isEmpty());
         }
 
@@ -1269,7 +1272,7 @@ public class NativeIndexDDLTest extends SAITester
         assertEquals("Segment memory limiter should revert to zero following rebuild.", 0L, getSegmentBufferUsedBytes());
         assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
 
-        assertTrue(verifyChecksum(createColumnContext("v1", indexv1Name, Int32Type.instance)));
+        assertTrue(verifyChecksum(createIndexContext("v1", indexv1Name, Int32Type.instance)));
     }
 
     @Test

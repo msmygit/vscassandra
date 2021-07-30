@@ -49,8 +49,8 @@ import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.db.rows.DeserializationHelper;
 import org.apache.cassandra.index.SecondaryIndexBuilder;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTableIdentityIterator;
 import org.apache.cassandra.io.sstable.SSTableSimpleIterator;
@@ -70,10 +70,10 @@ import static org.apache.cassandra.db.compaction.TableOperation.StopTrigger.TRUN
 
 /**
  * Multiple storage-attached indexes can start building concurrently. We need to make sure:
- * 1. Per-SSTable index files are built only once, eg. {@link IndexComponents#PER_SSTABLE_COMPONENTS}
+ * 1. Per-SSTable index files are built only once
  *      a. Per-SSTable index files already built, do nothing
  *      b. Per-SSTable index files are currently building, we need to wait until it's built in order to consider index built.
- * 2. Per-column index files are built for each column index..{@link IndexComponents#perColumnComponents(String, boolean)}
+ * 2. Per-column index files are built for each column index
  */
 public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
 {
@@ -152,11 +152,16 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
             perSSTableFileLock = shouldWriteTokenOffsetFiles(sstable);
             boolean perColumnOnly = perSSTableFileLock == null;
             // remove existing per column index files instead of overwriting
-            indexes.forEach(index -> index.deleteIndexFiles(sstable));
+            indexes.forEach(index -> IndexDescriptor.create(sstable.descriptor).deleteColumnIndex(index.getIndexContext()));
 
             final CompressionParams compressionParams = CryptoUtils.getCompressionParams(sstable);
 
-            indexWriter = new StorageAttachedIndexWriter(sstable.descriptor, indexes, txn, perColumnOnly, sstable.metadata());
+            indexWriter = new StorageAttachedIndexWriter(IndexDescriptor.create(sstable.descriptor),
+                                                         indexes,
+                                                         txn,
+                                                         perColumnOnly,
+                                                         sstable.metadata(),
+                                                         compressionParams);
 
             long previousKeyPosition = 0;
             indexWriter.begin();
@@ -279,8 +284,9 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
     private CountDownLatch shouldWriteTokenOffsetFiles(SSTableReader sstable)
     {
         // if per-table files are incomplete or checksum failed during full rebuild.
-        if (!IndexComponents.isGroupIndexComplete(sstable.descriptor) ||
-            (isFullRebuild && !IndexComponents.perSSTable(sstable).validatePerSSTableComponentsChecksum()))
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
+        if (!indexDescriptor.isGroupIndexComplete() ||
+            (isFullRebuild && !indexDescriptor.validatePerSSTableComponentsChecksum()))
         {
             CountDownLatch latch = new CountDownLatch(1);
             if (inProgress.putIfAbsent(sstable, latch) == null)
@@ -358,7 +364,7 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
 
         if (!dropped.isEmpty())
         {
-            String droppedIndexes = dropped.stream().map(sai -> sai.getContext().getIndexName()).collect(Collectors.toList()).toString();
+            String droppedIndexes = dropped.stream().map(sai -> sai.getIndexContext().getIndexName()).collect(Collectors.toList()).toString();
             if (isFullRebuild)
                 throw new RuntimeException(logMessage(String.format("%s are dropped, will stop index build.", droppedIndexes)));
             else

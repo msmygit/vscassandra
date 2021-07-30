@@ -21,7 +21,7 @@ import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.OrdinalPostingList;
-import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 
 import java.io.IOException;
 

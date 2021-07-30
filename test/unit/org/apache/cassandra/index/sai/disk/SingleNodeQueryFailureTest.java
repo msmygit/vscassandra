@@ -24,9 +24,9 @@ import org.junit.Test;
 
 import com.datastax.driver.core.exceptions.ReadFailureException;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
-import org.apache.cassandra.index.sai.disk.v1.TermsReader;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
+import org.apache.cassandra.index.sai.disk.v1.trie.TermsReader;
+import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.utils.Throwables;
@@ -68,6 +68,18 @@ public class SingleNodeQueryFailureTest extends SAITester
     public void testFailedBkdReaderOnMultiIndexesQuery() throws Throwable
     {
         testFailedMultiIndexesQuery("bkd_reader", PostingsReader.class, "<init>");
+    }
+
+    @Test
+    public void testFailedKeyFetcherOnMultiIndexesQuery() throws Throwable
+    {
+        testFailedMultiIndexesQuery("key_fetcher", V1SSTableContext.DecoratedKeyFetcher.class, "apply");
+    }
+
+    @Test
+    public void testFailedKeyReaderOnMultiIndexesQuery() throws Throwable
+    {
+        testFailedMultiIndexesQuery("key_reader", V1SSTableContext.DecoratedKeyFetcher.class, "createReader");
     }
 
     private void testFailedMultiIndexesQuery(String name, Class<?> targetClass, String targetMethod) throws Throwable

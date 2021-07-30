@@ -32,7 +32,7 @@ import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.SequentialWriterOption;
@@ -57,29 +57,50 @@ public class NdiRandomizedTest extends RandomizedTest
         Thread.setDefaultUncaughtExceptionHandler(handler);
     }
 
-    private static IndexComponentsLeakDetector indexComponentsLeakDetector;
+    private static IndexInputLeakDetector indexInputLeakDetector;
 
     protected static TemporaryFolder temporaryFolder;
 
     @ClassRule
-    public static TestRule classRules = RuleChain.outerRule(indexComponentsLeakDetector = new IndexComponentsLeakDetector())
+    public static TestRule classRules = RuleChain.outerRule(indexInputLeakDetector = new IndexInputLeakDetector())
                                                  .around(temporaryFolder = new TemporaryFolder());
 
-    public IndexComponents newIndexComponents() throws IOException
+//<<<<<<< HEAD
+//    public IndexComponents newIndexComponents() throws IOException
+//    {
+//        return indexComponentsLeakDetector.newIndexComponents(randomSimpleString(7, 29),
+//                                                              new Descriptor(temporaryFolder.newFolder(),
+//                                                                             randomSimpleString(5, 13),
+//                                                                             randomSimpleString(3, 17),
+//                                                                             randomIntBetween(0, 128)),
+//                                                              PrimaryKey.factory(),
+//                                                              SequentialWriterOption.newBuilder()
+//                                                                                    .bufferSize(randomIntBetween(17, 1 << 13))
+//                                                                                    .bufferType(randomBoolean() ? BufferType.ON_HEAP : BufferType.OFF_HEAP)
+//                                                                                    .trickleFsync(randomBoolean())
+//                                                                                    .trickleFsyncByteInterval(nextInt(1 << 10, 1 << 16))
+//                                                                                    .finishOnClose(true)
+//                                                                                    .build(), null);
+//=======
+    public IndexDescriptor newIndexDescriptor() throws IOException
     {
-        return indexComponentsLeakDetector.newIndexComponents(randomSimpleString(7, 29),
-                                                              new Descriptor(temporaryFolder.newFolder(),
-                                                                             randomSimpleString(5, 13),
-                                                                             randomSimpleString(3, 17),
-                                                                             randomIntBetween(0, 128)),
-                                                              PrimaryKey.factory(),
-                                                              SequentialWriterOption.newBuilder()
-                                                                                    .bufferSize(randomIntBetween(17, 1 << 13))
-                                                                                    .bufferType(randomBoolean() ? BufferType.ON_HEAP : BufferType.OFF_HEAP)
-                                                                                    .trickleFsync(randomBoolean())
-                                                                                    .trickleFsyncByteInterval(nextInt(1 << 10, 1 << 16))
-                                                                                    .finishOnClose(true)
-                                                                                    .build(), null);
+        return indexInputLeakDetector.newIndexDescriptor(new Descriptor(temporaryFolder.newFolder(),
+                                                                       randomSimpleString(5, 13),
+                                                                       randomSimpleString(3, 17),
+                                                                       randomIntBetween(0, 128)),
+                                                        SequentialWriterOption.newBuilder()
+                                                                              .bufferSize(randomIntBetween(17, 1 << 13))
+                                                                              .bufferType(randomBoolean() ? BufferType.ON_HEAP : BufferType.OFF_HEAP)
+                                                                              .trickleFsync(randomBoolean())
+                                                                              .trickleFsyncByteInterval(nextInt(1 << 10, 1 << 16))
+                                                                              .finishOnClose(true)
+                                                                              .build());
+    }
+
+    public String newIndex()
+    {
+        return randomSimpleString(2, 29);
+//>>>>>>> a1c417a8f0 (STAR-158: Add on-disk version support to SAI)
     }
 
     /**

@@ -22,7 +22,8 @@ import org.junit.Test;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v1.BKDReader;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDQueries;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -201,7 +202,7 @@ public class BKDQueriesTest extends NdiRandomizedTest
 
     private Expression buildExpression(Operator op, int value)
     {
-        final Expression expression = new Expression(SAITester.createColumnContext("meh", Int32Type.instance));
+        final Expression expression = new Expression(SAITester.createIndexContext("meh", Int32Type.instance));
         expression.add(op, Int32Type.instance.decompose(value));
         return expression;
     }
