@@ -21,16 +21,19 @@ import java.io.IOException;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
+import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.MergeOneDimPointValues;
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
+import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.index.PointValues.Relation;
@@ -93,6 +96,18 @@ public class BKDReaderTest extends NdiRandomizedTest
         }
     };
 
+    private IndexDescriptor indexDescriptor;
+    private String index;
+    private IndexContext indexContext;
+
+    @Before
+    public void setup() throws Throwable
+    {
+        indexDescriptor = newIndexDescriptor();
+        index = newIndex();
+        indexContext = SAITester.createIndexContext(index, Int32Type.instance);
+    }
+
     @Test
     public void testInts1D() throws IOException
     {
@@ -115,7 +130,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         // Next test that an intersection only returns the query values
         List<Long> expected = Lists.list(8L, 9L);
         int expectedCount = 0;
-        PostingList intersection = reader1.intersect(buildQuery(8, 9), NO_OP_BKD_LISTENER, new QueryContext());
+        PostingList intersection = reader1.intersect(buildQuery(8, 9), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
             assertEquals(expected.get(expectedCount++), id);
@@ -130,16 +145,14 @@ public class BKDReaderTest extends NdiRandomizedTest
         reader1 = createReader(10);
         BKDReader reader2 = createReader(10);
 
-        final IndexComponents indexComponents = newIndexComponents();
-
         List<BKDReader.IteratorState> iterators = ImmutableList.of(reader1.iteratorState(), reader2.iteratorState((rowID) -> rowID + 10));
         MergeOneDimPointValues merger = new MergeOneDimPointValues(iterators, Int32Type.instance);
-        final BKDReader reader = finishAndOpenReaderOneDim(2, merger, 20, indexComponents);
+        final BKDReader reader = finishAndOpenReaderOneDim(2, merger, 20);
 
         final int queryMin = 8;
         final int queryMax = 9;
 
-        intersection = reader.intersect(buildQuery(queryMin, queryMax), NO_OP_BKD_LISTENER, new QueryContext());
+        intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
 
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
@@ -160,7 +173,6 @@ public class BKDReaderTest extends NdiRandomizedTest
 
     private BKDReader createReader(int numRows) throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < numRows; docID++)
@@ -168,12 +180,11 @@ public class BKDReaderTest extends NdiRandomizedTest
             NumericUtils.intToSortableBytes(docID, scratch, 0);
             buffer.addPackedValue(docID, new BytesRef(scratch));
         }
-        return finishAndOpenReaderOneDim(2, buffer, indexComponents);
+        return finishAndOpenReaderOneDim(2, buffer);
     }
 
     private void doTestInts1D() throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int numRows = between(100, 400);
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
 
@@ -184,7 +195,7 @@ public class BKDReaderTest extends NdiRandomizedTest
             buffer.addPackedValue(docID, new BytesRef(scratch));
         }
 
-        final BKDReader reader = finishAndOpenReaderOneDim(2, buffer, indexComponents);
+        final BKDReader reader = finishAndOpenReaderOneDim(2, buffer);
 
         try (BKDReader.IteratorState iterator = reader.iteratorState())
         {
@@ -196,13 +207,13 @@ public class BKDReaderTest extends NdiRandomizedTest
             }
         }
 
-        try (PostingList intersection = reader.intersect(NONE_MATCH, NO_OP_BKD_LISTENER, new QueryContext()))
+        try (PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext()))
         {
             assertNull(intersection);
         }
 
-        try (PostingList collectAllIntersection = reader.intersect(ALL_MATCH, NO_OP_BKD_LISTENER, new QueryContext());
-             PostingList filteringIntersection = reader.intersect(ALL_MATCH_WITH_FILTERING, NO_OP_BKD_LISTENER, new QueryContext()))
+        try (PostingList collectAllIntersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+             PostingList filteringIntersection = reader.intersect(ALL_MATCH_WITH_FILTERING, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext()))
         {
             assertEquals(numRows, collectAllIntersection.size());
             assertEquals(numRows, filteringIntersection.size());
@@ -221,7 +232,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         final int queryMin = 42;
         final int queryMax = 87;
 
-        final PostingList intersection = reader.intersect(buildQuery(queryMin, queryMax), NO_OP_BKD_LISTENER, new QueryContext());
+        final PostingList intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
 
         assertThat(intersection, is(instanceOf(MergePostingList.class)));
         long expectedRowID = queryMin;
@@ -249,7 +260,6 @@ public class BKDReaderTest extends NdiRandomizedTest
 
     private void doTestAdvance(boolean crypto) throws IOException
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final int numRows = between(1000, 2000);
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
 
@@ -260,12 +270,12 @@ public class BKDReaderTest extends NdiRandomizedTest
             buffer.addPackedValue(docID, new BytesRef(scratch));
         }
 
-        final BKDReader reader = finishAndOpenReaderOneDim(2, buffer, indexComponents);
+        final BKDReader reader = finishAndOpenReaderOneDim(2, buffer);
 
-        PostingList intersection = reader.intersect(NONE_MATCH, NO_OP_BKD_LISTENER, new QueryContext());
+        PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
         assertNull(intersection);
 
-        intersection = reader.intersect(ALL_MATCH, NO_OP_BKD_LISTENER, new QueryContext());
+        intersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
         assertEquals(numRows, intersection.size());
         assertEquals(100, intersection.advance(100));
         assertEquals(200, intersection.advance(200));
@@ -286,7 +296,6 @@ public class BKDReaderTest extends NdiRandomizedTest
     @Test
     public void testResourcesReleaseWhenQueryDoesntMatchAnything() throws Exception
     {
-        final IndexComponents indexComponents = newIndexComponents();
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < 1000; docID++)
@@ -301,9 +310,9 @@ public class BKDReaderTest extends NdiRandomizedTest
             buffer.addPackedValue(docID, new BytesRef(scratch));
         }
 
-        final BKDReader reader = finishAndOpenReaderOneDim(50, buffer, indexComponents);
+        final BKDReader reader = finishAndOpenReaderOneDim(50, buffer);
 
-        final PostingList intersection = reader.intersect(buildQuery(1017, 1096), NO_OP_BKD_LISTENER, new QueryContext());
+        final PostingList intersection = reader.intersect(buildQuery(1017, 1096), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
         assertNull(intersection);
     }
 
@@ -343,9 +352,10 @@ public class BKDReaderTest extends NdiRandomizedTest
         };
     }
 
-    private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, BKDTreeRamBuffer buffer, IndexComponents indexComponents) throws IOException
+    private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, BKDTreeRamBuffer buffer) throws IOException
     {
-        final NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                                 indexContext,
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(buffer.numRows()),
@@ -354,23 +364,24 @@ public class BKDReaderTest extends NdiRandomizedTest
                                                                  false);
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-        final long bkdPosition = metadata.get(IndexComponents.NDIType.KD_TREE).root;
+        final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
         assertThat(bkdPosition, is(greaterThan(0L)));
-        final long postingsPosition = metadata.get(IndexComponents.NDIType.KD_TREE_POSTING_LISTS).root;
+        final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-        FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
-        return new BKDReader(indexComponents,
-                             kdtree,
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        return new BKDReader(indexContext,
+                             kdtreeHandle,
                              bkdPosition,
-                             kdtreePostings,
+                             kdtreePostingsHandle,
                              postingsPosition);
     }
 
-    private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, MutableOneDimPointValues values, int numRows, IndexComponents indexComponents) throws IOException
+    private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, MutableOneDimPointValues values, int numRows) throws IOException
     {
-        final NumericIndexWriter writer = new NumericIndexWriter(indexComponents,
+        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                                 indexContext,
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(numRows),
@@ -379,17 +390,17 @@ public class BKDReaderTest extends NdiRandomizedTest
                                                                  false);
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(values);
-        final long bkdPosition = metadata.get(IndexComponents.NDIType.KD_TREE).root;
+        final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
         assertThat(bkdPosition, is(greaterThan(0L)));
-        final long postingsPosition = metadata.get(IndexComponents.NDIType.KD_TREE_POSTING_LISTS).root;
+        final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-        FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
-        return new BKDReader(indexComponents,
-                             kdtree,
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        return new BKDReader(indexContext,
+                             kdtreeHandle,
                              bkdPosition,
-                             kdtreePostings,
+                             kdtreePostingsHandle,
                              postingsPosition);
     }
 }

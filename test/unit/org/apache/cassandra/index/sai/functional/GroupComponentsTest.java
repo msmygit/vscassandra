@@ -33,6 +33,7 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class GroupComponentsTest extends SAITester
 {
@@ -78,8 +79,30 @@ public class GroupComponentsTest extends SAITester
         assertEquals(8, components.size());
     }
 
-    private Collection<StorageAttachedIndex> getIndexesFromGroup(StorageAttachedIndexGroup group)
+    @Test
+    public void checkLiveComponentsAreCorrectlyNamed() throws Throwable
     {
-        return group.getIndexes().stream().map(index -> (StorageAttachedIndex)index).collect(Collectors.toList());
+        createTable("CREATE TABLE %s (pk int primary key, value int)");
+        createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+        execute("INSERT INTO %s (pk, value) VALUES (1, 1)");
+        flush();
+
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+        Set<SSTableReader> sstables = cfs.getLiveSSTables();
+
+        assertEquals(1, sstables.size());
+
+        SSTableReader sstable = sstables.iterator().next();
+        Set<Component> components = group.getLiveComponents(sstable, getIndexesFromGroup(group));
+
+        // 4 per-sstable components and 4 column components
+        assertEquals(8, components.size());
+
+        for (Component component : components)
+        {
+            assertTrue(sstable.descriptor.fileFor(component).exists());
+        }
     }
 }

@@ -31,6 +31,7 @@ import java.util.stream.IntStream;
 import com.google.common.primitives.Ints;
 import org.junit.Test;
 
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;

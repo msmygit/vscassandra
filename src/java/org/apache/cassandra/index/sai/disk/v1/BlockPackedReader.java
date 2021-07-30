@@ -22,11 +22,10 @@ import java.io.IOException;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
-import org.apache.cassandra.index.sai.utils.LongArray;
+import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
-import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.lucene.index.CorruptIndexException;
@@ -42,7 +41,6 @@ import static org.apache.lucene.util.BitUtil.zigZagDecode;
  */
 public class BlockPackedReader implements LongArray.Factory
 {
-    private final IndexComponents components;
     private final FileHandle file;
     private final int blockShift, blockMask;
     private final long valueCount;
@@ -50,15 +48,14 @@ public class BlockPackedReader implements LongArray.Factory
     private final long[] blockOffsets;
     private final long[] minValues;
 
-    public BlockPackedReader(FileHandle file, Component component, IndexComponents components, MetadataSource source) throws IOException
+    public BlockPackedReader(FileHandle file, IndexComponent component, MetadataSource source) throws IOException
     {
-        this(file, components, new NumericValuesMeta(source.get(component.name())));
+        this(file, new NumericValuesMeta(source.get(component.name())));
     }
 
     @SuppressWarnings("resource")
-    public BlockPackedReader(FileHandle file, IndexComponents components, NumericValuesMeta meta) throws IOException
+    public BlockPackedReader(FileHandle file, NumericValuesMeta meta) throws IOException
     {
-        this.components = components;
         this.file = file;
 
         this.valueCount = meta.valueCount;
@@ -119,7 +116,7 @@ public class BlockPackedReader implements LongArray.Factory
     @SuppressWarnings("resource")
     public LongArray openTokenReader(long sstableRowId, SSTableQueryContext context)
     {
-        final IndexInput indexInput = components.openInput(file);
+        final IndexInput indexInput = IndexFileUtils.instance.openInput(file);
         return new AbstractBlockPackedReader(indexInput, blockBitsPerValue, blockShift, blockMask, sstableRowId, valueCount)
         {
             @Override

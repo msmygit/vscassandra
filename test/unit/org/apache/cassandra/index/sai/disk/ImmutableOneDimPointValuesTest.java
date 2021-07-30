@@ -26,6 +26,8 @@ import org.junit.rules.ExpectedException;
 
 import com.carrotsearch.hppc.IntArrayList;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.index.sai.disk.v1.ImmutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;

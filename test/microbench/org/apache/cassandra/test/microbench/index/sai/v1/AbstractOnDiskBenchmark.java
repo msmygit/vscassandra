@@ -25,15 +25,17 @@ import java.util.stream.IntStream;
 
 import org.apache.cassandra.cache.ChunkCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.index.sai.disk.SSTableComponentsWriter;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.BlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.PostingsWriter;
+import org.apache.cassandra.index.sai.disk.v1.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.LongArray;
+import org.apache.cassandra.index.sai.utils.IndexFileUtils;
+import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
@@ -48,10 +50,10 @@ public abstract class AbstractOnDiskBenchmark
 
     private Descriptor descriptor;
 
-    IndexComponents groupComponents;
+    IndexDescriptor indexDescriptor;
+    String index;
     private FileHandle token;
 
-    private IndexComponents indexComponents;
     private FileHandle postings;
     private long summaryPosition;
 
@@ -97,16 +99,16 @@ public abstract class AbstractOnDiskBenchmark
         assert ChunkCache.instance != null;
 
         descriptor = new Descriptor(Files.createTempDirectory("jmh").toFile(), "ks", this.getClass().getSimpleName(), 1);
-        groupComponents = IndexComponents.perSSTable(descriptor, null);
-        indexComponents = IndexComponents.create("col", descriptor, null);
+        indexDescriptor = IndexDescriptor.create(descriptor);
+        index = "test";
 
         // write per-sstable components: token and offset
         writeSSTableComponents(numRows());
-        token = groupComponents.createFileHandle(IndexComponents.TOKEN_VALUES);
+        token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
 
         // write postings
         summaryPosition = writePostings(numPostings());
-        postings = indexComponents.createFileHandle(indexComponents.postingLists);
+        postings = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, index);
     }
 
     @TearDown(Level.Trial)
@@ -134,7 +136,7 @@ public abstract class AbstractOnDiskBenchmark
         final int[] postings = IntStream.range(0, rows).map(this::toPosting).toArray();
         final ArrayPostingList postingList = new ArrayPostingList(postings);
 
-        try (PostingsWriter writer = new PostingsWriter(indexComponents, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
         {
             long summaryPosition = writer.write(postingList);
             writer.complete();
@@ -145,8 +147,8 @@ public abstract class AbstractOnDiskBenchmark
 
     protected final PostingsReader openPostingsReader() throws IOException
     {
-        IndexInput input = indexComponents.openInput(postings);
-        IndexInput summaryInput = indexComponents.openInput(postings);
+        IndexInput input = IndexFileUtils.instance.openInput(postings);
+        IndexInput summaryInput = IndexFileUtils.instance.openInput(postings);
 
         PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(summaryInput, summaryPosition);
         return new PostingsReader(input, summary, QueryEventListener.PostingListEventListener.NO_OP);
@@ -154,7 +156,7 @@ public abstract class AbstractOnDiskBenchmark
 
     private void writeSSTableComponents(int rows) throws IOException
     {
-        SSTableComponentsWriter writer = new SSTableComponentsWriter(descriptor, null);
+        SSTableComponentsWriter writer = new SSTableComponentsWriter(indexDescriptor, null);
         for (int i = 0; i < rows; i++)
             writer.recordCurrentTokenOffset(toToken(i), toOffset(i));
 
@@ -163,7 +165,7 @@ public abstract class AbstractOnDiskBenchmark
 
     protected final LongArray openRowIdToTokenReader() throws IOException
     {
-        MetadataSource source = MetadataSource.loadGroupMetadata(groupComponents);
-        return new BlockPackedReader(token, IndexComponents.TOKEN_VALUES, groupComponents, source).open();
+        MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
+        return new BlockPackedReader(token, IndexComponent.TOKEN_VALUES, source).open();
     }
 }

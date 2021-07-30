@@ -35,7 +35,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.ColumnContext;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -50,7 +50,7 @@ public class MemtableIndex
     private final LongAdder writeCount = new LongAdder();
     private final LongAdder estimatedMemoryUsed = new LongAdder();
 
-    public MemtableIndex(ColumnContext columnContext, Memtable mt)
+    public MemtableIndex(IndexContext columnContext, Memtable mt)
     {
         this.index = new TrieMemoryIndex(columnContext);
         this.validator = columnContext.getValidator();

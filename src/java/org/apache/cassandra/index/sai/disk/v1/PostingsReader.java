@@ -25,7 +25,6 @@ import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
@@ -62,7 +61,7 @@ public class PostingsReader implements OrdinalPostingList
     private long postingsDecoded = 0;
 
     @VisibleForTesting
-    PostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
+    public PostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
         this(input, new BlocksSummary(input, summaryOffset, () -> {}), listener);
     }
@@ -97,10 +96,10 @@ public class PostingsReader implements OrdinalPostingList
     @VisibleForTesting
     public static class BlocksSummary
     {
-        final int blockSize;
-        final int numPostings;
-        final LongArray offsets;
-        final LongArray maxValues;
+        public final int blockSize;
+        public final int numPostings;
+        public final LongArray offsets;
+        public final LongArray maxValues;
 
         private final InputCloser runOnClose;
 

@@ -41,16 +41,16 @@ import org.apache.lucene.util.ArrayUtil;
  * Page-aware random access reader for a trie terms dictionary written by {@link TrieTermsDictionaryWriter}.
  */
 @NotThreadSafe
-class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
+public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
 {
-    static final long NOT_FOUND = -1;
+    public static final long NOT_FOUND = -1;
 
-    TrieTermsDictionaryReader(Rebufferer rebufferer, long root)
+    public TrieTermsDictionaryReader(Rebufferer rebufferer, long root)
     {
         super(rebufferer, root);
     }
 
-    static final TrieSerializer<Long, DataOutputPlus> trieSerializer = new TrieSerializer<Long, DataOutputPlus>()
+    public static final TrieSerializer<Long, DataOutputPlus> trieSerializer = new TrieSerializer<Long, DataOutputPlus>()
     {
         @Override
         public int sizeofNode(SerializationNode<Long> node, long nodePosition)
@@ -85,7 +85,7 @@ class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
         }
     };
 
-    long exactMatch(ByteComparable key)
+    public long exactMatch(ByteComparable key)
     {
         int b = follow(key);
         if (b != ByteSource.END_OF_STREAM)
@@ -95,7 +95,7 @@ class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
         return getCurrentPayload();
     }
 
-    Iterator<Pair<ByteComparable, Long>> iterator()
+    public Iterator<Pair<ByteComparable, Long>> iterator()
     {
         return new AbstractIterator<Pair<ByteComparable, Long>>()
         {
@@ -163,7 +163,7 @@ class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
         };
     }
 
-    ByteComparable getMaxTerm()
+    public ByteComparable getMaxTerm()
     {
         final TransitionBytesCollector collector = new ImmutableTransitionBytesCollector();
         go(root);
@@ -180,7 +180,7 @@ class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
         }
     }
 
-    ByteComparable getMinTerm()
+    public ByteComparable getMinTerm()
     {
         final TransitionBytesCollector collector = new ImmutableTransitionBytesCollector();
         go(root);
