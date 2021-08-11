@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoop;
+import org.apache.cassandra.metrics.LatencyMetrics;
 import org.apache.cassandra.net.FrameEncoder;
 import org.apache.cassandra.net.FrameEncoderCrc;
 import org.apache.cassandra.net.FrameEncoderLZ4;
@@ -49,6 +50,8 @@ abstract class Flusher implements Runnable
         Math.min(BufferPool.NORMAL_CHUNK_SIZE,
                  FrameEncoder.Payload.MAX_SIZE - Math.max(FrameEncoderCrc.HEADER_AND_TRAILER_LENGTH, FrameEncoderLZ4.HEADER_AND_TRAILER_LENGTH));
 
+    private static final LatencyMetrics flushMetrics = new LatencyMetrics("MJF", "flush");
+
     static class FlushItem<T>
     {
         enum Kind {FRAMED, UNFRAMED}
@@ -58,6 +61,7 @@ abstract class Flusher implements Runnable
         final T response;
         final Envelope request;
         final Consumer<FlushItem<T>> tidy;
+        public long startNanoTime;
 
         FlushItem(Kind kind, Channel channel, T response, Envelope request, Consumer<FlushItem<T>> tidy)
         {
@@ -66,6 +70,7 @@ abstract class Flusher implements Runnable
             this.request = request;
             this.response = response;
             this.tidy = tidy;
+            this.startNanoTime = System.nanoTime();
         }
 
         void release()
@@ -248,7 +253,10 @@ abstract class Flusher implements Runnable
         // In V4 however, the buffers containing each CQL envelope are emitted from Envelope.Encoder
         // and so releasing them is handled by Netty internally.
         for (FlushItem<?> item : processed)
+        {
+            flushMetrics.addNano(System.nanoTime() - item.startNanoTime);
             item.release();
+        }
 
         payloads.clear();
         channels.clear();
