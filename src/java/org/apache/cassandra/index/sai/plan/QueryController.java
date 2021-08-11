@@ -66,6 +66,7 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.io.IndexComponents;
 import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
+import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.ConjunctionPostingList;
@@ -224,11 +225,13 @@ public class QueryController
 
     public RangeIterator.Builder getIndexesPostings(Operation.OperationType op, Collection<Expression> expressions)
     {
-        RangeIterator.Builder builder = RangeUnionIterator.builder();
+        final RangeIterator.Builder builder = RangeUnionIterator.builder();
 
-        Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
+        final Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
-        HashMultimap<SSTableReader.UniqueIdentifier,Pair<Expression,SSTableIndex>> map = HashMultimap.create();
+        final HashMultimap<SSTableReader.UniqueIdentifier,Pair<Expression,SSTableIndex>> map = HashMultimap.create();
+
+        final List<PostingList> toClose = new ArrayList<>();
 
         try
         {
@@ -240,6 +243,7 @@ public class QueryController
                 }
             }
 
+            // iterate per-sstable expressions and create a posting list for the sstable
             for (final Map.Entry<SSTableReader.UniqueIdentifier,Collection<Pair<Expression,SSTableIndex>>> entry : map.asMap().entrySet())
             {
                 final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
@@ -252,6 +256,8 @@ public class QueryController
                 // for each expression create a posting list
                 for (Pair<Expression,SSTableIndex> pair : entry.getValue())
                 {
+                    // TODO: saving variables this way seems off, is the max key the same
+                    //       across SSTableIndex's?
                     maxKey = pair.right.segment.metadata.maxKey;
                     primaryKeyMap = pair.right.getSSTableContext().primaryKeyMap;
                     comps = pair.right.components;
@@ -259,18 +265,16 @@ public class QueryController
                     PostingList postings = pair.right.searchPostingList(pair.left, mergeRange, ssTableQueryContext);
                     if (postings != null)
                     {
+                        toClose.add(postings);
                         postingLists.add(postings.peekable());
                     }
                 }
-
-                // TODO: put conjunction posting list here if op == AND
 
                 if (postingLists.size() == 0)
                 {
                     continue;
                 }
 
-                // OR posting list
                 final PostingList sstablePostings;
 
                 if (op == Operation.OperationType.OR)
@@ -305,7 +309,7 @@ public class QueryController
         catch (Throwable t)
         {
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
-            //FileUtils.closeQuietly(builder.ranges());
+            FileUtils.closeQuietly(toClose);
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw t;
         }

@@ -368,6 +368,11 @@ public class Operation
     {
         RowFilter.Expression expression;
 
+        public ExpressionNode(RowFilter.Expression expression)
+        {
+            this.expression = expression;
+        }
+
         @Override
         public void analyze(List<RowFilter.Expression> expressionList, QueryController controller)
         {
@@ -380,22 +385,11 @@ public class Operation
             return new FilterTree(OperationType.AND, expressionMap);
         }
 
-        public ExpressionNode(RowFilter.Expression expression)
-        {
-            this.expression = expression;
-        }
-
         @Override
         public RowFilter.Expression expression()
         {
             return expression;
         }
-
-//        @Override
-//        PostingList postings(QueryController controller)
-//        {
-//             return null;
-//        }
 
         @Override
         RangeIterator rangeIterator(QueryController controller)

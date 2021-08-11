@@ -65,18 +65,9 @@ public interface PostingList extends Closeable
      * @return first segment row ID which is >= the target row ID or {@link PostingList#END_OF_STREAM} if one does not exist
      */
 
-
-
     long advance(PrimaryKey nextPrimaryKey) throws IOException;
 
     long advance(long targetRowID) throws IOException;
-
-//    default long advance(long targetRowID) throws IOException
-//    {
-//        return -1;
-//    }
-
-    //long advance(long target) throws IOException;
 
     PrimaryKey mapRowId(long rowId);
 
