@@ -27,6 +27,7 @@ import io.netty.channel.EventLoop;
 import io.netty.util.AttributeKey;
 import org.apache.cassandra.concurrent.LocalAwareExecutorService;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.metrics.LatencyMetrics;
 import org.apache.cassandra.net.FrameEncoder;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.service.QueryState;
@@ -46,6 +47,8 @@ public class Dispatcher
 
     private static final ConcurrentMap<EventLoop, Flusher> flusherLookup = new ConcurrentHashMap<>();
     private final boolean useLegacyFlusher;
+
+    private static final LatencyMetrics requestMetrics = new LatencyMetrics("MJF", "request");
 
     /**
      * Takes a Channel, Request and the Response produced by processRequest and outputs a FlushItem
@@ -96,6 +99,7 @@ public class Dispatcher
      */
     void processRequest(Channel channel, Message.Request request, FlushItemConverter forFlusher)
     {
+        long startNs = System.nanoTime();
         final Message.Response response;
         final ServerConnection connection;
         FlushItem<?> toFlush;
@@ -119,6 +123,7 @@ public class Dispatcher
         {
             ClientWarn.instance.resetWarnings();
         }
+        requestMetrics.addNano(System.nanoTime() - startNs);
         flush(toFlush);
     }
 
