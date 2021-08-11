@@ -72,6 +72,12 @@ class RAMPostingSlices
             }
 
             @Override
+            public long advance(long targetRowID) throws IOException
+            {
+                return 0;
+            }
+
+            @Override
             public long advance(PrimaryKey primaryKey)
             {
                 throw new UnsupportedOperationException();
