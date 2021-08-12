@@ -64,7 +64,7 @@ public class MergePostingList implements PostingList
 
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings)
     {
-        return merge(postings, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+        return merge(postings, () -> FileUtils.closeQuietly(postings));
     }
 
     @SuppressWarnings("resource")

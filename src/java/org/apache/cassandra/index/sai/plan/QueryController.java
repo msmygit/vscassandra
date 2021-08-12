@@ -223,9 +223,38 @@ public class QueryController
         return builder;
     }
 
-    public RangeIterator.Builder getIndexesPostings(Operation.OperationType op, Collection<Expression> expressions)
+    public RangeIterator.Builder getIndexesPostings(Operation.OperationType op,
+                                                    Collection<Expression> expressions)
     {
         final RangeIterator.Builder builder = RangeUnionIterator.builder();
+
+        final List<RangeIterator> memoryRangeIterators = new ArrayList<>();
+        for (final Expression expression : expressions)
+        {
+            final RangeIterator memtableIterator = expression.context.searchMemtable(expression, mergeRange);
+            memoryRangeIterators.add(memtableIterator);
+        }
+
+        final RangeIterator primaryMemoryRangeIterator;
+
+        if (op == Operation.OperationType.AND)
+        {
+            RangeIntersectionIterator.Builder andBuilder = RangeIntersectionIterator.builder();
+            for (RangeIterator it : memoryRangeIterators)
+            {
+                andBuilder.add(it);
+            }
+            primaryMemoryRangeIterator = andBuilder.build();
+        }
+        else
+        {
+            assert op == Operation.OperationType.OR;
+            RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
+            orBuilder.add(memoryRangeIterators);
+            primaryMemoryRangeIterator = orBuilder.build();
+        }
+
+        builder.add(primaryMemoryRangeIterator);
 
         final Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
@@ -258,6 +287,7 @@ public class QueryController
                 {
                     // TODO: saving variables this way seems off, is the max key the same
                     //       across SSTableIndex's?
+                    //       primaryKeyMap same?
                     maxKey = pair.right.segment.metadata.maxKey;
                     primaryKeyMap = pair.right.getSSTableContext().primaryKeyMap;
                     comps = pair.right.components;

@@ -47,15 +47,15 @@ public class AndTest extends SAITester
         execute("INSERT INTO %s (id, val, val2) VALUES ('11', 11, 11)");
         execute("INSERT INTO %s (id, val, val2) VALUES ('12', 12, 12)");
 
-        flush();
+        //flush();
 
         //assertEquals(1, execute("SELECT id FROM %s WHERE val = 0 AND val2 = 0").size());
         //assertEquals(0, execute("SELECT id FROM %s WHERE val = 0 AND val2 = 1").size());
 
-        UntypedResultSet result = execute("SELECT * FROM %s WHERE val = 12 AND val2 = 11");
+        UntypedResultSet result = execute("SELECT * FROM %s WHERE val = 10 AND val2 = 10");
         System.out.println("val=" + result.one().getInt("val")
                            + " val2=" + result.one().getInt("val2"));
 
-        assertEquals(0, result.size());
+        assertEquals(1, result.size());
     }
 }

@@ -19,6 +19,7 @@
 package org.apache.cassandra.index.sai.utils;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -29,13 +30,32 @@ public class ConjunctionPostingList implements PostingList
     final PostingList lead1, lead2;
     final PostingList[] others;
 
+    private int hits = 0;
+    private int misses = 0;
+
+    private final List<PostingList> toClose;
+
     public ConjunctionPostingList(List<PostingList> lists)
     {
         assert lists.size() >= 2;
+
+        toClose = new ArrayList<>(lists);
+
         CollectionUtil.timSort(lists, (o1, o2) -> Long.compare(o1.size(), o2.size()));
         lead1 = lists.get(0);
         lead2 = lists.get(1);
         others = lists.subList(2, lists.size()).toArray(new PostingList[0]);
+    }
+
+    @Override
+    public void close() throws IOException
+    {
+        lead1.close();
+        lead2.close();
+        for (PostingList list : others)
+        {
+            list.close();
+        }
     }
 
     @Override
@@ -66,6 +86,7 @@ public class ConjunctionPostingList implements PostingList
                 targetRowID = lead1.advance(next2);
                 if (next2 != targetRowID)
                 {
+                    misses++;
                     continue;
                 }
             }
@@ -80,6 +101,7 @@ public class ConjunctionPostingList implements PostingList
                     final long next = other.advance(targetRowID);
                     if (next > targetRowID)
                     {
+                        misses++;
                         // iterator beyond the current targetRowID - advance lead and continue to the new highest targetRowID.
                         targetRowID = lead1.advance(next);
                         continue advanceHead;
@@ -89,6 +111,7 @@ public class ConjunctionPostingList implements PostingList
 
             // success - all iterators are on the same targetRowID
             System.out.println("success - all iterators are on the same targetRowID="+targetRowID);
+            hits++;
             return targetRowID;
         }
     }
