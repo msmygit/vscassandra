@@ -1,0 +1,23 @@
+--- a/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java
++++ b/src/java/org/apache/cassandra/db/memtable/SkipListMemtable.java
+@@ -57,6 +57,7 @@
+ import org.apache.cassandra.utils.ObjectSizes;
+ import org.apache.cassandra.utils.concurrent.OpOrder;
+ import org.apache.cassandra.utils.memory.Cloner;
++import org.apache.cassandra.utils.memory.HeapCloner;
+ import org.apache.cassandra.utils.memory.MemtableAllocator;
+ import org.apache.cassandra.utils.memory.NativeAllocator;
+ 
+@@ -231,11 +232,7 @@
+             ConcurrentNavigableMap<PartitionPosition, Object> partitions = new ConcurrentSkipListMap<>();
+             final Object val = new Object();
+             for (int i = 0 ; i < count ; i++)
+-<<<<<<<
+-                partitions.put(allocator.clone(new BufferDecoratedKey(new LongToken(i), ByteBuffer.allocate(1)), group), val);
+-=======
+-                partitions.put(cloner.clone(new BufferDecoratedKey(new LongToken(i), ByteBufferUtil.EMPTY_BYTE_BUFFER)), val);
+->>>>>>>
++                partitions.put(cloner.clone(new BufferDecoratedKey(new LongToken(i), HeapCloner.instance.allocate(1))), val);
+             double avgSize = ObjectSizes.measureDeep(partitions) / (double) count;
+             rowOverhead = (int) ((avgSize - Math.floor(avgSize)) < 0.05 ? Math.floor(avgSize) : Math.ceil(avgSize));
+             rowOverhead -= ObjectSizes.measureDeep(new LongToken(0));
