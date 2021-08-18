@@ -33,13 +33,13 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Strings;
 import com.google.common.collect.ObjectArrays;
 import com.google.common.io.Files;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.NumericValuesMeta;
 import org.apache.cassandra.index.sai.disk.v1.PartitionKeysMeta;
 import org.apache.cassandra.index.sai.disk.v1.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v1.TrieTermsDictionaryWriter;
@@ -113,9 +113,14 @@ public class IndexComponents
 
         // per-sstable components
         /**
-         * SSTableRowId to PrimaryKey map
+         * A list of primary keys in the sstable, one for each row, ordered by row ids
          */
         PRIMARY_KEYS("PrimaryKeys"),
+        /**
+         * A list of byte offsets into the PrimaryKeys component, in the same order as primary keys.
+         * Allows finding the primary key by row id.
+         */
+        PRIMARY_KEY_OFFSETS("PrimaryKeyOffsets"),
         /**
          * Stores {@link PartitionKeysMeta} for {@link NDIType#PRIMARY_KEYS}
          */
@@ -213,6 +218,8 @@ public class IndexComponents
 
     public static final IndexComponent PRIMARY_KEYS = NDIType.PRIMARY_KEYS.newComponent();
 
+    public static final IndexComponent PRIMARY_KEY_OFFSETS = NDIType.PRIMARY_KEY_OFFSETS.newComponent();
+
     public static final IndexComponent GROUP_META = NDIType.GROUP_META.newComponent();
 
     public static final IndexComponent GROUP_COMPLETION_MARKER = NDIType.GROUP_COMPLETION_MARKER.newComponent();
@@ -221,7 +228,8 @@ public class IndexComponents
     /**
      * Files that are shared by all storage-attached indexes for each SSTable
      */
-    public static final List<IndexComponent> PER_SSTABLE_COMPONENTS = Arrays.asList(GROUP_COMPLETION_MARKER, PRIMARY_KEYS, GROUP_META);
+    public static final List<IndexComponent> PER_SSTABLE_COMPONENTS =
+            Arrays.asList(GROUP_COMPLETION_MARKER, PRIMARY_KEYS, PRIMARY_KEY_OFFSETS, GROUP_META);
 
     public final IndexComponent termsData, postingLists, meta, groupCompletionMarker, kdTree, kdTreePostingLists, columnCompletionMarker;
 
@@ -232,23 +240,32 @@ public class IndexComponents
                                                                                             .finishOnClose(true)
                                                                                             .build();
 
+    public final PrimaryKey.PrimaryKeyFactory keyFactory;
     public final Descriptor descriptor;
     public final String indexName;
 
     private final SequentialWriterOption writerOption;
     private final CompressionParams compressionParams;
 
-    IndexComponents(Descriptor descriptor, SequentialWriterOption sequentialWriterOption, CompressionParams compressionParams)
+    IndexComponents(Descriptor descriptor,
+                    PrimaryKey.PrimaryKeyFactory keyFactory,
+                    SequentialWriterOption sequentialWriterOption,
+                    CompressionParams compressionParams)
     {
-        this(null, descriptor, sequentialWriterOption, compressionParams);
+        this(null, descriptor, keyFactory, sequentialWriterOption, compressionParams);
     }
 
     @VisibleForTesting
-    IndexComponents(String indexName, Descriptor descriptor, SequentialWriterOption sequentialWriterOption, CompressionParams compressionParams)
+    IndexComponents(String indexName,
+                    Descriptor descriptor,
+                    PrimaryKey.PrimaryKeyFactory keyFactory,
+                    SequentialWriterOption sequentialWriterOption,
+                    CompressionParams compressionParams)
     {
         this.indexName = indexName;
         this.descriptor = descriptor;
         this.writerOption = sequentialWriterOption;
+        this.keyFactory = keyFactory;
 
         this.compressionParams = compressionParams;
 
@@ -266,12 +283,16 @@ public class IndexComponents
      */
     public static IndexComponents create(String indexName, SSTableReader ssTableReader)
     {
-        return create(indexName, ssTableReader.descriptor, CryptoUtils.getCompressionParams(ssTableReader));
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(ssTableReader.metadata());
+        return create(indexName, ssTableReader.descriptor, keyFactory, CryptoUtils.getCompressionParams(ssTableReader));
     }
 
-    public static IndexComponents create(String indexName, Descriptor descriptor, CompressionParams params)
+    public static IndexComponents create(String indexName,
+                                         Descriptor descriptor,
+                                         PrimaryKey.PrimaryKeyFactory keyFactory,
+                                         CompressionParams params)
     {
-        return new IndexComponents(indexName, descriptor, defaultWriterOption, params);
+        return new IndexComponents(indexName, descriptor, keyFactory, defaultWriterOption, params);
     }
 
     /**
@@ -285,14 +306,15 @@ public class IndexComponents
     /**
      * Used to access per-sstable shared components
      */
-    public static IndexComponents perSSTable(Descriptor descriptor, CompressionParams params)
+    public static IndexComponents perSSTable(Descriptor descriptor, PrimaryKey.PrimaryKeyFactory keyFactory, CompressionParams params)
     {
-        return new IndexComponents(descriptor, defaultWriterOption, params);
+        return new IndexComponents(descriptor, keyFactory, defaultWriterOption, params);
     }
 
     public static IndexComponents perSSTable(SSTableReader ssTableReader)
     {
-        return perSSTable(ssTableReader.descriptor, CryptoUtils.getCompressionParams(ssTableReader));
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(ssTableReader.metadata());
+        return perSSTable(ssTableReader.descriptor, keyFactory, CryptoUtils.getCompressionParams(ssTableReader));
     }
 
     /**
@@ -597,24 +619,24 @@ public class IndexComponents
     private void validatePerColumnComponents(boolean isLiteral, boolean checksum) throws IOException
     {
         //TODO Need to revisit component validation
-//        MetadataSource source = MetadataSource.loadColumnMetadata(this);
-//        //TODO Need a compressor
-//        SegmentMetadata segment = SegmentMetadata.load(source, null);
-//
-//        for (IndexComponent component : perColumnComponents(indexName, isLiteral))
-//        {
-//            if (!component.ndiType.completionMarker())
-//            {
-//                if (component.ndiType.perSegment())
-//                {
-//                    validateSegment(component, segment, true, checksum, false);
-//                }
-//                else
-//                {
-//                    validateComponent(component, checksum);
-//                }
-//            }
-//        }
+        MetadataSource source = MetadataSource.loadColumnMetadata(this);
+        //TODO Need a compressor
+        SegmentMetadata segment = SegmentMetadata.load(source, keyFactory, null);
+
+        for (IndexComponent component : perColumnComponents(indexName, isLiteral))
+        {
+            if (!component.ndiType.completionMarker())
+            {
+                if (component.ndiType.perSegment())
+                {
+                    validateSegment(component, segment, true, checksum, false);
+                }
+                else
+                {
+                    validateComponent(component, checksum);
+                }
+            }
+        }
     }
 
     @SuppressWarnings("resource")

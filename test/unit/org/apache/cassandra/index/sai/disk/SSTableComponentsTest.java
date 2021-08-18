@@ -59,9 +59,6 @@ import static org.junit.Assert.assertTrue;
 
 public class SSTableComponentsTest extends SAITester
 {
-    protected static final Injections.Counter FLUSH_COUNTER = Injections.newCounter("FlushCounter")
-                                                                        .add(newInvokePoint().onClass(SSTableComponentsWriter.class).onMethod("flush"))
-                                                                        .build();
 
     private Descriptor descriptor;
 
@@ -77,45 +74,6 @@ public class SSTableComponentsTest extends SAITester
     {
         setMemtableTrieAllocatedSizeThreshold(1);
 
-        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, null);
-        writer.complete();
-
-        TableMetadata tableMetadata = TableMetadata.builder("test", "test")
-                                                   .partitioner(Murmur3Partitioner.instance)
-                                                   .addPartitionKeyColumn("pk", Int32Type.instance)
-                                                   .addClusteringColumn("a", UTF8Type.instance)
-                                                   .addClusteringColumn("b", UTF8Type.instance)
-                                                   .build();
-
-        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, null);
-
-        PrimaryKeyMap primaryKeyMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, tableMetadata);
-
-        assertEquals(0, primaryKeyMap.size());
-
-        primaryKeyMap.close();
-    }
-
-    @Test
-    public void testSegmented() throws Throwable
-    {
-        testWithMemtableSizeThreshold(1);
-        assertTrue(FLUSH_COUNTER.get() >= 1);
-    }
-
-    @Test
-    public void testUnsegmented() throws Throwable
-    {
-        testWithMemtableSizeThreshold(2047);
-        assertEquals(1, FLUSH_COUNTER.get());
-    }
-
-    private void testWithMemtableSizeThreshold(int sizeThresholdMB) throws Throwable
-    {
-        setMemtableTrieAllocatedSizeThreshold(sizeThresholdMB);
-        Injections.inject(FLUSH_COUNTER);
-        FLUSH_COUNTER.reset();
-        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, null);
 
         TableMetadata tableMetadata = TableMetadata.builder("test", "test")
                                                    .partitioner(Murmur3Partitioner.instance)
@@ -125,6 +83,30 @@ public class SSTableComponentsTest extends SAITester
                                                    .build();
 
         PrimaryKey.PrimaryKeyFactory factory = PrimaryKey.factory(tableMetadata);
+        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, factory, null);
+        writer.complete();
+
+        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, factory, null);
+
+        PrimaryKeyMap primaryKeyMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, tableMetadata);
+
+        assertEquals(0, primaryKeyMap.size());
+
+        primaryKeyMap.close();
+    }
+
+    @Test
+    public void testNonEmptyKeys() throws Throwable
+    {
+        TableMetadata tableMetadata = TableMetadata.builder("test", "test")
+                .partitioner(Murmur3Partitioner.instance)
+                .addPartitionKeyColumn("pk", Int32Type.instance)
+                .addClusteringColumn("a", UTF8Type.instance)
+                .addClusteringColumn("b", UTF8Type.instance)
+                .build();
+
+        PrimaryKey.PrimaryKeyFactory factory = PrimaryKey.factory(tableMetadata);
+        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, factory, null);
 
         int numRows = CQLTester.getRandom().nextIntBetween(2000, 10000);
         int width = CQLTester.getRandom().nextIntBetween(3, 8);
@@ -147,7 +129,7 @@ public class SSTableComponentsTest extends SAITester
 
         writer.complete();
 
-        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, null);
+        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, factory, null);
 
         PrimaryKeyMap primaryKeyMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, tableMetadata);
 
