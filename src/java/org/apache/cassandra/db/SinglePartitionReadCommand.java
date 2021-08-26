@@ -17,13 +17,17 @@
  */
 package org.apache.cassandra.db;
 
+import java.awt.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
+
+import org.apache.commons.httpclient.methods.multipart.Part;
 
 import org.apache.cassandra.cache.IRowCacheEntry;
 import org.apache.cassandra.cache.RowCacheKey;
@@ -827,7 +831,7 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         Tracing.trace("Acquiring sstable references");
         ColumnFamilyStore.ViewFragment view = cfs.select(View.select(SSTableSet.LIVE, partitionKey()));
 
-        ImmutableBTreePartition result = null;
+        Partition result = null;
 
         Tracing.trace("Merging memtable contents");
         for (Memtable memtable : view.memtables)
@@ -924,18 +928,18 @@ public class SinglePartitionReadCommand extends ReadCommand implements SinglePar
         return result.unfilteredIterator(columnFilter(), Slices.ALL, clusteringIndexFilter().isReversed());
     }
 
-    private ImmutableBTreePartition add(UnfilteredRowIterator iter, ImmutableBTreePartition result, ClusteringIndexNamesFilter filter, boolean isRepaired)
+    private Partition add(UnfilteredRowIterator iter, Partition result, ClusteringIndexNamesFilter filter, boolean isRepaired)
     {
         if (!isRepaired)
             oldestUnrepairedTombstone = Math.min(oldestUnrepairedTombstone, iter.stats().minLocalDeletionTime);
 
         int maxRows = Math.max(filter.requestedRows().size(), 1);
         if (result == null)
-            return ImmutableBTreePartition.create(iter, maxRows);
+            return ImmutableArrayBackedPartition.create(iter, maxRows);
 
         try (UnfilteredRowIterator merged = UnfilteredRowIterators.merge(Arrays.asList(iter, result.unfilteredIterator(columnFilter(), Slices.ALL, filter.isReversed()))))
         {
-            return ImmutableBTreePartition.create(merged, maxRows);
+            return ImmutableArrayBackedPartition.create(merged, maxRows);
         }
     }
 
