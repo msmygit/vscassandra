@@ -1414,20 +1414,24 @@ enable_sasi_indexes: false
 # Transient replication is experimental and is not recommended for production use.
 enable_transient_replication: false
 
-  # Emulates DataStax Constellation database-as-a-service defaults.
-  #
-  # When enabled, some defaults are modified to match those used by DataStax Constellation (DataStax cloud data
-  # platform). This includes (but is not limited to) stricter guardrails defaults.
-  #
-  # This can be used as an convenience to develop and test applications meant to run on DataStax Constellation.
-  #
-  # Warning: when enabled, the updated defaults reflect those of DataStax Constellation _at the time_ of the currently
-  #                 used DSE release. This is a best-effort emulation of said defaults. Further, all nodes must use the same
-  #                 config value.
-  # emulate_dbaas_defaults: false
+# Enables the used of 'ALTER ... DROP COMPACT STORAGE' statements on this node.
+# 'ALTER ... DROP COMPACT STORAGE' is considered experimental and is not recommended for production use.
+enable_drop_compact_storage: false
 
-  # Guardrails settings.
-  # guardrails:
+# Emulates DataStax Constellation database-as-a-service defaults.
+#
+# When enabled, some defaults are modified to match those used by DataStax Constellation (DataStax cloud data
+# platform). This includes (but is not limited to) stricter guardrails defaults.
+#
+# This can be used as an convenience to develop and test applications meant to run on DataStax Constellation.
+#
+# Warning: when enabled, the updated defaults reflect those of DataStax Constellation _at the time_ of the currently
+#                 used DSE release. This is a best-effort emulation of said defaults. Further, all nodes must use the same
+#                 config value.
+# emulate_dbaas_defaults: false
+
+# Guardrails settings.
+# guardrails:
   # When executing a scan, within or across a partition, we need to keep the
   # tombstones seen in memory so we can return them to the coordinator, which
   # will use them to make sure other replicas also know about the deleted rows.

@@ -2100,3 +2100,11 @@ Enables creation of transiently replicated keyspaces on this node.
 Transient replication is experimental and is not recommended for production use.
 
 *Default Value:* false
+
+``enable_drop_compact_storage``
+--------------------------------
+
+Enables the used of 'ALTER ... DROP COMPACT STORAGE' statements on this node.
+'ALTER ... DROP COMPACT STORAGE' is considered experimental and is not recommended for production use.
+
+*Default Value:* false

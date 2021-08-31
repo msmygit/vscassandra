@@ -801,4 +801,14 @@ public class AlterTest extends CQLTester
         assertInvalidMessage(table2, format("ALTER TYPE %s.%s ADD v2 int;", keyspace(), type1));
         assertInvalidMessage(table3, format("ALTER TYPE %s.%s ADD v2 int;", keyspace(), type1));
     }
+
+    @Test
+    public void testAlterDropCompactStorageDisabled() throws Throwable
+    {
+        DatabaseDescriptor.setEnableDropCompactStorage(false);
+
+        createTable("CREATE TABLE %s (k text, i int, PRIMARY KEY (k, i)) WITH COMPACT STORAGE");
+
+        assertInvalidMessage("DROP COMPACT STORAGE is disabled. Enable in cassandra.yaml to use.", "ALTER TABLE %s DROP COMPACT STORAGE");
+    }
 }

@@ -19,10 +19,12 @@
 package org.apache.cassandra.db.compaction;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.HashSet;
@@ -42,6 +44,9 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.CompactionParams;
 
 import static com.google.common.collect.Iterables.filter;
+import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.TOMBSTONE_COMPACTION_INTERVAL_OPTION;
+import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.TOMBSTONE_THRESHOLD_OPTION;
+import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.UNCHECKED_TOMBSTONE_COMPACTION_OPTION;
 
 public class TimeWindowCompactionStrategy extends LegacyAbstractCompactionStrategy.WithAggregates
 {
@@ -56,13 +61,16 @@ public class TimeWindowCompactionStrategy extends LegacyAbstractCompactionStrate
     {
         super(factory, options);
         this.twcsOptions = new TimeWindowCompactionStrategyOptions(options);
-        if (!options.containsKey(CompactionStrategyOptions.TOMBSTONE_COMPACTION_INTERVAL_OPTION) && !options.containsKey(CompactionStrategyOptions.TOMBSTONE_THRESHOLD_OPTION))
+        String[] tsOpts = { UNCHECKED_TOMBSTONE_COMPACTION_OPTION, TOMBSTONE_COMPACTION_INTERVAL_OPTION, TOMBSTONE_THRESHOLD_OPTION };
+        if (Arrays.stream(tsOpts).map(options::get).filter(Objects::nonNull).anyMatch(v -> !v.equals("false")))
         {
-            super.options.setDisableTombstoneCompactions(true);
-            logger.debug("Disabling tombstone compactions for TWCS");
+            logger.debug("Enabling tombstone compactions for TWCS");
         }
         else
-            logger.debug("Enabling tombstone compactions for TWCS");
+        {
+            logger.debug("Disabling tombstone compactions for TWCS");
+            super.options.setDisableTombstoneCompactions(true);
+        }
     }
 
     @Override

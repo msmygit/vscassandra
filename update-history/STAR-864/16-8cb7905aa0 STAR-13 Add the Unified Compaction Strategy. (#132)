@@ -1,0 +1,316 @@
+--- a/src/java/org/apache/cassandra/db/SinglePartitionReadCommand.java
++++ b/src/java/org/apache/cassandra/db/SinglePartitionReadCommand.java
+@@ -595,18 +595,13 @@
+          *      Also, if tracking repaired data then we skip this optimization so we can collate the repaired sstables
+          *      and generate a digest over their merge, which procludes an early return.
+          */
+-<<<<<<<
+         if (clusteringIndexFilter() instanceof ClusteringIndexNamesFilter
+                 && !metadata().isCounter()
+                 && !queriesMulticellType()
+                 && !isTrackingRepairedStatus())
+         {
+-            return queryMemtableAndSSTablesInTimestampOrder(cfs, (ClusteringIndexNamesFilter)clusteringIndexFilter());
+-        }
+-=======
+-        if (clusteringIndexFilter() instanceof ClusteringIndexNamesFilter && !queriesMulticellType() && !isTrackingRepairedStatus())
+             return queryMemtableAndSSTablesInTimestampOrder(cfs, (ClusteringIndexNamesFilter)clusteringIndexFilter(), startTimeNanos);
+->>>>>>>
++        }
+ 
+         Tracing.trace("Acquiring sstable references");
+         ColumnFamilyStore.ViewFragment view = cfs.select(View.select(SSTableSet.LIVE, partitionKey()));
+--- a/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java
++++ b/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java
+@@ -44,6 +44,9 @@
+ import org.apache.cassandra.schema.CompactionParams;
+ 
+ import static com.google.common.collect.Iterables.filter;
++import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.TOMBSTONE_COMPACTION_INTERVAL_OPTION;
++import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.TOMBSTONE_THRESHOLD_OPTION;
++import static org.apache.cassandra.db.compaction.CompactionStrategyOptions.UNCHECKED_TOMBSTONE_COMPACTION_OPTION;
+ 
+ public class TimeWindowCompactionStrategy extends LegacyAbstractCompactionStrategy.WithAggregates
+ {
+@@ -56,26 +59,17 @@
+ 
+     public TimeWindowCompactionStrategy(CompactionStrategyFactory factory, Map<String, String> options)
+     {
+-<<<<<<<
+-        super(cfs, options);
+-        this.options = new TimeWindowCompactionStrategyOptions(options);
+-        String[] tsOpts = { UNCHECKED_TOMBSTONE_COMPACTION_OPTION, TOMBSTONE_COMPACTION_INTERVAL_OPTION, TOMBSTONE_THRESHOLD_OPTION };
+-        if (Arrays.stream(tsOpts).map(o -> options.get(o)).filter(Objects::nonNull).anyMatch(v -> !v.equals("false")))
+-        {
+-            logger.debug("Enabling tombstone compactions for TWCS");
+-=======
+         super(factory, options);
+         this.twcsOptions = new TimeWindowCompactionStrategyOptions(options);
+-        if (!options.containsKey(CompactionStrategyOptions.TOMBSTONE_COMPACTION_INTERVAL_OPTION) && !options.containsKey(CompactionStrategyOptions.TOMBSTONE_THRESHOLD_OPTION))
++        String[] tsOpts = { UNCHECKED_TOMBSTONE_COMPACTION_OPTION, TOMBSTONE_COMPACTION_INTERVAL_OPTION, TOMBSTONE_THRESHOLD_OPTION };
++        if (Arrays.stream(tsOpts).map(options::get).filter(Objects::nonNull).anyMatch(v -> !v.equals("false")))
+         {
+-            super.options.setDisableTombstoneCompactions(true);
+-            logger.debug("Disabling tombstone compactions for TWCS");
+->>>>>>>
++            logger.debug("Enabling tombstone compactions for TWCS");
+         }
+         else
+         {
+             logger.debug("Disabling tombstone compactions for TWCS");
+-            disableTombstoneCompactions = true;
++            super.options.setDisableTombstoneCompactions(true);
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -451,26 +451,18 @@
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+         assertEquals(1, sstable.getKeyCacheRequest());
+         assertEquals(0, sstable.getKeyCacheHit());
+-<<<<<<<
+         // existing, cached key
+-=======
+-        assertEquals(1, store.getBloomFilterTruePositiveCount());
+->>>>>>>
++        assertEquals(1, store.getBloomFilterTracker().getTruePositiveCount());
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+         assertEquals(2, sstable.getKeyCacheRequest());
+         assertEquals(1, sstable.getKeyCacheHit());
+-<<<<<<<
+         // non-existing key (it is specifically chosen to not be rejected by Bloom Filter check)
+         sstable.getPosition(k(14), SSTableReader.Operator.EQ);
+         assertEquals(3, sstable.getKeyCacheRequest());
+-        assertEquals(1, sstable.getKeyCacheHit());
+-    }
+-=======
+-        assertEquals(2, store.getBloomFilterTruePositiveCount());
++        assertEquals(2, store.getBloomFilterTracker().getTruePositiveCount());
+         sstable.getPosition(k(15), SSTableReader.Operator.EQ);
+         assertEquals(1, sstable.getKeyCacheHit());
+-        assertEquals(2, store.getBloomFilterTruePositiveCount());
+->>>>>>>
++    }
+ 
+     @Test
+     public void testGetPositionsBloomFilterStats()
+@@ -497,34 +489,34 @@
+         // the keys are specifically chosen to cover certain use cases
+         // existing key is read from index
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+-        assertEquals(1, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(0, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // existing key is read from Cache Key
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(0, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by Bloom Filter check
+         sstable.getPosition(k(10), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by sstable keys range check
+         sstable.getPosition(k(99), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(1, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by index interval check
+         sstable.getPosition(k(14), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(2, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, store.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by index lookup check
+         sstable.getPosition(k(807), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(3, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(3, sstable.getBloomFilterTracker().getFalsePositiveCount());
+     }
+ 
+     @Test
+diff --git a/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java b/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java
+index a8707449ed..11d4af8081 100644
+--- a/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java
++++ b/src/java/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategy.java
+@@ -59,7 +59,7 @@ public class TimeWindowCompactionStrategy extends LegacyAbstractCompactionStrate
+ 
+     public TimeWindowCompactionStrategy(CompactionStrategyFactory factory, Map<String, String> options)
+     {
+-        super(cfs, options);
++        super(factory, options);
+         this.twcsOptions = new TimeWindowCompactionStrategyOptions(options);
+         String[] tsOpts = { UNCHECKED_TOMBSTONE_COMPACTION_OPTION, TOMBSTONE_COMPACTION_INTERVAL_OPTION, TOMBSTONE_THRESHOLD_OPTION };
+         if (Arrays.stream(tsOpts).map(options::get).filter(Objects::nonNull).anyMatch(v -> !v.equals("false")))
+diff --git a/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java b/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java
+index 04f93eb20a..6c04abb827 100644
+--- a/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java
++++ b/src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java
+@@ -681,7 +681,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
+         this.bloomFilterTracker = bloomFilterTracker;
+     }
+ 
+-    protected BloomFilterTracker getBloomFilterTracker()
++    public BloomFilterTracker getBloomFilterTracker()
+     {
+         return this.bloomFilterTracker;
+     }
+diff --git a/src/java/org/apache/cassandra/io/sstable/format/big/BigTableReader.java b/src/java/org/apache/cassandra/io/sstable/format/big/BigTableReader.java
+index 072c0f8ba7..a6edafeb49 100644
+--- a/src/java/org/apache/cassandra/io/sstable/format/big/BigTableReader.java
++++ b/src/java/org/apache/cassandra/io/sstable/format/big/BigTableReader.java
+@@ -277,7 +277,7 @@ public class BigTableReader extends SSTableReader
+                     if (v < 0)
+                     {
+                         if (op == SSTableReader.Operator.EQ && updateCacheAndStats)
+-                            bloomFilterTracker.addFalsePositive();
++                            getBloomFilterTracker().addFalsePositive();
+                         listener.onSSTableSkipped(this, SkippingReason.PARTITION_INDEX_LOOKUP);
+                         Tracing.trace("Partition index lookup allows skipping sstable {}", descriptor.generation);
+                         return null;
+diff --git a/src/java/org/apache/cassandra/metrics/TableMetrics.java b/src/java/org/apache/cassandra/metrics/TableMetrics.java
+index 764ff59dac..a10f68efe4 100644
+--- a/src/java/org/apache/cassandra/metrics/TableMetrics.java
++++ b/src/java/org/apache/cassandra/metrics/TableMetrics.java
+@@ -158,7 +158,7 @@ public class TableMetrics
+     /** Number of false positives in bloom filter */
+     public final Gauge<Long> bloomFilterFalsePositives;
+     /** Number of false positives in bloom filter from last read */
+-    public final Gauge<Double> recentBloomFilterFalsePositives;
++    public final Gauge<Long> recentBloomFilterFalsePositives;
+     /** False positive ratio of bloom filter */
+     public final Gauge<Double> bloomFilterFalseRatio;
+     /** False positive ratio of bloom filter from last read */
+@@ -715,11 +715,11 @@ public class TableMetrics
+                 return cfs.getBloomFilterFalsePositiveCount();
+             }
+         });
+-        recentBloomFilterFalsePositives = createTableGauge("RecentBloomFilterFalsePositives", new Gauge<Double>()
++        recentBloomFilterFalsePositives = createTableGauge("RecentBloomFilterFalsePositives", new Gauge<Long>()
+         {
+-            public Double getValue()
++            public Long getValue()
+             {
+-                return cfs.getRecentBloomFilterFalsePositiveRate();
++                return (long) cfs.getRecentBloomFilterFalsePositiveRate();
+             }
+         });
+         bloomFilterFalseRatio = createTableGauge("BloomFilterFalseRatio", new Gauge<Double>()
+diff --git a/test/unit/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategyTest.java b/test/unit/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategyTest.java
+index 052eadf595..5d061ce280 100644
+--- a/test/unit/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategyTest.java
++++ b/test/unit/org/apache/cassandra/db/compaction/TimeWindowCompactionStrategyTest.java
+@@ -129,14 +129,14 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
+             options.put(TimeWindowCompactionStrategyOptions.UNSAFE_AGGRESSIVE_SSTABLE_EXPIRATION_KEY, "true");
+         }
+         
+-        options.put(AbstractCompactionStrategy.UNCHECKED_TOMBSTONE_COMPACTION_OPTION, "true");
++        options.put(CompactionStrategyOptions.UNCHECKED_TOMBSTONE_COMPACTION_OPTION, "true");
+         Keyspace keyspace = Keyspace.open(KEYSPACE1);
+         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARD1);
+-        TimeWindowCompactionStrategy twcs = new TimeWindowCompactionStrategy(cfs, options);
+-        assertFalse(twcs.disableTombstoneCompactions);
+-        options.put(AbstractCompactionStrategy.UNCHECKED_TOMBSTONE_COMPACTION_OPTION, "false");
+-        twcs = new TimeWindowCompactionStrategy(cfs, options);
+-        assertTrue(twcs.disableTombstoneCompactions);
++        TimeWindowCompactionStrategy twcs = new TimeWindowCompactionStrategy(new CompactionStrategyFactory(cfs), options);
++        assertFalse(twcs.options.isDisableTombstoneCompactions());
++        options.put(CompactionStrategyOptions.UNCHECKED_TOMBSTONE_COMPACTION_OPTION, "false");
++        twcs = new TimeWindowCompactionStrategy(new CompactionStrategyFactory(cfs), options);
++        assertTrue(twcs.options.isDisableTombstoneCompactions());
+ 
+         options.put("bad_option", "1.0");
+         unvalidated = validateOptions(options);
+diff --git a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+index 77835535a1..fb21481867 100644
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -452,14 +452,14 @@ public class SSTableReaderTest
+         assertEquals(1, sstable.getKeyCacheRequest());
+         assertEquals(0, sstable.getKeyCacheHit());
+         // existing, cached key
+-        assertEquals(1, store.getBloomFilterTruePositiveCount());
++        assertEquals(1, store.getBloomFilterTracker().getTruePositiveCount());
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+         assertEquals(2, sstable.getKeyCacheRequest());
+         assertEquals(1, sstable.getKeyCacheHit());
+         // non-existing key (it is specifically chosen to not be rejected by Bloom Filter check)
+         sstable.getPosition(k(14), SSTableReader.Operator.EQ);
+         assertEquals(3, sstable.getKeyCacheRequest());
+-        assertEquals(2, store.getBloomFilterTruePositiveCount());
++        assertEquals(2, store.getBloomFilterTracker().getTruePositiveCount());
+         sstable.getPosition(k(15), SSTableReader.Operator.EQ);
+         assertEquals(1, sstable.getKeyCacheHit());
+     }
+@@ -489,34 +489,34 @@ public class SSTableReaderTest
+         // the keys are specifically chosen to cover certain use cases
+         // existing key is read from index
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+-        assertEquals(1, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(0, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // existing key is read from Cache Key
+         sstable.getPosition(k(2), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(0, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by Bloom Filter check
+         sstable.getPosition(k(10), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(0, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(0, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by sstable keys range check
+         sstable.getPosition(k(99), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(1, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by index interval check
+         sstable.getPosition(k(14), SSTableReader.Operator.EQ);
+-        assertEquals(2, store.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(2, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, store.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getFalsePositiveCount());
+         // non-existing key is rejected by index lookup check
+         sstable.getPosition(k(807), SSTableReader.Operator.EQ);
+-        assertEquals(2, sstable.getBloomFilterTruePositiveCount());
+-        assertEquals(1, sstable.getBloomFilterTrueNegativeCount());
+-        assertEquals(3, sstable.getBloomFilterFalsePositiveCount());
++        assertEquals(2, sstable.getBloomFilterTracker().getTruePositiveCount());
++        assertEquals(1, sstable.getBloomFilterTracker().getTrueNegativeCount());
++        assertEquals(3, sstable.getBloomFilterTracker().getFalsePositiveCount());
+     }
+ 
+     @Test

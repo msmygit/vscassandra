@@ -163,7 +163,7 @@ public class ScrubTest
     }
 
     @Test
-    public void testScrubOneRow() throws ExecutionException, InterruptedException
+    public void testScrubOnePartition() throws ExecutionException, InterruptedException
     {
         CompactionManager.instance.disableAutoCompaction();
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
@@ -179,7 +179,7 @@ public class ScrubTest
     }
 
     @Test
-    public void testScrubCorruptedCounterRow() throws IOException, WriteTimeoutException
+    public void testScrubCorruptedCounterPartition() throws IOException, WriteTimeoutException
     {
         // When compression is enabled, for testing corrupted chunks we need enough partitions to cover
         // at least 3 chunks of size COMPRESSION_CHUNK_LENGTH
@@ -224,21 +224,21 @@ public class ScrubTest
         assertNotNull(scrubResult);
 
         boolean compression = Boolean.parseBoolean(System.getProperty("cassandra.test.compression", "false"));
-        assertEquals(0, scrubResult.emptyRows);
+        assertEquals(0, scrubResult.emptyPartitions);
         if (compression)
         {
-            assertEquals(numPartitions, scrubResult.badRows + scrubResult.goodRows);
+            assertEquals(numPartitions, scrubResult.badPartitions + scrubResult.goodPartitions);
             //because we only corrupted 1 chunk and we chose enough partitions to cover at least 3 chunks
-            assertTrue(scrubResult.goodRows >= scrubResult.badRows * 2);
+            assertTrue(scrubResult.goodPartitions >= scrubResult.badPartitions * 2);
         }
         else
         {
-            assertEquals(1, scrubResult.badRows);
-            assertEquals(numPartitions - 1, scrubResult.goodRows);
+            assertEquals(1, scrubResult.badPartitions);
+            assertEquals(numPartitions - 1, scrubResult.goodPartitions);
         }
         assertEquals(1, cfs.getLiveSSTables().size());
 
-        assertOrderedAll(cfs, scrubResult.goodRows);
+        assertOrderedAll(cfs, scrubResult.goodPartitions);
     }
 
     private String primaryIndexPath(SSTableReader reader)
@@ -385,7 +385,7 @@ public class ScrubTest
         try
         {
             SSTableRewriter.disableEarlyOpeningForTests = true;
-            testScrubCorruptedCounterRow();
+            testScrubCorruptedCounterPartition();
         }
         finally
         {
@@ -870,7 +870,7 @@ public class ScrubTest
     }
 
     @Test
-    public void testScrubOneRowWithTool()
+    public void testScrubOnePartitionWithTool()
     {
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
 
@@ -880,7 +880,7 @@ public class ScrubTest
 
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, ksName, CF);
         Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 rows in new sstable and 0 empty");
+        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
         tool.assertOnCleanExit();
 
         // check data is still there
@@ -888,7 +888,7 @@ public class ScrubTest
     }
 
     @Test
-    public void testSkipScrubCorruptedCounterRowWithTool() throws IOException, WriteTimeoutException
+    public void testSkipScrubCorruptedCounterPartitionWithTool() throws IOException, WriteTimeoutException
     {
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(COUNTER_CF);
         int numPartitions = 1000;
@@ -903,14 +903,14 @@ public class ScrubTest
         // with skipCorrupted == true, the corrupt rows will be skipped
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-s", ksName, COUNTER_CF);
         Assertions.assertThat(tool.getStdout()).contains("0 empty");
-        Assertions.assertThat(tool.getStdout()).contains("rows that were skipped");
+        Assertions.assertThat(tool.getStdout()).contains("partitions that were skipped");
         tool.assertOnCleanExit();
 
         assertEquals(1, cfs.getLiveSSTables().size());
     }
 
     @Test
-    public void testNoSkipScrubCorruptedCounterRowWithTool() throws IOException, WriteTimeoutException
+    public void testNoSkipScrubCorruptedCounterPartitionWithTool() throws IOException, WriteTimeoutException
     {
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(COUNTER_CF);
         int numPartitions = 1000;
@@ -937,7 +937,7 @@ public class ScrubTest
     }
 
     @Test
-    public void testNoCheckScrubMultiRowWithTool()
+    public void testNoCheckScrubMultiPartitionWithTool()
     {
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
 
@@ -947,7 +947,7 @@ public class ScrubTest
 
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-n", ksName, CF);
         Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("10 rows in new sstable and 0 empty");
+        Assertions.assertThat(tool.getStdout()).contains("10 partitions in new sstable and 0 empty");
         tool.assertOnCleanExit();
 
         // check data is still there
@@ -978,7 +978,7 @@ public class ScrubTest
 
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "validate", ksName, CF);
         Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 rows in new sstable and 0 empty");
+        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
         tool.assertOnCleanExit();
         assertOrderedAll(cfs, 1);
     }
@@ -1007,7 +1007,7 @@ public class ScrubTest
 
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "fix", ksName, CF);
         Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 rows in new sstable and 0 empty");
+        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
         tool.assertOnCleanExit();
         assertOrderedAll(cfs, 1);
     }
@@ -1022,7 +1022,7 @@ public class ScrubTest
 
         ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "off", ksName, CF);
         Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 rows in new sstable and 0 empty");
+        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
         tool.assertOnCleanExit();
         assertOrderedAll(cfs, 1);
     }

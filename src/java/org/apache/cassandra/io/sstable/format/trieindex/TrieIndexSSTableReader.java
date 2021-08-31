@@ -306,11 +306,6 @@ public class TrieIndexSSTableReader extends SSTableReader
         }
     }
 
-    protected boolean inBloomFilter(DecoratedKey dk)
-    {
-        return first.compareTo(dk) <= 0 && last.compareTo(dk) >= 0 && bf.isPresent(dk);
-    }
-
     @Override
     public DecoratedKey keyAt(RandomAccessReader reader, long dataPosition) throws IOException
     {
@@ -331,7 +326,7 @@ public class TrieIndexSSTableReader extends SSTableReader
                                           SSTableReadsListener listener,
                                           boolean updateStats)
     {
-        if (!inBloomFilter(dk))
+        if (!bf.isPresent(dk))
         {
             listener.onSSTableSkipped(this, SkippingReason.BLOOM_FILTER);
             Tracing.trace("Bloom filter allows skipping sstable {}", descriptor.generation);

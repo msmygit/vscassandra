@@ -158,7 +158,7 @@ public class TableMetrics
     /** Number of false positives in bloom filter */
     public final Gauge<Long> bloomFilterFalsePositives;
     /** Number of false positives in bloom filter from last read */
-    public final Gauge<Double> recentBloomFilterFalsePositives;
+    public final Gauge<Long> recentBloomFilterFalsePositives;
     /** False positive ratio of bloom filter */
     public final Gauge<Double> bloomFilterFalseRatio;
     /** False positive ratio of bloom filter from last read */
@@ -715,11 +715,11 @@ public class TableMetrics
                 return cfs.getBloomFilterFalsePositiveCount();
             }
         });
-        recentBloomFilterFalsePositives = createTableGauge("RecentBloomFilterFalsePositives", new Gauge<Double>()
+        recentBloomFilterFalsePositives = createTableGauge("RecentBloomFilterFalsePositives", new Gauge<Long>()
         {
-            public Double getValue()
+            public Long getValue()
             {
-                return cfs.getRecentBloomFilterFalsePositiveRate();
+                return (long) cfs.getRecentBloomFilterFalsePositiveRate();
             }
         });
         bloomFilterFalseRatio = createTableGauge("BloomFilterFalseRatio", new Gauge<Double>()

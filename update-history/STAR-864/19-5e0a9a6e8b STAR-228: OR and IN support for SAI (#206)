@@ -1,0 +1,35 @@
+--- a/src/java/org/apache/cassandra/cql3/WhereClause.java
++++ b/src/java/org/apache/cassandra/cql3/WhereClause.java
+@@ -115,14 +115,13 @@
+     }
+ 
+     /**
+-<<<<<<<
+      * Checks if the where clause contains some token relations.
+      *
+      * @return {@code true} if it is the case, {@code false} otherwise.
+      */
+     public boolean containsTokenRelations()
+     {
+-        for (Relation rel : relations)
++        for (Relation rel : rootElement.relations())
+         {
+             if (rel.onToken())
+                 return true;
+@@ -130,7 +129,7 @@
+         return false;
+     }
+ 
+-=======
++    /**
+      * This receives fragments from the parse operation and builds them into the final <code>WhereClause</code>.
+      *
+      * The received fragments are:
+@@ -148,7 +147,6 @@
+      *     precedence stack and the current <code>ParseState</code></li>
+      * </ul>
+      */
+->>>>>>>
+     public static final class Builder
+     {
+         private final Deque<ParseState> precedenceStack = new ArrayDeque<>();

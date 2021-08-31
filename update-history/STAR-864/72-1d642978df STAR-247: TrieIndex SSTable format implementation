@@ -1,0 +1,254 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -109,13 +109,8 @@
+         this.isIndex = cfs.isIndex();
+         if (!hasIndexFile)
+         {
+-<<<<<<<
+             // if there's any corruption in the -Data.db then partitions can't be skipped over. but it's worth a shot.
+-            outputHandler.warn("Missing component: " + sstable.descriptor.filenameFor(Component.PRIMARY_INDEX));
+-=======
+-            // if there's any corruption in the -Data.db then rows can't be skipped over. but it's worth a shot.
+             outputHandler.warn("Missing index component");
+->>>>>>>
+         }
+         this.checkData = checkData && !this.isIndex; //LocalByPartitionerType does not support validation
+         this.expectedBloomFilterSize = Math.max(
+@@ -193,14 +188,9 @@
+                 if (scrubInfo.isStopRequested())
+                     throw new CompactionInterruptedException(scrubInfo.getCompactionInfo());
+ 
+-<<<<<<<
+                 // position in a data file where the partition starts
+                 long dataStart = dataFile.getFilePointer();
+                 outputHandler.debug("Reading row at " + dataStart);
+-=======
+-                long partitionStart = dataFile.getFilePointer();
+-                outputHandler.debug("Reading row at " + partitionStart);
+->>>>>>>
+ 
+                 DecoratedKey key = null;
+                 try
+@@ -246,15 +236,8 @@
+                     }
+                 }
+ 
+-<<<<<<<
+-                // avoid an NPE if key is null
+-                String keyName = key == null ? "(unreadable key)" : ByteBufferUtil.bytesToHex(key.getKey());
+-                outputHandler.debug(String.format("row %s is %s", keyName, FBUtilities.prettyPrintMemory(dataSizeFromIndex)));
+-=======
+                 String keyName = key == null ? "(unreadable key)" : keyString(key);
+                 outputHandler.debug(String.format("partition %s is %s", keyName, FBUtilities.prettyPrintMemory(dataSizeFromIndex)));
+-                assert currentIndexKey != null || !indexAvailable();
+->>>>>>>
+ 
+                 try
+                 {
+@@ -285,16 +268,11 @@
+                     if (currentIndexKey != null
+                         && (key == null || !key.getKey().equals(currentIndexKey) || dataStart != dataStartFromIndex))
+                     {
+-<<<<<<<
+ 
+-                        outputHandler.output(String.format("Retrying from partition index; data is %s bytes starting at %s",
+-                                                           dataSizeFromIndex, dataStartFromIndex));
+-=======
+-                        // position where the row should start in a data file (right after the partition key)
++// position where the row should start in a data file (right after the partition key)
+                         long rowStartFromIndex = dataStartFromIndex + TypeSizes.SHORT_SIZE + currentIndexKey.remaining();
+-                        outputHandler.output(String.format("Retrying from row index; data is %s bytes starting at %s",
+-                                                  dataSizeFromIndex, rowStartFromIndex));
+->>>>>>>
++                        outputHandler.output(String.format("Retrying from partition index; data is %s bytes starting at %s",
++                                                           dataSizeFromIndex, rowStartFromIndex));
+                         key = sstable.decorateKey(currentIndexKey);
+                         try
+                         {
+@@ -317,12 +295,11 @@
+                     {
+                         throwIfCannotContinue(key, th);
+ 
+-<<<<<<<
+-                        badRows++;
++                        badPartitions++;
+                         if (indexIterator != null)
+                         {
+-                            outputHandler.warn("Row starting at position " + dataStart + " is unreadable; skipping to next");
+-                            seekToNextRow();
++                            outputHandler.warn("Partition starting at position " + dataStart + " is unreadable; skipping to next");
++                            seekToNextPartition();
+                         }
+                         else
+                         {
+@@ -335,12 +312,6 @@
+                             // There's no way to resync and continue. Give up.
+                             break;
+                         }
+-=======
+-                        outputHandler.warn("Partition starting at position " + dataStart + " is unreadable; skipping to next");
+-                        badPartitions++;
+-                        if (currentIndexKey != null)
+-                            seekToNextPartition();
+->>>>>>>
+                     }
+                 }
+             }
+@@ -454,10 +425,6 @@
+             {
+                 throwIfFatal(th);
+                 outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+-<<<<<<<
+-=======
+-                badPartitions++;
+->>>>>>>
+             }
+ 
+             try
+--- a/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java
++++ b/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java
+@@ -259,7 +259,7 @@
+ 
+         CacheMetrics metrics = CacheService.instance.keyCache.getMetrics();
+ 
+-        long expectedRequests = 0;
++        int expectedRequests = 0;
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -272,13 +272,8 @@
+ 
+         long hits = metrics.hits.getCount();
+         long requests = metrics.requests.getCount();
+-<<<<<<<
+-        assertEquals(0, hits);
+-        assertEquals(expectedRequests, requests);
+-=======
+         assertEquals(cacheInteractionsIfSupported(0), hits);
+-        assertEquals(cacheInteractionsIfSupported(210), requests);
+->>>>>>>
++        assertEquals(cacheInteractionsIfSupported(expectedRequests), requests);
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -295,13 +290,8 @@
+         metrics = CacheService.instance.keyCache.getMetrics();
+         hits = metrics.hits.getCount();
+         requests = metrics.requests.getCount();
+-<<<<<<<
+-        assertEquals(200, hits);
+-        assertEquals(expectedRequests, requests);
+-=======
+         assertEquals(cacheInteractionsIfSupported(200), hits);
+-        assertEquals(cacheInteractionsIfSupported(420), requests);
+->>>>>>>
++        assertEquals(cacheInteractionsIfSupported(expectedRequests), requests);
+ 
+         CacheService.instance.keyCache.submitWrite(Integer.MAX_VALUE).get();
+ 
+@@ -362,7 +352,7 @@
+ 
+         CacheMetrics metrics = CacheService.instance.keyCache.getMetrics();
+ 
+-        long expectedNumberOfRequests = 0;
++        int expectedNumberOfRequests = 0;
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -376,15 +366,8 @@
+ 
+         long hits = metrics.hits.getCount();
+         long requests = metrics.requests.getCount();
+-<<<<<<<
+-        assertEquals(0, hits);
+-        assertEquals(expectedNumberOfRequests, requests);
+-=======
+         assertEquals(cacheInteractionsIfSupported(0), hits);
+-        assertEquals(cacheInteractionsIfSupported(210), requests);
+-
+-        //
+->>>>>>>
++        assertEquals(cacheInteractionsIfSupported(expectedNumberOfRequests), requests);
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -402,13 +385,8 @@
+         metrics = CacheService.instance.keyCache.getMetrics();
+         hits = metrics.hits.getCount();
+         requests = metrics.requests.getCount();
+-<<<<<<<
+-        assertEquals(200, hits);
+-        assertEquals(expectedNumberOfRequests, requests);
+-=======
+         assertEquals(cacheInteractionsIfSupported(200), hits);
+-        assertEquals(cacheInteractionsIfSupported(420), requests);
+->>>>>>>
++        assertEquals(cacheInteractionsIfSupported(expectedNumberOfRequests), requests);
+ 
+         dropTable("DROP TABLE %s");
+ 
+@@ -453,7 +431,7 @@
+         insertData(table, null, false);
+         clearCache();
+ 
+-        long expectedNumberOfRequests = 0;
++        int expectedNumberOfRequests = 0;
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -481,13 +459,8 @@
+ 
+         hits = metrics.hits.getCount();
+         requests = metrics.requests.getCount();
+-<<<<<<<
+-        assertEquals(10, hits);
+-        assertEquals(expectedNumberOfRequests, requests);
+-=======
+         assertEquals(cacheInteractionsIfSupported(10), hits);
+-        assertEquals(cacheInteractionsIfSupported(120), requests);
+->>>>>>>
++        assertEquals(cacheInteractionsIfSupported(expectedNumberOfRequests), requests);
+     }
+ 
+     @Test
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -455,8 +455,6 @@
+         assertEquals(1, sstable.getKeyCacheHit());
+     }
+ 
+-<<<<<<<
+-=======
+     @Test
+     public void testGetPositionsBloomFilterStats()
+     {
+@@ -512,7 +510,6 @@
+         assertEquals(3, sstable.getBloomFilterFalsePositiveCount());
+     }
+ 
+->>>>>>>
+     @Test
+     public void testOpeningSSTable() throws Exception
+     {
+diff --git a/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java b/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java
+index fd9f7e4d33..6a09891cd3 100644
+--- a/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java
++++ b/test/unit/org/apache/cassandra/cql3/KeyCacheCqlTest.java
+@@ -352,7 +352,7 @@ public class KeyCacheCqlTest extends CQLTester
+ 
+         CacheMetrics metrics = CacheService.instance.keyCache.getMetrics();
+ 
+-        long expectedNumberOfRequests = 0;
++        int expectedNumberOfRequests = 0;
+ 
+         for (int i = 0; i < 10; i++)
+         {
+@@ -431,7 +431,7 @@ public class KeyCacheCqlTest extends CQLTester
+         insertData(table, null, false);
+         clearCache();
+ 
+-        long expectedNumberOfRequests = 0;
++        int expectedNumberOfRequests = 0;
+ 
+         for (int i = 0; i < 10; i++)
+         {

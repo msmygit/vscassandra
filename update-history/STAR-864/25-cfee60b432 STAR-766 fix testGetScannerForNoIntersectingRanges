@@ -1,0 +1,14 @@
+--- a/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
++++ b/test/unit/org/apache/cassandra/io/sstable/SSTableReaderTest.java
+@@ -673,11 +673,7 @@
+     public void testGetScannerForNoIntersectingRanges() throws Exception
+     {
+         Keyspace keyspace = Keyspace.open(KEYSPACE1);
+-<<<<<<<
+-        ColumnFamilyStore store = keyspace.getColumnFamilyStore(CF_STANDARD);
+-=======
+         ColumnFamilyStore store = keyspace.getColumnFamilyStore(CF_STANDARD3);
+->>>>>>>
+         partitioner = store.getPartitioner();
+ 
+         new RowUpdateBuilder(store.metadata(), 0, "k1")

@@ -1021,6 +1021,15 @@ public class Util
 
         Gossiper.instance.addLocalApplicationState(ApplicationState.RELEASE_VERSION,
                                                    VersionedValue.unsafeMakeVersionedValue(version, v + 1));
+        try
+        {
+            // add dummy host to avoid returning early in Gossiper.instance.upgradeFromVersionSupplier
+            Gossiper.instance.initializeNodeUnsafe(InetAddressAndPort.getByName("127.0.0.2"), UUID.randomUUID(), 1);
+        }
+        catch (UnknownHostException e)
+        {
+            throw new RuntimeException(e);
+        }
         Gossiper.instance.expireUpgradeFromVersion();
     }
 

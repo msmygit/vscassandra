@@ -681,7 +681,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
         this.bloomFilterTracker = bloomFilterTracker;
     }
 
-    protected BloomFilterTracker getBloomFilterTracker()
+    public BloomFilterTracker getBloomFilterTracker()
     {
         return this.bloomFilterTracker;
     }

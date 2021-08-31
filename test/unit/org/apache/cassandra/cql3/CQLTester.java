@@ -29,7 +29,6 @@ import java.nio.ByteBuffer;
 import java.rmi.server.RMISocketFactory;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -73,35 +72,21 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.TokenMetadata;
 import org.apache.cassandra.metrics.ClientMetrics;
 import org.apache.cassandra.schema.*;
-import org.apache.cassandra.audit.AuditLogManager;
 import org.apache.cassandra.auth.CassandraAuthorizer;
 import org.apache.cassandra.auth.CassandraRoleManager;
 import org.apache.cassandra.auth.PasswordAuthenticator;
-import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.cql3.functions.FunctionName;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.marshal.*;
 import org.apache.cassandra.db.marshal.TupleType;
-import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
-import org.apache.cassandra.db.virtual.VirtualSchemaKeyspace;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.SyntaxException;
-import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.locator.AbstractEndpointSnitch;
-import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.locator.Replica;
-import org.apache.cassandra.locator.TokenMetadata;
-import org.apache.cassandra.metrics.ClientMetrics;
-import org.apache.cassandra.schema.*;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.security.ThreadAwareSecurityManager;
-import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.serializers.TypeSerializer;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
@@ -456,6 +441,12 @@ public abstract class CQLTester
         return allArgs;
     }
 
+    protected static void requireNetworkWithoutDriver()
+    {
+        startServices();
+        startServer(server -> {});
+    }
+
     protected static void requireAuthentication()
     {
         System.setProperty("cassandra.superuser_setup_delay_ms", "-1");
@@ -477,11 +468,16 @@ public abstract class CQLTester
         if (server != null)
             return;
 
+        startServices();
+        initializeNetwork(decorator, null);
+    }
+
+    private static void startServices()
+    {
         SystemKeyspace.finishStartup();
         VirtualKeyspaceRegistry.instance.register(VirtualSchemaKeyspace.instance);
         StorageService.instance.initServer();
         SchemaLoader.startGossiper();
-        initializeNetwork(decorator, null);
     }
 
     protected static void reinitializeNetwork()
@@ -509,6 +505,11 @@ public abstract class CQLTester
     }
 
     private static void initializeNetwork(Consumer<Server.Builder> decorator, Consumer<Cluster.Builder> clusterConfigurator)
+    {
+        startServer(decorator);
+    }
+
+    private static void startServer(Consumer<Server.Builder> decorator)
     {
         Server.Builder serverBuilder = new Server.Builder().withHost(nativeAddr).withPort(nativePort);
         decorator.accept(serverBuilder);
@@ -1186,11 +1187,18 @@ public abstract class CQLTester
 
     public static Cluster.Builder clusterBuilder()
     {
+        SocketOptions socketOptions = new SocketOptions()
+            .setConnectTimeoutMillis(Integer.getInteger("cassandra.test.driver.connection_timeout_ms", DEFAULT_CONNECT_TIMEOUT_MILLIS)) // default is 5000
+            .setReadTimeoutMillis(Integer.getInteger("cassandra.test.driver.read_timeout_ms", DEFAULT_READ_TIMEOUT_MILLIS)); // default is 12000
+
+        logger.info("Timeouts: {} / {}", socketOptions.getConnectTimeoutMillis(), socketOptions.getReadTimeoutMillis());
+
         return Cluster.builder()
                       .addContactPoints(nativeAddr)
                       .withPort(nativePort)
                       .withClusterName("Test Cluster")
-                      .withoutJMXReporting();
+                      .withoutJMXReporting()
+                      .withSocketOptions(socketOptions);
     }
 
     protected SimpleClient newSimpleClient(ProtocolVersion version) throws IOException
