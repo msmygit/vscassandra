@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 import com.google.common.collect.Range;
@@ -47,7 +46,6 @@ import org.apache.cassandra.io.tries.IncrementalTrieWriter;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.store.GrowableByteArrayDataOutput;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
@@ -167,6 +165,8 @@ public class BlockIndexWriter
         public final long multiBlockLeafRangesFP;
         public final long nodeIDToMultilevelPostingsFP_FP;
         public final long zstdDictionaryFP;
+        public final long leafValuesSameFP;
+        public final long leafValuesSamePostingsFP;
 //        public final IntLongHashMap nodeIDPostingsFP;
 //        public final RangeSet<Integer> multiBlockLeafOrdinalRanges;
 //        public final BitSet leafValuesSame;
@@ -181,7 +181,9 @@ public class BlockIndexWriter
                               long nodeIDToLeafOrdinalFP,
                               long multiBlockLeafRangesFP,
                               long nodeIDToMultilevelPostingsFP_FP,
-                              long zstdDictionaryFP)
+                              long zstdDictionaryFP,
+                              long leafValuesSameFP,
+                              long leafValuesSamePostingsFP)
 //                              IntLongHashMap nodeIDPostingsFP,
 //                              RangeSet<Integer> multiBlockLeafOrdinalRanges,
 //                              BitSet leafValuesSame,
@@ -195,6 +197,8 @@ public class BlockIndexWriter
             this.multiBlockLeafRangesFP = multiBlockLeafRangesFP;
             this.nodeIDToMultilevelPostingsFP_FP = nodeIDToMultilevelPostingsFP_FP;
             this.zstdDictionaryFP = zstdDictionaryFP;
+            this.leafValuesSameFP = leafValuesSameFP;
+            this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
 //            this.nodeIDPostingsFP = nodeIDPostingsFP;
 //            this.multiBlockLeafOrdinalRanges = multiBlockLeafOrdinalRanges;
 //            this.leafValuesSame = leafValuesSame;
@@ -422,9 +426,13 @@ public class BlockIndexWriter
 
         System.out.println("leafToPostingsFP=" + leafToPostingsFP);
 
+        // write multiBlockLeafRanges
         final long multiBlockLeafRangesFP = this.leafPostingsOut.getFilePointer();
+        IntRangeSetSerializer.serialize(multiBlockLeafRanges, this.leafPostingsOut);
 
-        RangeSetSerializer.serialize(multiBlockLeafRanges, this.leafPostingsOut);
+        // write leafValuesSame
+        final long leafValuesSameFP = leafPostingsOut.getFilePointer();
+        final long leafValuesSamePostingsFP = BitSetSerializer.serialize(this.leafValuesSame, this.leafPostingsOut);
 
         // close leaf postings because MultiLevelPostingsWriter read leaf postings
         this.leafPostingsOut.close();
@@ -466,7 +474,9 @@ public class BlockIndexWriter
                                   nodeIDToLeafOrdinalFP,
                                   multiBlockLeafRangesFP,
                                   nodeIDToMultilevelPostingsFP_FP,
-                                  zstdDictionaryFP);
+                                  zstdDictionaryFP,
+                                  leafValuesSameFP,
+                                  leafValuesSamePostingsFP);
     }
 
     public void add(ByteComparable term, long rowID) throws IOException

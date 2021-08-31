@@ -36,6 +36,7 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeMultimap;
 
 import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntLongHashMap;
@@ -105,24 +106,19 @@ public class BlockIndexReader implements Closeable
     long currentLeafFP = -1;
 
     final RangeSet<Integer> multiBlockLeafRanges;
-    final FixedBitSet leafValuesSame = null;
-    final Multimap<Integer,Long> multiNodeIDToPostingsFP = null;
+    final FixedBitSet leafValuesSame;
+    final Multimap<Integer,Long> multiNodeIDToPostingsFP = TreeMultimap.create();
 
-    public BlockIndexReader(IndexDescriptor indexDescriptor, String indexName) throws IOException
+    public BlockIndexReader(IndexDescriptor indexDescriptor, String indexName, BlockIndexWriter.BlockIndexMeta meta) throws IOException
     {
-        BlockIndexWriter.BlockIndexMeta meta = null;
-
         this.bytesInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)));
         this.indexFile = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE, indexName));
         this.postingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.POSTING_LISTS, indexName));
-        this.orderMapInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.ORDER_MAP, indexName));
+        this.orderMapInput = indexDescriptor.openInput(IndexComponent.Type.ORDER_MAP, indexName);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
-        //this.multiBlockLeafRanges = meta.multiBlockLeafOrdinalRanges;
-        this.multiPostingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName)));
-        //this.nodeIDToPostingsFP = meta.nodeIDPostingsFP;
+        this.multiPostingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName));
 
         orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
-
         seekingInput = new SeekingRandomAccessInput(bytesInput.sharedCopy());
 
         final PackedLongValues.Builder leafFPBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
@@ -135,8 +131,22 @@ public class BlockIndexReader implements Closeable
         }
         leafFilePointers = leafFPBuilder.build();
 
+        postingsInput.seek(meta.multiBlockLeafRangesFP);
+        multiBlockLeafRanges = IntRangeSetSerializer.deserialize(postingsInput);
+
+        this.postingsInput.seek(meta.leafValuesSameFP);
+        this.leafValuesSame = BitSetSerializer.deserialize(meta.leafValuesSamePostingsFP, postingsInput);
+
         bytesInput.seek(meta.zstdDictionaryFP);
-        multiBlockLeafRanges = RangeSetSerializer.deserialize(bytesInput);
+
+        multiPostingsInput.seek(meta.nodeIDToMultilevelPostingsFP_FP);
+        int numBigPostings = multiPostingsInput.readVInt();
+        for (int x=0; x < numBigPostings; x++)
+        {
+            int nodeID = multiPostingsInput.readVInt();
+            long postingsFP = multiPostingsInput.readVLong();
+            multiNodeIDToPostingsFP.put(nodeID, postingsFP);
+        }
 
         final PackedLongValues.Builder nodeIDToLeafOrdinalFPBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
         nodeIDToLeafOrdinalFPBuilder.add(0);
