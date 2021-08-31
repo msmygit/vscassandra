@@ -55,7 +55,7 @@ public class NumericValuesWriter implements Closeable
                                boolean monotonic,
                                int blockSize) throws IOException
     {
-        this(component, indexDescriptor.openOutput(component, false, false), metadataWriter, monotonic, blockSize);
+        this(component, indexDescriptor.openPerSSTableOutput(component), metadataWriter, monotonic, blockSize);
     }
 
     private NumericValuesWriter(IndexComponent component,
@@ -75,7 +75,7 @@ public class NumericValuesWriter implements Closeable
     @Override
     public void close() throws IOException
     {
-        try (IndexOutput o = metadataWriter.builder(component.type.name()))
+        try (IndexOutput o = metadataWriter.builder(component.name()))
         {
             final long fp = writer.finish();
             SAICodecUtils.writeFooter(output);

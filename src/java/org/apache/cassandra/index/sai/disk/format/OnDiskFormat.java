@@ -50,7 +50,9 @@ public interface OnDiskFormat
                                             RowMapping rowMapping,
                                             CompressionParams compressionParams);
 
-    public void validateComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException;
+    public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException;
+
+    public void validatePerIndexComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, IndexContext indexContext, boolean checksum) throws IOException;
 
     public Set<IndexComponent> perSSTableComponents();
 

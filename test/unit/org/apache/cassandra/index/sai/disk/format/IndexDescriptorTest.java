@@ -80,7 +80,7 @@ public class IndexDescriptorTest
         indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
 
         assertEquals(Version.AA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, "test_index")));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
     }
 
     @Test
@@ -104,7 +104,7 @@ public class IndexDescriptorTest
         indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
 
         assertEquals(Version.BA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, "test_index")));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
     }
 
     @Test
@@ -136,10 +136,10 @@ public class IndexDescriptorTest
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
         indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.META, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.TERMS_DATA, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, "test_index")));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, "test_index"));
     }
 
     @Test
@@ -154,9 +154,9 @@ public class IndexDescriptorTest
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
         indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.META, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.KD_TREE, "test_index")));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, "test_index")));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, "test_index"));
     }
 }

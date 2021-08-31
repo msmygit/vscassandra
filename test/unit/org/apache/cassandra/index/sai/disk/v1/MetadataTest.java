@@ -46,21 +46,19 @@ public class MetadataTest extends NdiRandomizedTest
 
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexComponent meta;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        meta = IndexComponent.create(IndexComponent.Type.META, index);
     }
 
     @Test
     public void shouldReadWrittenMetadata() throws Exception
     {
         final Map<String, byte[]> data = new HashMap<>();
-        try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openOutput(meta)))
+        try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, index)))
         {
             int num = nextInt(1, 50);
             for (int x = 0; x < num; x++)
@@ -76,7 +74,7 @@ public class MetadataTest extends NdiRandomizedTest
                 }
             }
         }
-        MetadataSource reader = MetadataSource.load(indexDescriptor.openInput(meta));
+        MetadataSource reader = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, index));
 
         for (Map.Entry<String, byte[]> entry : data.entrySet())
         {
@@ -93,7 +91,7 @@ public class MetadataTest extends NdiRandomizedTest
     @Test
     public void shouldFailWhenFileHasNoHeader() throws IOException
     {
-        try (IndexOutputWriter out = indexDescriptor.openOutput(meta))
+        try (IndexOutputWriter out = indexDescriptor.openPerIndexOutput(IndexComponent.META, index))
         {
             final byte[] bytes = nextBytes(13, 29);
             out.writeBytes(bytes, bytes.length);
@@ -101,7 +99,7 @@ public class MetadataTest extends NdiRandomizedTest
 
         expectedException.expect(CorruptIndexException.class);
         expectedException.expectMessage("codec header mismatch");
-        MetadataSource.load(indexDescriptor.openInput(meta));
+        MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, index));
     }
 
     @Test
@@ -125,7 +123,7 @@ public class MetadataTest extends NdiRandomizedTest
 
         expectedException.expect(CorruptIndexException.class);
         expectedException.expectMessage("misplaced codec footer (file truncated?)");
-        MetadataSource.load(indexDescriptor.openInput(meta));
+        MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, index));
     }
 
     @Test
@@ -160,12 +158,12 @@ public class MetadataTest extends NdiRandomizedTest
 
         expectedException.expect(CorruptIndexException.class);
         expectedException.expectMessage("checksum failed");
-        MetadataSource.load(indexDescriptor.openInput(meta));
+        MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, index));
     }
 
     private IndexOutputWriter writeRandomBytes() throws IOException
     {
-        final IndexOutputWriter output = indexDescriptor.openOutput(meta);
+        final IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.META, index);
         try (MetadataWriter writer = new MetadataWriter(output))
         {
             byte[] bytes = nextBytes(11, 1024);

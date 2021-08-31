@@ -70,14 +70,14 @@ public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
 
             long indexFP;
 
-            try (IndexOutput out = indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
+            try (IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, index))
             {
                 indexFP = w.finish(out);
             }
 
             assertThat(directoryWrapper.createdTempFiles.size(), is(greaterThan(0)));
 
-            try (final IndexInput indexInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
+            try (final IndexInput indexInput = indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE, index))
             {
                 indexInput.seek(indexFP);
                 final BKDReader bkdReader = new BKDReader(indexInput);

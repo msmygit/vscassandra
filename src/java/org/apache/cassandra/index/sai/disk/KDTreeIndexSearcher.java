@@ -50,15 +50,15 @@ public class KDTreeIndexSearcher extends IndexSearcher
     {
         super(segment, indexContext);
 
-        final long bkdPosition = metadata.getIndexRoot(IndexComponent.Type.KD_TREE);
+        final long bkdPosition = metadata.getIndexRoot(IndexComponent.KD_TREE);
         assert bkdPosition >= 0;
-        final long postingsPosition = metadata.getIndexRoot(IndexComponent.Type.KD_TREE_POSTING_LISTS);
+        final long postingsPosition = metadata.getIndexRoot(IndexComponent.KD_TREE_POSTING_LISTS);
         assert postingsPosition >= 0;
 
         bkdReader = new BKDReader(indexContext,
-                                  indexFiles.get(IndexComponent.Type.KD_TREE).sharedCopy(),
+                                  indexFiles.get(IndexComponent.KD_TREE).sharedCopy(),
                                   bkdPosition,
-                                  indexFiles.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).sharedCopy(),
+                                  indexFiles.get(IndexComponent.KD_TREE_POSTING_LISTS).sharedCopy(),
                                   postingsPosition);
         perColumnEventListener = (QueryEventListener.BKDIndexEventListener)indexContext.getColumnQueryMetrics();
 

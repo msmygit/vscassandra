@@ -156,13 +156,13 @@ public class SegmentsSystemViewTest extends SAITester
                     final String indexType = entry.getKey();
                     final String str = entry.getValue().getOrDefault(SegmentMetadata.ComponentMetadata.LENGTH, "0");
 
-                    if (indexType.equals(IndexComponent.Type.KD_TREE.toString()))
+                    if (indexType.equals(IndexComponent.KD_TREE.toString()))
                     {
                         int maxPointsInLeafNode = Integer.parseInt(entry.getValue().get("max_points_in_leaf_node"));
 
                         assertEquals(1024, maxPointsInLeafNode);
                     }
-                    else if (indexType.equals(IndexComponent.Type.KD_TREE_POSTING_LISTS.toString()))
+                    else if (indexType.equals(IndexComponent.KD_TREE_POSTING_LISTS.toString()))
                     {
                         int numLeafPostings = Integer.parseInt(entry.getValue().get("num_leaf_postings"));
 
@@ -207,13 +207,13 @@ public class SegmentsSystemViewTest extends SAITester
 
                 if (sstableIndex.getIndexContext().isLiteral())
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.create(IndexComponent.Type.TERMS_DATA, index.getIndexContext().getIndexName()), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index.getIndexContext().getIndexName()), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext().getIndexName(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext().getIndexName(), indexDescriptor);
                 }
                 else
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.create(IndexComponent.Type.KD_TREE, index.getIndexContext().getIndexName()), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index.getIndexContext().getIndexName()), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext().getIndexName(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext().getIndexName(), indexDescriptor);
                 }
             }
         }
@@ -221,10 +221,10 @@ public class SegmentsSystemViewTest extends SAITester
         return lengths;
     }
 
-    private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, IndexDescriptor indexDescriptor)
+    private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, String index, IndexDescriptor indexDescriptor)
     {
-        map.compute(key.type.name(), (typeName, acc) -> {
-            final long size = indexDescriptor.sizeOfPerColumnComponents(key.index);
+        map.compute(key.name(), (typeName, acc) -> {
+            final long size = indexDescriptor.sizeOfPerColumnComponents(index);
             return acc == null ? size : size + acc;
         });
     }

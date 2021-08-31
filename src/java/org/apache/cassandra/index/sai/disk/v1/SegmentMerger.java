@@ -28,6 +28,7 @@ import java.util.Map;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.MergeOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.QueryEventListeners;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.TermsIteratorMerger;
@@ -109,16 +110,16 @@ public interface SegmentMerger extends Closeable
         @SuppressWarnings("resource")
         private TermsIterator createTermsIterator(IndexContext indexContext, SegmentMetadata segment, PerIndexFiles indexFiles) throws IOException
         {
-            final long root = segment.getIndexRoot(IndexComponent.Type.TERMS_DATA);
+            final long root = segment.getIndexRoot(IndexComponent.TERMS_DATA);
             assert root >= 0;
 
-            final Map<String, String> map = segment.componentMetadatas.get(IndexComponent.Type.TERMS_DATA).attributes;
+            final Map<String, String> map = segment.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes;
             final String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
             final long footerPointer = footerPointerString == null ? -1 : Long.parseLong(footerPointerString);
 
             final TermsReader termsReader = new TermsReader(indexContext,
-                                                            indexFiles.get(IndexComponent.Type.TERMS_DATA).sharedCopy(),
-                                                            indexFiles.get(IndexComponent.Type.POSTING_LISTS).sharedCopy(),
+                                                            indexFiles.get(IndexComponent.TERMS_DATA).sharedCopy(),
+                                                            indexFiles.get(IndexComponent.POSTING_LISTS).sharedCopy(),
                                                             root,
                                                             footerPointer);
             readers.add(termsReader);
@@ -185,15 +186,15 @@ public interface SegmentMerger extends Closeable
         @SuppressWarnings("resource")
         private BKDReader.IteratorState createIteratorState(IndexContext indexContext, SegmentMetadata segment, PerIndexFiles indexFiles) throws IOException
         {
-            final long bkdPosition = segment.getIndexRoot(IndexComponent.Type.KD_TREE);
+            final long bkdPosition = segment.getIndexRoot(IndexComponent.KD_TREE);
             assert bkdPosition >= 0;
-            final long postingsPosition = segment.getIndexRoot(IndexComponent.Type.KD_TREE_POSTING_LISTS);
+            final long postingsPosition = segment.getIndexRoot(IndexComponent.KD_TREE_POSTING_LISTS);
             assert postingsPosition >= 0;
 
             final BKDReader bkdReader = new BKDReader(indexContext,
-                                                      indexFiles.get(IndexComponent.Type.KD_TREE).sharedCopy(),
+                                                      indexFiles.get(IndexComponent.KD_TREE).sharedCopy(),
                                                       bkdPosition,
-                                                      indexFiles.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).sharedCopy(),
+                                                      indexFiles.get(IndexComponent.KD_TREE_POSTING_LISTS).sharedCopy(),
                                                                      postingsPosition);
             readers.add(bkdReader);
             return bkdReader.iteratorState(rowid -> rowid + segment.segmentRowIdOffset);

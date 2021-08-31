@@ -103,18 +103,14 @@ public class BKDReaderTest extends NdiRandomizedTest
 
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexContext columnContext;
-    private IndexComponent kdtree;
-    private IndexComponent kdtreePostings;
+    private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        columnContext = SAITester.createIndexContext(index, Int32Type.instance);
-        kdtree = IndexComponent.create(IndexComponent.Type.KD_TREE, index);
-        kdtreePostings = IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index);
+        indexContext = SAITester.createIndexContext(index, Int32Type.instance);
     }
 
     @Test
@@ -364,7 +360,7 @@ public class BKDReaderTest extends NdiRandomizedTest
     private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, BKDTreeRamBuffer buffer) throws IOException
     {
         final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                 columnContext,
+                                                                 indexContext,
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(buffer.numRows()),
@@ -373,14 +369,14 @@ public class BKDReaderTest extends NdiRandomizedTest
                                                                  false);
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-        final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
+        final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
         assertThat(bkdPosition, is(greaterThan(0L)));
-        final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
+        final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
-        FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
-        return new BKDReader(columnContext,
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        return new BKDReader(indexContext,
                              kdtreeHandle,
                              bkdPosition,
                              kdtreePostingsHandle,
@@ -390,7 +386,7 @@ public class BKDReaderTest extends NdiRandomizedTest
     private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, MutableOneDimPointValues values, int numRows) throws IOException
     {
         final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                 columnContext,
+                                                                 indexContext,
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(numRows),
@@ -399,14 +395,14 @@ public class BKDReaderTest extends NdiRandomizedTest
                                                                  false);
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(values);
-        final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
+        final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
         assertThat(bkdPosition, is(greaterThan(0L)));
-        final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
+        final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
-        FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
-        return new BKDReader(columnContext,
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        return new BKDReader(indexContext,
                              kdtreeHandle,
                              bkdPosition,
                              kdtreePostingsHandle,

@@ -81,15 +81,15 @@ public class TermsReaderTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }
 
-        FileHandle termsData = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.TERMS_DATA, index));
-        FileHandle postingLists = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index));
+        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, index, false);
+        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, index, false);
 
-        long termsFooterPointer = Long.parseLong(indexMetas.get(IndexComponent.Type.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
+        long termsFooterPointer = Long.parseLong(indexMetas.get(IndexComponent.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
 
         try (TermsReader reader = new TermsReader(indexContext,
                                                   termsData,
                                                   postingLists,
-                                                  indexMetas.get(IndexComponent.Type.TERMS_DATA).root,
+                                                  indexMetas.get(IndexComponent.TERMS_DATA).root,
                                                   termsFooterPointer))
         {
             try (TermsIterator actualTermsEnum = reader.allTerms(0, (QueryEventListener.TrieIndexEventListener)NO_OP_TRIE_LISTENER))
@@ -117,15 +117,15 @@ public class TermsReaderTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }
 
-        FileHandle termsData = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.TERMS_DATA, index));
-        FileHandle postingLists = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index));
+        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, index, false);
+        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, index, false);
 
-        long termsFooterPointer = Long.parseLong(indexMetas.get(IndexComponent.Type.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
+        long termsFooterPointer = Long.parseLong(indexMetas.get(IndexComponent.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
 
         try (TermsReader reader = new TermsReader(indexContext,
                                                   termsData,
                                                   postingLists,
-                                                  indexMetas.get(IndexComponent.Type.TERMS_DATA).root,
+                                                  indexMetas.get(IndexComponent.TERMS_DATA).root,
                                                   termsFooterPointer))
         {
             for (Pair<ByteComparable, IntArrayList> pair : termsEnum)

@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v1.writers.SSTableIndexWriter;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
@@ -321,19 +322,20 @@ public class NodeStartupTest extends SAITester
             case VALID:
                 break;
             case ALL_EMPTY:
-                allIndexComponents().forEach(this::remove);
+                V1OnDiskFormat.PER_SSTABLE_COMPONENTS.forEach(this::remove);
+                V1OnDiskFormat.NUMERIC_COMPONENTS.forEach(c -> remove(c, indexName));
                 break;
             case PER_SSTABLE_INCOMPLETE:
                 remove(IndexComponent.GROUP_COMPLETION_MARKER);
                 break;
             case PER_COLUMN_INCOMPLETE:
-                remove(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexName));
+                remove(IndexComponent.COLUMN_COMPLETION_MARKER, indexName);
                 break;
             case PER_SSTABLE_CORRUPT:
                 corrupt(IndexComponent.GROUP_META);
                 break;
             case PER_COLUMN_CORRUPT:
-                corrupt(IndexComponent.create(IndexComponent.Type.META, indexName));
+                corrupt(IndexComponent.META, indexName);
                 break;
         }
     }
@@ -341,11 +343,8 @@ public class NodeStartupTest extends SAITester
     private Set<IndexComponent> allIndexComponents()
     {
         Set<IndexComponent> components = new HashSet<>();
-        components.addAll(IndexComponent.PER_SSTABLE);
-        components.add(IndexComponent.create(IndexComponent.Type.META, indexName));
-        components.add(IndexComponent.create(IndexComponent.Type.KD_TREE, indexName));
-        components.add(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName));
-        components.add(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexName));
+        components.addAll(V1OnDiskFormat.PER_SSTABLE_COMPONENTS);
+        components.addAll(V1OnDiskFormat.NUMERIC_COMPONENTS);
         return components;
     }
 
@@ -362,11 +361,37 @@ public class NodeStartupTest extends SAITester
         }
     }
 
+    private void remove(IndexComponent component, String index)
+    {
+        try
+        {
+            corruptIndexComponent(component, index, CorruptionType.REMOVED);
+        }
+        catch (Exception e)
+        {
+            error = e;
+            e.printStackTrace();
+        }
+    }
+
     private void corrupt(IndexComponent component)
     {
         try
         {
             corruptIndexComponent(component, CorruptionType.TRUNCATED_HEADER);
+        }
+        catch (Exception e)
+        {
+            error = e;
+            e.printStackTrace();
+        }
+    }
+
+    private void corrupt(IndexComponent component, String index)
+    {
+        try
+        {
+            corruptIndexComponent(component, index, CorruptionType.TRUNCATED_HEADER);
         }
         catch (Exception e)
         {

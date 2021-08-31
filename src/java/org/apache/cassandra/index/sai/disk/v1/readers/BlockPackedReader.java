@@ -56,7 +56,7 @@ public class BlockPackedReader implements LongArray.Factory
 
     public BlockPackedReader(FileHandle file, IndexComponent component, MetadataSource source) throws IOException
     {
-        this(file, new NumericValuesMeta(source.get(component.type.name())));
+        this(file, new NumericValuesMeta(source.get(component.name())));
     }
 
     @SuppressWarnings("resource")

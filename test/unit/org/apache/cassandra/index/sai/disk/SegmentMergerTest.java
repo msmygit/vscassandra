@@ -191,7 +191,7 @@ public class SegmentMergerTest extends SAITester
         IndexMetadata index = table.indexes.get(indexName).get();
         IndexContext indexContext = new IndexContext(table, index);
         assertTrue(indexDescriptor.isColumnIndexComplete(indexContext));
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.META, indexName)));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexName));
         return SegmentMetadata.load(source, null);
     }
 }

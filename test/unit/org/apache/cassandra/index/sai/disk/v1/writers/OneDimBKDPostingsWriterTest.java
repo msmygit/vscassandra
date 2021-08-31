@@ -48,16 +48,14 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
 {
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexComponent kdTreePostings;
-    private IndexContext columnContext;
+    private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        kdTreePostings = IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index);
-        columnContext = SAITester.createIndexContext(index, Int32Type.instance);
+        indexContext = SAITester.createIndexContext(index, Int32Type.instance);
     }
 
     @Test
@@ -66,7 +64,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         List<PackedLongValues> leaves =
                 Arrays.asList(postings(1, 5, 7), postings(3, 4, 6), postings(2, 8, 10), postings(11, 12, 13));
 
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 1), columnContext);
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 1), indexContext);
 
         // should build postings for nodes 2 & 3 (lvl 2) and 8, 10, 12, 14 (lvl 4)
         writer.onLeaf(64, 1, pathToRoot(1, 2, 4, 8, 16));
@@ -75,12 +73,12 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(112, 4, pathToRoot(1, 3, 7, 14, 28));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openOutput(kdTreePostings))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createFileHandle(kdTreePostings), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(10, postingsIndex.size());
 
         // Internal postings...
@@ -114,19 +112,19 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
     public void shouldSkipPostingListWhenSamplingMisses() throws IOException
     {
         List<PackedLongValues> leaves = Collections.singletonList(postings(1, 2, 3));
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 5, 1), columnContext);
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 5, 1), indexContext);
 
         // The tree is too short to have any internal posting lists.
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openOutput(kdTreePostings))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createFileHandle(kdTreePostings), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(1, postingsIndex.size());
     }
 
@@ -134,25 +132,25 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
     public void shouldSkipPostingListWhenTooFewLeaves() throws IOException
     {
         List<PackedLongValues> leaves = Collections.singletonList(postings(1, 2, 3));
-        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 2), columnContext);
+        OneDimBKDPostingsWriter writer = new OneDimBKDPostingsWriter(leaves, new IndexWriterConfig("test", 2, 2), indexContext);
 
         // The tree is too short to have any internal posting lists.
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openOutput(kdTreePostings))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createFileHandle(kdTreePostings), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
         assertEquals(1, postingsIndex.size());
     }
 
     private void assertPostingReaderEquals(BKDPostingsIndex postingsIndex, int nodeID, int[] postings) throws IOException
     {
-        assertPostingReaderEquals(indexDescriptor.openInput(kdTreePostings),
+        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, index),
                                   postingsIndex.getPostingsFilePointer(nodeID),
                                   new ArrayPostingList(postings));
     }

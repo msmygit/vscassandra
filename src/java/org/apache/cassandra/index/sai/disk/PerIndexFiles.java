@@ -30,38 +30,33 @@ import org.apache.cassandra.io.util.FileUtils;
 public abstract class PerIndexFiles implements Closeable
 {
     private final IndexDescriptor indexDescriptor;
-    private final IndexContext columnContext;
-    private final Map<IndexComponent.Type, FileHandle> files;
+    private final IndexContext indexContext;
+    private final Map<IndexComponent, FileHandle> files;
 
-    public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext columnContext)
+    public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
-        this(indexDescriptor, columnContext, false);
+        this(indexDescriptor, indexContext, false);
     }
 
-    public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext columnContext, boolean temporary)
+    public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
     {
         this.indexDescriptor = indexDescriptor;
-        this.columnContext = columnContext;
-        files = populate(indexDescriptor, columnContext, temporary);
+        this.indexContext = indexContext;
+        files = populate(indexDescriptor, indexContext, temporary);
     }
 
-    public FileHandle get(IndexComponent.Type type)
+    public FileHandle get(IndexComponent indexComponent)
     {
-        FileHandle file = files.get(type);
+        FileHandle file = files.get(indexComponent);
         if (file == null)
-            throw new IllegalArgumentException(String.format(columnContext.logMessage("Component for %s not found for SSTable %s"),
-                                                             type.representation,
+            throw new IllegalArgumentException(String.format(indexContext.logMessage("Component for %s not found for SSTable %s"),
+                                                             indexComponent.representation,
                                                              indexDescriptor.descriptor));
 
         return file;
     }
 
-    protected abstract Map<IndexComponent.Type, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext columnContext, boolean temporary);
-
-    protected void putFile(IndexComponent.Type type, boolean temporary)
-    {
-        files.put(type, indexDescriptor.createFileHandle(IndexComponent.create(type, columnContext.getIndexName()), temporary));
-    }
+    protected abstract Map<IndexComponent, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext columnContext, boolean temporary);
 
     @Override
     public void close()

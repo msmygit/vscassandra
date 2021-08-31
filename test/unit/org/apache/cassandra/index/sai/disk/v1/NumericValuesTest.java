@@ -65,9 +65,9 @@ public class NumericValuesTest extends NdiRandomizedTest
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         writeTokens(monotonic, indexDescriptor, new long[length], prev -> 1000L);
 
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
              LongArray reader = monotonic ? new MonotonicBlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source).open()
                                           : new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source).open())
         {
@@ -91,9 +91,9 @@ public class NumericValuesTest extends NdiRandomizedTest
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         writeTokens(false, indexDescriptor, array, prev -> prev + nextInt(2, 100));
 
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
              LongArray reader = new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source).open())
         {
             assertEquals(array.length, reader.length());
@@ -107,7 +107,7 @@ public class NumericValuesTest extends NdiRandomizedTest
         }
 
         // non-exact match
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
              LongArray reader = new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source).open())
         {
             assertEquals(array.length, reader.length());
@@ -126,9 +126,9 @@ public class NumericValuesTest extends NdiRandomizedTest
         int length = 64_000;
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         writeTokens(false, indexDescriptor, new long[length], prev -> 1000L);
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
              LongArray reader = new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source).open())
         {
             for (int x = 0; x < length; x++)
@@ -148,9 +148,9 @@ public class NumericValuesTest extends NdiRandomizedTest
         long[] array = new long[length];
         writeTokens(false, indexDescriptor, array, prev -> prev + nextInt(1, 100));
 
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES))
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES))
         {
             LongArray.Factory factory = new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source);
             for (int segmentOffset : Arrays.asList(0, 33, 123, nextInt(length)))
@@ -183,9 +183,9 @@ public class NumericValuesTest extends NdiRandomizedTest
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         writeTokens(monotonic, indexDescriptor, array, prev -> monotonic ? prev + nextInt(100) : nextInt(100));
 
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
-        try (FileHandle fileHandle = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        try (FileHandle fileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
              LongArray reader = (monotonic ? new MonotonicBlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source)
                                            : new BlockPackedReader(fileHandle, IndexComponent.TOKEN_VALUES, source)).open())
         {
@@ -203,7 +203,7 @@ public class NumericValuesTest extends NdiRandomizedTest
         final int blockSize = 1 << nextInt(8, 15);
 
         long current = 0;
-        try (MetadataWriter metadataWriter = new MetadataWriter(indexDescriptor.openOutput(IndexComponent.GROUP_META));
+        try (MetadataWriter metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
              final NumericValuesWriter numericWriter = new NumericValuesWriter(indexDescriptor,
                                                                                IndexComponent.TOKEN_VALUES,
                                                                                metadataWriter,

@@ -78,7 +78,7 @@ public class V1SSTableContext extends SSTableContext
         KeyFetcher keyFetcher;
         try
         {
-            MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+            MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
 
             sstableRef = sstable.tryRef();
 
@@ -87,8 +87,8 @@ public class V1SSTableContext extends SSTableContext
                 throw new IllegalStateException("Couldn't acquire reference to the sstable: " + sstable);
             }
 
-            token = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
-            offset  = indexDescriptor.createFileHandle(IndexComponent.OFFSETS_VALUES);
+            token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
+            offset  = indexDescriptor.createPerSSTableFileHandle(IndexComponent.OFFSETS_VALUES);
 
             tokenReaderFactory = new BlockPackedReader(token, IndexComponent.TOKEN_VALUES, source);
             offsetReaderFactory = new MonotonicBlockPackedReader(offset, IndexComponent.OFFSETS_VALUES, source);

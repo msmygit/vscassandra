@@ -230,7 +230,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         Set<Component> components = Version.LATEST.onDiskFormat()
                                                   .perSSTableComponents()
                                                   .stream()
-                                                  .map(c -> new Component(Component.Type.CUSTOM, IndexDescriptor.componentName(Version.LATEST, c)))
+                                                  .map(c -> new Component(Component.Type.CUSTOM, IndexDescriptor.componentName(Version.LATEST, c, null)))
                                                   .collect(Collectors.toSet());
         indices.forEach(index -> components.addAll(index.getComponents()));
         return components;

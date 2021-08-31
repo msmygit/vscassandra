@@ -58,18 +58,18 @@ public class InvertedIndexSearcher extends IndexSearcher
     {
         super(segment, indexContext);
 
-        long root = metadata.getIndexRoot(IndexComponent.Type.TERMS_DATA);
+        long root = metadata.getIndexRoot(IndexComponent.TERMS_DATA);
         assert root >= 0;
 
         perColumnEventListener = (QueryEventListener.TrieIndexEventListener)indexContext.getColumnQueryMetrics();
 
-        Map<String,String> map = metadata.componentMetadatas.get(IndexComponent.Type.TERMS_DATA).attributes;
+        Map<String,String> map = metadata.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes;
         String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
         long footerPointer = footerPointerString == null ? -1 : Long.parseLong(footerPointerString);
 
         reader = new TermsReader(indexContext,
-                                 indexFiles.get(IndexComponent.Type.TERMS_DATA).sharedCopy(),
-                                 indexFiles.get(IndexComponent.Type.POSTING_LISTS).sharedCopy(),
+                                 indexFiles.get(IndexComponent.TERMS_DATA).sharedCopy(),
+                                 indexFiles.get(IndexComponent.POSTING_LISTS).sharedCopy(),
                                  root,
                                  footerPointer);
     }

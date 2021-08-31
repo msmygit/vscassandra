@@ -52,7 +52,6 @@ public abstract class AbstractOnDiskBenchmark
 
     IndexDescriptor indexDescriptor;
     String index;
-    private IndexComponent postingLists;
     private FileHandle token;
 
     private FileHandle postings;
@@ -102,15 +101,14 @@ public abstract class AbstractOnDiskBenchmark
         descriptor = new Descriptor(Files.createTempDirectory("jmh").toFile(), "ks", this.getClass().getSimpleName(), 1);
         indexDescriptor = IndexDescriptor.create(descriptor);
         index = "test";
-        postingLists = IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index);
 
         // write per-sstable components: token and offset
         writeSSTableComponents(numRows());
-        token = indexDescriptor.createFileHandle(IndexComponent.TOKEN_VALUES);
+        token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
 
         // write postings
         summaryPosition = writePostings(numPostings());
-        postings = indexDescriptor.createFileHandle(postingLists);
+        postings = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, index);
     }
 
     @TearDown(Level.Trial)
@@ -167,7 +165,7 @@ public abstract class AbstractOnDiskBenchmark
 
     protected final LongArray openRowIdToTokenReader() throws IOException
     {
-        MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.GROUP_META));
+        MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
         return new BlockPackedReader(token, IndexComponent.TOKEN_VALUES, source).open();
     }
 }

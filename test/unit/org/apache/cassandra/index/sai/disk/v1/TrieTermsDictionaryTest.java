@@ -46,14 +46,12 @@ public class TrieTermsDictionaryTest extends NdiRandomizedTest
 {
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexComponent termsData;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        termsData = IndexComponent.create(IndexComponent.Type.TERMS_DATA, index);
     }
 
     @Test
@@ -75,7 +73,7 @@ public class TrieTermsDictionaryTest extends NdiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createFileHandle(termsData);
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, index);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.exactMatch(asByteComparable("a")));
@@ -102,7 +100,7 @@ public class TrieTermsDictionaryTest extends NdiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createFileHandle(termsData);
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, index);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             final Iterator<Pair<ByteComparable, Long>> iterator = reader.iterator();
@@ -135,7 +133,7 @@ public class TrieTermsDictionaryTest extends NdiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createFileHandle(termsData);
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, index);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             final ByteComparable expectedMaxTerm = byteComparables.get(byteComparables.size() - 1);

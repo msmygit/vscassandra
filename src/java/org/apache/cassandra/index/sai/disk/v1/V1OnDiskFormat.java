@@ -57,14 +57,18 @@ public class V1OnDiskFormat implements OnDiskFormat
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private static final EnumSet<IndexComponent.Type> LITERAL_COMPONENT_TYPES = EnumSet.of(IndexComponent.Type.COLUMN_COMPLETION_MARKER,
-                                                                                           IndexComponent.Type.META,
-                                                                                           IndexComponent.Type.TERMS_DATA,
-                                                                                           IndexComponent.Type.POSTING_LISTS);
-    private static final EnumSet<IndexComponent.Type> NUMERIC_COMPONENT_TYPES = EnumSet.of(IndexComponent.Type.COLUMN_COMPLETION_MARKER,
-                                                                                           IndexComponent.Type.META,
-                                                                                           IndexComponent.Type.KD_TREE,
-                                                                                           IndexComponent.Type.KD_TREE_POSTING_LISTS);
+    public static final EnumSet<IndexComponent> PER_SSTABLE_COMPONENTS = EnumSet.of(IndexComponent.GROUP_COMPLETION_MARKER,
+                                                                                    IndexComponent.GROUP_META,
+                                                                                    IndexComponent.TOKEN_VALUES,
+                                                                                    IndexComponent.OFFSETS_VALUES);
+    public static final EnumSet<IndexComponent> LITERAL_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
+                                                                                IndexComponent.META,
+                                                                                IndexComponent.TERMS_DATA,
+                                                                                IndexComponent.POSTING_LISTS);
+    public static final EnumSet<IndexComponent> NUMERIC_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
+                                                                                IndexComponent.META,
+                                                                                IndexComponent.KD_TREE,
+                                                                                IndexComponent.KD_TREE_POSTING_LISTS);
 
     public static final V1OnDiskFormat instance = new V1OnDiskFormat();
 
@@ -82,20 +86,20 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         indexDescriptor.registerSSTable().registerIndex(indexContext);
         return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER) &&
-               indexDescriptor.hasComponent(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexContext.getIndexName()));
+               indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
     }
 
     @Override
     public boolean isCompletionMarker(IndexComponent indexComponent)
     {
-        return indexComponent.type == IndexComponent.Type.GROUP_COMPLETION_MARKER ||
-               indexComponent.type == IndexComponent.Type.COLUMN_COMPLETION_MARKER;
+        return indexComponent == IndexComponent.GROUP_COMPLETION_MARKER ||
+               indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER;
     }
 
     @Override
     public boolean isEncryptable(IndexComponent indexComponent)
     {
-        return indexComponent.type == IndexComponent.Type.TERMS_DATA;
+        return indexComponent == IndexComponent.TERMS_DATA;
     }
 
     @Override
@@ -126,12 +130,39 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public void validateComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException
+    public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException
     {
         File file = indexDescriptor.fileFor(indexComponent);
         if (file.exists() && file.length() > 0)
         {
-            try (IndexInput input = indexDescriptor.openInput(indexComponent))
+            try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
+            {
+                if (checksum)
+                    SAICodecUtils.validateChecksum(input);
+                else
+                    SAICodecUtils.validate(input);
+            }
+            catch (IOException e)
+            {
+                if (logger.isDebugEnabled())
+                {
+                    logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
+                                 (checksum ? "Checksum validation" : "Validation"),
+                                 indexComponent,
+                                 indexDescriptor.descriptor);
+                }
+                throw e;
+            }
+        }
+    }
+
+    @Override
+    public void validatePerIndexComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, IndexContext indexContext, boolean checksum) throws IOException
+    {
+        File file = indexDescriptor.fileFor(indexComponent, indexContext.getIndexName());
+        if (file.exists() && file.length() > 0)
+        {
+            try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext.getIndexName()))
             {
                 if (checksum)
                     SAICodecUtils.validateChecksum(input);
@@ -155,18 +186,13 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public Set<IndexComponent> perSSTableComponents()
     {
-        return IndexComponent.PER_SSTABLE;
+        return PER_SSTABLE_COMPONENTS;
     }
 
     @Override
     public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
     {
-        return indexContext.isLiteral() ? LITERAL_COMPONENT_TYPES.stream()
-                                                                 .map(t -> IndexComponent.create(t, indexContext.getIndexName()))
-                                                                 .collect(Collectors.toSet())
-                                        : NUMERIC_COMPONENT_TYPES.stream()
-                                                                 .map(t -> IndexComponent.create(t, indexContext.getIndexName()))
-                                                                 .collect(Collectors.toSet());
+        return indexContext.isLiteral() ? LITERAL_COMPONENTS : NUMERIC_COMPONENTS;
     }
 
     @Override
@@ -175,18 +201,18 @@ public class V1OnDiskFormat implements OnDiskFormat
         return new PerIndexFiles(indexDescriptor, indexContext, temporary)
         {
             @Override
-            protected Map<IndexComponent.Type, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext columnContext, boolean temporary)
+            protected Map<IndexComponent, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
             {
-                Map<IndexComponent.Type, FileHandle> files = new EnumMap<>(IndexComponent.Type.class);
-                if (columnContext.isLiteral())
+                Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+                if (indexContext.isLiteral())
                 {
-                    putFile(IndexComponent.Type.POSTING_LISTS, temporary);
-                    putFile(IndexComponent.Type.TERMS_DATA, temporary);
+                    files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext.getIndexName(), temporary));
+                    files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext.getIndexName(), temporary));
                 }
                 else
                 {
-                    putFile(IndexComponent.Type.KD_TREE, temporary);
-                    putFile(IndexComponent.Type.KD_TREE_POSTING_LISTS, temporary);
+                    files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName(), temporary));
+                    files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName(), temporary));
                 }
                 return files;
             }

@@ -241,6 +241,17 @@ public class SAITester extends CQLTester
         }
     }
 
+    protected void corruptIndexComponent(IndexComponent indexComponent, String index, CorruptionType corruptionType) throws Exception
+    {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+
+        for (SSTableReader sstable : cfs.getLiveSSTables())
+        {
+            File file = IndexDescriptor.create(sstable.descriptor).fileFor(indexComponent, index);
+            corruptionType.corrupt(file);
+        }
+    }
+
     protected void waitForAssert(Runnable runnableAssert, long timeout, TimeUnit unit)
     {
         Awaitility.await().dontCatchUncaughtExceptions().atMost(timeout, unit).untilAsserted(runnableAssert::run);
@@ -286,7 +297,7 @@ public class SAITester extends CQLTester
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
             IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
-            if (!indexDescriptor.validatePerSSTableComponentsChecksum() || !indexDescriptor.validatePerColumnComponentsChecksum(context))
+            if (!indexDescriptor.validatePerSSTableComponentsChecksum() || !indexDescriptor.validatePerIndexComponentsChecksum(context))
                 return false;
         }
         return true;
@@ -680,7 +691,7 @@ public class SAITester extends CQLTester
 
     protected Set<File> componentFiles(Collection<File> indexFiles, IndexComponent component)
     {
-        return indexFiles.stream().filter(c -> c.getName().endsWith(component.type.representation + ".db")).collect(Collectors.toSet());
+        return indexFiles.stream().filter(c -> c.getName().endsWith(component.representation + ".db")).collect(Collectors.toSet());
     }
 
     protected Set<File> componentFiles(Collection<File> indexFiles, String shortName)

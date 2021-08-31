@@ -52,23 +52,15 @@ public class SSTableComponentsWriter implements PerSSTableComponentsWriter
     {
         this.indexDescriptor = indexDescriptor;
 
-        this.metadataWriter = new MetadataWriter(indexDescriptor.openOutput(IndexComponent.GROUP_META, false, false));
+        this.metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
 
         this.tokenWriter = new NumericValuesWriter(IndexComponent.TOKEN_VALUES,
-                                                   indexDescriptor.openOutput(IndexComponent.TOKEN_VALUES, false, false),
+                                                   indexDescriptor.openPerSSTableOutput(IndexComponent.TOKEN_VALUES),
                                                    metadataWriter, false);
         this.offsetWriter = new NumericValuesWriter(IndexComponent.OFFSETS_VALUES,
-                                                    indexDescriptor.openOutput(IndexComponent.OFFSETS_VALUES, false, false),
+                                                    indexDescriptor.openPerSSTableOutput(IndexComponent.OFFSETS_VALUES),
                                                     metadataWriter, true);
     }
-
-//    private SSTableComponentsWriter()
-//    {
-//        this.indexDescriptor = null;
-//        this.metadataWriter = null;
-//        this.tokenWriter = null;
-//        this.offsetWriter = null;
-//    }
 
     public void startPartition(DecoratedKey key, long position)
     {

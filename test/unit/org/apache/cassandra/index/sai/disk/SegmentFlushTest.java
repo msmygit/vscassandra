@@ -140,7 +140,7 @@ public class SegmentFlushTest
 
         writer.flush();
 
-        MetadataSource source = MetadataSource.load(indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.META, context.getIndexName())));
+        MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, context.getIndexName()));
 
         // verify segment count
         List<SegmentMetadata> segmentMetadatas = SegmentMetadata.load(source, null);
@@ -162,15 +162,15 @@ public class SegmentFlushTest
 
     private void verifyStringIndex(IndexDescriptor indexDescriptor, IndexContext indexContext, SegmentMetadata segmentMetadata) throws IOException
     {
-        FileHandle termsData = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexContext.getIndexName()));
-        FileHandle postingLists = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, indexContext.getIndexName()));
+        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext.getIndexName());
+        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext.getIndexName());
 
-        long termsFooterPointer = Long.parseLong(segmentMetadata.componentMetadatas.get(IndexComponent.Type.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
+        long termsFooterPointer = Long.parseLong(segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
 
         try (TermsReader reader = new TermsReader(indexContext,
                                                   termsData,
                                                   postingLists,
-                                                  segmentMetadata.componentMetadatas.get(IndexComponent.Type.TERMS_DATA).root,
+                                                  segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).root,
                                                   termsFooterPointer))
         {
             TermsIterator iterator = reader.allTerms(0, (QueryEventListener.TrieIndexEventListener)QueryEventListeners.NO_OP_TRIE_LISTENER);

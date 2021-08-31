@@ -35,6 +35,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
@@ -42,7 +43,6 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMerger;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
-import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.FBUtilities;
@@ -277,7 +277,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
             compactSegments();
 
             writeSegmentsMetadata();
-            indexDescriptor.createComponentOnDisk(IndexComponent.create(IndexComponent.Type.COLUMN_COMPLETION_MARKER, indexContext.getIndexName()));
+            indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
         }
         finally
         {
@@ -320,7 +320,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         DecoratedKey maxKey = segments.get(segments.size() - 1).maxKey;
 
         try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
-             PerIndexFiles perIndexFiles = new PerIndexFiles(indexDescriptor, indexContext, true))
+             PerIndexFiles perIndexFiles = indexDescriptor.perIndexFiles(indexContext, true))
         {
             for (final SegmentMetadata segment : segments)
             {
@@ -331,7 +331,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         }
         finally
         {
-            indexDescriptor.deleteTemporaryComponents(indexContext.getIndexName());
+            indexDescriptor.deleteTemporaryComponents(indexContext);
         }
     }
 
@@ -340,10 +340,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         if (segments.isEmpty())
             return;
 
-        try (final MetadataWriter writer = new MetadataWriter(indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.META,
-                                                                                                               indexContext.getIndexName()),
-                                                                                         false,
-                                                                                         false)))
+        try (final MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName())))
         {
             SegmentMetadata.write(writer, segments, null);
         }

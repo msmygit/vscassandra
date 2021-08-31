@@ -87,8 +87,8 @@ public class InvertedIndexWriter implements Closeable
         map.put(SAICodecUtils.FOOTER_POINTER, "" + footerPointer.getValue());
 
         // Postings list file pointers are stored directly in TERMS_DATA, so a root is not needed.
-        components.put(IndexComponent.Type.POSTING_LISTS, -1, postingsOffset, postingsLength);
-        components.put(IndexComponent.Type.TERMS_DATA, termsRoot, termsOffset, termsLength, map);
+        components.put(IndexComponent.POSTING_LISTS, -1, postingsOffset, postingsLength);
+        components.put(IndexComponent.TERMS_DATA, termsRoot, termsOffset, termsLength, map);
 
         return components;
     }

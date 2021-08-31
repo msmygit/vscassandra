@@ -89,8 +89,8 @@ public class SSTableIndex
 
             ImmutableList.Builder<Segment> segmentsBuilder = ImmutableList.builder();
 
-            final MetadataSource source = MetadataSource.load(sstableContext.indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.META,
-                                                                                                                             indexContext.getIndexName())));
+            final MetadataSource source = MetadataSource.load(sstableContext.indexDescriptor.openPerIndexInput(IndexComponent.META,
+                                                                                                               indexContext.getIndexName()));
             metadatas = SegmentMetadata.load(source, null);
 
             for (SegmentMetadata metadata : metadatas)

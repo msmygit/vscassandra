@@ -44,14 +44,12 @@ public class PostingsTest extends NdiRandomizedTest
 
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexComponent postingLists;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        postingLists = IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index);
     }
 
     @Test
@@ -67,7 +65,7 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        IndexInput input = indexDescriptor.openInput(postingLists);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
         SAICodecUtils.validate(input);
         input.seek(postingPointer);
 
@@ -92,7 +90,7 @@ public class PostingsTest extends NdiRandomizedTest
         reader.close();
         assertEquals(reader.size(), listener.decodes);
 
-        input = indexDescriptor.openInput(postingLists);
+        input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
         listener = new CountingPostingListEventListener();
         reader = new PostingsReader(input, postingPointer, listener);
 
@@ -127,14 +125,14 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openInput(postingLists))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
         {
             SAICodecUtils.validate(input);
         }
 
         for (int i = 0; i < numPostingLists; ++i)
         {
-            IndexInput input = indexDescriptor.openInput(postingLists);
+            IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
             input.seek(postingPointers[i]);
             final ArrayPostingList expectedPostingList = expected[i];
             final PostingsReader.BlocksSummary summary = assertBlockSummary(blockSize, expectedPostingList, input);
@@ -152,7 +150,7 @@ public class PostingsTest extends NdiRandomizedTest
             }
 
             // test skipping to the last block
-            input = indexDescriptor.openInput(postingLists);
+            input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
             try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
             {
                 long tokenToAdvance = -1;
@@ -187,7 +185,7 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openInput(postingLists))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -228,7 +226,7 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openInput(postingLists))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -307,7 +305,7 @@ public class PostingsTest extends NdiRandomizedTest
 
     private PostingsReader openReader(long fp, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        IndexInput input = indexDescriptor.openInput(postingLists);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
         input.seek(fp);
         return new PostingsReader(input, fp, listener);
     }

@@ -58,6 +58,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v1.writers.NumericValuesWriter;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
@@ -944,8 +945,8 @@ public class NativeIndexDDLTest extends SAITester
             reloadSSTableIndex();
 
             // Verify the index cannot be read:
-            verifySSTableIndexes(numericIndexName, component.type.perSSTable ? 0 : 1, failedNumericIndex ? 0 : 1);
-            verifySSTableIndexes(stringIndexName, component.type.perSSTable ? 0 : 1, failedStringIndex ? 0 : 1);
+            verifySSTableIndexes(numericIndexName, V1OnDiskFormat.PER_SSTABLE_COMPONENTS.contains(component) ? 0 : 1, failedNumericIndex ? 0 : 1);
+            verifySSTableIndexes(stringIndexName, V1OnDiskFormat.PER_SSTABLE_COMPONENTS.contains(component) ? 0 : 1, failedStringIndex ? 0 : 1);
 
             try
             {

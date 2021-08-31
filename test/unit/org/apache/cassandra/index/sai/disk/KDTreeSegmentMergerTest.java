@@ -207,11 +207,11 @@ public class KDTreeSegmentMergerTest extends SAITester
                                                                      false))
         {
             SegmentMetadata.ComponentMetadataMap metadata = indexWriter.writeAll(merger);
-            final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
-            final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
+            final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
+            final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
 
-            FileHandle kdtree = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE, "test"));
-            FileHandle kdtreePostings = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, "test"));
+            FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, "test");
+            FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, "test");
             BKDReader reader = new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition);
 
             for (int term : expected.keySet())
@@ -251,11 +251,11 @@ public class KDTreeSegmentMergerTest extends SAITester
                                                                  false);
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-        final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
-        final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
+        final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
+        final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
 
-        FileHandle kdtree = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE, "test"));
-        FileHandle kdtreePostings = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, "test"));
+        FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, "test");
+        FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, "test");
         return new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition);
     }
 
