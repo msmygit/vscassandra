@@ -52,7 +52,10 @@ public class TermIterator extends RangeIterator
     }
 
     @SuppressWarnings("resource")
-    public static TermIterator build(final Expression e, Set<SSTableIndex> perSSTableIndexes, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext)
+    public static TermIterator build(final Expression e,
+                                     Set<SSTableIndex> perSSTableIndexes,
+                                     AbstractBounds<PartitionPosition> keyRange,
+                                     QueryContext queryContext)
     {
         final List<RangeIterator> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
 

@@ -313,8 +313,6 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         PrimaryKey minKey = segments.get(0).minKey;
         PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
 
-//        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
-//             PerIndexFiles perIndexFiles = new PerIndexFiles(indexDescriptor, indexContext, true))
         try (SegmentMerger segmentMerger = indexDescriptor.version.onDiskFormat().newSegmentMerger(indexContext.isLiteral());
              PerIndexFiles perIndexFiles = new PerIndexFiles(indexDescriptor, indexContext, true))
         {

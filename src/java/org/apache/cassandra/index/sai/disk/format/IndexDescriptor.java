@@ -330,6 +330,11 @@ public class IndexDescriptor
         registerComponent(component);
     }
 
+    public IndexInput openInput(IndexComponent.Type type, String index)
+    {
+        return openInput(IndexComponent.create(type, index));
+    }
+
     public IndexInput openInput(IndexComponent indexComponent)
     {
         final File file = fileFor(indexComponent);
@@ -339,6 +344,11 @@ public class IndexDescriptor
                          FBUtilities.prettyPrintMemory(file.length()));
 
         return IndexFileUtils.instance.openBlockingInput(file);
+    }
+
+    public IndexOutputWriter openOutput(IndexComponent.Type type, String indexName) throws IOException
+    {
+        return openOutput(IndexComponent.create(type, indexName), false, false);
     }
 
     public IndexOutputWriter openOutput(IndexComponent component) throws IOException

@@ -79,6 +79,11 @@ public interface ByteComparable
         return v -> ByteSource.fixedLength(bytes);
     }
 
+    static ByteComparable fixedLength(byte[] bytes, int offset, int length)
+    {
+        return v -> ByteSource.fixedLength(bytes, offset, length);
+    }
+
     static ByteComparable fixedLength(byte[] bytes)
     {
         return v -> ByteSource.fixedLength(bytes);

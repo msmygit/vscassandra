@@ -51,6 +51,8 @@ public class IndexComponent
          * file pointer to posting block on posting file.
          */
         TERMS_DATA("TermsData", false),
+        TERMS_INDEX("TermsIndex", false),
+        ORDER_MAP("OrderMap", false),
         /**
          * Stores postings written by {@code PostingsWriter}
          */

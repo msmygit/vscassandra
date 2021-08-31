@@ -118,7 +118,7 @@ public abstract class IndexSearcher implements Closeable
         final PostingList.PeekablePostingList postingList;
         final PrimaryKeyMap primaryKeyMap;
 
-        SearcherContext(SSTableQueryContext context, PostingList.PeekablePostingList postingList) throws IOException
+        public SearcherContext(SSTableQueryContext context, PostingList.PeekablePostingList postingList) throws IOException
         {
             this.context = context;
             this.postingList = postingList;
