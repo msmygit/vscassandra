@@ -77,11 +77,11 @@ public class BlockIndexReader implements Closeable
     final SeekingRandomAccessInput seekingInput;
     final SharedIndexInput bytesInput;
     final BytesRefBuilder builder = new BytesRefBuilder();
-    final BlockIndexWriter.BlockIndexMeta meta = null;
+    final BlockIndexWriter.BlockIndexMeta meta;
 
-    final IntLongHashMap nodeIDToPostingsFP = null;
+    final IntLongHashMap nodeIDToPostingsFP = new IntLongHashMap();
     final IndexInput orderMapInput;
-    final SharedIndexInput postingsInput, multiPostingsInput;
+    final SharedIndexInput leafLevelPostingsInput, multiPostingsInput;
     final SeekingRandomAccessInput orderMapRandoInput;
     private final DirectReaders.Reader orderMapReader;
 
@@ -109,11 +109,14 @@ public class BlockIndexReader implements Closeable
     final FixedBitSet leafValuesSame;
     final Multimap<Integer,Long> multiNodeIDToPostingsFP = TreeMultimap.create();
 
-    public BlockIndexReader(IndexDescriptor indexDescriptor, String indexName, BlockIndexWriter.BlockIndexMeta meta) throws IOException
+    public BlockIndexReader(IndexDescriptor indexDescriptor,
+                            String indexName,
+                            BlockIndexWriter.BlockIndexMeta meta) throws IOException
     {
+        this.meta = meta;
         this.bytesInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)));
-        this.indexFile = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.KD_TREE, indexName));
-        this.postingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.POSTING_LISTS, indexName));
+        this.indexFile = indexDescriptor.createFileHandle(IndexComponent.create(IndexComponent.Type.TERMS_INDEX, indexName));
+        this.leafLevelPostingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.POSTING_LISTS, indexName));
         this.orderMapInput = indexDescriptor.openInput(IndexComponent.Type.ORDER_MAP, indexName);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
         this.multiPostingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName));
@@ -131,20 +134,33 @@ public class BlockIndexReader implements Closeable
         }
         leafFilePointers = leafFPBuilder.build();
 
-        postingsInput.seek(meta.multiBlockLeafRangesFP);
-        multiBlockLeafRanges = IntRangeSetSerializer.deserialize(postingsInput);
+        leafLevelPostingsInput.seek(meta.multiBlockLeafRangesFP);
+        multiBlockLeafRanges = IntRangeSetSerializer.deserialize(leafLevelPostingsInput);
 
-        this.postingsInput.seek(meta.leafValuesSameFP);
-        this.leafValuesSame = BitSetSerializer.deserialize(meta.leafValuesSamePostingsFP, postingsInput);
+        this.leafLevelPostingsInput.seek(meta.leafValuesSameFP);
+        this.leafValuesSame = BitSetSerializer.deserialize(meta.leafValuesSamePostingsFP, leafLevelPostingsInput);
 
-        bytesInput.seek(meta.zstdDictionaryFP);
+        if (meta.zstdDictionaryFP != -1)
+        {
+            bytesInput.seek(meta.zstdDictionaryFP);
+        }
+
+        this.leafLevelPostingsInput.seek(meta.nodeIDPostingsFP_FP);
+        final int leafLevelPostingsSize = this.leafLevelPostingsInput.readVInt();
+        for (int x=0; x < leafLevelPostingsSize; x++)
+        {
+            int nodeID = this.leafLevelPostingsInput.readVInt();
+            long postingsFP = this.leafLevelPostingsInput.readVLong();
+
+            this.nodeIDToPostingsFP.put(nodeID, postingsFP);
+        }
 
         multiPostingsInput.seek(meta.nodeIDToMultilevelPostingsFP_FP);
         int numBigPostings = multiPostingsInput.readVInt();
         for (int x=0; x < numBigPostings; x++)
         {
             int nodeID = multiPostingsInput.readVInt();
-            long postingsFP = multiPostingsInput.readVLong();
+            long postingsFP = multiPostingsInput.readZLong();
             multiNodeIDToPostingsFP.put(nodeID, postingsFP);
         }
 
@@ -176,7 +192,7 @@ public class BlockIndexReader implements Closeable
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(indexFile, seekingInput, orderMapInput, postingsInput, multiPostingsInput);
+        FileUtils.close(indexFile, seekingInput, orderMapInput, leafLevelPostingsInput, multiPostingsInput);
     }
 
     static class NodeIDLeafFP
@@ -362,7 +378,7 @@ public class BlockIndexReader implements Closeable
         // TODO: the postings are not in leaf id order
         for (int x = startOrd; x < endOrd; x++)
         {
-            NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
+            final NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
 
             // negative file pointer means an upper level big posting list so use multiPostingsInput
             if (nodeIDLeafOrd.filePointer < 0)
@@ -375,7 +391,7 @@ public class BlockIndexReader implements Closeable
             {
                 final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
                 System.out.println("nodeID=" + nodeIDLeafOrd.nodeID + " postingsFP=" + postingsFP);
-                PostingsReader postings = new PostingsReader(postingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                PostingsReader postings = new PostingsReader(leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                 postingLists.add(postings.peekable());
             }
         }
@@ -485,7 +501,7 @@ public class BlockIndexReader implements Closeable
 
         final long postingsFP = nodeIDToPostingsFP.get(nodeID);
         System.out.println("leaf="+leaf+" nodeID=" + nodeID + " postingsFP=" + postingsFP + " startIdx=" + startIdx+" orderMapFP="+orderMapFP);
-        final PostingsReader postings = new PostingsReader(postingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+        final PostingsReader postings = new PostingsReader(leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
         FilteringPostingList filterPostings = new FilteringPostingList(
         cardinality,
         // get the row id's term ordinal to compare against the startOrdinal

@@ -136,6 +136,8 @@ public class PostingsWriter implements Closeable
 
     public long completePostings() throws IOException
     {
+        assert totalPostings > 0;
+
         finish();
 
         final long summaryOffset = dataOutput.getFilePointer();
@@ -150,6 +152,7 @@ public class PostingsWriter implements Closeable
     {
         writePosting(rowid);
         totalPostings++;
+        postingsWritten++;
     }
 
     /**

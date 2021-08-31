@@ -32,6 +32,7 @@ import com.google.common.collect.TreeMultimap;
 import com.google.common.collect.TreeRangeSet;
 
 import com.carrotsearch.hppc.IntLongHashMap;
+import com.carrotsearch.hppc.cursors.IntLongCursor;
 import com.github.luben.zstd.Zstd;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
@@ -45,6 +46,7 @@ import org.apache.cassandra.io.tries.IncrementalDeepTrieWriterPageAware;
 import org.apache.cassandra.io.tries.IncrementalTrieWriter;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.GrowableByteArrayDataOutput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.ArrayUtil;
@@ -97,7 +99,7 @@ public class BlockIndexWriter
     private int termOrdinal = 0; // number of unique terms
     private int leaf;
 
-    private byte[][] zstdSamples = new byte[10][];
+    private List<byte[]> zstdSamples = new ArrayList<>();
 
     public static class BlockBuffer
     {
@@ -167,6 +169,7 @@ public class BlockIndexWriter
         public final long zstdDictionaryFP;
         public final long leafValuesSameFP;
         public final long leafValuesSamePostingsFP;
+        public final long nodeIDPostingsFP_FP;
 //        public final IntLongHashMap nodeIDPostingsFP;
 //        public final RangeSet<Integer> multiBlockLeafOrdinalRanges;
 //        public final BitSet leafValuesSame;
@@ -183,7 +186,8 @@ public class BlockIndexWriter
                               long nodeIDToMultilevelPostingsFP_FP,
                               long zstdDictionaryFP,
                               long leafValuesSameFP,
-                              long leafValuesSamePostingsFP)
+                              long leafValuesSamePostingsFP,
+                              long nodeIDPostingsFP_FP)
 //                              IntLongHashMap nodeIDPostingsFP,
 //                              RangeSet<Integer> multiBlockLeafOrdinalRanges,
 //                              BitSet leafValuesSame,
@@ -199,6 +203,7 @@ public class BlockIndexWriter
             this.zstdDictionaryFP = zstdDictionaryFP;
             this.leafValuesSameFP = leafValuesSameFP;
             this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
+            this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
 //            this.nodeIDPostingsFP = nodeIDPostingsFP;
 //            this.multiBlockLeafOrdinalRanges = multiBlockLeafOrdinalRanges;
 //            this.leafValuesSame = leafValuesSame;
@@ -218,17 +223,15 @@ public class BlockIndexWriter
         int start = 0;
         int leafIdx = 0;
 
-        // byte[][] zstdSamples = new byte[blockMinValues.size()][];
-
         // write distinct min block terms and the min and max leaf id's encoded as a long
-        BytesRefBuilder lastTerm = new BytesRefBuilder();
+        final BytesRefBuilder lastTerm = new BytesRefBuilder();
         for (leafIdx = 0; leafIdx < blockMinValues.size(); leafIdx++)
         {
-            BytesRef minValue = blockMinValues.get(leafIdx);
-            zstdSamples[leafIdx] = minValue.bytes;
+            final BytesRef minValue = blockMinValues.get(leafIdx);
+            //zstdSamples[leafIdx] = minValue.bytes;
             if (leafIdx > 0)
             {
-                BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
+                final BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
                 if (!minValue.equals(prevMinValue))
                 {
                     final int startLeaf = start;
@@ -299,10 +302,32 @@ public class BlockIndexWriter
             distinctCount++;
         }
 
-        final byte[] zstdDictionary = new byte[64 * 1024];
-        final int zstdDictionaryLen = (int)Zstd.trainFromBuffer(this.zstdSamples, zstdDictionary);
-        final long zstdDictionaryFP = this.valuesOut.getFilePointer();
-        this.valuesOut.writeBytes(zstdDictionary, 0, zstdDictionaryLen);
+        // no samples just add the block min values
+        if (zstdSamples.size() == 0)
+        {
+            for (BytesRef br : blockMinValues)
+            {
+                zstdSamples.add(br.bytes);
+            }
+        }
+
+        final byte[] zstdDictionary = new byte[32 * 1024];
+
+        byte[][] zstdSamplesArray = zstdSamples.toArray(new byte[0][]);
+
+        System.out.println("ZSTD dictionary zstdSamples.size="+zstdSamples.size()+" zstdSamplesArray.len="+zstdSamplesArray.length);
+
+        final int zstdDictionaryLen = (int)Zstd.trainFromBuffer(zstdSamplesArray, zstdDictionary);
+        final long zstdDictionaryFP;
+        if (zstdDictionaryLen == -1)
+        {
+            zstdDictionaryFP = -1;
+        }
+        else
+        {
+            zstdDictionaryFP = this.valuesOut.getFilePointer();
+            this.valuesOut.copyBytes(new ByteArrayDataInput(zstdDictionary, 0, zstdDictionaryLen), zstdDictionaryLen);
+        }
 
         assert leafBytesFPs.size() == blockMinValues.size()
         : "leafFilePointers.size=" + leafBytesFPs.size() + " blockMinValues.size=" + blockMinValues.size();
@@ -365,7 +390,6 @@ public class BlockIndexWriter
 
         System.out.println("nodeIDToLeafPointer="+nodeIDToLeafPointer);
         System.out.println("realLeafFilePointers=" + realLeafBytesFPs);
-
 
         // TODO: the "leafPointer" is actually the leaf id because
         //       the binary tree code requires unique values
@@ -434,6 +458,15 @@ public class BlockIndexWriter
         final long leafValuesSameFP = leafPostingsOut.getFilePointer();
         final long leafValuesSamePostingsFP = BitSetSerializer.serialize(this.leafValuesSame, this.leafPostingsOut);
 
+        final long nodeIDPostingsFP_FP = leafPostingsOut.getFilePointer();
+
+        this.leafPostingsOut.writeVInt(nodeIDPostingsFP.size());
+        for (IntLongCursor cursor : nodeIDPostingsFP)
+        {
+            this.leafPostingsOut.writeVInt(cursor.key);
+            this.leafPostingsOut.writeVLong(cursor.value);
+        }
+
         // close leaf postings because MultiLevelPostingsWriter read leaf postings
         this.leafPostingsOut.close();
 
@@ -457,7 +490,7 @@ public class BlockIndexWriter
         for (Map.Entry<Integer,Long> entry : nodeIDToMultilevelPostingsFP.entries())
         {
             bigPostingsOut.writeVInt(entry.getKey());
-            bigPostingsOut.writeVLong(entry.getValue());
+            bigPostingsOut.writeZLong(entry.getValue());
         }
 
         leafPostingsInput.close();
@@ -476,7 +509,8 @@ public class BlockIndexWriter
                                   nodeIDToMultilevelPostingsFP_FP,
                                   zstdDictionaryFP,
                                   leafValuesSameFP,
-                                  leafValuesSamePostingsFP);
+                                  leafValuesSamePostingsFP,
+                                  nodeIDPostingsFP_FP);
     }
 
     public void add(ByteComparable term, long rowID) throws IOException
@@ -519,9 +553,8 @@ public class BlockIndexWriter
 
             if (termOrdinal % ZSTD_DICTIONARY_SAMPLE_INTERVAL == 0 && newTerm)
             {
-                this.zstdSamples = ArrayUtil.grow(this.zstdSamples, termOrdinal + 1);
                 // use the min value bytes as is
-                this.zstdSamples[termOrdinal] = minValue.bytes;
+                this.zstdSamples.add(minValue.bytes);
             }
 
             currentBuffer.leaf = leaf;
@@ -537,9 +570,8 @@ public class BlockIndexWriter
 
             if (termOrdinal % ZSTD_DICTIONARY_SAMPLE_INTERVAL == 0 && newTerm)
             {
-                this.zstdSamples = ArrayUtil.grow(this.zstdSamples, termOrdinal + 1);
                 // make a deep copy to get static bytes
-                this.zstdSamples[termOrdinal] = BytesRef.deepCopyOf(termBuilder.get()).bytes;
+                this.zstdSamples.add(BytesRef.deepCopyOf(termBuilder.get()).bytes);
             }
         }
         // System.out.println("term=" + termBuilder.get().utf8ToString() + " prefix=" + currentBuffer.prefixes[currentBuffer.leafOrdinal] + " length=" + currentBuffer.lengths[currentBuffer.leafOrdinal]);

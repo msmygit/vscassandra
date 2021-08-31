@@ -164,6 +164,8 @@ public class IndexComponent
             case KD_TREE:
             case KD_TREE_POSTING_LISTS:
             case TERMS_DATA:
+            case ORDER_MAP:
+            case TERMS_INDEX:
             case POSTING_LISTS:
                 component = new IndexComponent(type, index);
                 break;
