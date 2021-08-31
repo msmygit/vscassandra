@@ -32,7 +32,7 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
-import org.apache.cassandra.index.sai.disk.ImmutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.ImmutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;

@@ -23,11 +23,13 @@ import java.util.Set;
 
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
 import org.apache.cassandra.index.sai.memory.RowMapping;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.CompressionParams;
 
 public interface OnDiskFormat
@@ -59,4 +61,6 @@ public interface OnDiskFormat
     public Set<IndexComponent> perIndexComponents(IndexContext indexContext);
 
     public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
+
+    public SSTableContext newSSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor);
 }

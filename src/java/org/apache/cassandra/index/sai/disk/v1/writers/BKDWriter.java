@@ -27,7 +27,7 @@ import java.util.function.IntFunction;
 
 import com.google.common.base.MoreObjects;
 
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;

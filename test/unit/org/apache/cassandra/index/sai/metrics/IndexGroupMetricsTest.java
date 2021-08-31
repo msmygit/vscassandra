@@ -20,9 +20,8 @@ package org.apache.cassandra.index.sai.metrics;
 import org.junit.Before;
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.disk.InvertedIndexSearcher;
-import org.apache.cassandra.index.sai.disk.KDTreeIndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.InvertedIndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.KDTreeIndexSearcher;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

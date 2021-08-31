@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
@@ -46,6 +47,7 @@ import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.FBUtilities;
@@ -195,6 +197,11 @@ public class IndexDescriptor
                                                                          .map(c -> new Component(Component.Type.CUSTOM, componentName(version, c, index)))
                                                                          .collect(Collectors.toSet())
                                                      : Collections.emptySet();
+    }
+
+    public SSTableContext newSSTableContext(SSTableReader sstable)
+    {
+        return version.onDiskFormat().newSSTableContext(sstable, this);
     }
 
     public PerSSTableComponentsWriter newPerSSTableComponentsWriter(boolean perColumnOnly,

@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.function.Supplier;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.v1.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.v1.readers.BlockPackedReader;
 
 /**
@@ -107,7 +108,7 @@ public interface LongArray extends Closeable
          * not supported by other implementation.
          *
          * @param startingIndex minimum index to be used in {@link LongArray#findTokenRowID(long)}.
-         *                      In {@link org.apache.cassandra.index.sai.disk.PostingListRangeIterator}, a segmentRowId
+         *                      In {@link PostingListRangeIterator}, a segmentRowId
          *                      is provided and then in {@link OffsetFactory},
          *                      segment offset is applied to segmentRowId to create sstableRowId which will be used by
          *                      {@link BlockPackedReader#openTokenReader(long, SSTableQueryContext)}.

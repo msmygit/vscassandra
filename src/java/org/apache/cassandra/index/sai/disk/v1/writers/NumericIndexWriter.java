@@ -28,7 +28,7 @@ import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;

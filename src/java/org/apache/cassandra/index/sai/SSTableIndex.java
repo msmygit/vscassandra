@@ -19,6 +19,7 @@
 package org.apache.cassandra.index.sai;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,26 +27,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableList;
 
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.IndexSearchContext;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.disk.PerIndexFiles;
-import org.apache.cassandra.index.sai.utils.RangeConcatIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.utils.Throwables;
 
 
 /**
@@ -62,14 +55,7 @@ public class SSTableIndex
     private final IndexContext indexContext;
     private final SSTableReader sstable;
 
-    private final ImmutableList<Segment> segments;
-    private PerIndexFiles indexFiles;
-
-    private final List<SegmentMetadata> metadatas;
-    private final DecoratedKey minKey, maxKey; // in token order
-    private final ByteBuffer minTerm, maxTerm;
-    private final long minSSTableRowId, maxSSTableRowId;
-    private final long numRows;
+    private final IndexSearchContext indexSearchContext;
 
     private final AtomicInteger references = new AtomicInteger(1);
     private final AtomicBoolean obsolete = new AtomicBoolean(false);
@@ -83,41 +69,7 @@ public class SSTableIndex
         final AbstractType<?> validator = indexContext.getValidator();
         assert validator != null;
 
-        try
-        {
-            this.indexFiles = sstableContext.perIndexFiles(indexContext);
-
-            ImmutableList.Builder<Segment> segmentsBuilder = ImmutableList.builder();
-
-            final MetadataSource source = MetadataSource.load(sstableContext.indexDescriptor.openPerIndexInput(IndexComponent.META,
-                                                                                                               indexContext.getIndexName()));
-            metadatas = SegmentMetadata.load(source, null);
-
-            for (SegmentMetadata metadata : metadatas)
-            {
-                segmentsBuilder.add(new Segment(indexContext, (V1SSTableContext)sstableContext, indexFiles, metadata));
-            }
-
-            segments = segmentsBuilder.build();
-            assert !segments.isEmpty();
-
-            this.minKey = metadatas.get(0).minKey;
-            this.maxKey = metadatas.get(metadatas.size() - 1).maxKey;
-
-            this.minTerm = metadatas.stream().map(m -> m.minTerm).min(TypeUtil.comparator(validator)).orElse(null);
-            this.maxTerm = metadatas.stream().map(m -> m.maxTerm).max(TypeUtil.comparator(validator)).orElse(null);
-
-            this.numRows = metadatas.stream().mapToLong(m -> m.numRows).sum();
-
-            this.minSSTableRowId = metadatas.get(0).minSSTableRowId;
-            this.maxSSTableRowId = metadatas.get(metadatas.size() - 1).maxSSTableRowId;
-        }
-        catch (Throwable t)
-        {
-            FileUtils.closeQuietly(indexFiles);
-            FileUtils.closeQuietly(sstableContext);
-            throw Throwables.unchecked(t);
-        }
+        this.indexSearchContext = sstableContext.newIndexSearcher(indexContext);
     }
 
     public IndexContext getIndexContext()
@@ -132,7 +84,7 @@ public class SSTableIndex
 
     public long indexFileCacheSize()
     {
-        return segments.stream().mapToLong(Segment::indexFileCacheSize).sum();
+        return indexSearchContext.indexFileCacheSize();
     }
 
     /**
@@ -140,7 +92,7 @@ public class SSTableIndex
      */
     public long getRowCount()
     {
-        return numRows;
+        return indexSearchContext.getRowCount();
     }
 
     /**
@@ -156,7 +108,7 @@ public class SSTableIndex
      */
     public long minSSTableRowId()
     {
-        return minSSTableRowId;
+        return indexSearchContext.minSSTableRowId();
     }
 
     /**
@@ -164,47 +116,37 @@ public class SSTableIndex
      */
     public long maxSSTableRowId()
     {
-        return maxSSTableRowId;
+        return indexSearchContext.maxSSTableRowId();
     }
 
     public ByteBuffer minTerm()
     {
-        return minTerm;
+        return indexSearchContext.minTerm();
     }
 
     public ByteBuffer maxTerm()
     {
-        return maxTerm;
+        return indexSearchContext.maxTerm();
     }
 
     public DecoratedKey minKey()
     {
-        return minKey;
+        return indexSearchContext.minKey();
     }
 
     public DecoratedKey maxKey()
     {
-        return maxKey;
+        return indexSearchContext.maxKey();
     }
 
     public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer)
     {
-        RangeConcatIterator.Builder builder = RangeConcatIterator.builder();
-
-        for (Segment segment : segments)
-        {
-            if (segment.intersects(keyRange))
-            {
-                builder.add(segment.search(expression, context, defer));
-            }
-        }
-
-        return builder.build();
+        return indexSearchContext.search(expression, keyRange, context, defer);
     }
 
     public List<SegmentMetadata> segments()
     {
-        return metadatas;
+        return Collections.emptyList();
     }
 
     public Version getVersion()
@@ -242,8 +184,7 @@ public class SSTableIndex
 
         if (n == 0)
         {
-            FileUtils.closeQuietly(indexFiles);
-            FileUtils.closeQuietly(segments);
+            FileUtils.closeQuietly(indexSearchContext);
             sstableContext.close();
 
             /*

@@ -21,7 +21,7 @@ import java.io.IOException;
 
 import com.google.common.base.Preconditions;
 
-import org.apache.cassandra.index.sai.disk.MutableOneDimPointValues;
+import org.apache.cassandra.index.sai.disk.v1.MutableOneDimPointValues;
 import org.apache.lucene.codecs.MutablePointValues;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.ByteBlockPool;

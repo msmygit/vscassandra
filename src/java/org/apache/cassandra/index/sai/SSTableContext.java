@@ -19,8 +19,8 @@ package org.apache.cassandra.index.sai;
 
 import java.io.File;
 
+import org.apache.cassandra.index.sai.disk.IndexSearchContext;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.utils.concurrent.RefCounted;
@@ -51,16 +51,11 @@ public abstract class SSTableContext extends SharedCloseableImpl
         this.indexDescriptor = indexDescriptor;
     }
 
-    @SuppressWarnings("resource")
-    public static SSTableContext create(SSTableReader sstable, IndexDescriptor indexDescriptor)
-    {
-        // We currently only support the V1 per-sstable format but in future selection of
-        // per-sstable format will be here
-        return V1SSTableContext.create(sstable, indexDescriptor);
-    }
-
     @Override
     public abstract SSTableContext sharedCopy();
+
+    public abstract IndexSearchContext newIndexSearcher(IndexContext indexContext);
+
 
     /**
      * @return number of open files per {@link SSTableContext} instance

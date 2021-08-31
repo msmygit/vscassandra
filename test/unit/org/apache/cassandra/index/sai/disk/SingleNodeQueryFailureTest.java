@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import com.datastax.driver.core.exceptions.ReadFailureException;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.v1.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.v1.readers.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.readers.TermsReader;
 import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;

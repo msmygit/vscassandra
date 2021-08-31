@@ -18,10 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.v1;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
@@ -29,6 +26,7 @@ import com.google.common.base.MoreObjects;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
+import org.apache.cassandra.index.sai.disk.IndexSearchContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.readers.BlockPackedReader;
@@ -41,7 +39,7 @@ import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.concurrent.Ref;
 import org.apache.cassandra.utils.concurrent.RefCounted;
 
-import static org.apache.cassandra.index.sai.disk.OnDiskKeyProducer.NO_OFFSET;
+import static org.apache.cassandra.index.sai.disk.v1.OnDiskKeyProducer.NO_OFFSET;
 
 public class V1SSTableContext extends SSTableContext
 {
@@ -116,9 +114,9 @@ public class V1SSTableContext extends SSTableContext
     }
 
     @Override
-    public int openFilesPerSSTable()
+    public IndexSearchContext newIndexSearcher(IndexContext indexContext)
     {
-        return 2;
+        return new V1IndexSearchContext(this, indexContext);
     }
 
     private static class Cleanup implements RefCounted.Tidy
