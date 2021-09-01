@@ -19,9 +19,7 @@
 package org.apache.cassandra.index.sai;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -32,8 +30,7 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.disk.IndexSearchContext;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.SearchContext;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -55,7 +52,7 @@ public class SSTableIndex
     private final IndexContext indexContext;
     private final SSTableReader sstable;
 
-    private final IndexSearchContext indexSearchContext;
+    private final SearchContext indexSearchContext;
 
     private final AtomicInteger references = new AtomicInteger(1);
     private final AtomicBoolean obsolete = new AtomicBoolean(false);
@@ -69,7 +66,7 @@ public class SSTableIndex
         final AbstractType<?> validator = indexContext.getValidator();
         assert validator != null;
 
-        this.indexSearchContext = sstableContext.newIndexSearcher(indexContext);
+        this.indexSearchContext = sstableContext.newSearchContext(indexContext);
     }
 
     public IndexContext getIndexContext()
@@ -144,10 +141,10 @@ public class SSTableIndex
         return indexSearchContext.search(expression, keyRange, context, defer);
     }
 
-    public List<SegmentMetadata> segments()
-    {
-        return Collections.emptyList();
-    }
+//    public List<SegmentMetadata> segments()
+//    {
+//        return Collections.emptyList();
+//    }
 
     public Version getVersion()
     {

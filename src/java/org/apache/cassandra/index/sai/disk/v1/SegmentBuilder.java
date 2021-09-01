@@ -30,13 +30,9 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.BytesRefUtil;
-import org.apache.cassandra.index.sai.disk.v1.writers.BKDTreeRamBuffer;
-import org.apache.cassandra.index.sai.disk.v1.writers.InvertedIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.RAMStringIndexer;
+import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.lucene.util.BytesRef;
@@ -208,23 +204,13 @@ public abstract class SegmentBuilder
         rowCount++;
 
         // segmentRowIdOffset should encode sstableRowId into Integer
-        int segmentRowId = castToSegmentRowId(sstableRowId, segmentRowIdOffset);
+        int segmentRowId = RowMapping.castToSegmentRowId(sstableRowId, segmentRowIdOffset);
         maxSegmentRowId = Math.max(maxSegmentRowId, segmentRowId);
 
         long bytesAllocated = addInternal(term, segmentRowId);
         totalBytesAllocated += bytesAllocated;
 
         return bytesAllocated;
-    }
-
-    public static int castToSegmentRowId(long sstableRowId, long segmentRowIdOffset)
-    {
-        int segmentRowId = Math.toIntExact(sstableRowId - segmentRowIdOffset);
-
-        if (segmentRowId == PostingList.END_OF_STREAM)
-            throw new IllegalArgumentException("Illegal segment row id: END_OF_STREAM found");
-
-        return segmentRowId;
     }
 
     public long totalBytesAllocated()

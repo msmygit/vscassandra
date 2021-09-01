@@ -24,10 +24,9 @@ import org.junit.Test;
 
 import com.datastax.driver.core.ResultSet;
 import org.apache.cassandra.db.marshal.Int32Type;
-import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v1.writers.NumericIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 
 import static org.junit.Assert.assertEquals;
 

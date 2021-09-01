@@ -25,10 +25,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.Iterators;
 
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.Token;
-import org.apache.cassandra.index.sai.disk.v1.V1SSTableContext;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.io.util.RandomAccessReader;
 
 /**

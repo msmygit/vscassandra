@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index.sai.virtual;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -35,7 +34,6 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.Schema;
@@ -98,24 +96,24 @@ public class SegmentsSystemView extends AbstractVirtualTable
             for (SSTableIndex sstableIndex : columnContext.getView())
             {
                 SSTableReader sstable = sstableIndex.getSSTable();
-                List<SegmentMetadata> segments = sstableIndex.segments();
+//                List<SegmentMetadata> segments = sstableIndex.segments();
                 Descriptor descriptor = sstable.descriptor;
                 Token.TokenFactory tokenFactory = sstable.metadata().partitioner.getTokenFactory();
 
-                for (SegmentMetadata metadata : segments)
-                {
-                    dataset.row(sstable.metadata().keyspace, columnContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
-                           .column(TABLE_NAME, descriptor.cfname)
-                           .column(COLUMN_NAME, columnContext.getColumnName())
-                           .column(CELL_COUNT, metadata.numRows)
-                           .column(MIN_SSTABLE_ROW_ID, metadata.minSSTableRowId)
-                           .column(MAX_SSTABLE_ROW_ID, metadata.maxSSTableRowId)
-                           .column(START_TOKEN, tokenFactory.toString(metadata.minKey.getToken()))
-                           .column(END_TOKEN, tokenFactory.toString(metadata.maxKey.getToken()))
-                           .column(MIN_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
-                           .column(MAX_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
-                           .column(COMPONENT_METADATA, metadata.componentMetadatas.asMap());
-                }
+//                for (SegmentMetadata metadata : segments)
+//                {
+//                    dataset.row(sstable.metadata().keyspace, columnContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
+//                           .column(TABLE_NAME, descriptor.cfname)
+//                           .column(COLUMN_NAME, columnContext.getColumnName())
+//                           .column(CELL_COUNT, metadata.numRows)
+//                           .column(MIN_SSTABLE_ROW_ID, metadata.minSSTableRowId)
+//                           .column(MAX_SSTABLE_ROW_ID, metadata.maxSSTableRowId)
+//                           .column(START_TOKEN, tokenFactory.toString(metadata.minKey.getToken()))
+//                           .column(END_TOKEN, tokenFactory.toString(metadata.maxKey.getToken()))
+//                           .column(MIN_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
+//                           .column(MAX_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
+//                           .column(COMPONENT_METADATA, metadata.componentMetadatas.asMap());
+//                }
             }
         });
 

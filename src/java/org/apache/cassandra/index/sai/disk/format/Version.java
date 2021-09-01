@@ -25,6 +25,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -37,7 +38,7 @@ public class Version
     // 6.8 formats
     public static final Version AA = new Version("aa", V1OnDiskFormat.instance);
     // Stargazer
-    public static final Version BA = new Version("ba", V1OnDiskFormat.instance);
+    public static final Version BA = new Version("ba", V2OnDiskFormat.instance);
 
     public static List<Version> ALL_VERSIONS = Lists.newArrayList(AA, BA);
 

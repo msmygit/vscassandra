@@ -61,7 +61,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
@@ -365,7 +365,7 @@ public class IndexContext
      */
     public int openPerIndexFiles()
     {
-        return viewManager.getView().size() * IndexSearcher.openPerIndexFiles(getValidator());
+        return viewManager.getView().size() * Version.LATEST.onDiskFormat().openPerIndexFiles(isLiteral());
     }
 
     public void drop(Collection<SSTableReader> sstablesToRebuild)

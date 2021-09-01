@@ -26,12 +26,9 @@ import com.google.common.base.MoreObjects;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.disk.IndexSearchContext;
+import org.apache.cassandra.index.sai.disk.SearchContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.readers.BlockPackedReader;
-import org.apache.cassandra.index.sai.disk.v1.readers.MonotonicBlockPackedReader;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
@@ -114,9 +111,9 @@ public class V1SSTableContext extends SSTableContext
     }
 
     @Override
-    public IndexSearchContext newIndexSearcher(IndexContext indexContext)
+    public SearchContext newSearchContext(IndexContext indexContext)
     {
-        return new V1IndexSearchContext(this, indexContext);
+        return new V1SearchContext(this, indexContext);
     }
 
     private static class Cleanup implements RefCounted.Tidy

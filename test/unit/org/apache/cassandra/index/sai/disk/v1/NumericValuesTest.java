@@ -26,10 +26,6 @@ import org.junit.Test;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.readers.BlockPackedReader;
-import org.apache.cassandra.index.sai.disk.v1.readers.MonotonicBlockPackedReader;
-import org.apache.cassandra.index.sai.disk.v1.writers.NumericValuesWriter;
-import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 

@@ -31,7 +31,7 @@ import com.datastax.driver.core.exceptions.ReadFailureException;
 import org.apache.cassandra.config.StorageAttachedIndexOptions;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.inject.Injection;

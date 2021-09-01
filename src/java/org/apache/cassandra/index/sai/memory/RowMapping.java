@@ -29,7 +29,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.db.tries.Trie;
-import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
@@ -153,7 +153,7 @@ public class RowMapping
             Row row = (Row) unfiltered;
 
             ByteComparable byteComparable = asComparableBytes(key, row.clustering());
-            int segmentRowId = SegmentBuilder.castToSegmentRowId(sstableRowId, 0);
+            int segmentRowId = castToSegmentRowId(sstableRowId, 0);
             try
             {
                 rowMapping.apply(Trie.singleton(byteComparable, segmentRowId), (existing, neww) -> neww);
@@ -171,6 +171,16 @@ public class RowMapping
                 minKey = key;
             maxKey = key;
         }
+    }
+
+    public static int castToSegmentRowId(long sstableRowId, long segmentRowIdOffset)
+    {
+        int segmentRowId = Math.toIntExact(sstableRowId - segmentRowIdOffset);
+
+        if (segmentRowId == PostingList.END_OF_STREAM)
+            throw new IllegalArgumentException("Illegal segment row id: END_OF_STREAM found");
+
+        return segmentRowId;
     }
 
     public boolean hasRows()

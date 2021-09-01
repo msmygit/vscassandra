@@ -20,7 +20,6 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.nio.ByteBuffer;
 
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.index.sai.disk.v1.readers.BKDReader;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.lucene.index.PointValues.Relation;

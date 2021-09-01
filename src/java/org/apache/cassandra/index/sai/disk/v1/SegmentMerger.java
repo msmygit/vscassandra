@@ -33,10 +33,6 @@ import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.TermsIteratorMerger;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.readers.BKDReader;
-import org.apache.cassandra.index.sai.disk.v1.readers.TermsReader;
-import org.apache.cassandra.index.sai.disk.v1.writers.InvertedIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.NumericIndexWriter;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 

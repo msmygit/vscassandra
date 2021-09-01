@@ -19,7 +19,7 @@ package org.apache.cassandra.index.sai;
 
 import java.io.File;
 
-import org.apache.cassandra.index.sai.disk.IndexSearchContext;
+import org.apache.cassandra.index.sai.disk.SearchContext;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -54,7 +54,7 @@ public abstract class SSTableContext extends SharedCloseableImpl
     @Override
     public abstract SSTableContext sharedCopy();
 
-    public abstract IndexSearchContext newIndexSearcher(IndexContext indexContext);
+    public abstract SearchContext newSearchContext(IndexContext indexContext);
 
 
     /**

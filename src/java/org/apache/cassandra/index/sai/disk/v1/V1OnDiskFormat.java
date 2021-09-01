@@ -25,11 +25,12 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.Gauge;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -41,18 +42,17 @@ import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v1.writers.MemtableIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.SSTableComponentsWriter;
-import org.apache.cassandra.index.sai.disk.v1.writers.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.memory.RowMapping;
+import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.metrics.CassandraMetricsRegistry;
+import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.lucene.store.IndexInput;
 
-import static org.apache.cassandra.index.sai.StorageAttachedIndex.SEGMENT_BUILD_MEMORY_LIMITER;
 import static org.apache.cassandra.utils.FBUtilities.prettyPrintMemory;
 
 public class V1OnDiskFormat implements OnDiskFormat
@@ -72,9 +72,40 @@ public class V1OnDiskFormat implements OnDiskFormat
                                                                                 IndexComponent.KD_TREE,
                                                                                 IndexComponent.KD_TREE_POSTING_LISTS);
 
+    /**
+     * Global limit on heap consumed by all index segment building that occurs outside the context of Memtable flush.
+     *
+     * Note that to avoid flushing extremely small index segments, a segment is only flushed when
+     * both the global size of all building segments has breached the limit and the size of the
+     * segment in question reaches (segment_write_buffer_space_mb / # currently building column indexes).
+     *
+     * ex. If there is only one column index building, it can buffer up to segment_write_buffer_space_mb.
+     *
+     * ex. If there is one column index building per table across 8 compactors, each index will be
+     *     eligible to flush once it reaches (segment_write_buffer_space_mb / 8) MBs.
+     */
+    public static final long SEGMENT_BUILD_MEMORY_LIMIT = Long.getLong("cassandra.test.sai.segment_build_memory_limit",
+                                                                       1024L * 1024L * (long) DatabaseDescriptor.getSAISegmentWriteBufferSpace());
+
+    public static final NamedMemoryLimiter SEGMENT_BUILD_MEMORY_LIMITER =
+    new NamedMemoryLimiter(SEGMENT_BUILD_MEMORY_LIMIT, "SSTable-attached Index Segment Builder");
+
+    static
+    {
+        CassandraMetricsRegistry.MetricName bufferSpaceUsed = DefaultNameFactory.createMetricName(AbstractMetrics.TYPE, "SegmentBufferSpaceUsedBytes", null);
+        CassandraMetricsRegistry.Metrics.register(bufferSpaceUsed, (Gauge<Long>) SEGMENT_BUILD_MEMORY_LIMITER::currentBytesUsed);
+
+        CassandraMetricsRegistry.MetricName bufferSpaceLimit = DefaultNameFactory.createMetricName(AbstractMetrics.TYPE, "SegmentBufferSpaceLimitBytes", null);
+        CassandraMetricsRegistry.Metrics.register(bufferSpaceLimit, (Gauge<Long>) () -> SEGMENT_BUILD_MEMORY_LIMIT);
+
+        // Note: The active builder count starts at 1 to avoid dividing by zero.
+        CassandraMetricsRegistry.MetricName buildsInProgress = DefaultNameFactory.createMetricName(AbstractMetrics.TYPE, "ColumnIndexBuildsInProgress", null);
+        CassandraMetricsRegistry.Metrics.register(buildsInProgress, (Gauge<Long>) () -> SegmentBuilder.ACTIVE_BUILDER_COUNT.get() - 1);
+    }
+
     public static final V1OnDiskFormat instance = new V1OnDiskFormat();
 
-    private V1OnDiskFormat()
+    protected V1OnDiskFormat()
     {}
 
     @Override
@@ -219,6 +250,13 @@ public class V1OnDiskFormat implements OnDiskFormat
                 return files;
             }
         };
+    }
+
+    @Override
+    public int openPerIndexFiles(boolean isLiteral)
+    {
+        // For the V1 format there are always 2 open files per index - index (kdtree or terms) + postings
+        return 2;
     }
 
     @Override

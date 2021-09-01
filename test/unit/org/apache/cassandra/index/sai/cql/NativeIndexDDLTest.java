@@ -59,7 +59,7 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v1.writers.NumericValuesWriter;
+import org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Expression;

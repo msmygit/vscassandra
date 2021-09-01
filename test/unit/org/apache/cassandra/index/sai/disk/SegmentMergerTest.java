@@ -34,7 +34,7 @@ import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.writers.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Descriptor;

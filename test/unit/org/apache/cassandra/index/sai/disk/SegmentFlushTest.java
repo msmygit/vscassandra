@@ -42,10 +42,11 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.writers.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.v1.readers.TermsReader;
+import org.apache.cassandra.index.sai.disk.v1.TermsReader;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
@@ -122,7 +123,7 @@ public class SegmentFlushTest
                                                 IndexWriterConfig.defaultConfig("test"),
                                                 QueryEventListeners.NO_OP_TRIE_LISTENER);
 
-        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor, context, StorageAttachedIndex.SEGMENT_BUILD_MEMORY_LIMITER, () -> true, null);
+        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor, context, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER, () -> true, null);
 
         List<DecoratedKey> keys = Arrays.asList(dk("1"), dk("2"));
         Collections.sort(keys);

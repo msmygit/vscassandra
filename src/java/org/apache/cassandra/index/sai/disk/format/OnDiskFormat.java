@@ -62,5 +62,7 @@ public interface OnDiskFormat
 
     public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
 
+    public int openPerIndexFiles(boolean isLiteral);
+
     public SSTableContext newSSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor);
 }

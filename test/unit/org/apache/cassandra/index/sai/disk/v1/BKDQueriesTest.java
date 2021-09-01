@@ -22,8 +22,6 @@ import org.junit.Test;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v1.BKDQueries;
-import org.apache.cassandra.index.sai.disk.v1.readers.BKDReader;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.utils.ByteBufferUtil;
