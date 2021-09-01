@@ -643,7 +643,8 @@ public class StorageAttachedIndex implements Index
         return Version.LATEST.onDiskFormat()
                              .perIndexComponents(indexContext)
                              .stream()
-                             .map(c -> new Component(Component.Type.CUSTOM, IndexDescriptor.componentName(Version.LATEST, c, indexContext.getIndexName())))
+                             .map(c -> new Component(Component.Type.CUSTOM,
+                                                     Version.LATEST.onDiskFormat().componentName(c, indexContext.getIndexName())))
                              .collect(Collectors.toSet());
     }
 

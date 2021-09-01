@@ -55,7 +55,6 @@ public class FlushingTest extends SAITester
     @Test
     public void testFlushingOverwriteDelete() throws Throwable
     {
-        String table = "flush_overwrite_delete";
         createTable(CREATE_TABLE_TEMPLATE);
         IndexContext numericIndexContext = createIndexContext(createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1")), Int32Type.instance);
 
@@ -69,11 +68,11 @@ public class FlushingTest extends SAITester
 
         ResultSet rows = executeNet("SELECT id1 FROM %s WHERE v1 >= 0");
         assertEquals(0, rows.all().size());
-        verifyIndexFiles(numericIndexContext, null, sstables, sstables, sstables);
+        verifyIndexFiles(numericIndexContext, null, sstables, 0, 0, sstables, 0);
         verifySSTableIndexes(numericIndexContext.getIndexName(), sstables, 0);
 
         compact();
-        waitForAssert(() -> verifyIndexFiles(numericIndexContext, null, 1, 1, 0));
+        waitForAssert(() -> verifyIndexFiles(numericIndexContext, null, 1, 0, 0, 1, 0));
 
         rows = executeNet("SELECT id1 FROM %s WHERE v1 >= 0");
         assertEquals(0, rows.all().size());

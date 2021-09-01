@@ -62,13 +62,7 @@ public class IndexDescriptor
     public static final String SAI_DESCRIPTOR = "SAI";
 
     private static final String SEPARATOR = "-";
-    private static final String SAI_SEPARATOR = "+";
-    private static final String EXTENSION = ".db";
     private static final String TMP_EXTENSION = ".tmp";
-
-    // Version AA - The final 6.8 file format
-    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
-    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
 
     public final Version version;
     public final Descriptor descriptor;
@@ -76,7 +70,7 @@ public class IndexDescriptor
     public final Map<String, Set<IndexComponent>> perIndexComponents = Maps.newHashMap();
     public final Map<IndexComponent, File> onDiskPerSSTableFileMap = Maps.newHashMap();
     public final Map<Pair<IndexComponent, String>, File> onDiskPerIndexFileMap = Maps.newHashMap();
-    public final Map<IndexComponent, File> onDiskTemporaryFileMap = Maps.newHashMap();
+    public final Map<Pair<IndexComponent, String>, File> onDiskTemporaryFileMap = Maps.newHashMap();
 
     private IndexDescriptor(Version version, Descriptor descriptor)
     {
@@ -139,7 +133,7 @@ public class IndexDescriptor
 
     public File tmpFileFor(IndexComponent component, String index)
     {
-        return onDiskTemporaryFileMap.computeIfAbsent(component, c -> new File(tmpFilenameFor(c, index)));
+        return onDiskTemporaryFileMap.computeIfAbsent(Pair.create(component, index), c -> new File(tmpFilenameFor(component, index)));
     }
 
     public File fileFor(IndexComponent component)
@@ -160,41 +154,20 @@ public class IndexDescriptor
     private String filenameFor(IndexComponent component, String index)
     {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(descriptor.baseFilename()).append(SEPARATOR).append(componentName(version, component, index));
-        return stringBuilder.toString();
-    }
-
-    public static String componentName(Version version, IndexComponent indexComponent, String index)
-    {
-        StringBuilder stringBuilder = new StringBuilder();
-
-        if (version.onOrAfter(Version.BA))
-        {
-            stringBuilder.append(SAI_DESCRIPTOR);
-            stringBuilder.append(SAI_SEPARATOR).append(version);
-            if (index != null)
-                stringBuilder.append(SAI_SEPARATOR).append(index);
-            stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
-            stringBuilder.append(EXTENSION);
-        }
-        else if (version.equals(Version.AA))
-        {
-            stringBuilder.append(index == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
-                                               : String.format(VERSION_AA_PER_INDEX_FORMAT, index, indexComponent.representation));
-        }
+        stringBuilder.append(descriptor.baseFilename()).append(SEPARATOR).append(version.onDiskFormat().componentName(component, index));
         return stringBuilder.toString();
     }
 
     public Set<Component> getSSTableComponents()
     {
-        return perSSTableComponents.stream().map(c -> new Component(Component.Type.CUSTOM, componentName(version, c, null))).collect(Collectors.toSet());
+        return perSSTableComponents.stream().map(c -> new Component(Component.Type.CUSTOM, version.onDiskFormat().componentName(c, null))).collect(Collectors.toSet());
     }
 
     public Set<Component> getSSTableComponents(String index)
     {
         return perIndexComponents.containsKey(index) ? perIndexComponents.get(index)
                                                                          .stream()
-                                                                         .map(c -> new Component(Component.Type.CUSTOM, componentName(version, c, index)))
+                                                                         .map(c -> new Component(Component.Type.CUSTOM, version.onDiskFormat().componentName(c, index)))
                                                                          .collect(Collectors.toSet())
                                                      : Collections.emptySet();
     }

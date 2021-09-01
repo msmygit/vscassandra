@@ -190,7 +190,7 @@ public interface SegmentMerger extends Closeable
                                                       indexFiles.get(IndexComponent.KD_TREE).sharedCopy(),
                                                       bkdPosition,
                                                       indexFiles.get(IndexComponent.KD_TREE_POSTING_LISTS).sharedCopy(),
-                                                                     postingsPosition);
+                                                      postingsPosition);
             readers.add(bkdReader);
             return bkdReader.iteratorState(rowid -> rowid + segment.segmentRowIdOffset);
         }

@@ -48,12 +48,12 @@ public class FailureTest extends SAITester
 
         assertEquals(1, execute("SELECT id1 FROM %s WHERE v1 > 1").size());
 
-        verifyIndexFiles(numericIndexContext, null, 1, 1, 0);
+        verifyIndexFiles(numericIndexContext, null, 1, 1, 0, 1, 0);
         verifySSTableIndexes(numericIndexContext.getIndexName(), 1, 1);
 
         execute("INSERT INTO %s (id1, v1) VALUES ('3', 3)");
 
-        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_flush", SSTableContext.class, "create", RuntimeException.class);
+        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_flush", SSTableContext.class, "<init>", RuntimeException.class);
         Injections.inject(ssTableContextCreationFailure);
 
         flush();
@@ -87,10 +87,10 @@ public class FailureTest extends SAITester
 
         assertEquals(1, execute("SELECT id1 FROM %s WHERE v1 > 1").size());
 
-        verifyIndexFiles(numericIndexContext, null, 2, 2, 0);
+        verifyIndexFiles(numericIndexContext, null, 2, 2, 0, 2, 0);
         verifySSTableIndexes(numericIndexContext.getIndexName(), 2, 2);
 
-        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_compaction", SSTableContext.class, "create", RuntimeException.class);
+        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_compaction", SSTableContext.class, "<init>", RuntimeException.class);
         Injections.inject(ssTableContextCreationFailure);
 
         compact();
@@ -112,7 +112,7 @@ public class FailureTest extends SAITester
         // because byteman can't find the class.
         SSTableContext.class.getName();
 
-        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_creation", SSTableContext.class, "create", RuntimeException.class);
+        Injection ssTableContextCreationFailure = newFailureOnEntry("context_failure_on_creation", SSTableContext.class, "<init>", RuntimeException.class);
         Injections.inject(ssTableContextCreationFailure);
 
         String v2IndexName = createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));

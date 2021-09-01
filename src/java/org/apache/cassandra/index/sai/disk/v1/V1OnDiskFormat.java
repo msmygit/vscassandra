@@ -72,6 +72,9 @@ public class V1OnDiskFormat implements OnDiskFormat
                                                                                 IndexComponent.KD_TREE,
                                                                                 IndexComponent.KD_TREE_POSTING_LISTS);
 
+    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
+    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
+
     /**
      * Global limit on heap consumed by all index segment building that occurs outside the context of Memtable flush.
      *
@@ -107,6 +110,17 @@ public class V1OnDiskFormat implements OnDiskFormat
 
     protected V1OnDiskFormat()
     {}
+
+    @Override
+    public String componentName(IndexComponent indexComponent, String index)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append(index == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
+                                           : String.format(VERSION_AA_PER_INDEX_FORMAT, index, indexComponent.representation));
+
+        return stringBuilder.toString();
+    }
 
     @Override
     public boolean isGroupIndexComplete(IndexDescriptor indexDescriptor)

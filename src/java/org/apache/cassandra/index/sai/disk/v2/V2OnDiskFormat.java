@@ -18,13 +18,34 @@
 
 package org.apache.cassandra.index.sai.disk.v2;
 
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+
+import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DESCRIPTOR;
 
 public class V2OnDiskFormat extends V1OnDiskFormat
 {
+    private static final String SAI_SEPARATOR = "+";
+    private static final String EXTENSION = ".db";
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
 
     protected V2OnDiskFormat()
     {}
+
+    @Override
+    public String componentName(IndexComponent indexComponent, String index)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append(SAI_DESCRIPTOR);
+        stringBuilder.append(SAI_SEPARATOR).append(Version.BA);
+        if (index != null)
+            stringBuilder.append(SAI_SEPARATOR).append(index);
+        stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
+        stringBuilder.append(EXTENSION);
+
+        return stringBuilder.toString();
+    }
 }

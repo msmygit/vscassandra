@@ -17,13 +17,22 @@
  */
 package org.apache.cassandra.index.sai.disk.format;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
+
+import org.apache.cassandra.config.DatabaseDescriptor;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertEquals;
 
 public class VersionTest
 {
+    @BeforeClass
+    public static void initialise() throws Throwable
+    {
+        DatabaseDescriptor.daemonInitialization();
+    }
+
     @Test
     public void supportedVersionsWillParse()
     {

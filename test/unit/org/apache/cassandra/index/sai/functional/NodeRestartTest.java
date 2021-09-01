@@ -105,7 +105,7 @@ public class NodeRestartTest extends SAITester
     }
 
     @Test
-    public void shouldRestartWithExistingNDIComponents() throws Throwable
+    public void shouldRestartWithExistingIndexComponents() throws Throwable
     {
         createTable(CREATE_TABLE_TEMPLATE);
         verifyNoIndexFiles();

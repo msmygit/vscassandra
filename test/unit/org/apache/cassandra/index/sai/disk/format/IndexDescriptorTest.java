@@ -28,6 +28,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -152,7 +153,7 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_KDTreePostingLists.db"));
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", Int32Type.instance));
 
         assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
         assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));

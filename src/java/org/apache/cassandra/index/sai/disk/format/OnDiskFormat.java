@@ -34,6 +34,8 @@ import org.apache.cassandra.schema.CompressionParams;
 
 public interface OnDiskFormat
 {
+    public String componentName(IndexComponent indexComponent, String index);
+
     public boolean isGroupIndexComplete(IndexDescriptor indexDescriptor);
 
     public boolean isColumnIndexComplete(IndexDescriptor indexDescriptor, IndexContext indexContext);

@@ -55,7 +55,7 @@ public class SnapshotTest extends SAITester
         IndexContext numericIndexContext = createIndexContext(createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1")), Int32Type.instance);
         waitForIndexQueryable();
         flush();
-        verifyNoIndexFiles();
+        verifyIndexFiles(numericIndexContext, null, 1, 1, 0, 1, 0);
         // Note: This test will fail here if it is run on its own because the per-index validation
         // is run if the node is starting up but validatation isn't done once the node is started
         assertValidationCount(0, 0);
@@ -64,7 +64,7 @@ public class SnapshotTest extends SAITester
         // Add some data into a second sstable
         execute("INSERT INTO %s (id1, v1) VALUES ('1', 0);");
         flush();
-        verifyNoIndexFiles();
+        verifyIndexFiles(numericIndexContext, null, 2, 2, 0, 2, 0);
         assertValidationCount(0, 0);
 
         // Take a snapshot recording the index files last modified date
@@ -81,21 +81,19 @@ public class SnapshotTest extends SAITester
         // Add some data into a third sstable, out of the scope of our snapshot
         execute("INSERT INTO %s (id1, v1) VALUES ('2', 0);");
         flush();
-        verifyIndexFiles(numericIndexContext, null, 1, 0);
+        verifyIndexFiles(numericIndexContext, null, 3, 3, 0, 3, 0);
         assertNumRows(3, "SELECT * FROM %%s WHERE v1 >= 0");
         assertValidationCount(0, 0);
 
         // Truncate the table
         truncate(false);
-        Thread.sleep(1000);
-        System.out.println();
         waitForAssert(() -> verifyNoIndexFiles());
         assertNumRows(0, "SELECT * FROM %%s WHERE v1 >= 0");
         assertValidationCount(0, 0);
 
         // Restore the snapshot, only the two first sstables should be restored
         restoreSnapshot(snapshot);
-        verifyIndexFiles(numericIndexContext, null, 3, 0);
+        verifyIndexFiles(numericIndexContext, null, 2, 2, 0, 2, 0);
         assertEquals(snapshotLastModified, indexFilesLastModified());
         assertNumRows(2, "SELECT * FROM %%s WHERE v1 >= 0");
         assertValidationCount(2, 2); // newly loaded

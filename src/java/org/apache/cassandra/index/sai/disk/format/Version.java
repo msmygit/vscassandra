@@ -18,11 +18,9 @@
 package org.apache.cassandra.index.sai.disk.format;
 
 import java.util.List;
-import java.util.Set;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;

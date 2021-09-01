@@ -915,7 +915,7 @@ public class NativeIndexDDLTest extends SAITester
         verifySSTableIndexes(stringIndexName, 1);
         IndexContext numericIndexContext = createIndexContext("v1", numericIndexName, Int32Type.instance);
         IndexContext literalIndexContext = createIndexContext("v2", stringIndexName, UTF8Type.instance);
-        verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1);
+        verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1, 1, 1);
         assertTrue(verifyChecksum(createIndexContext("v1", numericIndexName, Int32Type.instance)));
         assertTrue(verifyChecksum(createIndexContext("v2", stringIndexName, UTF8Type.instance)));
 
@@ -977,7 +977,7 @@ public class NativeIndexDDLTest extends SAITester
         // verify indexes are recovered
         verifySSTableIndexes(numericIndexName, 1);
         verifySSTableIndexes(stringIndexName, 1);
-        verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1);
+        verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1, 1, 1);
 
         rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(rowCount, rows.all().size());
@@ -1009,7 +1009,7 @@ public class NativeIndexDDLTest extends SAITester
             waitForCompactionsFinished();
 
             // Only token/offset files for the first SSTable in the compaction task should exist, while column-specific files are blown away:
-            verifyIndexFiles(numericIndexContext, null, 2, 0);
+            verifyIndexFiles(numericIndexContext, null, 2, 0, 0, 0, 0);
 
             assertEquals("Segment memory limiter should revert to zero.", 0L, getSegmentBufferUsedBytes());
             assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
@@ -1071,7 +1071,7 @@ public class NativeIndexDDLTest extends SAITester
         execute("INSERT INTO %s (id1) VALUES ('1');");
         flush();
 
-        verifyIndexFiles(numericIndexContext, literalIndexContext, 2, 1, 1);
+        verifyIndexFiles(numericIndexContext, literalIndexContext, 2, 0, 0, 2, 2);
 
         ResultSet rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(0, rows.all().size());
@@ -1080,7 +1080,7 @@ public class NativeIndexDDLTest extends SAITester
 
         // compact empty index
         compact();
-        waitForAssert(() -> verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1));
+        waitForAssert(() -> verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 0, 0, 1, 1));
 
         rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(0, rows.all().size());
@@ -1149,7 +1149,7 @@ public class NativeIndexDDLTest extends SAITester
         populateData.run();
         verifySSTableIndexes(IndexMetadata.generateDefaultIndexName(currentTable(), V1_COLUMN_IDENTIFIER), 2, 0);
         verifySSTableIndexes(IndexMetadata.generateDefaultIndexName(currentTable(), V2_COLUMN_IDENTIFIER), 2, 0);
-        verifyIndexFiles(numericIndexContext, literalIndexContext, 2, 1, 1);
+        verifyIndexFiles(numericIndexContext, literalIndexContext, 2, 0, 0, 2, 2);
 
         ResultSet rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(0, rows.all().size());
@@ -1160,7 +1160,7 @@ public class NativeIndexDDLTest extends SAITester
         compact();
         verifySSTableIndexes(IndexMetadata.generateDefaultIndexName(currentTable(), V1_COLUMN_IDENTIFIER), 1, 0);
         verifySSTableIndexes(IndexMetadata.generateDefaultIndexName(currentTable(), V2_COLUMN_IDENTIFIER), 1, 0);
-        waitForAssert(() -> verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 1, 1));
+        waitForAssert(() -> verifyIndexFiles(numericIndexContext, literalIndexContext, 1, 0, 0, 1, 1));
 
         rows = executeNet("SELECT id1 FROM %s WHERE v1>=0");
         assertEquals(0, rows.all().size());

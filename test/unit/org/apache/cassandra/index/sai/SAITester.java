@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
@@ -110,7 +111,7 @@ public class SAITester extends CQLTester
 
     protected static final Injections.Counter perIndexValidationCounter = Injections.newCounter("PerIndexValidationCounter")
                                                                                     .add(newInvokePoint().onClass(IndexDescriptor.class)
-                                                                                                         .onMethod("validatePerColumnComponents", "IndexContext"))
+                                                                                                         .onMethod("validatePerIndexComponents", "IndexContext"))
                                                                                     .build();
 
     protected static ColumnIdentifier V1_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v1", true);
@@ -448,21 +449,35 @@ public class SAITester extends CQLTester
 
     protected void verifyNoIndexFiles()
     {
+        Set<File> indexFiles = indexFiles();
+        System.out.println(indexFiles);
         assertTrue(indexFiles().size() == 0);
     }
 
-    protected void verifyIndexFiles(IndexContext numericIndexContext, IndexContext literalIndexContext, int numericFiles, int literal)
+    protected void verifyIndexFiles(IndexContext numericIndexContext, IndexContext literalIndexContext, int numericFiles, int literalFiles)
     {
-        verifyIndexFiles(numericIndexContext, literalIndexContext, Math.max(numericFiles, literal), numericFiles, literal);
+        verifyIndexFiles(numericIndexContext,
+                         literalIndexContext,
+                         Math.max(numericFiles, literalFiles),
+                         numericFiles,
+                         literalFiles,
+                         numericFiles,
+                         literalFiles);
     }
 
-    protected void verifyIndexFiles(IndexContext numericIndexContext, IndexContext literalIndexContext, int perSSTableFiles, int numericFiles, int literalFiles)
+    protected void verifyIndexFiles(IndexContext numericIndexContext,
+                                    IndexContext literalIndexContext,
+                                    int perSSTableFiles,
+                                    int numericFiles,
+                                    int literalFiles,
+                                    int numericCompletionMarkers,
+                                    int literalCompletionMarkers)
     {
         Set<File> indexFiles = indexFiles();
 
-        for (IndexComponent component : Version.LATEST.onDiskFormat().perSSTableComponents())
+        for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perSSTableComponents())
         {
-            Set<File> tableFiles = componentFiles(indexFiles, component);
+            Set<File> tableFiles = componentFiles(indexFiles, new Component(Component.Type.CUSTOM, Version.LATEST.onDiskFormat().componentName(indexComponent, null)));
             assertEquals(tableFiles.toString(), perSSTableFiles, tableFiles.size());
         }
 
@@ -470,8 +485,14 @@ public class SAITester extends CQLTester
         {
             for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perIndexComponents(literalIndexContext))
             {
-                Set<File> stringIndexFiles = componentFiles(indexFiles, indexComponent);
-                assertEquals(stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
+                Set<File> stringIndexFiles = componentFiles(indexFiles,
+                                                            new Component(Component.Type.CUSTOM,
+                                                                          Version.LATEST.onDiskFormat().componentName(indexComponent,
+                                                                                                                      literalIndexContext.getIndexName())));
+                if (Version.LATEST.onDiskFormat().isCompletionMarker(indexComponent))
+                    assertEquals(literalCompletionMarkers, stringIndexFiles.size());
+                else
+                    assertEquals(stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
             }
         }
 
@@ -479,22 +500,40 @@ public class SAITester extends CQLTester
         {
             for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perIndexComponents(numericIndexContext))
             {
-                Set<File> numericIndexFiles = componentFiles(indexFiles, indexComponent);
-                assertEquals(numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
+                Set<File> numericIndexFiles = componentFiles(indexFiles,
+                                                             new Component(Component.Type.CUSTOM,
+                                                                           Version.LATEST.onDiskFormat().componentName(indexComponent,
+                                                                                                                       numericIndexContext.getIndexName())));
+                if (Version.LATEST.onDiskFormat().isCompletionMarker(indexComponent))
+                    assertEquals(numericCompletionMarkers, numericIndexFiles.size());
+                else
+                    assertEquals(numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
             }
         }
     }
 
     protected Set<File> indexFiles()
     {
-        return Keyspace.open(KEYSPACE)
-                       .getColumnFamilyStore(currentTable())
-                       .getDirectories()
-                       .getCFDirectories()
-                       .stream()
-                       .flatMap(dir -> Arrays.stream(dir.listFiles((folder, name) -> name.contains(SAI_DESCRIPTOR))))
-                       .filter(File::isFile)
-                       .collect(Collectors.toSet());
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        Set<Component> components = cfs.indexManager.listIndexGroups()
+                                                    .stream()
+                                                    .filter(g -> g instanceof StorageAttachedIndexGroup)
+                                                    .map(Index.Group::getComponents)
+                                                    .flatMap(Set::stream)
+                                                    .collect(Collectors.toSet());
+
+        Set<File> indexFiles = new HashSet<>();
+        for (Component component : components)
+        {
+            List<File> files = cfs.getDirectories().getCFDirectories()
+                                  .stream()
+                                  .flatMap(dir -> Arrays.stream(dir.listFiles()))
+                                  .filter(File::isFile)
+                                  .filter(f -> f.getName().endsWith(component.name))
+                                  .collect(Collectors.toList());
+            indexFiles.addAll(files);
+        }
+        return indexFiles;
     }
 
     protected ObjectName bufferSpaceObjectName(String name) throws MalformedObjectNameException
@@ -689,9 +728,9 @@ public class SAITester extends CQLTester
         return group.getIndexes().stream().map(index -> (StorageAttachedIndex)index).collect(Collectors.toList());
     }
 
-    protected Set<File> componentFiles(Collection<File> indexFiles, IndexComponent component)
+    protected Set<File> componentFiles(Collection<File> indexFiles, Component component)
     {
-        return indexFiles.stream().filter(c -> c.getName().endsWith(component.representation + ".db")).collect(Collectors.toSet());
+        return indexFiles.stream().filter(c -> c.getName().endsWith(component.name)).collect(Collectors.toSet());
     }
 
     protected Set<File> componentFiles(Collection<File> indexFiles, String shortName)
