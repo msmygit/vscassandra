@@ -841,8 +841,9 @@ public class BlockIndexReader implements Closeable
             builder.clear();
 
             //System.out.println("bytesPosition=" + leafBytesFP + " bytesPositionStart=" + leafBytesStartFP + " total=" + (leafBytesFP - leafBytesStartFP));
-
             //System.out.println("lastlen=" + lastLen + " lastPrefix=" + lastPrefix + " bytesLength=" + bytesLength);
+
+            // TODO: fix this allocation by reading directly into builder
             final byte[] bytes = new byte[bytesLength];
             bytesInput.seek(leafBytesFP);
             bytesInput.readBytes(bytes, 0, bytesLength);

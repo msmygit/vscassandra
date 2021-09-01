@@ -324,7 +324,5 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
         this.currentPostings = this.postingsBuffer;
         Arrays.fill(currentPostings, 0);
         this.forEncoder.decodePFoR(currentPostings, in);
-
-        //this.forEncoder.decodeFoRDeltaAndPrefixSum(currentPosition, currentPostings, in);
     }
 }

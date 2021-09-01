@@ -53,6 +53,7 @@ public class IndexComponent
         TERMS_DATA("TermsData", false),
         TERMS_INDEX("TermsIndex", false),
         ORDER_MAP("OrderMap", false),
+        COMPRESSED_TERMS_DATA("CompressedTermsData", false),
         /**
          * Stores postings written by {@code PostingsWriter}
          */
@@ -166,6 +167,7 @@ public class IndexComponent
             case TERMS_DATA:
             case ORDER_MAP:
             case TERMS_INDEX:
+            case COMPRESSED_TERMS_DATA:
             case POSTING_LISTS:
                 component = new IndexComponent(type, index);
                 break;

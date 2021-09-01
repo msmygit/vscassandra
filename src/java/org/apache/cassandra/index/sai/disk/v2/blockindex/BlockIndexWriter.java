@@ -31,9 +31,11 @@ import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
 import com.google.common.collect.TreeRangeSet;
 
+import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.cursors.IntLongCursor;
 import com.github.luben.zstd.Zstd;
+import com.github.luben.zstd.ZstdDictCompress;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -74,9 +76,12 @@ public class BlockIndexWriter
     //       write the leaf file pointer to the first occurence of the min value
     private final LongArrayList leafBytesFPs = new LongArrayList();
     private final LongArrayList realLeafBytesFPs = new LongArrayList();
+    private final LongArrayList realLeafCompressedBytesFPs = new LongArrayList();
+
+    private final IntArrayList realLeafBytesLengths = new IntArrayList();
 
     final List<BytesRef> blockMinValues = new ArrayList();
-    final IndexOutput valuesOut;
+    final IndexOutput valuesOut, compressedValuesOut;
     final IndexOutputWriter indexOut;
     final IndexOutput leafPostingsOut, orderMapOut;
 
@@ -155,6 +160,7 @@ public class BlockIndexWriter
         this.indexOut = indexDescriptor.openOutput(IndexComponent.Type.TERMS_INDEX, indexName);
         this.leafPostingsOut = indexDescriptor.openOutput(IndexComponent.Type.POSTING_LISTS, indexName);
         this.orderMapOut = indexDescriptor.openOutput(IndexComponent.Type.ORDER_MAP, indexName);
+        this.compressedValuesOut = indexDescriptor.openOutput(IndexComponent.Type.COMPRESSED_TERMS_DATA, indexName);
         this.postingsWriter = new PostingsWriter(leafPostingsOut);
     }
 
@@ -297,25 +303,6 @@ public class BlockIndexWriter
             {
                 zstdSamples.add(br.bytes);
             }
-        }
-
-        final byte[] zstdDictionary = new byte[100 * 1024];
-
-        byte[][] zstdSamplesArray = zstdSamples.toArray(new byte[0][]);
-
-        final int zstdDictionaryLen = (int)Zstd.trainFromBuffer(zstdSamplesArray, zstdDictionary);
-        final long zstdDictionaryFP;
-
-        System.out.println("ZSTD dictionary zstdDictionaryLen="+zstdDictionaryLen+" zstdSamples.size="+zstdSamples.size()+" zstdSamplesArray.len="+zstdSamplesArray.length);
-
-        if (zstdDictionaryLen == -1)
-        {
-            zstdDictionaryFP = -1;
-        }
-        else
-        {
-            zstdDictionaryFP = this.valuesOut.getFilePointer();
-            this.valuesOut.copyBytes(new ByteArrayDataInput(zstdDictionary, 0, zstdDictionaryLen), zstdDictionaryLen);
         }
 
         assert leafBytesFPs.size() == blockMinValues.size()
@@ -489,12 +476,78 @@ public class BlockIndexWriter
         orderMapOut.close();
         valuesOut.close();
 
+        // get samples from bytes for the zstd dictionary
+        long totalDict = 110 * 1024;
+
+        byte[] zstdDictionary = new byte[(int)totalDict];
+
+        long totalSamples = totalDict * 100;
+        long numSampleBlocks = totalSamples / 1024;
+        long sampleChunkSize = valuesOutLastBytesFP / numSampleBlocks;
+
+        List<byte[]> bytesList = new ArrayList<>();
+
+        // gather 1kb chunks as samples
         try (IndexInput bytesInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)))
         {
-
-
-            //valuesOutLastBytesFP
+            for (int x = 0; x < numSampleBlocks; x++)
+            {
+                bytesInput.seek(x * sampleChunkSize);
+                byte[] samplesBytes = new byte[1024];
+                bytesInput.readBytes(samplesBytes, 0, samplesBytes.length);
+                bytesList.add(samplesBytes);
+            }
         }
+
+        final int zstdDictionaryLen = (int) Zstd.trainFromBuffer(bytesList.toArray(new byte[0][]), zstdDictionary);
+        final long zstdDictionaryFP;
+
+        System.out.println("ZSTD dictionary zstdDictionaryLen=" + zstdDictionaryLen + " zstdSamples.size=" + zstdSamples.size() + " zstdSamplesArray.len=" + bytesList.size());
+
+        if (zstdDictionaryLen == -1)
+        {
+            zstdDictionaryFP = -1;
+        }
+        else
+        {
+            zstdDictionaryFP = this.compressedValuesOut.getFilePointer();
+            this.compressedValuesOut.copyBytes(new ByteArrayDataInput(zstdDictionary, 0, zstdDictionaryLen), zstdDictionaryLen);
+        }
+
+
+        assert realLeafBytesFPs.size() == realLeafBytesLengths.size();
+
+        try (ZstdDictCompress dictCompress = new ZstdDictCompress(zstdDictionary, 0, zstdDictionaryLen, 1);
+             IndexInput bytesInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)))
+        {
+            for (int x = 0; x < realLeafBytesFPs.size(); x++)
+            {
+                long bytesFP = realLeafBytesFPs.get(x);
+
+                if (x > 0 && realLeafBytesFPs.get(x - 1) == bytesFP)
+                {
+                    realLeafCompressedBytesFPs.add(realLeafCompressedBytesFPs.get(x - 1));
+                }
+                else
+                {
+                    int bytesLen = realLeafBytesLengths.get(x);
+
+                    byte[] bytes = new byte[bytesLen];
+                    bytesInput.seek(bytesFP);
+                    bytesInput.readBytes(bytes, 0, bytes.length);
+
+                    // TODO: bad alloc, bytes should be reused, however the JNI API is limited
+                    byte[] compressedBytes = Zstd.compress(bytes, dictCompress);
+                    long compressedFP = this.compressedValuesOut.getFilePointer();
+                    this.compressedValuesOut.writeBytes(compressedBytes, 0, compressedBytes.length);
+                    realLeafCompressedBytesFPs.add(compressedFP);
+                }
+            }
+        }
+
+        assert realLeafBytesFPs.size() == realLeafCompressedBytesFPs.size();
+
+        this.compressedValuesOut.close();
 
         return new BlockIndexMeta(orderMapFP,
                                   indexFP,
@@ -681,6 +734,9 @@ public class BlockIndexWriter
             {
                 long previousRealFP = this.realLeafBytesFPs.get(this.realLeafBytesFPs.size() - 1);
                 this.realLeafBytesFPs.add(previousRealFP);
+
+                int previousRealLen = this.realLeafBytesLengths.get(this.realLeafBytesLengths.size() - 1);
+                this.realLeafBytesLengths.add(previousRealLen);
                 return;
             }
         }
@@ -700,6 +756,8 @@ public class BlockIndexWriter
         valuesOut.writeBytes(buffer.prefixScratchOut.getBytes(), 0, buffer.prefixScratchOut.getPosition());
         valuesOut.writeBytes(buffer.scratchOut.getBytes(), 0, buffer.scratchOut.getPosition());
 
+        long bytesLength = valuesOut.getFilePointer() - filePointer;
+        this.realLeafBytesLengths.add((int)bytesLength);
         this.realLeafBytesFPs.add(filePointer);
     }
 

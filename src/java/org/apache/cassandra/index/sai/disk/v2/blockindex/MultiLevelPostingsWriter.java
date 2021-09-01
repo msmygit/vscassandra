@@ -206,7 +206,6 @@ public class MultiLevelPostingsWriter
 
             final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
 
-            //for (final Integer leafNodeID : leafNodeIDs)
             for (final Integer leafNodeID : leafNodeIDsCopy)
             {
                 assert leafNodeID.intValue() >= numLeaves;
@@ -237,7 +236,6 @@ public class MultiLevelPostingsWriter
         flushTime.stop();
 
         final long indexFilePointer = out.getFilePointer();
-        //writeMap(nodeIDToPostingsFP, out);
         postingsWriter.complete();
         return nodeIDToPostingsFP;
     }
@@ -291,16 +289,5 @@ public class MultiLevelPostingsWriter
     private boolean isLevelEligibleForPostingList(int level)
     {
         return level > 1 && level % config.getBkdPostingsSkip() == 0;
-    }
-
-    private void writeMap(Map<Integer, Long> map, IndexOutput out) throws IOException
-    {
-        out.writeVInt(map.size());
-
-        for (Map.Entry<Integer, Long> e : map.entrySet())
-        {
-            out.writeVInt(e.getKey());
-            out.writeVLong(e.getValue());
-        }
     }
 }
