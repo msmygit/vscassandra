@@ -241,7 +241,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     public void doRandomTest() throws Exception
     {
         List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
-        int numValues = nextInt(10000, 12000);
+        int numValues = nextInt(500, 1000);
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
 
         int maxRowID = -1;

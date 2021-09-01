@@ -46,6 +46,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v1.numerics.DirectReaders;
+import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
@@ -384,7 +385,7 @@ public class BlockIndexReader implements Closeable
             if (nodeIDLeafOrd.filePointer < 0)
             {
                 long fp = nodeIDLeafOrd.filePointer * -1;
-                PostingsReader postings = new PostingsReader(multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
+                PForDeltaPostingsReader postings = new PForDeltaPostingsReader(multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
                 postingLists.add(postings.peekable());
             }
             else

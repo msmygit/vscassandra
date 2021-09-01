@@ -39,8 +39,6 @@ public class PFoRPostingsTest extends NdiRandomizedTest
         String index = "index";
         IndexComponent postingLists = IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index);
 
-        // new int[]{ 10, 20, 30, 40, 50, 60 }
-
         int[] arr = new int[1000];
         for (int x=0; x < arr.length; x++)
         {

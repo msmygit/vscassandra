@@ -43,6 +43,7 @@ import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
+import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsWriter;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -96,7 +97,7 @@ public class MultiLevelPostingsWriter
 //                   "Expected equal number of postings lists (%s) and leaf offsets (%s).",
 //                   postings.size(), leafFPToNodeID.size());
 
-        final PostingsWriter postingsWriter = new PostingsWriter(out);
+        final PForDeltaPostingsWriter postingsWriter = new PForDeltaPostingsWriter(out);
 
         final List<Integer> internalNodeIDs =
         nodeToChildLeaves.keySet()
