@@ -87,7 +87,7 @@ public class SSTableContextManager
 
                 // ConcurrentHashMap#computeIfAbsent guarantees atomicity, so {@link SSTableContext#create(SSTableReader)}}
                 // is called at most once per key.
-                contexts.add(sstableContexts.computeIfAbsent(sstable, s -> indexDescriptor.version.onDiskFormat().newSSTableContext(s, indexDescriptor)));
+                contexts.add(sstableContexts.computeIfAbsent(sstable, s -> indexDescriptor.newSSTableContext(s)));
             }
             catch (Throwable t)
             {
