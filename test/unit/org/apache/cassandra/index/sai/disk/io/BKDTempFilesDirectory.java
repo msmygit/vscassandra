@@ -45,121 +45,121 @@ import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DES
  * Limited Lucene Directory for use with writing the KD-Tree only
  */
 //TODO Fix this
-public class BKDTempFilesDirectory extends Directory
-{
-    private static final Logger logger = LoggerFactory.getLogger(BKDTempFilesDirectory.class);
-
-    private final AtomicLong nextTempFileCounter;
-    private final IndexDescriptor delegate;
-    private final String index;
-
-    public BKDTempFilesDirectory(IndexDescriptor delegate, String index, long seed)
-    {
-        this.delegate = delegate;
-        this.index = index;
-        // SequentialWriter#openChannel doesn't fail when we try to create a file that already exist.
-        // If tests were running concurrently, it's possible that we could get a tmp file name collision,
-        // hence each directory has to have a separate seed.
-        this.nextTempFileCounter = new AtomicLong(seed);
-    }
-
-    @Override
-    public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException
-    {
-        final String name = prefix + "_" + Long.toString(nextTempFileCounter.getAndIncrement(), Character.MAX_RADIX) + "_" + suffix;
-
-        final File file = delegate.descriptor.tmpFileFor(new Component(Component.Type.CUSTOM, SAI_DESCRIPTOR +
-                                                                                              "+" +
-                                                                                              Version.LATEST +
-                                                                                              "+" +
-                                                                                              index +
-                                                                                              "+" +
-                                                                                              name +
-                                                                                              ".db"));
-
-        return IndexFileUtils.instance.openOutput(file);
-    }
-
-    @Override
-    public IndexInput openInput(String name, IOContext context)
-    {
-        final File indexInput = getTmpFileByName(name);
-
-        try (FileHandle.Builder builder = new FileHandle.Builder(indexInput.getPath()))
-        {
-            final FileHandle handle = builder.complete();
-            final RandomAccessReader reader = handle.createReader();
-
-            return IndexInputReader.create(reader, handle::close);
-        }
-    }
-
-    @Override
-    public long fileLength(String name)
-    {
-        return getTmpFileByName(name).length();
-    }
-
-    @Override
-    public void deleteFile(String name)
-    {
-        final File file = getTmpFileByName(name);
-        if (!file.delete())
-        {
-            logger.warn(delegate.logMessage("Unable to delete file {}"), file.getAbsolutePath());
-        }
-    }
-
-    @Override
-    public void close()
-    {
-        // noop
-    }
-
-    @Override
-    public void syncMetaData()
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String[] listAll()
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void rename(String source, String dest)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public IndexOutput createOutput(String name, IOContext context)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void sync(Collection<String> collection)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Lock obtainLock(String s)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    private File getTmpFileByName(String name)
-    {
-        assert name.endsWith(Descriptor.TMP_EXT);
-        final File file = new File(name);
-        if (file.exists())
-        {
-            return file;
-        }
-        throw new IllegalStateException(delegate.logMessage("unrecognised file: " + name));
-    }
-}
+//public class BKDTempFilesDirectory extends Directory
+//{
+//    private static final Logger logger = LoggerFactory.getLogger(BKDTempFilesDirectory.class);
+//
+//    private final AtomicLong nextTempFileCounter;
+//    private final IndexDescriptor delegate;
+//    private final String index;
+//
+//    public BKDTempFilesDirectory(IndexDescriptor delegate, String index, long seed)
+//    {
+//        this.delegate = delegate;
+//        this.index = index;
+//        // SequentialWriter#openChannel doesn't fail when we try to create a file that already exist.
+//        // If tests were running concurrently, it's possible that we could get a tmp file name collision,
+//        // hence each directory has to have a separate seed.
+//        this.nextTempFileCounter = new AtomicLong(seed);
+//    }
+//
+//    @Override
+//    public IndexOutput createTempOutput(String prefix, String suffix, IOContext context) throws IOException
+//    {
+//        final String name = prefix + "_" + Long.toString(nextTempFileCounter.getAndIncrement(), Character.MAX_RADIX) + "_" + suffix;
+//
+//        final File file = delegate.descriptor.tmpFileFor(new Component(Component.Type.CUSTOM, SAI_DESCRIPTOR +
+//                                                                                              "+" +
+//                                                                                              Version.LATEST +
+//                                                                                              "+" +
+//                                                                                              index +
+//                                                                                              "+" +
+//                                                                                              name +
+//                                                                                              ".db"));
+//
+//        return IndexFileUtils.instance.openOutput(file);
+//    }
+//
+//    @Override
+//    public IndexInput openInput(String name, IOContext context)
+//    {
+//        final File indexInput = getTmpFileByName(name);
+//
+//        try (FileHandle.Builder builder = new FileHandle.Builder(indexInput.getPath()))
+//        {
+//            final FileHandle handle = builder.complete();
+//            final RandomAccessReader reader = handle.createReader();
+//
+//            return IndexInputReader.create(reader, handle::close);
+//        }
+//    }
+//
+//    @Override
+//    public long fileLength(String name)
+//    {
+//        return getTmpFileByName(name).length();
+//    }
+//
+//    @Override
+//    public void deleteFile(String name)
+//    {
+//        final File file = getTmpFileByName(name);
+//        if (!file.delete())
+//        {
+//            logger.warn(delegate.logMessage("Unable to delete file {}"), file.getAbsolutePath());
+//        }
+//    }
+//
+//    @Override
+//    public void close()
+//    {
+//        // noop
+//    }
+//
+//    @Override
+//    public void syncMetaData()
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public String[] listAll()
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public void rename(String source, String dest)
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public IndexOutput createOutput(String name, IOContext context)
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public void sync(Collection<String> collection)
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public Lock obtainLock(String s)
+//    {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    private File getTmpFileByName(String name)
+//    {
+//        assert name.endsWith(Descriptor.TMP_EXT);
+//        final File file = new File(name);
+//        if (file.exists())
+//        {
+//            return file;
+//        }
+//        throw new IllegalStateException(delegate.logMessage("unrecognised file: " + name));
+//    }
+//}

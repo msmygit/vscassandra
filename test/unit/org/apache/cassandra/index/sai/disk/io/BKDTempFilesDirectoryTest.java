@@ -40,51 +40,51 @@ import static org.hamcrest.Matchers.is;
 
 public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
 {
-    @Test
-    public void shouldSortPointsOnDisk() throws IOException
-    {
-        final int numRows = between(300_000, 500_000);
-        final IndexDescriptor indexDescriptor = newIndexDescriptor();
-        final String index = newIndex();
-        final TempFileTrackingDirectoryWrapper directoryWrapper =
-                new TempFileTrackingDirectoryWrapper(new BKDTempFilesDirectory(indexDescriptor, index, randomLong()));
-
-        try (final BKDWriter w = new BKDWriter(numRows,
-                                               directoryWrapper,
-                                               "tmp",
-                                               1,
-                                               4,
-                                               BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE,
-                                               // low threshold
-                                               1.0,
-                                               numRows,
-                                               true))
-        {
-
-            byte[] scratch = new byte[4];
-            for (int segmentRowId = 0; segmentRowId < numRows; ++segmentRowId)
-            {
-                NumericUtils.intToSortableBytes(segmentRowId, scratch, 0);
-                w.add(scratch, segmentRowId);
-            }
-
-            long indexFP;
-
-            try (IndexOutput out = indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
-            {
-                indexFP = w.finish(out);
-            }
-
-            assertThat(directoryWrapper.createdTempFiles.size(), is(greaterThan(0)));
-
-            try (final IndexInput indexInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
-            {
-                indexInput.seek(indexFP);
-                final BKDReader bkdReader = new BKDReader(indexInput);
-                assertEquals(numRows, bkdReader.getDocCount());
-            }
-        }
-    }
+//    @Test
+//    public void shouldSortPointsOnDisk() throws IOException
+//    {
+//        final int numRows = between(300_000, 500_000);
+//        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+//        final String index = newIndex();
+//        final TempFileTrackingDirectoryWrapper directoryWrapper =
+//                new TempFileTrackingDirectoryWrapper(new BKDTempFilesDirectory(indexDescriptor, index, randomLong()));
+//
+//        try (final BKDWriter w = new BKDWriter(numRows,
+//                                               directoryWrapper,
+//                                               "tmp",
+//                                               1,
+//                                               4,
+//                                               BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE,
+//                                               // low threshold
+//                                               1.0,
+//                                               numRows,
+//                                               true))
+//        {
+//
+//            byte[] scratch = new byte[4];
+//            for (int segmentRowId = 0; segmentRowId < numRows; ++segmentRowId)
+//            {
+//                NumericUtils.intToSortableBytes(segmentRowId, scratch, 0);
+//                w.add(scratch, segmentRowId);
+//            }
+//
+//            long indexFP;
+//
+//            try (IndexOutput out = indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
+//            {
+//                indexFP = w.finish(out);
+//            }
+//
+//            assertThat(directoryWrapper.createdTempFiles.size(), is(greaterThan(0)));
+//
+//            try (final IndexInput indexInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.KD_TREE, index)))
+//            {
+//                indexInput.seek(indexFP);
+//                final BKDReader bkdReader = new BKDReader(indexInput);
+//                assertEquals(numRows, bkdReader.getDocCount());
+//            }
+//        }
+//    }
 
     private static class TempFileTrackingDirectoryWrapper extends FilterDirectory
     {

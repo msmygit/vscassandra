@@ -24,7 +24,6 @@ import org.apache.cassandra.index.sai.disk.v1.kdtree.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v1.numerics.DirectReaders;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
-import org.apache.lucene.store.ByteArrayIndexInput;
 import org.apache.lucene.util.packed.DirectWriter;
 
 public class LeafOrderMapTest extends NdiRandomizedTest

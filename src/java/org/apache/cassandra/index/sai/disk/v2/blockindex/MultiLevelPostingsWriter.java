@@ -144,8 +144,8 @@ public class MultiLevelPostingsWriter
             final Range<Integer> multiBlockMin = multiBlockLeafRanges.rangeContaining(minLeaf);
             final Range<Integer> multiBlockMax = multiBlockLeafRanges.rangeContaining(maxLeaf);
 
-            System.out.println("minLeaf=" + minLeaf + " multiBlockMin=" + multiBlockMin);
-            System.out.println("maxLeaf=" + maxLeaf + " multiBlockMax=" + multiBlockMax);
+//            System.out.println("minLeaf=" + minLeaf + " multiBlockMin=" + multiBlockMin);
+//            System.out.println("maxLeaf=" + maxLeaf + " multiBlockMax=" + multiBlockMax);
 
             if (multiBlockMin != null)
             {
@@ -170,7 +170,7 @@ public class MultiLevelPostingsWriter
                     Integer toRemoveNodeID = this.leafToNodeID.get(leaf);
                     assert toRemoveNodeID != null;
                     boolean removed = leafNodeIDsCopy.remove(toRemoveNodeID);
-                    System.out.println("multiBlockMin removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
+                    //System.out.println("multiBlockMin removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
                 }
             }
 
@@ -194,12 +194,12 @@ public class MultiLevelPostingsWriter
                     Integer toRemoveNodeID = this.leafToNodeID.get(leaf);
                     assert toRemoveNodeID != null;
                     boolean removed = leafNodeIDsCopy.remove(toRemoveNodeID);
-                    System.out.println("multiBlockMax removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
+                    //System.out.println("multiBlockMax removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
                 }
             }
 
-            System.out.println("leafNodeIDs=" + leafNodeIDs);
-            System.out.println("leafNodeIDsCopy=" + leafNodeIDsCopy);
+            //System.out.println("leafNodeIDs=" + leafNodeIDs);
+            //System.out.println("leafNodeIDsCopy=" + leafNodeIDsCopy);
 
             numNonLeafPostings++;
 

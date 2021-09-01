@@ -63,17 +63,17 @@ public class ImmutableOneDimPointValuesTest
         pointValues.swap(0, 1);
     }
 
-    @Test
-    public void shouldSkipLuceneSorting() throws IOException
-    {
-        final int minTerm = 2, maxTerm = 7;
-        final TermsIterator termEnum = buildDescTermEnum(minTerm, maxTerm);
-        final ImmutableOneDimPointValues pointValues = ImmutableOneDimPointValues.fromTermEnum(termEnum, Int32Type.instance);
-
-        MutablePointsReaderUtils.sort(2, Int32Type.instance.valueLengthIfFixed(), pointValues, 0, Math.toIntExact(pointValues.size()));
-
-        pointValues.intersect(assertingVisitor(minTerm));
-    }
+//    @Test
+//    public void shouldSkipLuceneSorting() throws IOException
+//    {
+//        final int minTerm = 2, maxTerm = 7;
+//        final TermsIterator termEnum = buildDescTermEnum(minTerm, maxTerm);
+//        final ImmutableOneDimPointValues pointValues = ImmutableOneDimPointValues.fromTermEnum(termEnum, Int32Type.instance);
+//
+//        MutablePointsReaderUtils.sort(2, Int32Type.instance.valueLengthIfFixed(), pointValues, 0, Math.toIntExact(pointValues.size()));
+//
+//        pointValues.intersect(assertingVisitor(minTerm));
+//    }
 
     private MutableOneDimPointValues.IntersectVisitor assertingVisitor(int minTerm)
     {

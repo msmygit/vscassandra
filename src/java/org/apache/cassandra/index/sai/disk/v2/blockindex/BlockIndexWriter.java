@@ -48,6 +48,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.GrowableByteArrayDataOutput;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
@@ -67,7 +68,7 @@ import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader
  */
 public class BlockIndexWriter
 {
-    public static final int ZSTD_DICTIONARY_SAMPLE_INTERVAL = 256;
+    public static final int ZSTD_DICTIONARY_SAMPLE_INTERVAL = 1;
     public static final int LEAF_SIZE = 3;
     // TODO: when the previous leaf min value is the same,
     //       write the leaf file pointer to the first occurence of the min value
@@ -170,12 +171,6 @@ public class BlockIndexWriter
         public final long leafValuesSameFP;
         public final long leafValuesSamePostingsFP;
         public final long nodeIDPostingsFP_FP;
-//        public final IntLongHashMap nodeIDPostingsFP;
-//        public final RangeSet<Integer> multiBlockLeafOrdinalRanges;
-//        public final BitSet leafValuesSame;
-        // there can be multiple postings for a node id if the
-        // edges are same value multi block postings
-        //public final TreeMultimap<Integer, Long> multiNodeIDToPostingsFP;
 
         public BlockIndexMeta(long orderMapFP,
                               long indexFP,
@@ -188,10 +183,6 @@ public class BlockIndexWriter
                               long leafValuesSameFP,
                               long leafValuesSamePostingsFP,
                               long nodeIDPostingsFP_FP)
-//                              IntLongHashMap nodeIDPostingsFP,
-//                              RangeSet<Integer> multiBlockLeafOrdinalRanges,
-//                              BitSet leafValuesSame,
-//                              TreeMultimap<Integer, Long> multiNodeIDToPostingsFP)
         {
             this.orderMapFP = orderMapFP;
             this.indexFP = indexFP;
@@ -204,16 +195,14 @@ public class BlockIndexWriter
             this.leafValuesSameFP = leafValuesSameFP;
             this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
             this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
-//            this.nodeIDPostingsFP = nodeIDPostingsFP;
-//            this.multiBlockLeafOrdinalRanges = multiBlockLeafOrdinalRanges;
-//            this.leafValuesSame = leafValuesSame;
-//            this.multiNodeIDToPostingsFP = multiNodeIDToPostingsFP;
         }
     }
 
     public BlockIndexMeta finish() throws IOException
     {
         flushLastBuffers();
+
+        final long valuesOutLastBytesFP = valuesOut.getFilePointer();
 
         System.out.println("unique terms="+(this.termOrdinal + 1)); // 2, 1 for starting at 0
 
@@ -228,7 +217,6 @@ public class BlockIndexWriter
         for (leafIdx = 0; leafIdx < blockMinValues.size(); leafIdx++)
         {
             final BytesRef minValue = blockMinValues.get(leafIdx);
-            //zstdSamples[leafIdx] = minValue.bytes;
             if (leafIdx > 0)
             {
                 final BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
@@ -311,14 +299,15 @@ public class BlockIndexWriter
             }
         }
 
-        final byte[] zstdDictionary = new byte[32 * 1024];
+        final byte[] zstdDictionary = new byte[100 * 1024];
 
         byte[][] zstdSamplesArray = zstdSamples.toArray(new byte[0][]);
 
-        System.out.println("ZSTD dictionary zstdSamples.size="+zstdSamples.size()+" zstdSamplesArray.len="+zstdSamplesArray.length);
-
         final int zstdDictionaryLen = (int)Zstd.trainFromBuffer(zstdSamplesArray, zstdDictionary);
         final long zstdDictionaryFP;
+
+        System.out.println("ZSTD dictionary zstdDictionaryLen="+zstdDictionaryLen+" zstdSamples.size="+zstdSamples.size()+" zstdSamplesArray.len="+zstdSamplesArray.length);
+
         if (zstdDictionaryLen == -1)
         {
             zstdDictionaryFP = -1;
@@ -388,8 +377,8 @@ public class BlockIndexWriter
                          true,
                          nodeIDToLeafPointer);
 
-        System.out.println("nodeIDToLeafPointer="+nodeIDToLeafPointer);
-        System.out.println("realLeafFilePointers=" + realLeafBytesFPs);
+//        System.out.println("nodeIDToLeafPointer="+nodeIDToLeafPointer);
+//        System.out.println("realLeafFilePointers=" + realLeafBytesFPs);
 
         // TODO: the "leafPointer" is actually the leaf id because
         //       the binary tree code requires unique values
@@ -467,10 +456,10 @@ public class BlockIndexWriter
             this.leafPostingsOut.writeVLong(cursor.value);
         }
 
-        // close leaf postings because MultiLevelPostingsWriter read leaf postings
+        // close leaf postings because MultiLevelPostingsWriter reads leaf postings
         this.leafPostingsOut.close();
 
-        final SharedIndexInput leafPostingsInput = new SharedIndexInput(this.indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, indexName)));
+        final SharedIndexInput leafPostingsInput = new SharedIndexInput(this.indexDescriptor.openInput(IndexComponent.Type.POSTING_LISTS, indexName));
 
         MultiLevelPostingsWriter multiLevelPostingsWriter
         = new MultiLevelPostingsWriter(leafPostingsInput,
@@ -499,6 +488,13 @@ public class BlockIndexWriter
         indexOut.close();
         orderMapOut.close();
         valuesOut.close();
+
+        try (IndexInput bytesInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)))
+        {
+
+
+            //valuesOutLastBytesFP
+        }
 
         return new BlockIndexMeta(orderMapFP,
                                   indexFP,

@@ -15,11 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1.postings;
+package org.apache.cassandra.index.sai.disk.v2.postings;
 
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -31,12 +32,14 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.lucene.codecs.lucene84.PForEncoder;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.Math.max;
+import static org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter.BLOCK_SIZE;
 
 /**
  * Encodes, compresses and writes postings lists to disk.
@@ -52,7 +55,7 @@ import static java.lang.Math.max;
  * </p>
  *
  * <p>
- * Packed blocks are favoured, meaning when the postings are long enough, {@link PostingsWriter} will try
+ * Packed blocks are favoured, meaning when the postings are long enough, {@link PForDeltaPostingsWriter} will try
  * to encode most data as a packed block. Take a term with 259 row IDs as an example, the first 256 IDs are encoded
  * as two packed blocks, while the remaining 3 are encoded as one VLong block.
  * </p>
@@ -81,9 +84,8 @@ import static java.lang.Math.max;
  */
 @NotThreadSafe
 //TODO Review this for DSP-19608
-public class PostingsWriter implements Closeable
+public class PForDeltaPostingsWriter implements Closeable
 {
-    public static final int BLOCK_SIZE = 128;
     private final static String POSTINGS_MUST_BE_SORTED_ERROR_MSG = "Postings must be sorted ascending, got [%s] after [%s]";
 
     private final IndexOutput dataOutput;
@@ -93,36 +95,67 @@ public class PostingsWriter implements Closeable
     private final LongArrayList blockMaxIDs = new LongArrayList();
     private final RAMIndexOutput inMemoryOutput = new RAMIndexOutput("blockOffsets");
 
+    private final PForEncoder forEncoder = new PForEncoder();
     private final long startOffset;
 
     private int bufferUpto;
     private long lastSegmentRowId;
     private long maxDelta;
     private long totalPostings;
+    private int postingsWritten;
 
     @VisibleForTesting
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
     {
         this(indexDescriptor, index, BLOCK_SIZE, segmented);
     }
 
-    public PostingsWriter(IndexOutput dataOutput) throws IOException
+    public PForDeltaPostingsWriter(IndexOutput dataOutput) throws IOException
     {
         this(dataOutput, BLOCK_SIZE);
     }
 
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
+    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
     {
         this(indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index), true, segmented), blockSize);
     }
 
-    private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
+    private PForDeltaPostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
     {
         this.blockSize = blockSize;
         this.dataOutput = dataOutput;
         startOffset = dataOutput.getFilePointer();
         deltaBuffer = new long[blockSize];
         SAICodecUtils.writeHeader(dataOutput);
+    }
+
+    private void reset()
+    {
+        postingsWritten = 0;
+        resetBlockCounters();
+        blockOffsets.clear();
+        blockMaxIDs.clear();
+    }
+
+    public long completePostings() throws IOException
+    {
+        assert totalPostings > 0;
+
+        finish();
+
+        final long summaryOffset = dataOutput.getFilePointer();
+        writeSummary(postingsWritten);
+
+        reset();
+
+        return summaryOffset;
+    }
+
+    public void add(long rowid) throws IOException
+    {
+        writePosting(rowid);
+        totalPostings++;
+        postingsWritten++;
     }
 
     /**
@@ -229,6 +262,7 @@ public class PostingsWriter implements Closeable
         bufferUpto = 0;
         lastSegmentRowId = 0;
         maxDelta = 0;
+        Arrays.fill(deltaBuffer, 0);
     }
 
     private void addBlockToSkipTable(long maxSegmentRowID)
@@ -267,12 +301,8 @@ public class PostingsWriter implements Closeable
         dataOutput.writeByte((byte) bitsPerValue);
         if (bitsPerValue > 0)
         {
-            final DirectWriter writer = DirectWriter.getInstance(dataOutput, blockSize, bitsPerValue);
-            for (int i = 0; i < blockSize; ++i)
-            {
-                writer.add(deltaBuffer[i]);
-            }
-            writer.finish();
+            forEncoder.encodePFoR(deltaBuffer, dataOutput);
+            // forEncoder.encodeFoRDeltas(deltaBuffer, dataOutput);
         }
     }
 
