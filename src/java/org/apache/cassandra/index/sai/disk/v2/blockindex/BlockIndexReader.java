@@ -38,11 +38,16 @@ import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
 
+import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntLongHashMap;
+import com.carrotsearch.hppc.LongArrayList;
+import com.github.luben.zstd.Zstd;
+import com.github.luben.zstd.ZstdDictDecompress;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.ByteArrayIndexInput;
 import org.apache.cassandra.index.sai.disk.v1.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v1.numerics.DirectReaders;
@@ -58,6 +63,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
+import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -73,16 +79,18 @@ public class BlockIndexReader implements Closeable
 {
     final FileHandle indexFile;
     final PackedLongValues leafFilePointers;
+    final LongArrayList compressedLeafFPs = new LongArrayList();
+    final IntArrayList compressedLeafLengths = new IntArrayList();
+    final IntArrayList leafLengths = new IntArrayList();
     final IntIntHashMap nodeIDToLeaf = new IntIntHashMap();
     final IntLongHashMap leafToOrderMapFP = new IntLongHashMap();
-    final SeekingRandomAccessInput seekingInput;
-    final SharedIndexInput bytesInput;
+    private SeekingRandomAccessInput seekingInput;
     final BytesRefBuilder builder = new BytesRefBuilder();
     final BlockIndexWriter.BlockIndexMeta meta;
 
     final IntLongHashMap nodeIDToPostingsFP = new IntLongHashMap();
     final IndexInput orderMapInput;
-    final SharedIndexInput leafLevelPostingsInput, multiPostingsInput;
+    final SharedIndexInput bytesInput, bytesCompressedInput, leafLevelPostingsInput, multiPostingsInput;
     final SeekingRandomAccessInput orderMapRandoInput;
     private final DirectReaders.Reader orderMapReader;
 
@@ -109,6 +117,7 @@ public class BlockIndexReader implements Closeable
     final RangeSet<Integer> multiBlockLeafRanges;
     final FixedBitSet leafValuesSame;
     final Multimap<Integer,Long> multiNodeIDToPostingsFP = TreeMultimap.create();
+    final ZstdDictDecompress zstdDictDecompress;
 
     public BlockIndexReader(IndexDescriptor indexDescriptor,
                             String indexName,
@@ -121,6 +130,7 @@ public class BlockIndexReader implements Closeable
         this.orderMapInput = indexDescriptor.openInput(IndexComponent.Type.ORDER_MAP, indexName);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
         this.multiPostingsInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.KD_TREE_POSTING_LISTS, indexName));
+        this.bytesCompressedInput = new SharedIndexInput(indexDescriptor.openInput(IndexComponent.Type.COMPRESSED_TERMS_DATA, indexName));
 
         orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
         seekingInput = new SeekingRandomAccessInput(bytesInput.sharedCopy());
@@ -143,12 +153,33 @@ public class BlockIndexReader implements Closeable
 
         if (meta.zstdDictionaryFP != -1)
         {
-            bytesInput.seek(meta.zstdDictionaryFP);
+            bytesCompressedInput.seek(meta.zstdDictionaryFP);
+            int len = bytesCompressedInput.readVInt();
+            byte[] dictBytes = new byte[len];
+            bytesCompressedInput.readBytes(dictBytes, 0, dictBytes.length);
+            zstdDictDecompress = new ZstdDictDecompress(dictBytes);
+        }
+        else
+        {
+            zstdDictDecompress = null;
+        }
+
+        bytesCompressedInput.seek(meta.compressedLeafFPs_FP);
+        int numCompEntries = bytesCompressedInput.readVInt();
+        assert meta.numLeaves == numCompEntries;
+        for (int x = 0; x < meta.numLeaves; x++)
+        {
+            final long leafFP = bytesCompressedInput.readVLong();
+            final int len = bytesCompressedInput.readVInt();
+            final int origLen = bytesCompressedInput.readVInt();
+            compressedLeafFPs.add(leafFP);
+            compressedLeafLengths.add(len);
+            leafLengths.add(origLen);
         }
 
         this.leafLevelPostingsInput.seek(meta.nodeIDPostingsFP_FP);
         final int leafLevelPostingsSize = this.leafLevelPostingsInput.readVInt();
-        for (int x=0; x < leafLevelPostingsSize; x++)
+        for (int x = 0; x < leafLevelPostingsSize; x++)
         {
             int nodeID = this.leafLevelPostingsInput.readVInt();
             long postingsFP = this.leafLevelPostingsInput.readVLong();
@@ -158,7 +189,7 @@ public class BlockIndexReader implements Closeable
 
         multiPostingsInput.seek(meta.nodeIDToMultilevelPostingsFP_FP);
         int numBigPostings = multiPostingsInput.readVInt();
-        for (int x=0; x < numBigPostings; x++)
+        for (int x = 0; x < numBigPostings; x++)
         {
             int nodeID = multiPostingsInput.readVInt();
             long postingsFP = multiPostingsInput.readZLong();
@@ -461,8 +492,9 @@ public class BlockIndexReader implements Closeable
             orderMapFP = null;
         }
 
-        final long leafFP = leafFilePointers.get(leaf);
-        readBlock(leafFP);
+        //final long leafFP = leafFilePointers.get(leaf);
+        //readBlock(leafFP);
+        this.readCompressedBlock(leaf);
 
         int idx = 0;
         int startIdx = -1;
@@ -471,7 +503,7 @@ public class BlockIndexReader implements Closeable
 
         for (idx = 0; idx < this.leafSize; idx++)
         {
-            final BytesRef term = seekInBlock(idx);
+            final BytesRef term = seekInBlockCompressed(idx);
 
 //            System.out.println("filterFirstLastLeaf idx="+idx+" term=" + NumericUtils.sortableBytesToInt(term.bytes, 0)
 //                               + " start=" + NumericUtils.sortableBytesToInt(start.bytes, 0)
@@ -711,7 +743,7 @@ public class BlockIndexReader implements Closeable
             readBlock(leafFP);
             this.currentLeafFP = leafFP;
         }
-        return seekInBlock(leafIdx);
+        return seekInBlockCompressed(leafIdx);
     }
 
     public static ByteComparable fixedLength(BytesRef bytes)
@@ -743,7 +775,7 @@ public class BlockIndexReader implements Closeable
 
             for (int x = 0; x < leafSize; x++)
             {
-                BytesRef term = seekInBlock(x);
+                BytesRef term = seekInBlockCompressed(x);
                 System.out.println("seekInBlock term="+term.utf8ToString());
                 if (target.compareTo(term) <= 0)
                 {
@@ -780,7 +812,53 @@ public class BlockIndexReader implements Closeable
         this.leafIndex = 0;
     }
 
-    public BytesRef seekInBlock(int seekIndex) throws IOException
+    private IndexInput compBytesInput = null;
+
+    private void readCompressedBlock(int leafID) throws IOException
+    {
+        long filePointer = this.leafFilePointers.get(leafID);
+        long compressedFP = this.compressedLeafFPs.get(leafID);
+
+        System.out.println("readBlock filePointer="+filePointer);
+        bytesCompressedInput.seek(compressedFP);
+
+        int compLen = compressedLeafLengths.get(leafID);
+        int originalSize = leafLengths.get(leafID);
+
+        byte[] compBytes = new byte[compLen];
+        bytesCompressedInput.readBytes(compBytes, 0, compBytes.length);
+        byte[] uncompBytes = Zstd.decompress(compBytes, this.zstdDictDecompress, originalSize);
+
+        compBytesInput = new ByteArrayIndexInput("", uncompBytes);
+
+        this.currentLeafFP = filePointer;
+        leafSize = compBytesInput.readInt();
+        lengthsBytesLen = compBytesInput.readInt();
+        prefixBytesLen = compBytesInput.readInt();
+        lengthsBits = compBytesInput.readByte();
+        prefixBits = compBytesInput.readByte();
+
+        //arraysFilePointer = in.getPosition() + filePointer;
+
+        arraysFilePointer = compBytesInput.getFilePointer();
+
+        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
+
+        lengthsReader = DirectReaders.getReaderForBitsPerValue(lengthsBits);
+        prefixesReader = DirectReaders.getReaderForBitsPerValue(prefixBits);
+
+        compBytesInput.seek(arraysFilePointer + lengthsBytesLen + prefixBytesLen);
+
+        seekingInput = new SeekingRandomAccessInput(compBytesInput);
+
+        //bytesInput.seek(arraysFilePointer + lengthsBytesLen + prefixBytesLen);
+
+        //leafBytesStartFP = leafBytesFP = bytesInput.getFilePointer();
+
+        this.leafIndex = 0;
+    }
+
+    public BytesRef seekInBlockCompressed(int seekIndex) throws IOException
     {
         if (seekIndex >= leafSize)
         {
@@ -813,8 +891,8 @@ public class BlockIndexReader implements Closeable
             if (x == 0)
             {
                 firstTerm = new byte[len];
-                bytesInput.seek(leafBytesStartFP);
-                bytesInput.readBytes(firstTerm, 0, len);
+                this.compBytesInput.seek(leafBytesStartFP);
+                this.compBytesInput.readBytes(firstTerm, 0, len);
                 lastPrefix = len;
                 //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 bytesLength = 0;
@@ -845,8 +923,8 @@ public class BlockIndexReader implements Closeable
 
             // TODO: fix this allocation by reading directly into builder
             final byte[] bytes = new byte[bytesLength];
-            bytesInput.seek(leafBytesFP);
-            bytesInput.readBytes(bytes, 0, bytesLength);
+            this.compBytesInput.seek(leafBytesFP);
+            this.compBytesInput.readBytes(bytes, 0, bytesLength);
 
             leafBytesFP += bytesLength;
 
@@ -859,6 +937,86 @@ public class BlockIndexReader implements Closeable
         //System.out.println("term="+builder.get().utf8ToString());
         return builder.get();
     }
+
+//    public BytesRef seekInBlock(int seekIndex) throws IOException
+//    {
+//        if (seekIndex >= leafSize)
+//        {
+//            throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+leafSize);
+//        }
+//
+//        System.out.println("seekInBlock seekInBlock="+seekIndex+" leafIndex="+leafIndex);
+//
+//        int len = 0;
+//        int prefix = 0;
+//
+//        // TODO: this part can go back from the current
+//        //       position rather than start from the beginning each time
+//
+//        int start = 0;
+//
+//        // start from where we left off
+//        if (seekIndex >= leafIndex)
+//        {
+//            start = leafIndex;
+//        }
+//
+//        for (int x = start; x <= seekIndex; x++)
+//        {
+//            len = LeafOrderMap.getValue(seekingInput, arraysFilePointer, x, lengthsReader);
+//            prefix = LeafOrderMap.getValue(seekingInput, arraysFilePointer + lengthsBytesLen, x, prefixesReader);
+//
+//            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
+//
+//            if (x == 0)
+//            {
+//                firstTerm = new byte[len];
+//                bytesInput.seek(leafBytesStartFP);
+//                bytesInput.readBytes(firstTerm, 0, len);
+//                lastPrefix = len;
+//                //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
+//                bytesLength = 0;
+//                leafBytesFP += len;
+//            }
+//
+//            if (len > 0 && x > 0)
+//            {
+//                bytesLength = len - prefix;
+//                lastLen = len;
+//                lastPrefix = prefix;
+//                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
+//            }
+//            else
+//            {
+//                bytesLength = 0;
+//            }
+//        }
+//
+//        this.leafIndex = seekIndex + 1;
+//
+//        if (!(len == 0 && prefix == 0))
+//        {
+//            builder.clear();
+//
+//            //System.out.println("bytesPosition=" + leafBytesFP + " bytesPositionStart=" + leafBytesStartFP + " total=" + (leafBytesFP - leafBytesStartFP));
+//            //System.out.println("lastlen=" + lastLen + " lastPrefix=" + lastPrefix + " bytesLength=" + bytesLength);
+//
+//            // TODO: fix this allocation by reading directly into builder
+//            final byte[] bytes = new byte[bytesLength];
+//            bytesInput.seek(leafBytesFP);
+//            bytesInput.readBytes(bytes, 0, bytesLength);
+//
+//            leafBytesFP += bytesLength;
+//
+//            //System.out.println("bytes read=" + new BytesRef(bytes).utf8ToString());
+//
+//            builder.append(firstTerm, 0, lastPrefix);
+//            builder.append(bytes, 0, bytes.length);
+//        }
+//
+//        //System.out.println("term="+builder.get().utf8ToString());
+//        return builder.get();
+//    }
 
     interface SimpleVisitor
     {

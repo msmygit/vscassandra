@@ -77,6 +77,7 @@ public class BlockIndexWriter
     private final LongArrayList leafBytesFPs = new LongArrayList();
     private final LongArrayList realLeafBytesFPs = new LongArrayList();
     private final LongArrayList realLeafCompressedBytesFPs = new LongArrayList();
+    private final IntArrayList realLeafCompressedLengths = new IntArrayList();
 
     private final IntArrayList realLeafBytesLengths = new IntArrayList();
 
@@ -177,6 +178,7 @@ public class BlockIndexWriter
         public final long leafValuesSameFP;
         public final long leafValuesSamePostingsFP;
         public final long nodeIDPostingsFP_FP;
+        public final long compressedLeafFPs_FP;
 
         public BlockIndexMeta(long orderMapFP,
                               long indexFP,
@@ -188,7 +190,8 @@ public class BlockIndexWriter
                               long zstdDictionaryFP,
                               long leafValuesSameFP,
                               long leafValuesSamePostingsFP,
-                              long nodeIDPostingsFP_FP)
+                              long nodeIDPostingsFP_FP,
+                              long compressedLeafFPs_FP)
         {
             this.orderMapFP = orderMapFP;
             this.indexFP = indexFP;
@@ -201,6 +204,7 @@ public class BlockIndexWriter
             this.leafValuesSameFP = leafValuesSameFP;
             this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
             this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
+            this.compressedLeafFPs_FP = compressedLeafFPs_FP;
         }
     }
 
@@ -511,9 +515,9 @@ public class BlockIndexWriter
         else
         {
             zstdDictionaryFP = this.compressedValuesOut.getFilePointer();
+            this.compressedValuesOut.writeVInt(zstdDictionaryLen);
             this.compressedValuesOut.copyBytes(new ByteArrayDataInput(zstdDictionary, 0, zstdDictionaryLen), zstdDictionaryLen);
         }
-
 
         assert realLeafBytesFPs.size() == realLeafBytesLengths.size();
 
@@ -524,9 +528,11 @@ public class BlockIndexWriter
             {
                 long bytesFP = realLeafBytesFPs.get(x);
 
+                // don't compress > 1
                 if (x > 0 && realLeafBytesFPs.get(x - 1) == bytesFP)
                 {
                     realLeafCompressedBytesFPs.add(realLeafCompressedBytesFPs.get(x - 1));
+                    realLeafCompressedLengths.add(realLeafCompressedLengths.get(x - 1));
                 }
                 else
                 {
@@ -541,8 +547,18 @@ public class BlockIndexWriter
                     long compressedFP = this.compressedValuesOut.getFilePointer();
                     this.compressedValuesOut.writeBytes(compressedBytes, 0, compressedBytes.length);
                     realLeafCompressedBytesFPs.add(compressedFP);
+                    realLeafCompressedLengths.add(compressedBytes.length);
                 }
             }
+        }
+
+        final long compressedLeafFPs_FP = compressedValuesOut.getFilePointer();
+        compressedValuesOut.writeVInt(realLeafCompressedBytesFPs.size());
+        for (int x = 0; x < realLeafCompressedBytesFPs.size(); x++)
+        {
+            compressedValuesOut.writeVLong(realLeafCompressedBytesFPs.get(x));
+            compressedValuesOut.writeVInt(realLeafCompressedLengths.get(x));
+            compressedValuesOut.writeVInt(realLeafBytesLengths.get(x));
         }
 
         assert realLeafBytesFPs.size() == realLeafCompressedBytesFPs.size();
@@ -559,7 +575,8 @@ public class BlockIndexWriter
                                   zstdDictionaryFP,
                                   leafValuesSameFP,
                                   leafValuesSamePostingsFP,
-                                  nodeIDPostingsFP_FP);
+                                  nodeIDPostingsFP_FP,
+                                  compressedLeafFPs_FP);
     }
 
     public void add(ByteComparable term, long rowID) throws IOException
