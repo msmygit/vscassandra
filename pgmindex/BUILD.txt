@@ -1,0 +1,3 @@
+g++ -shared -o libpgmindex.dylib -std=c++17 -I $JAVA_HOME/include -I $JAVA_HOME/include/darwin -I . PGMIndex.cpp 
+
+

@@ -27,6 +27,7 @@ import com.carrotsearch.hppc.LongArrayList;
 public class PGMIndex
 {
     final List<Segment> segments = new ArrayList();
+    final long firstKey;
 
     static
     {
@@ -40,21 +41,65 @@ public class PGMIndex
         long rowid = 0;
         for (int x = 0; x < count; x++)
         {
-            rowid += ThreadLocalRandom.current().nextInt(1, 1000);
+            rowid += ThreadLocalRandom.current().nextInt(1, 10);
             list.add(rowid);
         }
 
-        PGMIndex index = new PGMIndex(list.toArray());
+        long[] array = list.toArray();
+        PGMIndex index = new PGMIndex(array);
+
+        long pos = index.search(90000);
+        System.out.println("pos="+pos+" posting="+array[(int)pos]);
     }
 
     public PGMIndex(long[] array)
     {
+        firstKey = array[0];
         create(array, segments);
 
         System.out.println("segments="+segments);
-
-        
     }
+
+    public static class ApproxPos
+    {
+        public final long pos, lo, hi;
+
+        public ApproxPos(long pos, long lo, long hi)
+        {
+            this.pos = pos;
+            this.lo = lo;
+            this.hi = hi;
+        }
+    }
+
+    public long search(long targetKey)
+    {
+         long k = Math.max(firstKey, targetKey);
+         int r;
+         for (r = 0; r < segments.size(); r++)
+         {
+             if (segments.get(r).key >= k)
+             {
+                 break;
+             }
+         }
+         r--;
+         long origin = segments.get(r).key;
+
+         long pos = Math.min(segments.get(r).operator(origin, k), segments.get(r + 1).intercept);
+
+         //long pos = Math.min(segments.get(r).operator(origin), segments.get(r + 1).intercept);
+         return pos;
+    }
+//
+//    ApproxPos search(const K &key) const {
+//    auto k = std::max(first_key, key);
+//    auto[r, origin] = pred(k - first_key);
+//    auto pos = std::min<size_t>(segments[r](origin + first_key, k), segments[r + 1].intercept);
+//    auto lo = PGM_SUB_EPS(pos, Epsilon);
+//    auto hi = PGM_ADD_EPS(pos, Epsilon, n);
+//    return {pos, lo, hi};
+//    }
 
     public native void create(long[] array, List<Segment> segments);
 }
