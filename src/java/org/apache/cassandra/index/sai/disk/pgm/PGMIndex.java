@@ -18,11 +18,13 @@
 
 package org.apache.cassandra.index.sai.disk.pgm;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.carrotsearch.hppc.LongArrayList;
+import org.apache.lucene.store.IndexOutput;
 
 public class PGMIndex
 {
@@ -36,28 +38,36 @@ public class PGMIndex
 
     public static void main(String[] args)
     {
-        int count = 10_000_000;
+        int count = 100_000_000;
         LongArrayList list = new LongArrayList();
         long rowid = 0;
         for (int x = 0; x < count; x++)
         {
-            rowid += ThreadLocalRandom.current().nextInt(1, 10);
+            rowid += ThreadLocalRandom.current().nextInt(1, 1000);
             list.add(rowid);
         }
 
         long[] array = list.toArray();
         PGMIndex index = new PGMIndex(array);
 
-        long pos = index.search(90000);
-        System.out.println("pos="+pos+" posting="+array[(int)pos]);
+        long target = ThreadLocalRandom.current().nextLong(list.get(0), list.get(list.size() - 1));
+
+        long pos = index.search(target);
+        System.out.println("target="+target+" pos="+pos+" posting="+array[(int)pos]);
     }
 
     public PGMIndex(long[] array)
     {
         firstKey = array[0];
+
         create(array, segments);
 
         System.out.println("segments="+segments);
+    }
+
+    public void writeSegments(IndexOutput out) throws IOException
+    {
+
     }
 
     public static class ApproxPos
