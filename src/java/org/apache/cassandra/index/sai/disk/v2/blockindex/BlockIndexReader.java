@@ -63,8 +63,8 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
-import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
@@ -224,7 +224,7 @@ public class BlockIndexReader implements Closeable
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(indexFile, seekingInput, orderMapInput, leafLevelPostingsInput, multiPostingsInput);
+        FileUtils.close(indexFile, seekingInput, orderMapInput, leafLevelPostingsInput, multiPostingsInput, zstdDictDecompress);
     }
 
     static class NodeIDLeafFP
@@ -263,12 +263,12 @@ public class BlockIndexReader implements Closeable
         if (startExclusive && start != null)
         {
             byte[] startBytes = ByteSourceInverse.readBytes(start.asComparableBytes(ByteComparable.Version.OSS41));
-            realStart = nudge(start, startBytes.length - 1);
+            realStart = BytesUtil.nudge(start, startBytes.length - 1);
         }
         if (endExclusive && end != null)
         {
             byte[] endBytes = ByteSourceInverse.readBytes(end.asComparableBytes(ByteComparable.Version.OSS41));
-            realEnd = nudgeReverse(end, endBytes.length - 1);
+            realEnd = BytesUtil.nudgeReverse(end, endBytes.length - 1);
         }
         return traverse(realStart, realEnd);
     }
@@ -746,16 +746,11 @@ public class BlockIndexReader implements Closeable
         return seekInBlockCompressed(leafIdx);
     }
 
-    public static ByteComparable fixedLength(BytesRef bytes)
-    {
-        return ByteComparable.fixedLength(bytes.bytes, bytes.offset, bytes.length);
-    }
-
     public BytesRef seekTo(BytesRef target) throws IOException
     {
         try (TermsRangeIterator reader = new TermsRangeIterator(indexFile.instantiateRebufferer(),
                                                                 meta.indexFP,
-                                                                fixedLength(target),
+                                                                BytesUtil.fixedLength(target),
                                                                 null,
                                                                 false,
                                                                 true))
@@ -813,21 +808,25 @@ public class BlockIndexReader implements Closeable
     }
 
     private IndexInput compBytesInput = null;
+    private byte[] compBytes = new byte[10];
+    private byte[] uncompBytes = new byte[10];
 
     private void readCompressedBlock(int leafID) throws IOException
     {
         long filePointer = this.leafFilePointers.get(leafID);
         long compressedFP = this.compressedLeafFPs.get(leafID);
 
-        System.out.println("readBlock filePointer="+filePointer);
         bytesCompressedInput.seek(compressedFP);
 
         int compLen = compressedLeafLengths.get(leafID);
         int originalSize = leafLengths.get(leafID);
 
-        byte[] compBytes = new byte[compLen];
-        bytesCompressedInput.readBytes(compBytes, 0, compBytes.length);
-        byte[] uncompBytes = Zstd.decompress(compBytes, this.zstdDictDecompress, originalSize);
+        compBytes = ArrayUtil.grow(compBytes, compLen);
+        uncompBytes = ArrayUtil.grow(uncompBytes, originalSize);
+
+        bytesCompressedInput.readBytes(compBytes, 0, compLen);
+
+        long uncompLen = Zstd.decompressFastDict(uncompBytes, 0, compBytes, 0, compLen, this.zstdDictDecompress);
 
         compBytesInput = new ByteArrayIndexInput("", uncompBytes);
 
@@ -837,8 +836,6 @@ public class BlockIndexReader implements Closeable
         prefixBytesLen = compBytesInput.readInt();
         lengthsBits = compBytesInput.readByte();
         prefixBits = compBytesInput.readByte();
-
-        //arraysFilePointer = in.getPosition() + filePointer;
 
         arraysFilePointer = compBytesInput.getFilePointer();
 
@@ -850,10 +847,6 @@ public class BlockIndexReader implements Closeable
         compBytesInput.seek(arraysFilePointer + lengthsBytesLen + prefixBytesLen);
 
         seekingInput = new SeekingRandomAccessInput(compBytesInput);
-
-        //bytesInput.seek(arraysFilePointer + lengthsBytesLen + prefixBytesLen);
-
-        //leafBytesStartFP = leafBytesFP = bytesInput.getFilePointer();
 
         this.leafIndex = 0;
     }
@@ -1094,7 +1087,7 @@ public class BlockIndexReader implements Closeable
     public static void main(String[] args)
     {
         byte[] bytes = new byte[] {-1, -1, -1, -1};
-        ByteComparable bc = nudgeReverse(ByteComparable.fixedLength(bytes), bytes.length - 1);
+        ByteComparable bc = BytesUtil.nudgeReverse(ByteComparable.fixedLength(bytes), bytes.length - 1);
 
         ByteSource byteSource = bc.asComparableBytes(ByteComparable.Version.OSS41);
         int length = 0;
@@ -1117,61 +1110,5 @@ public class BlockIndexReader implements Closeable
         }
 
         System.out.println("ints=" + Arrays.toString(ints));
-    }
-
-    public static ByteComparable nudge(ByteComparable value, int nudgeAt)
-    {
-        return version -> new ByteSource()
-        {
-            private final ByteSource v = value.asComparableBytes(version);
-            private int cur = 0;
-
-            @Override
-            public int next()
-            {
-                int b = ByteSource.END_OF_STREAM;
-                if (cur <= nudgeAt)
-                {
-                    b = v.next();
-                    if (cur == nudgeAt)
-                    {
-                        if (b < 255)
-                            ++b;
-                        else
-                            return b;  // can't nudge here, increase next instead (eventually will be -1)
-                    }
-                }
-                ++cur;
-                return b;
-            }
-        };
-    }
-
-    public static ByteComparable nudgeReverse(ByteComparable value, int nudgeAt)
-    {
-        return version -> new ByteSource()
-        {
-            private final ByteSource v = value.asComparableBytes(version);
-            private int cur = 0;
-
-            @Override
-            public int next()
-            {
-                int b = ByteSource.END_OF_STREAM;
-                if (cur <= nudgeAt)
-                {
-                    b = v.next();
-                    if (cur == nudgeAt)
-                    {
-                        if (b > 0)
-                            --b;
-                        else
-                            return ByteSource.END_OF_STREAM;  // can't nudge here, increase next instead (eventually will be -1)
-                    }
-                }
-                ++cur;
-                return b;
-            }
-        };
     }
 }

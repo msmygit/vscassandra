@@ -19,6 +19,8 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,6 +33,7 @@ import org.junit.Test;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
+import com.sun.jna.Pointer;
 import com.sun.scenario.effect.Merge;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
@@ -227,6 +230,20 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             if (rowID == PostingList.END_OF_STREAM) break;
             System.out.println("testSameTerms rowid=" + rowID);
         }
+    }
+
+    @Test
+    public void testPointer() throws Exception
+    {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(10);
+        Pointer pointer = com.sun.jna.Native.getDirectBufferPointer(buffer);
+
+        Field field = Pointer.class.getDeclaredField("peer");
+        field.setAccessible(true);
+
+        Long pointerLong = field.getLong(pointer);
+
+        System.out.println("pointerLong="+pointerLong);
     }
 
     @Test

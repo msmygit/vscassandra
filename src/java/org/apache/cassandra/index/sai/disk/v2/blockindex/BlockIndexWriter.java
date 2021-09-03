@@ -59,7 +59,7 @@ import org.apache.lucene.util.FutureArrays;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryReader.trieSerializer;
-import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader.fixedLength;
+import static org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil.fixedLength;
 
 /**
  * Buffer 2 blocks at a time a determine if the block values are all the same
@@ -524,6 +524,9 @@ public class BlockIndexWriter
         try (ZstdDictCompress dictCompress = new ZstdDictCompress(zstdDictionary, 0, zstdDictionaryLen, 1);
              IndexInput bytesInput = indexDescriptor.openInput(IndexComponent.create(IndexComponent.Type.TERMS_DATA, indexName)))
         {
+            byte[] rawBytes = new byte[10];
+            byte[] compressedBytes = new byte[10];
+
             for (int x = 0; x < realLeafBytesFPs.size(); x++)
             {
                 long bytesFP = realLeafBytesFPs.get(x);
@@ -538,12 +541,14 @@ public class BlockIndexWriter
                 {
                     int bytesLen = realLeafBytesLengths.get(x);
 
-                    byte[] bytes = new byte[bytesLen];
+                    rawBytes = ArrayUtil.grow(rawBytes, bytesLen);
                     bytesInput.seek(bytesFP);
-                    bytesInput.readBytes(bytes, 0, bytes.length);
+                    bytesInput.readBytes(rawBytes, 0, bytesLen);
 
-                    // TODO: bad alloc, bytes should be reused, however the JNI API is limited
-                    byte[] compressedBytes = Zstd.compress(bytes, dictCompress);
+                    long maxCompressedSize = Zstd.compressBound(bytesLen);
+                    compressedBytes = ArrayUtil.grow(compressedBytes, (int)maxCompressedSize);
+
+                    Zstd.compressFastDict(compressedBytes, 0, rawBytes, 0, bytesLen, dictCompress);
                     long compressedFP = this.compressedValuesOut.getFilePointer();
                     this.compressedValuesOut.writeBytes(compressedBytes, 0, compressedBytes.length);
                     realLeafCompressedBytesFPs.add(compressedFP);
