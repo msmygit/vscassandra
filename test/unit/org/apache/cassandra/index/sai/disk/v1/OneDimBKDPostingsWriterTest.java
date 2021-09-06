@@ -34,11 +34,9 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
-import org.apache.cassandra.index.sai.disk.v1.BKDPostingsIndex;
-import org.apache.cassandra.index.sai.disk.v1.OneDimBKDPostingsWriter;
-import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
@@ -79,7 +77,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
             fp = writer.finish(output);
         }
 
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(10, postingsIndex.size());
 
         // Internal postings...
@@ -125,7 +123,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(1, postingsIndex.size());
     }
 
@@ -145,7 +143,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(1, postingsIndex.size());
     }
 
@@ -158,7 +156,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
 
     private void assertPostingReaderEquals(IndexInput input, long offset, PostingList expected) throws IOException
     {
-        try (PostingsReader reader = new PostingsReader(input, offset, NO_OP_POSTINGS_LISTENER))
+        try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), offset, NO_OP_POSTINGS_LISTENER))
         {
             assertPostingListEquals(expected, reader);
         }

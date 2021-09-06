@@ -16,18 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.format;
+package org.apache.cassandra.index.sai.disk.v1;
 
-import org.junit.Test;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.io.util.RandomAccessReader;
 
-import org.apache.cassandra.index.sai.SAITester;
-
-public class NamingTest extends SAITester
+public interface KeyFetcher
 {
-    @Test
-    public void test() throws Throwable
-    {
-        createTable("CREATE TABLE %s (pk int, value int, primary key(pk))");
-        String indexName = createIndex("CREATE CUSTOM INDEX my_index_name ON %s(value) USING 'StorageAttachedIndex'");
-    }
+    DecoratedKey apply(RandomAccessReader reader, long keyOffset);
+
+    /**
+     * Create a shared RAR for all tokens in the same segment.
+     */
+    RandomAccessReader createReader();
 }

@@ -37,7 +37,8 @@ public interface QueryEventListener
     /**
      * Collector for kd-tree index file related metrics.
      */
-    interface BKDIndexEventListener
+    interface
+    BKDIndexEventListener
     {
         /**
          * Per-segment kd-tree index intersection time in given units. Recorded when intersection completes.

@@ -27,12 +27,14 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.IndexInput;
 
 public class PostingsTest extends NdiRandomizedTest
@@ -71,7 +73,7 @@ public class PostingsTest extends NdiRandomizedTest
         assertEquals(1, summary.offsets.length());
 
         CountingPostingListEventListener listener = new CountingPostingListEventListener();
-        PostingsReader reader = new PostingsReader(input, postingPointer, listener);
+        PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointer, listener);
 
         expectedPostingList.reset();
         assertEquals(expectedPostingList.getOrdinal(), reader.getOrdinal());
@@ -90,11 +92,10 @@ public class PostingsTest extends NdiRandomizedTest
 
         input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
         listener = new CountingPostingListEventListener();
-        reader = new PostingsReader(input, postingPointer, listener);
+        reader = new PostingsReader(new SharedIndexInput(input), postingPointer, listener);
 
-        assertEquals(50, reader.advance(45));
-
-        assertEquals(60, reader.advance(60));
+        assertEquals(50, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(45)));
+        assertEquals(60, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(60)));
         assertEquals(PostingList.END_OF_STREAM, reader.nextPosting());
         assertEquals(2, listener.advances);
         reader.close();
@@ -137,7 +138,7 @@ public class PostingsTest extends NdiRandomizedTest
             assertTrue(summary.offsets.length() > 1);
 
             final CountingPostingListEventListener listener = new CountingPostingListEventListener();
-            try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
+            try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointers[i], listener))
             {
                 expectedPostingList.reset();
                 assertEquals(expectedPostingList.getOrdinal(), reader.getOrdinal());
@@ -149,7 +150,7 @@ public class PostingsTest extends NdiRandomizedTest
 
             // test skipping to the last block
             input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
-            try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
+            try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointers[i], listener))
             {
                 long tokenToAdvance = -1;
                 expectedPostingList.reset();
@@ -159,8 +160,8 @@ public class PostingsTest extends NdiRandomizedTest
                 }
 
                 expectedPostingList.reset();
-                assertEquals(expectedPostingList.advance(tokenToAdvance),
-                             reader.advance(tokenToAdvance));
+                assertEquals(expectedPostingList.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(tokenToAdvance)),
+                             reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(tokenToAdvance)));
 
                 assertPostingListEquals(expectedPostingList, reader);
                 assertEquals(1, listener.advances);
@@ -285,8 +286,8 @@ public class PostingsTest extends NdiRandomizedTest
 
         for (int target : targetIDs)
         {
-            final long actualRowId = reader.advance(target);
-            final long expectedRowId = expected.advance(target);
+            final long actualRowId = reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
+            final long expectedRowId = expected.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
 
             assertEquals(expectedRowId, actualRowId);
 
@@ -305,7 +306,7 @@ public class PostingsTest extends NdiRandomizedTest
     {
         IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
         input.seek(fp);
-        return new PostingsReader(input, fp, listener);
+        return new PostingsReader(new SharedIndexInput(input), fp, listener);
     }
 
     private PostingsReader.BlocksSummary assertBlockSummary(int blockSize, PostingList expected, IndexInput input) throws IOException

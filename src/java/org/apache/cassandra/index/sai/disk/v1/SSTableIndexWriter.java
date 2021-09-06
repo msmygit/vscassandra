@@ -29,18 +29,17 @@ import javax.annotation.concurrent.NotThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
 
@@ -48,7 +47,7 @@ import org.apache.cassandra.utils.NoSpamLogger;
  * Column index writer that accumulates (on-heap) indexed data from a compacted SSTable as it's being flushed to disk.
  */
 @NotThreadSafe
-public class SSTableIndexWriter implements ColumnIndexWriter
+public class SSTableIndexWriter implements PerIndexWriter
 {
     private static final Logger logger = LoggerFactory.getLogger(SSTableIndexWriter.class);
     private static final NoSpamLogger noSpamLogger = NoSpamLogger.getLogger(logger, 1, TimeUnit.MINUTES);
@@ -59,9 +58,11 @@ public class SSTableIndexWriter implements ColumnIndexWriter
             "Can't add term of column {} to index for key: {}, term size {} " +
                     "max allowed size {}, use analyzed = true (if not yet set) for that column.";
 
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
+    protected final List<SegmentMetadata> segments = new ArrayList<>();
+
     private final int nowInSec = FBUtilities.nowInSeconds();
-    private final IndexContext indexContext;
-    private final IndexDescriptor indexDescriptor;
     private final AbstractAnalyzer analyzer;
     private final NamedMemoryLimiter limiter;
     private final int maxTermSize;
@@ -71,11 +72,10 @@ public class SSTableIndexWriter implements ColumnIndexWriter
 
     // segment writer
     private SegmentBuilder currentBuilder;
-    private final List<SegmentMetadata> segments = new ArrayList<>();
     private long maxSSTableRowId;
 
     public SSTableIndexWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, NamedMemoryLimiter limiter,
-                              BooleanSupplier isIndexValid, CompressionParams compressionParams)
+                              BooleanSupplier isIndexValid)
     {
         this.indexContext = indexContext;
         this.indexDescriptor = indexDescriptor;
@@ -86,7 +86,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
     }
 
     @Override
-    public void addRow(DecoratedKey rowKey, long sstableRowId, Row row) throws IOException
+    public void addRow(PrimaryKey key, Row row) throws IOException
     {
         if (maybeAbort())
             return;
@@ -99,17 +99,17 @@ public class SSTableIndexWriter implements ColumnIndexWriter
                 while (valueIterator.hasNext())
                 {
                     ByteBuffer value = valueIterator.next();
-                    addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), rowKey, sstableRowId, indexContext.getValidator());
+                    addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, indexContext.getValidator());
                 }
             }
         }
         else
         {
-            ByteBuffer value = indexContext.getValueOf(rowKey, row, nowInSec);
+            ByteBuffer value = indexContext.getValueOf(key.partitionKey(), row, nowInSec);
             if (value != null)
-                addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), rowKey, sstableRowId, indexContext.getValidator());
+                addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, indexContext.getValidator());
         }
-        maxSSTableRowId = sstableRowId;
+        maxSSTableRowId = key.sstableRowId();
     }
 
     /**
@@ -129,13 +129,13 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         return true;
     }
 
-    private void addTerm(ByteBuffer term, DecoratedKey key, long sstableRowId, AbstractType<?> type) throws IOException
+    private void addTerm(ByteBuffer term, PrimaryKey key, AbstractType<?> type) throws IOException
     {
         if (term.remaining() >= maxTermSize)
         {
             noSpamLogger.warn(indexContext.logMessage(TERM_OVERSIZE_MESSAGE),
                               indexContext.getColumnName(),
-                              indexContext.keyValidator().getString(key.getKey()),
+                              indexContext.keyValidator().getString(key.partitionKey().getKey()),
                               FBUtilities.prettyPrintMemory(term.remaining()),
                               FBUtilities.prettyPrintMemory(maxTermSize));
             return;
@@ -145,7 +145,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         {
             currentBuilder = newSegmentBuilder();
         }
-        else if (shouldFlush(sstableRowId))
+        else if (shouldFlush(key.sstableRowId()))
         {
             flushSegment();
             currentBuilder = newSegmentBuilder();
@@ -155,7 +155,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
 
         if (!TypeUtil.isLiteral(type))
         {
-            limiter.increment(currentBuilder.add(term, key, sstableRowId));
+            limiter.increment(currentBuilder.add(term, key));
         }
         else
         {
@@ -165,7 +165,7 @@ public class SSTableIndexWriter implements ColumnIndexWriter
                 while (analyzer.hasNext())
                 {
                     ByteBuffer tokenTerm = analyzer.next();
-                    limiter.increment(currentBuilder.add(tokenTerm, key, sstableRowId));
+                    limiter.increment(currentBuilder.add(tokenTerm, key));
                 }
             }
             finally
@@ -307,13 +307,31 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         indexDescriptor.deleteColumnIndex(indexContext);
     }
 
+    protected void writeSegmentsMetadata() throws IOException
+    {
+        if (segments.isEmpty())
+            return;
+
+        assert segments.size() == 1 : "A post-compacted index should only contain a single segment";
+
+        try
+        {
+            indexDescriptor.newIndexMetadataSerializer().serialize(new V1IndexOnDiskMetadata(segments), indexDescriptor, indexContext);
+        }
+        catch (IOException e)
+        {
+            abort(e);
+            throw e;
+        }
+    }
+
     private void compactSegments() throws IOException
     {
         if (segments.isEmpty())
             return;
 
-        DecoratedKey minKey = segments.get(0).minKey;
-        DecoratedKey maxKey = segments.get(segments.size() - 1).maxKey;
+        PrimaryKey minKey = segments.get(0).minKey;
+        PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
 
         try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
              PerIndexFiles perIndexFiles = indexDescriptor.perIndexFiles(indexContext, true))
@@ -328,22 +346,6 @@ public class SSTableIndexWriter implements ColumnIndexWriter
         finally
         {
             indexDescriptor.deleteTemporaryComponents(indexContext);
-        }
-    }
-
-    private void writeSegmentsMetadata() throws IOException
-    {
-        if (segments.isEmpty())
-            return;
-
-        try (final MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName())))
-        {
-            SegmentMetadata.write(writer, segments, null);
-        }
-        catch (IOException e)
-        {
-            abort(e);
-            throw e;
         }
     }
 

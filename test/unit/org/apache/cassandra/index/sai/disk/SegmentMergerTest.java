@@ -96,10 +96,7 @@ public class SegmentMergerTest extends SAITester
         // All we are interested in is that before the segment compaction there were more than 1 segment created
         assertTrue(SEGMENT_BUILD_COUNTER.get() > 1);
 
-        List<SegmentMetadata> segments = getSegments(indexName, 1);
-
-        // Post-build the index only has 1 segment
-        assertEquals(1, segments.size());
+        getIndexOnDiskMetadata(indexName, 1);
 
         Map<String, List<Integer>> actual = new HashMap<>();
 
@@ -155,10 +152,7 @@ public class SegmentMergerTest extends SAITester
         // All we are interested in is that before the segment compaction there were more than 1 segment created
         assertTrue(SEGMENT_BUILD_COUNTER.get() > 1);
 
-        List<SegmentMetadata> segments = getSegments(indexName, 1);
-
-        // Post-build the index only has 1 segment
-        assertEquals(1, segments.size());
+        getIndexOnDiskMetadata(indexName, 1);
 
         Map<Integer, List<Integer>> actual = new HashMap<>();
 
@@ -180,18 +174,17 @@ public class SegmentMergerTest extends SAITester
         expected.keySet().forEach(term -> assertThat("Postings comparison failed for term = " + term, expected.get(term), is(actual.get(term))));
     }
 
-    private List<SegmentMetadata> getSegments(String indexName, int generation) throws Throwable
+    private IndexOnDiskMetadata getIndexOnDiskMetadata(String indexName, int generation) throws Throwable
     {
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         File dataFolder = new Directories(cfs.metadata()).getDirectoryForNewSSTables();
         Descriptor descriptor = new Descriptor(dataFolder, cfs.keyspace.getName(), cfs.getTableName(), generation, SSTableFormat.Type.current());
         TableMetadata table = currentTableMetadata();
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, table);
         assertTrue(indexDescriptor.isGroupIndexComplete());
         IndexMetadata index = table.indexes.get(indexName).get();
         IndexContext indexContext = new IndexContext(table, index);
         assertTrue(indexDescriptor.isColumnIndexComplete(indexContext));
-        final MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexName));
-        return SegmentMetadata.load(source, null);
+        return indexDescriptor.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
     }
 }

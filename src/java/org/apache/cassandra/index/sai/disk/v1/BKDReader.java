@@ -20,10 +20,11 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
@@ -35,9 +36,10 @@ import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.MergePostingList;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.FilteringPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
@@ -71,6 +73,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
     private final BKDPostingsIndex postingsIndex;
     private final ICompressor compressor;
     private final DirectReaders.Reader leafOrderMapReader;
+    private final PrimaryKeyMap.Factory primaryKeyMapFactory;
 
     /**
      * Performs a blocking read.
@@ -79,7 +82,8 @@ public class BKDReader extends TraversingBKDReader implements Closeable
                      FileHandle kdtreeFile,
                      long bkdIndexRoot,
                      FileHandle postingsFile,
-                     long bkdPostingsRoot) throws IOException
+                     long bkdPostingsRoot,
+                     PrimaryKeyMap.Factory primaryKeyMapFactory) throws IOException
     {
         super(kdtreeFile, bkdIndexRoot);
         this.indexContext = indexContext;
@@ -89,6 +93,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         this.compressor = null;
         final byte bits = (byte) DirectWriter.unsignedBitsRequired(maxPointsInLeafNode - 1);
         leafOrderMapReader = DirectReaders.getReaderForBitsPerValue(bits);
+        this.primaryKeyMapFactory = primaryKeyMapFactory;
     }
 
     public interface DocMapper
@@ -286,7 +291,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         {
             final long pointer = postingsIndex.getPostingsFilePointer(nodeID);
             final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(bkdPostingsInput, pointer);
-            final PostingsReader postingsReader = new PostingsReader(bkdPostingsInput, summary, QueryEventListener.PostingListEventListener.NO_OP);
+            final PostingsReader postingsReader = new ScanningPostingsReader(bkdPostingsInput, summary);
 
             tempPostings.clear();
 
@@ -314,12 +319,6 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         return count;
     }
 
-    public static int openPerIndexFiles()
-    {
-        // kd-tree, posting lists file
-        return 2;
-    }
-
     @Override
     public void close()
     {
@@ -329,12 +328,12 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         }
         finally
         {
-            postingsFile.close();
+            FileUtils.closeQuietly(postingsFile);
         }
     }
 
     @SuppressWarnings("resource")
-    public PostingList intersect(IntersectVisitor visitor, QueryEventListener.BKDIndexEventListener listener, QueryContext context)
+    public List<PostingList.PeekablePostingList> intersect(IntersectVisitor visitor, QueryEventListener.BKDIndexEventListener listener, SSTableQueryContext context)
     {
         Relation relation = visitor.compare(minPackedValue, maxPackedValue);
 
@@ -365,7 +364,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
     class Intersection
     {
         private final Stopwatch queryExecutionTimer = Stopwatch.createStarted();
-        final QueryContext context;
+        final SSTableQueryContext context;
 
         final IndexInput bkdInput;
         final IndexInput postingsInput;
@@ -374,7 +373,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         final QueryEventListener.BKDIndexEventListener listener;
 
         Intersection(IndexInput bkdInput, IndexInput postingsInput, IndexInput postingsSummaryInput,
-                     IndexTree index, QueryEventListener.BKDIndexEventListener listener, QueryContext context)
+                     IndexTree index, QueryEventListener.BKDIndexEventListener listener, SSTableQueryContext context)
         {
             this.bkdInput = bkdInput;
             this.postingsInput = postingsInput;
@@ -384,16 +383,32 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             this.context = context;
         }
 
-        public PostingList execute()
+        public List<PostingList.PeekablePostingList> execute()
         {
             try
             {
-                PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, COMPARATOR);
+                List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
+
                 executeInternal(postingLists);
 
                 FileUtils.closeQuietly(bkdInput);
 
-                return mergePostings(postingLists);
+                final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+
+                listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
+                listener.postingListsHit(postingLists.size());
+
+                if (postingLists.isEmpty())
+                {
+                    FileUtils.closeQuietly(postingsInput, postingsSummaryInput);
+                    return null;
+                }
+
+                if (logger.isTraceEnabled())
+                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
+                                 indexFile.path(), elapsedMicros, postingLists.size());
+
+                return postingLists;
             }
             catch (Throwable t)
             {
@@ -405,7 +420,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             }
         }
 
-        protected void executeInternal(final PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
+        protected void executeInternal(final List<PostingList.PeekablePostingList> postingLists) throws IOException
         {
             collectPostingLists(postingLists);
         }
@@ -415,30 +430,9 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             FileUtils.closeQuietly(bkdInput, postingsInput, postingsSummaryInput);
         }
 
-        protected PostingList mergePostings(PriorityQueue<PostingList.PeekablePostingList> postingLists)
+        public void collectPostingLists(List<PostingList.PeekablePostingList> postingLists) throws IOException
         {
-            final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
-
-            listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
-            listener.postingListsHit(postingLists.size());
-
-            if (postingLists.isEmpty())
-            {
-                FileUtils.closeQuietly(postingsInput, postingsSummaryInput);
-                return null;
-            }
-            else
-            {
-                if (logger.isTraceEnabled())
-                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
-                                 indexFile.path(), elapsedMicros, postingLists.size());
-                return MergePostingList.merge(postingLists, () -> FileUtils.close(postingsInput, postingsSummaryInput));
-            }
-        }
-
-        public void collectPostingLists(PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
-        {
-            context.checkpoint();
+            context.queryContext.checkpoint();
 
             final int nodeID = index.getNodeID();
 
@@ -465,7 +459,10 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         private PostingList initPostingReader(long offset) throws IOException
         {
             final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
-            return new PostingsReader(postingsInput, summary, listener.postingListEventListener());
+            return new PostingsReader(postingsInput,
+                                      summary,
+                                      listener.postingListEventListener(),
+                                      primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context));
         }
     }
 
@@ -642,7 +639,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
         FilteringIntersection(IndexInput bkdInput, IndexInput postingsInput, IndexInput postingsSummaryInput,
                               IndexTree index, IntersectVisitor visitor,
-                              QueryEventListener.BKDIndexEventListener listener, QueryContext context)
+                              QueryEventListener.BKDIndexEventListener listener, SSTableQueryContext context)
         {
             super(bkdInput, postingsInput, postingsSummaryInput, index, listener, context);
             this.visitor = visitor;
@@ -652,14 +649,14 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         }
 
         @Override
-        public void executeInternal(final PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
+        public void executeInternal(final List<PostingList.PeekablePostingList> postingLists) throws IOException
         {
             collectPostingLists(postingLists, minPackedValue, maxPackedValue);
         }
 
-        public void collectPostingLists(PriorityQueue<PostingList.PeekablePostingList> postingLists, byte[] cellMinPacked, byte[] cellMaxPacked) throws IOException
+        public void collectPostingLists(List<PostingList.PeekablePostingList> postingLists, byte[] cellMinPacked, byte[] cellMaxPacked) throws IOException
         {
-            context.checkpoint();
+            context.queryContext.checkpoint();
 
             final Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
 
@@ -687,7 +684,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         }
 
         @SuppressWarnings("resource")
-        void filterLeaf(PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
+        void filterLeaf(List<PostingList.PeekablePostingList> postingLists) throws IOException
         {
             bkdInput.seek(index.getLeafBlockFP());
 
@@ -730,7 +727,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             }
         }
 
-        void visitNode(PriorityQueue<PostingList.PeekablePostingList> postingLists, byte[] cellMinPacked, byte[] cellMaxPacked) throws IOException
+        void visitNode(List<PostingList.PeekablePostingList> postingLists, byte[] cellMinPacked, byte[] cellMaxPacked) throws IOException
         {
             int splitDim = index.getSplitDim();
             assert splitDim >= 0 : "splitDim=" + splitDim;
@@ -771,7 +768,10 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         @SuppressWarnings("resource")
         private PostingList initFilteringPostingReader(FixedBitSet filter, PostingsReader.BlocksSummary header) throws IOException
         {
-            PostingsReader postingsReader = new PostingsReader(postingsInput, header, listener.postingListEventListener());
+            PostingsReader postingsReader = new PostingsReader(postingsInput,
+                                                               header,
+                                                               listener.postingListEventListener(),
+                                                               primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context));
             return new FilteringPostingList(filter, postingsReader);
         }
     }

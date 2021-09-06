@@ -18,18 +18,23 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.nio.ByteBuffer;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import com.carrotsearch.hppc.IntArrayList;
+import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -51,14 +56,14 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
 {
     private IndexDescriptor indexDescriptor;
     private String index;
-    private IndexContext columnContext;
+    private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
-        columnContext = SAITester.createIndexContext(index, Int32Type.instance);
+        indexContext = SAITester.createIndexContext(index, Int32Type.instance);
     }
 
     @Test
@@ -86,7 +91,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
         try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                columnContext,
+                                                                indexContext,
                                                                 Integer.BYTES,
                                                                 docCount, docCount,
                                                                 IndexWriterConfig.defaultConfig("test"),
@@ -95,18 +100,19 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(pointValues);
         }
 
-        final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, index);
-        final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index);
+        final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+        final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
 
-        try (BKDReader reader = new BKDReader(columnContext,
+        try (BKDReader reader = new BKDReader(indexContext,
                                               kdtreeHandle,
                                               indexMetas.get(IndexComponent.KD_TREE).root,
                                               kdtreePostingsHandle,
-                                              indexMetas.get(IndexComponent.KD_TREE_POSTING_LISTS).root
+                                              indexMetas.get(IndexComponent.KD_TREE_POSTING_LISTS).root,
+                                              PrimaryKeyMap.Factory.IDENTITY
         ))
         {
             final Counter visited = Counter.newCounter();
-            try (final PostingList ignored = reader.intersect(new BKDReader.IntersectVisitor()
+            try (final PostingList ignored = intersect(reader.intersect(new BKDReader.IntersectVisitor()
             {
                 @Override
                 public boolean visit(byte[] packedValue)
@@ -122,7 +128,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext()))
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
             {
                 assertEquals(numRows, visited.get());
             }
@@ -139,7 +145,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
         try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                columnContext,
+                                                                indexContext,
                                                                 TypeUtil.fixedSizeOf(Int32Type.instance),
                                                                 maxSegmentRowId, maxSegmentRowId,
                                                                 IndexWriterConfig.defaultConfig("test"), false))
@@ -147,18 +153,19 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
             indexMetas = writer.writeAll(pointValues);
         }
 
-        final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, index);
-        final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index);
+        final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+        final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
 
-        try (BKDReader reader = new BKDReader(columnContext,
+        try (BKDReader reader = new BKDReader(indexContext,
                                               kdtreeHandle,
                                               indexMetas.get(IndexComponent.KD_TREE).root,
                                               kdtreePostingsHandle,
-                                              indexMetas.get(IndexComponent.KD_TREE_POSTING_LISTS).root
+                                              indexMetas.get(IndexComponent.KD_TREE_POSTING_LISTS).root,
+                                              PrimaryKeyMap.Factory.IDENTITY
         ))
         {
             final Counter visited = Counter.newCounter();
-            try (final PostingList ignored = reader.intersect(new BKDReader.IntersectVisitor()
+            try (final PostingList ignored = intersect(reader.intersect(new BKDReader.IntersectVisitor()
             {
                 @Override
                 public boolean visit(byte[] packedValue)
@@ -177,7 +184,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, new QueryContext()))
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
             {
                 assertEquals(maxSegmentRowId, visited.get());
             }
@@ -189,20 +196,20 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         final ByteBuffer minTerm = Int32Type.instance.decompose(startTermInclusive);
         final ByteBuffer maxTerm = Int32Type.instance.decompose(endTermExclusive);
 
-        final AbstractIterator<Pair<ByteComparable, IntArrayList>> iterator = new AbstractIterator<Pair<ByteComparable, IntArrayList>>()
+        final AbstractIterator<Pair<ByteComparable, LongArrayList>> iterator = new AbstractIterator<Pair<ByteComparable, LongArrayList>>()
         {
             private int currentTerm = startTermInclusive;
             private int currentRowId = 0;
 
             @Override
-            protected Pair<ByteComparable, IntArrayList> computeNext()
+            protected Pair<ByteComparable, LongArrayList> computeNext()
             {
                 if (currentTerm >= endTermExclusive)
                 {
                     return endOfData();
                 }
                 final ByteBuffer term = Int32Type.instance.decompose(currentTerm++);
-                final IntArrayList postings = new IntArrayList();
+                final LongArrayList postings = new LongArrayList();
                 postings.add(currentRowId++);
                 final ByteSource encoded = Int32Type.instance.asComparableBytes(term, ByteComparable.Version.OSS41);
                 return Pair.create(v -> encoded, postings);
@@ -211,4 +218,16 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
 
         return new MemtableTermsIterator(minTerm, maxTerm, iterator);
     }
+
+    private PostingList intersect(List<PostingList.PeekablePostingList> postings)
+    {
+        if (postings == null || postings.isEmpty())
+            return null;
+
+        PriorityQueue<PostingList.PeekablePostingList> queue = new PriorityQueue<>(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        queue.addAll(postings);
+
+        return MergePostingList.merge(queue);
+    }
+
 }

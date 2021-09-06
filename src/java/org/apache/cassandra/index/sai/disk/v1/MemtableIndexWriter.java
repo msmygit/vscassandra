@@ -26,19 +26,19 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.carrotsearch.hppc.IntArrayList;
+import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
@@ -46,20 +46,20 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
  * Column index writer that flushes indexed data directly from the corresponding Memtable index, without buffering index
  * data in memory.
  */
-public class MemtableIndexWriter implements ColumnIndexWriter
+public class MemtableIndexWriter implements PerIndexWriter
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
+
     private final MemtableIndex memtable;
     private final RowMapping rowMapping;
-    private final IndexContext indexContext;
-    private final IndexDescriptor indexDescriptor;
 
     public MemtableIndexWriter(MemtableIndex memtable,
                                IndexDescriptor indexDescriptor,
                                IndexContext indexContext,
-                               RowMapping rowMapping,
-                               CompressionParams compressionParams)
+                               RowMapping rowMapping)
     {
         assert rowMapping != null && rowMapping != RowMapping.DUMMY : "Row mapping must exist during FLUSH.";
 
@@ -70,7 +70,7 @@ public class MemtableIndexWriter implements ColumnIndexWriter
     }
 
     @Override
-    public void addRow(DecoratedKey rowKey, long ssTableRowId, Row row)
+    public void addRow(PrimaryKey key, Row row)
     {
         // Memtable indexes are flushed directly to disk with the aid of a mapping between primary
         // keys and row IDs in the flushing SSTable. This writer, therefore, does nothing in
@@ -100,10 +100,10 @@ public class MemtableIndexWriter implements ColumnIndexWriter
                 return;
             }
 
-            final DecoratedKey minKey = rowMapping.minKey;
-            final DecoratedKey maxKey = rowMapping.maxKey;
+            final DecoratedKey minKey = rowMapping.minKey.partitionKey();
+            final DecoratedKey maxKey = rowMapping.maxKey.partitionKey();
 
-            final Iterator<Pair<ByteComparable, IntArrayList>> iterator = rowMapping.merge(memtable);
+            final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable);
 
             try (MemtableTermsIterator terms = new MemtableTermsIterator(memtable.getMinTerm(), memtable.getMaxTerm(), iterator))
             {
@@ -132,7 +132,7 @@ public class MemtableIndexWriter implements ColumnIndexWriter
         }
     }
 
-    private long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, int maxSegmentRowId) throws IOException
+    private long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
     {
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;
@@ -170,14 +170,23 @@ public class MemtableIndexWriter implements ColumnIndexWriter
         }
 
         // During index memtable flush, the data is sorted based on terms.
-        SegmentMetadata metadata = new SegmentMetadata(0, numRows, terms.getMinSSTableRowId(), terms.getMaxSSTableRowId(),
-                                                       minKey, maxKey, terms.getMinTerm(), terms.getMaxTerm(), indexMetas);
+        SegmentMetadata metadata = new SegmentMetadata(0,
+                                                       numRows,
+                                                       terms.getMinSSTableRowId(),
+                                                       terms.getMaxSSTableRowId(),
+                                                       indexDescriptor.primaryKeyFactory.createKey(minKey),
+                                                       indexDescriptor.primaryKeyFactory.createKey(maxKey),
+                                                       terms.getMinTerm(),
+                                                       terms.getMaxTerm(),
+                                                       indexMetas);
 
-        try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName())))
-        {
-            SegmentMetadata.write(writer, Collections.singletonList(metadata), null);
-        }
+        writeMetadata(metadata);
 
         return numRows;
+    }
+
+    protected void writeMetadata(SegmentMetadata metadata) throws IOException
+    {
+        indexDescriptor.newIndexMetadataSerializer().serialize(new V1IndexOnDiskMetadata(Collections.singletonList(metadata)), indexDescriptor, indexContext);
     }
 }

@@ -38,8 +38,8 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.io.IndexComponents;
-import org.apache.cassandra.index.sai.disk.v2.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -47,39 +47,39 @@ import org.apache.cassandra.schema.TableMetadata;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 public class SSTableComponentsTest extends SAITester
 {
-
     private Descriptor descriptor;
+    private TableMetadata tableMetadata;
+    private IndexDescriptor indexDescriptor;
 
     @Before
     public void createDescriptor() throws Throwable
     {
         Path tmpDir = Files.createTempDirectory("SegmentFlushTest");
         descriptor = new Descriptor(tmpDir.toFile(), "test", "test", 1);
+        tableMetadata = TableMetadata.builder("test", "test")
+                                     .partitioner(Murmur3Partitioner.instance)
+                                     .addPartitionKeyColumn("pk", Int32Type.instance)
+                                     .addClusteringColumn("a", UTF8Type.instance)
+                                     .addClusteringColumn("b", UTF8Type.instance)
+                                     .build();
+        indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
     }
 
     @Test
     public void testEmptyKeys() throws Throwable
     {
+        assumeTrue(Version.LATEST == Version.BA);
+
         setMemtableTrieAllocatedSizeThreshold(1);
 
-
-        TableMetadata tableMetadata = TableMetadata.builder("test", "test")
-                                                   .partitioner(Murmur3Partitioner.instance)
-                                                   .addPartitionKeyColumn("pk", Int32Type.instance)
-                                                   .addClusteringColumn("a", UTF8Type.instance)
-                                                   .addClusteringColumn("b", UTF8Type.instance)
-                                                   .build();
-
-        PrimaryKey.PrimaryKeyFactory factory = PrimaryKey.factory(tableMetadata);
-        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, factory, null);
+        PerSSTableWriter writer = indexDescriptor.newPerSSTableComponentsWriter();
         writer.complete();
 
-        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, factory, null);
-
-        PrimaryKeyMap primaryKeyMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, tableMetadata);
+        PrimaryKeyMap primaryKeyMap = indexDescriptor.newPrimaryKeyMapFactory(null).newPerSSTablePrimaryKeyMap(null);
 
         assertEquals(0, primaryKeyMap.size());
 
@@ -89,15 +89,10 @@ public class SSTableComponentsTest extends SAITester
     @Test
     public void testNonEmptyKeys() throws Throwable
     {
-        TableMetadata tableMetadata = TableMetadata.builder("test", "test")
-                .partitioner(Murmur3Partitioner.instance)
-                .addPartitionKeyColumn("pk", Int32Type.instance)
-                .addClusteringColumn("a", UTF8Type.instance)
-                .addClusteringColumn("b", UTF8Type.instance)
-                .build();
+        assumeTrue(Version.LATEST == Version.BA);
 
-        PrimaryKey.PrimaryKeyFactory factory = PrimaryKey.factory(tableMetadata);
-        SSTableComponentsWriter writer = new SSTableComponentsWriter.OnDiskSSTableComponentsWriter(descriptor, factory, null);
+        PrimaryKey.PrimaryKeyFactory factory = indexDescriptor.primaryKeyFactory;
+        PerSSTableWriter writer = indexDescriptor.newPerSSTableComponentsWriter();
 
         int numRows = CQLTester.getRandom().nextIntBetween(2000, 10000);
         int width = CQLTester.getRandom().nextIntBetween(3, 8);
@@ -120,9 +115,7 @@ public class SSTableComponentsTest extends SAITester
 
         writer.complete();
 
-        IndexComponents indexComponents = IndexComponents.perSSTable(descriptor, factory, null);
-
-        PrimaryKeyMap primaryKeyMap = new PrimaryKeyMap.DefaultPrimaryKeyMap(indexComponents, tableMetadata);
+        PrimaryKeyMap primaryKeyMap = indexDescriptor.newPrimaryKeyMapFactory(null).newPerSSTablePrimaryKeyMap(null);
 
         assertEquals(numRows, primaryKeyMap.size());
 

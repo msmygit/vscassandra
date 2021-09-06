@@ -127,6 +127,7 @@ public class SegmentsSystemViewTest extends SAITester
 
         for (int lastValidSegmentRowId : Arrays.asList(0, 1, 2, 3, 5, 9, 25, 49, 59, 99, 101))
         {
+            System.out.println("lastValidSegmentRowId = " + lastValidSegmentRowId);
             SegmentBuilder.updateLastValidSegmentRowId(lastValidSegmentRowId);
 
             // compaction to rewrite segments
@@ -203,7 +204,7 @@ public class SegmentsSystemViewTest extends SAITester
             {
                 SSTableReader sstable = sstableIndex.getSSTable();
 
-                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor).registerIndex(index.getIndexContext());
+                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata()).registerIndex(index.getIndexContext());
 
                 if (sstableIndex.getIndexContext().isLiteral())
                 {
@@ -224,7 +225,7 @@ public class SegmentsSystemViewTest extends SAITester
     private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, String index, IndexDescriptor indexDescriptor)
     {
         map.compute(key.name(), (typeName, acc) -> {
-            final long size = indexDescriptor.sizeOfPerColumnComponents(index);
+            final long size = indexDescriptor.sizeOfPerColumnComponents(index, key);
             return acc == null ? size : size + acc;
         });
     }

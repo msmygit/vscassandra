@@ -81,7 +81,6 @@ import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZ
  *  </pre>
  */
 @NotThreadSafe
-//TODO Review this for DSP-19608
 public class PostingsWriter implements Closeable
 {
     private final static String POSTINGS_MUST_BE_SORTED_ERROR_MSG = "Postings must be sorted ascending, got [%s] after [%s]";

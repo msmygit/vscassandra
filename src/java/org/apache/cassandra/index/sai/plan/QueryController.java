@@ -54,6 +54,7 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
@@ -78,13 +79,14 @@ public class QueryController
     private final QueryContext queryContext;
     private final TableQueryMetrics tableQueryMetrics;
     private final RowFilter.FilterElement filterOperation;
-
+    private final IndexFeatureSet indexFeatureSet;
     private final List<DataRange> ranges;
     private final AbstractBounds<PartitionPosition> mergeRange;
 
     public QueryController(ColumnFamilyStore cfs,
                            ReadCommand command,
                            RowFilter.FilterElement filterOperation,
+                           IndexFeatureSet indexFeatureSet,
                            QueryContext queryContext,
                            TableQueryMetrics tableQueryMetrics)
     {
@@ -93,6 +95,7 @@ public class QueryController
         this.queryContext = queryContext;
         this.tableQueryMetrics = tableQueryMetrics;
         this.filterOperation = filterOperation;
+        this.indexFeatureSet = indexFeatureSet;
         this.ranges = dataRanges(command);
         DataRange first = ranges.get(0);
         DataRange last = ranges.get(ranges.size() - 1);
@@ -210,7 +213,7 @@ public class QueryController
 
     private ClusteringIndexFilter makeFilter(PrimaryKey key)
     {
-        if (key.hasEmptyClustering())
+        if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())
             return command.clusteringIndexFilter(key.partitionKey());
         else
             return new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(), key.clusteringComparator()), false);

@@ -33,27 +33,30 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.rows.BTreeRow;
 import org.apache.cassandra.db.rows.BufferCell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v2.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.TermsReader;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
 import static org.apache.cassandra.Util.dk;
@@ -61,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 //TODO This test needs rethinking because we always now end up with a single segment after a flush
 // and we are not restricted to Integer.MAX_VALUE in the segments
@@ -69,8 +73,8 @@ public class SegmentFlushTest
     private static long segmentRowIdOffset;
     private static int posting1;
     private static int posting2;
-    private static DecoratedKey minKey;
-    private static DecoratedKey maxKey;
+    private static PrimaryKey minKey;
+    private static PrimaryKey maxKey;
     private static ByteBuffer minTerm;
     private static ByteBuffer maxTerm;
     private static int numRows;
@@ -90,6 +94,7 @@ public class SegmentFlushTest
     @Test
     public void testFlushBetweenRowIds() throws Exception
     {
+        assumeTrue(Version.LATEST == Version.BA);
         // exceeds max rowId per segment
         testFlushBetweenRowIds(0, Integer.MAX_VALUE, 1);
         testFlushBetweenRowIds(0, Long.MAX_VALUE - 1, 1);
@@ -101,6 +106,7 @@ public class SegmentFlushTest
     @Test
     public void testNoFlushBetweenRowIds() throws Exception
     {
+        assumeTrue(Version.LATEST == Version.BA);
         // not exceeds max rowId per segment
         testFlushBetweenRowIds(0, SegmentBuilder.LAST_VALID_SEGMENT_ROW_ID, 1);
         testFlushBetweenRowIds(Long.MAX_VALUE - SegmentBuilder.LAST_VALID_SEGMENT_ROW_ID, Long.MAX_VALUE - 1, 1);
@@ -109,7 +115,8 @@ public class SegmentFlushTest
     private void testFlushBetweenRowIds(long sstableRowId1, long sstableRowId2, int segments) throws Exception
     {
         Path tmpDir = Files.createTempDirectory("SegmentFlushTest");
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(tmpDir.toFile(), "ks", "cf", 1));
+        TableMetadata tableMetadata = TableMetadata.builder("ks", "cf").addPartitionKeyColumn("pk", Int32Type.instance).build();
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(tmpDir.toFile(), "ks", "cf", 1), tableMetadata);
 
         ColumnMetadata column = ColumnMetadata.regularColumn("sai", "internal", "column", UTF8Type.instance);
         IndexMetadata config = IndexMetadata.fromSchemaMetadata("index_name", IndexMetadata.Kind.CUSTOM, null);
@@ -123,7 +130,8 @@ public class SegmentFlushTest
                                                 IndexWriterConfig.defaultConfig("test"),
                                                 QueryEventListeners.NO_OP_TRIE_LISTENER);
 
-        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor, context, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER, () -> true, null);
+
+        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor, context, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER, () -> true);
 
         List<DecoratedKey> keys = Arrays.asList(dk("1"), dk("2"));
         Collections.sort(keys);
@@ -131,29 +139,26 @@ public class SegmentFlushTest
         DecoratedKey key1 = keys.get(0);
         ByteBuffer term1 = UTF8Type.instance.decompose("a");
         Row row1 = createRow(column, term1);
-        writer.addRow(key1, sstableRowId1, row1);
+        writer.addRow(PrimaryKey.factory().createKey(key1, Clustering.EMPTY, sstableRowId1), row1);
 
         // expect a flush if exceed max rowId per segment
         DecoratedKey key2 = keys.get(1);
         ByteBuffer term2 = UTF8Type.instance.decompose("b");
         Row row2 = createRow(column, term2);
-        writer.addRow(key2, sstableRowId2, row2);
+        writer.addRow(PrimaryKey.factory().createKey(key2, Clustering.EMPTY, sstableRowId2), row2);
 
         writer.flush();
 
-        MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, context.getIndexName()));
-
         // verify segment count
-        List<SegmentMetadata> segmentMetadatas = SegmentMetadata.load(source, null);
-        assertEquals(segments, segmentMetadatas.size());
-
+        IndexOnDiskMetadata indexMetadata = indexDescriptor.newIndexMetadataSerializer().deserialize(indexDescriptor, context);
+        assertTrue(indexMetadata instanceof V2IndexOnDiskMetadata);
         // verify segment metadata
-        SegmentMetadata segmentMetadata = segmentMetadatas.get(0);
+        SegmentMetadata segmentMetadata = ((V2IndexOnDiskMetadata)indexMetadata).segment;
         segmentRowIdOffset = 0;
         posting1 = 0;
         posting2 = (int) (sstableRowId2 - segmentRowIdOffset);
-        minKey = key1;
-        maxKey = key2;
+        minKey = PrimaryKey.factory().createKey(key1);
+        maxKey = PrimaryKey.factory().createKey(key2);
         minTerm = term1;
         maxTerm = term2;
         numRows = 2;
@@ -163,8 +168,8 @@ public class SegmentFlushTest
 
     private void verifyStringIndex(IndexDescriptor indexDescriptor, IndexContext indexContext, SegmentMetadata segmentMetadata) throws IOException
     {
-        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext.getIndexName());
-        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext.getIndexName());
+        FileHandle termsData = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
+        FileHandle postingLists = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
 
         long termsFooterPointer = Long.parseLong(segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes.get(SAICodecUtils.FOOTER_POINTER));
 
@@ -172,9 +177,10 @@ public class SegmentFlushTest
                                                   termsData,
                                                   postingLists,
                                                   segmentMetadata.componentMetadatas.get(IndexComponent.TERMS_DATA).root,
-                                                  termsFooterPointer))
+                                                  termsFooterPointer,
+                                                  PrimaryKeyMap.Factory.IDENTITY))
         {
-            TermsIterator iterator = reader.allTerms(0, (QueryEventListener.TrieIndexEventListener)QueryEventListeners.NO_OP_TRIE_LISTENER);
+            TermsIterator iterator = reader.allTerms(0);
             assertEquals(minTerm, iterator.getMinTerm());
             assertEquals(maxTerm, iterator.getMaxTerm());
 

@@ -101,18 +101,6 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
         }
     }
 
-    public static class NodeEntry
-    {
-        public final long numPoints;
-        public final long postingsFilePointer;
-
-        public NodeEntry(long numPoints, long postingsFilePointer)
-        {
-            this.numPoints = numPoints;
-            this.postingsFilePointer = postingsFilePointer;
-        }
-    }
-
     @SuppressWarnings("resource")
     public long finish(IndexOutput out) throws IOException
     {
@@ -143,7 +131,7 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
 
         final long startFP = out.getFilePointer();
         final Stopwatch flushTime = Stopwatch.createStarted();
-        final TreeMap<Integer, NodeEntry> nodeIDToPostingsFilePointer = new TreeMap<>();
+        final TreeMap<Integer, Long> nodeIDToPostingsFilePointer = new TreeMap<>();
         for (int nodeID : Iterables.concat(internalNodeIDs, leafNodeIDs))
         {
             Collection<Integer> leaves = nodeToChildLeaves.get(nodeID);
@@ -163,17 +151,11 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
                 postingLists.add(new PackedLongsPostingList(leafToPostings.get(leaf)).peekable());
 
             final PostingList mergedPostingList = MergePostingList.merge(postingLists);
-
-            final long numPoints = mergedPostingList.size();
-
             final long postingFilePosition = postingsWriter.write(mergedPostingList);
             // During compaction we could end up with an empty postings due to deletions.
             // The writer will return a fp of -1 if no postings were written.
             if (postingFilePosition >= 0)
-            {
-                NodeEntry nodeEntry = new NodeEntry(numPoints, postingFilePosition);
-                nodeIDToPostingsFilePointer.put(nodeID, nodeEntry);
-            }
+                nodeIDToPostingsFilePointer.put(nodeID, postingFilePosition);
         }
         flushTime.stop();
         logger.debug(columnContext.logMessage("Flushed {} of posting lists for kd-tree nodes in {} ms."),
@@ -192,15 +174,14 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
         return level > 1 && level % config.getBkdPostingsSkip() == 0;
     }
 
-    private void writeMap(Map<Integer, NodeEntry> map, IndexOutput out) throws IOException
+    private void writeMap(Map<Integer, Long> map, IndexOutput out) throws IOException
     {
         out.writeVInt(map.size());
 
-        for (Map.Entry<Integer, NodeEntry> e : map.entrySet())
+        for (Map.Entry<Integer, Long> e : map.entrySet())
         {
             out.writeVInt(e.getKey());
-            out.writeVLong(e.getValue().postingsFilePointer);
-            out.writeVLong(e.getValue().numPoints);
+            out.writeVLong(e.getValue());
         }
     }
 }

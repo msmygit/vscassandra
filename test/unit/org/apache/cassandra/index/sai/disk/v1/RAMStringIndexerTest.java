@@ -27,6 +27,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.RAMStringIndexer;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;

@@ -19,13 +19,16 @@ package org.apache.cassandra.index.sai.utils;
 
 import java.nio.ByteBuffer;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
@@ -33,10 +36,18 @@ import static org.junit.Assert.assertTrue;
 
 public class PrimaryKeyTest
 {
+    @BeforeClass
+    public static void initialise() throws Throwable
+    {
+        DatabaseDescriptor.daemonInitialization();
+    }
+
     @Test
     public void primaryKeyFromBytesTest() throws Exception
     {
-        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance, new ClusteringComparator());
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance,
+                                                                     new ClusteringComparator(),
+                                                                     Version.LATEST.onDiskFormat().indexFeatureSet());
         DecoratedKey decoratedKey = Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.decompose("A"));
         PrimaryKey expected = keyFactory.createKey(decoratedKey);
         byte[] bytes = expected.asBytes();
@@ -49,7 +60,9 @@ public class PrimaryKeyTest
     @Test
     public void staticClusteringFromBytesTest() throws Exception
     {
-        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance, new ClusteringComparator(UTF8Type.instance));
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance,
+                                                                     new ClusteringComparator(UTF8Type.instance),
+                                                                     Version.LATEST.onDiskFormat().indexFeatureSet());
 
         DecoratedKey decoratedKey = Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.decompose("A"));
 
@@ -65,7 +78,9 @@ public class PrimaryKeyTest
     @Test
     public void skinnyRowTest() throws Exception
     {
-        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance, new ClusteringComparator());
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance,
+                                                                     new ClusteringComparator(),
+                                                                     Version.LATEST.onDiskFormat().indexFeatureSet());
         DecoratedKey decoratedKey = Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.decompose("A"));
         PrimaryKey expected = keyFactory.createKey(decoratedKey);
 
@@ -84,7 +99,9 @@ public class PrimaryKeyTest
         values[0] = UTF8Type.instance.decompose("B");
         Clustering clustering = Clustering.make(values);
 
-        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance, new ClusteringComparator(UTF8Type.instance));
+        PrimaryKey.PrimaryKeyFactory keyFactory = PrimaryKey.factory(Murmur3Partitioner.instance,
+                                                                     new ClusteringComparator(UTF8Type.instance),
+                                                                     Version.LATEST.onDiskFormat().indexFeatureSet());
 
         PrimaryKey expected = keyFactory.createKey(decoratedKey, clustering);
 

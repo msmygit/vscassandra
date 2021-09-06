@@ -31,11 +31,14 @@ import org.junit.rules.TestRule;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.SequentialWriterOption;
+import org.apache.cassandra.schema.TableMetadata;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class NdiRandomizedTest extends RandomizedTest
@@ -67,10 +70,17 @@ public class NdiRandomizedTest extends RandomizedTest
 
     public IndexDescriptor newIndexDescriptor() throws IOException
     {
+        String keyspace = randomSimpleString(5, 13);
+        String table = randomSimpleString(3, 17);
+        TableMetadata metadata = TableMetadata.builder(keyspace, table)
+                                              .addPartitionKeyColumn(randomSimpleString(3, 15), Int32Type.instance)
+                                              .partitioner(Murmur3Partitioner.instance)
+                                              .build();
         return indexInputLeakDetector.newIndexDescriptor(new Descriptor(temporaryFolder.newFolder(),
                                                                        randomSimpleString(5, 13),
                                                                        randomSimpleString(3, 17),
                                                                        randomIntBetween(0, 128)),
+                                                        metadata,
                                                         SequentialWriterOption.newBuilder()
                                                                               .bufferSize(randomIntBetween(17, 1 << 13))
                                                                               .bufferType(randomBoolean() ? BufferType.ON_HEAP : BufferType.OFF_HEAP)

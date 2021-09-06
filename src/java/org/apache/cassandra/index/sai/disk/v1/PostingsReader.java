@@ -23,16 +23,21 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
+import org.apache.cassandra.index.sai.utils.SharedIndexInput;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 
 
 /**
- * Reads, decompresses and decodes postings lists written by {@link PostingsWriter}.
+ * Reads, decompresses and decodes postings lists written by {@code PostingsWriter}.
  *
  * Holds exactly one postings block in memory at a time. Does binary search over skip table to find a postings block to
  * load.
@@ -47,6 +52,7 @@ public class PostingsReader implements OrdinalPostingList
     private final LongArray blockMaxValues;
     private final SeekingRandomAccessInput seekingInput;
     private final QueryEventListener.PostingListEventListener listener;
+    private final PrimaryKeyMap primaryKeyMap;
 
     // TODO: Expose more things through the summary, now that it's an actual field?
     private final BlocksSummary summary;
@@ -61,13 +67,16 @@ public class PostingsReader implements OrdinalPostingList
     private long postingsDecoded = 0;
 
     @VisibleForTesting
-    public PostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
+    PostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        this(input, new BlocksSummary(input, summaryOffset, () -> {}), listener);
+        this(sharedInput, new BlocksSummary(sharedInput.sharedCopy(), summaryOffset), listener, PrimaryKeyMap.IDENTITY);
     }
 
     @VisibleForTesting
-    public PostingsReader(IndexInput input, BlocksSummary summary, QueryEventListener.PostingListEventListener listener) throws IOException
+    public PostingsReader(IndexInput input,
+                          BlocksSummary summary,
+                          QueryEventListener.PostingListEventListener listener,
+                          PrimaryKeyMap primaryKeyMap) throws IOException
     {
         this.input = input;
         this.seekingInput = new SeekingRandomAccessInput(input);
@@ -76,6 +85,7 @@ public class PostingsReader implements OrdinalPostingList
         this.numPostings = summary.numPostings;
         this.blockMaxValues = summary.maxValues;
         this.listener = listener;
+        this.primaryKeyMap = primaryKeyMap;
 
         this.summary = summary;
 
@@ -96,23 +106,17 @@ public class PostingsReader implements OrdinalPostingList
     @VisibleForTesting
     public static class BlocksSummary
     {
-        public final int blockSize;
-        public final int numPostings;
-        public final LongArray offsets;
-        public final LongArray maxValues;
+        final int blockSize;
+        final int numPostings;
+        final LongArray offsets;
+        final LongArray maxValues;
 
         private final InputCloser runOnClose;
 
         @VisibleForTesting
         public BlocksSummary(IndexInput input, long offset) throws IOException
         {
-            this(input, offset, input::close);
-        }
-
-        BlocksSummary(IndexInput input, long offset, InputCloser runOnClose) throws IOException
-        {
-            this.runOnClose = runOnClose;
-
+            this.runOnClose = input::close;
             input.seek(offset);
             this.blockSize = input.readVInt();
             //TODO This should need to change because we can potentially end up with postings of more than Integer.MAX_VALUE?
@@ -127,7 +131,7 @@ public class PostingsReader implements OrdinalPostingList
             if (offsetBitsPerValue > 64)
             {
                 throw new CorruptIndexException(
-                        String.format("Postings list header is corrupted: Bits per value for block offsets must be no more than 64 and is %d.", offsetBitsPerValue), input);
+                String.format("Postings list header is corrupted: Bits per value for block offsets must be no more than 64 and is %d.", offsetBitsPerValue), input);
             }
             this.offsets = new LongArrayReader(randomAccessInput, DirectReaders.getReaderForBitsPerValue(offsetBitsPerValue), input.getFilePointer(), numBlocks);
 
@@ -136,7 +140,7 @@ public class PostingsReader implements OrdinalPostingList
             if (valuesBitsPerValue > 64)
             {
                 throw new CorruptIndexException(
-                        String.format("Postings list header is corrupted: Bits per value for values samples must be no more than 64 and is %d.", valuesBitsPerValue), input);
+                String.format("Postings list header is corrupted: Bits per value for values samples must be no more than 64 and is %d.", valuesBitsPerValue), input);
             }
             this.maxValues = new LongArrayReader(randomAccessInput, DirectReaders.getReaderForBitsPerValue(valuesBitsPerValue), input.getFilePointer(), numBlocks);
         }
@@ -185,14 +189,8 @@ public class PostingsReader implements OrdinalPostingList
     public void close() throws IOException
     {
         listener.postingDecoded(postingsDecoded);
-        try
-        {
-            input.close();
-        }
-        finally
-        {
-            summary.close();
-        }
+        FileUtils.closeQuietly(input, primaryKeyMap);
+        summary.close();
     }
 
     @Override
@@ -211,15 +209,15 @@ public class PostingsReader implements OrdinalPostingList
      * Note: Callers must use the return value of this method before calling {@link #nextPosting()}, as calling
      * that method will return the next posting, not the one to which we have just advanced.
      *
-     * @param targetRowID target row ID to advance to
+     * @param nextPrimaryKey target primary key to advance to
      *
      * @return first segment row ID which is >= the target row ID or {@link PostingList#END_OF_STREAM} if one does not exist
      */
     @Override
-    public long advance(long targetRowID) throws IOException
+    public long advance(PrimaryKey nextPrimaryKey) throws IOException
     {
         listener.onAdvance();
-        int block = binarySearchBlock(targetRowID);
+        int block = binarySearchBlock(nextPrimaryKey);
 
         if (block < 0)
         {
@@ -229,58 +227,55 @@ public class PostingsReader implements OrdinalPostingList
         if (postingsBlockIdx == block + 1)
         {
             // we're in the same block, just iterate through
-            return slowAdvance(targetRowID);
+            return slowAdvance(nextPrimaryKey);
         }
         assert block > 0;
         // Even if there was an exact match, block might contain duplicates.
         // We iterate to the target token from the beginning.
         lastPosInBlock(block - 1);
-        return slowAdvance(targetRowID);
+        return slowAdvance(nextPrimaryKey);
     }
 
-    private long slowAdvance(long targetRowID) throws IOException
+    private long slowAdvance(PrimaryKey nextPrimaryKey) throws IOException
     {
         while (totalPostingsRead < numPostings)
         {
-            long segmentRowId = peekNext();
+            final long segmentRowId = peekNext();
 
             advanceOnePosition(segmentRowId);
 
-            if (segmentRowId >= targetRowID)
-            {
+            if (primaryKeyMap.primaryKeyFromRowId(segmentRowId).compareTo(nextPrimaryKey) >= 0)
                 return segmentRowId;
-            }
         }
         return END_OF_STREAM;
     }
 
-    private int binarySearchBlock(long targetRowID)
+    private int binarySearchBlock(PrimaryKey primaryKey) throws IOException
     {
         int low = postingsBlockIdx - 1;
         int high = Math.toIntExact(blockMaxValues.length()) - 1;
 
         // in current block
-        if (low <= high && targetRowID <= blockMaxValues.get(low))
+        if (low <= high && primaryKey.compareTo(primaryKeyMap.primaryKeyFromRowId(blockMaxValues.get(low))) <= 0)
             return low;
 
         while (low <= high)
         {
             int mid = low + ((high - low) >> 1) ;
 
-            long midVal = blockMaxValues.get(mid);
-
-            if (midVal < targetRowID)
+            int cmp = primaryKeyMap.primaryKeyFromRowId(blockMaxValues.get(mid)).compareTo(primaryKey);
+            if (cmp < 0)
             {
                 low = mid + 1;
             }
-            else if (midVal > targetRowID)
+            else if (cmp > 0)
             {
                 high = mid - 1;
             }
             else
             {
                 // target found, but we need to check for duplicates
-                if (mid > 0 && blockMaxValues.get(mid - 1L) == targetRowID)
+                if (mid > 0 && primaryKeyMap.primaryKeyFromRowId(blockMaxValues.get(mid - 1)).compareTo(primaryKey) == 0)
                 {
                     // there are duplicates, pivot left
                     high = mid - 1;
@@ -304,6 +299,12 @@ public class PostingsReader implements OrdinalPostingList
 
         postingsBlockIdx = block + 1;
         blockIdx = blockSize;
+    }
+
+    @Override
+    public PrimaryKey mapRowId(long rowId) throws IOException
+    {
+        return primaryKeyMap.primaryKeyFromRowId(rowId);
     }
 
     @Override
@@ -389,7 +390,7 @@ public class PostingsReader implements OrdinalPostingList
         else if (bitsPerValue > 64)
         {
             throw new CorruptIndexException(
-                    String.format("Postings list #%s block is corrupted. Bits per value should be no more than 64 and is %d.", postingsBlockIdx, bitsPerValue), input);
+            String.format("Postings list #%s block is corrupted. Bits per value should be no more than 64 and is %d.", postingsBlockIdx, bitsPerValue), input);
         }
         currentFORValues = DirectReaders.getReaderForBitsPerValue(bitsPerValue);
     }
