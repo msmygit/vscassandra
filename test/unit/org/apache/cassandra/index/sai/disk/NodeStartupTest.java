@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.inject.Injection;
@@ -306,13 +307,13 @@ public class NodeStartupTest extends SAITester
     private boolean isGroupIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isGroupIndexComplete());
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor, sstable.metadata()).isGroupIndexComplete());
     }
 
     private boolean isColumnIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isColumnIndexComplete(indexContext));
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor, sstable.metadata()).isColumnIndexComplete(indexContext));
     }
 
     private void setState(IndexStateOnRestart state)
@@ -322,8 +323,8 @@ public class NodeStartupTest extends SAITester
             case VALID:
                 break;
             case ALL_EMPTY:
-                V1OnDiskFormat.PER_SSTABLE_COMPONENTS.forEach(this::remove);
-                V1OnDiskFormat.NUMERIC_COMPONENTS.forEach(c -> remove(c, indexName));
+                Version.LATEST.onDiskFormat().perSSTableComponents().forEach(this::remove);
+                Version.LATEST.onDiskFormat().perIndexComponents(indexContext).forEach(c -> remove(c, indexName));
                 break;
             case PER_SSTABLE_INCOMPLETE:
                 remove(IndexComponent.GROUP_COMPLETION_MARKER);

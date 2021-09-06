@@ -20,6 +20,8 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import com.google.common.base.MoreObjects;
@@ -28,8 +30,11 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -47,9 +52,13 @@ public class InvertedIndexSearcher extends IndexSearcher
     private final TermsReader reader;
     private final QueryEventListener.TrieIndexEventListener perColumnEventListener;
 
-    InvertedIndexSearcher(Segment segment, IndexContext indexContext) throws IOException
+    InvertedIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                          PerIndexFiles perIndexFiles,
+                          SegmentMetadata segmentMetadata,
+                          IndexDescriptor indexDescriptor,
+                          IndexContext indexContext) throws IOException
     {
-        super(segment, indexContext);
+        super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
 
         long root = metadata.getIndexRoot(IndexComponent.TERMS_DATA);
         assert root >= 0;
@@ -64,7 +73,8 @@ public class InvertedIndexSearcher extends IndexSearcher
                                  indexFiles.get(IndexComponent.TERMS_DATA).sharedCopy(),
                                  indexFiles.get(IndexComponent.POSTING_LISTS).sharedCopy(),
                                  root,
-                                 footerPointer);
+                                 footerPointer,
+                                 primaryKeyMapFactory);
     }
 
     @Override
@@ -77,7 +87,7 @@ public class InvertedIndexSearcher extends IndexSearcher
 
     @Override
     @SuppressWarnings("resource")
-    public RangeIterator search(Expression exp, SSTableQueryContext context, boolean defer)
+    public List<RangeIterator> search(Expression exp, SSTableQueryContext context) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -88,14 +98,8 @@ public class InvertedIndexSearcher extends IndexSearcher
         final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
         QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
 
-        PostingList postingList = defer ? new PostingList.DeferredPostingList(() -> reader.exactMatch(term, listener, context.queryContext))
-                                        : reader.exactMatch(term, listener, context.queryContext);
-        return toIterator(postingList, context, defer);
-    }
-
-    public static int openPerIndexFiles()
-    {
-        return TermsReader.openPerIndexFiles();
+        PostingList postingList = reader.exactMatch(term, listener, context);
+        return toIterators(postingList == null ? Collections.EMPTY_LIST : Collections.singletonList(postingList.peekable()), context);
     }
 
     @Override

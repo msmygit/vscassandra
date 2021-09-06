@@ -26,6 +26,7 @@ import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DESCRIPTOR;
 
 /**
  * Format version of indexing component, denoted as [major][minor]. Same forward-compatibility rules apply as to
@@ -34,22 +35,28 @@ import static com.google.common.base.Preconditions.checkArgument;
 public class Version
 {
     // 6.8 formats
-    public static final Version AA = new Version("aa", V1OnDiskFormat.instance);
+    public static final Version AA = new Version("aa", V1OnDiskFormat.instance, (c, i) -> aaFileNameFormat(c, i));
     // Stargazer
-    public static final Version BA = new Version("ba", V2OnDiskFormat.instance);
+    public static final Version BA = new Version("ba", V2OnDiskFormat.instance, (c, i) -> baFileNameFormat(c, i));
 
-    public static List<Version> ALL_VERSIONS = Lists.newArrayList(AA, BA);
+    // These are in reverse order so that the latest version is used first. Version matching tests
+    // are more likely to match the latest version so we want to test that one first.
+    public static List<Version> ALL_VERSIONS = Lists.newArrayList(BA, AA);
 
     public static final Version EARLIEST = AA;
-    public static final Version LATEST = BA;
+    // The latest version can be configured to be an earlier version to support partial upgrades that don't
+    // write newer versions of the on-disk formats.
+    public static final Version LATEST = parse(System.getProperty("cassandra.sai.latest.version", "ba"));
 
     private final String version;
     private final OnDiskFormat onDiskFormat;
+    private final FileNameFormatter fileNameFormatter;
 
-    private Version(String version, OnDiskFormat onDiskFormat)
+    private Version(String version, OnDiskFormat onDiskFormat, FileNameFormatter fileNameFormatter)
     {
         this.version = version;
         this.onDiskFormat = onDiskFormat;
+        this.fileNameFormatter = fileNameFormatter;
     }
 
     public static Version parse(String input)
@@ -89,5 +96,55 @@ public class Version
     public OnDiskFormat onDiskFormat()
     {
         return onDiskFormat;
+    }
+
+    public FileNameFormatter fileNameFormatter()
+    {
+        return fileNameFormatter;
+    }
+
+    public static interface FileNameFormatter
+    {
+        public String format(IndexComponent indexComponent, String index);
+    }
+
+    //
+    // Version.AA filename formatter. This is the old DSE 6.8 SAI on-disk filename format
+    //
+    // Format: <sstable descriptor>-SAI(_<index name>)_<component name>.db
+    //
+    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
+    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
+
+    private static String aaFileNameFormat(IndexComponent indexComponent, String index)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append(index == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
+                                           : String.format(VERSION_AA_PER_INDEX_FORMAT, index, indexComponent.representation));
+
+        return stringBuilder.toString();
+    }
+
+    //
+    // Version.BA filename formatter. This is the current SAI on-disk filename format
+    //
+    // Format: <sstable descriptor>-SAI+ba(+<index name>)+<component name>.db
+    //
+    private static final String SAI_SEPARATOR = "+";
+    private static final String EXTENSION = ".db";
+
+    private static String baFileNameFormat(IndexComponent indexComponent, String index)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append(SAI_DESCRIPTOR);
+        stringBuilder.append(SAI_SEPARATOR).append(Version.BA);
+        if (index != null)
+            stringBuilder.append(SAI_SEPARATOR).append(index);
+        stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
+        stringBuilder.append(EXTENSION);
+
+        return stringBuilder.toString();
     }
 }

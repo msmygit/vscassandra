@@ -77,7 +77,6 @@ public class TrieMemoryIndex extends MemoryIndex
         }
     };
 
-
     public TrieMemoryIndex(IndexContext columnContext)
     {
         super(columnContext);

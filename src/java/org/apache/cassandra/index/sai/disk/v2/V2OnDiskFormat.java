@@ -18,34 +18,109 @@
 
 package org.apache.cassandra.index.sai.disk.v2;
 
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
-import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.EnumSet;
+import java.util.Set;
 
-import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DESCRIPTOR;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.cassandra.db.compaction.OperationType;
+import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SSTableContext;
+import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.PerIndexWriter;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
+import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.memory.RowMapping;
+import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
+
+import static org.apache.cassandra.utils.FBUtilities.prettyPrintMemory;
 
 public class V2OnDiskFormat extends V1OnDiskFormat
 {
-    private static final String SAI_SEPARATOR = "+";
-    private static final String EXTENSION = ".db";
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+
+    public static final EnumSet<IndexComponent> PER_SSTABLE_COMPONENTS = EnumSet.of(IndexComponent.GROUP_COMPLETION_MARKER,
+                                                                                    IndexComponent.GROUP_META,
+                                                                                    IndexComponent.PRIMARY_KEYS,
+                                                                                    IndexComponent.PRIMARY_KEY_OFFSETS);
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
+
+    private static final IndexFeatureSet v2IndexFeatureSet = new IndexFeatureSet()
+    {
+        @Override
+        public boolean isRowAware()
+        {
+            return true;
+        }
+    };
 
     protected V2OnDiskFormat()
     {}
 
     @Override
-    public String componentName(IndexComponent indexComponent, String index)
+    public IndexFeatureSet indexFeatureSet()
     {
-        StringBuilder stringBuilder = new StringBuilder();
+        return v2IndexFeatureSet;
+    }
 
-        stringBuilder.append(SAI_DESCRIPTOR);
-        stringBuilder.append(SAI_SEPARATOR).append(Version.BA);
-        if (index != null)
-            stringBuilder.append(SAI_SEPARATOR).append(index);
-        stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
-        stringBuilder.append(EXTENSION);
+    @Override
+    public Set<IndexComponent> perSSTableComponents()
+    {
+        return PER_SSTABLE_COMPONENTS;
+    }
 
-        return stringBuilder.toString();
+    @Override
+    public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException
+    {
+        return new SSTableComponentsWriter(indexDescriptor);
+    }
+
+    @Override
+    public SearchableIndex newSearchableIndex(SSTableContext sstableContext, IndexContext indexContext)
+    {
+        return new V2SearchableIndex(sstableContext, indexContext);
+    }
+
+    @Override
+    public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
+    {
+        return new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
+    }
+
+    @Override
+    public PerIndexWriter newPerIndexWriter(StorageAttachedIndex index,
+                                            IndexDescriptor indexDescriptor,
+                                            LifecycleNewTracker tracker,
+                                            RowMapping rowMapping)
+    {
+        // If we're not flushing or we haven't yet started the initialization build, flush from SSTable contents.
+        if (tracker.opType() != OperationType.FLUSH || !index.isInitBuildStarted())
+        {
+            NamedMemoryLimiter limiter = SEGMENT_BUILD_MEMORY_LIMITER;
+            logger.info(index.getIndexContext().logMessage("Starting a compaction index build. Global segment memory usage: {}"), prettyPrintMemory(limiter.currentBytesUsed()));
+
+            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
+        }
+
+        return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);
+    }
+
+    @Override
+    public IndexOnDiskMetadata.IndexMetadataSerializer newIndexMetadataSerializer()
+    {
+        return V2IndexOnDiskMetadata.serializer;
     }
 }

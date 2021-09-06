@@ -18,9 +18,11 @@
 package org.apache.cassandra.index.sai.disk;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 import org.junit.After;
 import org.junit.Before;
@@ -31,17 +33,19 @@ import org.junit.rules.TemporaryFolder;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.MergeOneDimPointValues;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.BKDReader;
 import org.apache.cassandra.index.sai.disk.v1.BKDTreeRamBuffer;
+import org.apache.cassandra.index.sai.disk.v1.MergeOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
@@ -53,6 +57,7 @@ import static org.junit.Assert.assertThat;
 public class KDTreeSegmentMergerTest extends SAITester
 {
     private TemporaryFolder temporaryFolder = new TemporaryFolder();
+    private TableMetadata metadata;
     private Map<Integer, List<Long>> expected;
     private Map<Integer, List<Long>> actual;
 
@@ -65,6 +70,7 @@ public class KDTreeSegmentMergerTest extends SAITester
     @Before
     public void setup() throws Throwable
     {
+        metadata = TableMetadata.builder("test", "test").addPartitionKeyColumn("pk", Int32Type.instance).build();
         temporaryFolder.create();
         expected = new HashMap<>();
         actual = new HashMap<>();
@@ -196,7 +202,7 @@ public class KDTreeSegmentMergerTest extends SAITester
 
         MergeOneDimPointValues merger = new MergeOneDimPointValues(segmentIterators, Integer.BYTES);
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(temporaryFolder.newFolder(), "test", "test", 20));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(temporaryFolder.newFolder(), "test", "test", 20), metadata);
 
         IndexContext indexContext = SAITester.createIndexContext("test", Int32Type.instance);
         try (NumericIndexWriter indexWriter = new NumericIndexWriter(indexDescriptor,
@@ -211,13 +217,13 @@ public class KDTreeSegmentMergerTest extends SAITester
             final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
             final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
 
-            FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, "test");
-            FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, "test");
-            BKDReader reader = new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition);
+            FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+            FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
+            BKDReader reader = new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition, PrimaryKeyMap.Factory.IDENTITY);
 
             for (int term : expected.keySet())
             {
-                PostingList postingList = reader.intersect(buildQuery(term, term), NO_OP_BKD_LISTENER, new QueryContext());
+                PostingList postingList = intersect(reader.intersect(buildQuery(term, term), NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
 
                 while (true)
                 {
@@ -238,9 +244,20 @@ public class KDTreeSegmentMergerTest extends SAITester
         }
     }
 
+    private PostingList intersect(List<PostingList.PeekablePostingList> postings)
+    {
+        if (postings == null || postings.isEmpty())
+            return null;
+
+        PriorityQueue<PostingList.PeekablePostingList> queue = new PriorityQueue<>(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        queue.addAll(postings);
+
+        return MergePostingList.merge(queue, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+    }
+
     private BKDReader createReader(BKDTreeRamBuffer buffer, int maxSegmentRowId, int generation) throws Throwable
     {
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(temporaryFolder.newFolder(), "test", "test", generation));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(temporaryFolder.newFolder(), "test", "test", generation), metadata);
         IndexContext indexContext = SAITester.createIndexContext("test", Int32Type.instance);
 
         final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
@@ -255,9 +272,9 @@ public class KDTreeSegmentMergerTest extends SAITester
         final long bkdPosition = metadata.get(IndexComponent.KD_TREE).root;
         final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
 
-        FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, "test");
-        FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, "test");
-        return new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition);
+        FileHandle kdtree = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+        FileHandle kdtreePostings = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
+        return new BKDReader(indexContext, kdtree, bkdPosition, kdtreePostings, postingsPosition, PrimaryKeyMap.Factory.IDENTITY);
     }
 
     private BKDReader.IntersectVisitor buildQuery(int queryMin, int queryMax)

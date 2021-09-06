@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.index.sai.disk.v1;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.EnumMap;
@@ -36,11 +35,15 @@ import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexWriter;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
-import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
+import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
@@ -50,7 +53,6 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.metrics.DefaultNameFactory;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.lucene.store.IndexInput;
 
 import static org.apache.cassandra.utils.FBUtilities.prettyPrintMemory;
@@ -71,9 +73,6 @@ public class V1OnDiskFormat implements OnDiskFormat
                                                                                 IndexComponent.META,
                                                                                 IndexComponent.KD_TREE,
                                                                                 IndexComponent.KD_TREE_POSTING_LISTS);
-
-    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
-    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
 
     /**
      * Global limit on heap consumed by all index segment building that occurs outside the context of Memtable flush.
@@ -108,28 +107,32 @@ public class V1OnDiskFormat implements OnDiskFormat
 
     public static final V1OnDiskFormat instance = new V1OnDiskFormat();
 
+    private static final IndexFeatureSet v1IndexFeatureSet = new IndexFeatureSet()
+    {
+        @Override
+        public boolean isRowAware()
+        {
+            return false;
+        }
+    };
+
     protected V1OnDiskFormat()
     {}
 
     @Override
-    public String componentName(IndexComponent indexComponent, String index)
+    public IndexFeatureSet indexFeatureSet()
     {
-        StringBuilder stringBuilder = new StringBuilder();
-
-        stringBuilder.append(index == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
-                                           : String.format(VERSION_AA_PER_INDEX_FORMAT, index, indexComponent.representation));
-
-        return stringBuilder.toString();
+        return v1IndexFeatureSet;
     }
 
     @Override
-    public boolean isGroupIndexComplete(IndexDescriptor indexDescriptor)
+    public boolean isPerSSTableBuildComplete(IndexDescriptor indexDescriptor)
     {
         return indexDescriptor.registerSSTable().hasComponent(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 
     @Override
-    public boolean isColumnIndexComplete(IndexDescriptor indexDescriptor, IndexContext indexContext)
+    public boolean isPerIndexBuildComplete(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
         indexDescriptor.registerSSTable().registerIndex(indexContext);
         return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER) &&
@@ -137,7 +140,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public boolean isCompletionMarker(IndexComponent indexComponent)
+    public boolean isBuildCompletionMarker(IndexComponent indexComponent)
     {
         return indexComponent == IndexComponent.GROUP_COMPLETION_MARKER ||
                indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER;
@@ -150,19 +153,28 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public PerSSTableComponentsWriter createPerSSTableComponentsWriter(boolean perColumnOnly,
-                                                                       IndexDescriptor indexDescriptor,
-                                                                       CompressionParams compressionParams) throws IOException
+    public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
     {
-        return perColumnOnly ? PerSSTableComponentsWriter.NONE : new SSTableComponentsWriter(indexDescriptor, compressionParams);
+        return new V1PrimaryKeyMap.V1PrimaryKeyMapFactory(indexDescriptor, sstable);
     }
 
     @Override
-    public ColumnIndexWriter newIndexWriter(StorageAttachedIndex index,
+    public SearchableIndex newSearchableIndex(SSTableContext sstableContext, IndexContext indexContext)
+    {
+        return new V1SearchableIndex(sstableContext, indexContext);
+    }
+
+    @Override
+    public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException
+    {
+        return new SSTableComponentsWriter(indexDescriptor);
+    }
+
+    @Override
+    public PerIndexWriter newPerIndexWriter(StorageAttachedIndex index,
                                             IndexDescriptor indexDescriptor,
                                             LifecycleNewTracker tracker,
-                                            RowMapping rowMapping,
-                                            CompressionParams compressionParams)
+                                            RowMapping rowMapping)
     {
         // If we're not flushing or we haven't yet started the initialization build, flush from SSTable contents.
         if (tracker.opType() != OperationType.FLUSH || !index.isInitBuildStarted())
@@ -170,17 +182,22 @@ public class V1OnDiskFormat implements OnDiskFormat
             NamedMemoryLimiter limiter = SEGMENT_BUILD_MEMORY_LIMITER;
             logger.info(index.getIndexContext().logMessage("Starting a compaction index build. Global segment memory usage: {}"), prettyPrintMemory(limiter.currentBytesUsed()));
 
-            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid(), compressionParams);
+            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
         }
 
-        return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping, compressionParams);
+        return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);
+    }
+
+    @Override
+    public IndexOnDiskMetadata.IndexMetadataSerializer newIndexMetadataSerializer()
+    {
+        return V1IndexOnDiskMetadata.serializer;
     }
 
     @Override
     public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException
     {
-        File file = indexDescriptor.fileFor(indexComponent);
-        if (file.exists() && file.length() > 0)
+        if (!isBuildCompletionMarker(indexComponent))
         {
             try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
             {
@@ -206,8 +223,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public void validatePerIndexComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, IndexContext indexContext, boolean checksum) throws IOException
     {
-        File file = indexDescriptor.fileFor(indexComponent, indexContext.getIndexName());
-        if (file.exists() && file.length() > 0)
+        if (!isBuildCompletionMarker(indexComponent))
         {
             try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext.getIndexName()))
             {
@@ -253,13 +269,13 @@ public class V1OnDiskFormat implements OnDiskFormat
                 Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
                 if (indexContext.isLiteral())
                 {
-                    files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext.getIndexName(), temporary));
-                    files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext.getIndexName(), temporary));
+                    files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
+                    files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
                 }
                 else
                 {
-                    files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName(), temporary));
-                    files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName(), temporary));
+                    files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, temporary));
+                    files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, temporary));
                 }
                 return files;
             }
@@ -267,15 +283,15 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public int openPerIndexFiles(boolean isLiteral)
+    public int openFilesPerSSTable()
     {
-        // For the V1 format there are always 2 open files per index - index (kdtree or terms) + postings
         return 2;
     }
 
     @Override
-    public SSTableContext newSSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor)
+    public int openFilesPerIndex(IndexContext indexContext)
     {
-        return V1SSTableContext.create(sstable, indexDescriptor);
+        // For the V1 format there are always 2 open files per index - index (kdtree or terms) + postings
+        return 2;
     }
 }

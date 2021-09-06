@@ -18,17 +18,12 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.IntLongMap;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.github.jamm.MemoryLayoutSpecification;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.cassandra.index.sai.utils.SAICodecUtils.validate;
@@ -40,7 +35,7 @@ import static org.apache.cassandra.index.sai.utils.SAICodecUtils.validate;
 public class BKDPostingsIndex
 {
     private final int size;
-    public final Map<Integer, OneDimBKDPostingsWriter.NodeEntry> index = new HashMap();
+    public final IntLongMap index = new IntLongHashMap();
 
     @SuppressWarnings("resource")
     public BKDPostingsIndex(FileHandle postingsFileHandle, long filePosition) throws IOException
@@ -57,30 +52,10 @@ public class BKDPostingsIndex
             {
                 final int node = input.readVInt();
                 final long filePointer = input.readVLong();
-                final long numPoints = input.readVLong();
 
-                index.put(node, new OneDimBKDPostingsWriter.NodeEntry(numPoints, filePointer));
+                index.put(node, filePointer);
             }
         }
-    }
-
-    public SortedMap<Long,Integer> toFilePointers()
-    {
-        final TreeMap<Long,Integer> map = new TreeMap<>();
-        for (Map.Entry<Integer, OneDimBKDPostingsWriter.NodeEntry> entry : index.entrySet())
-        {
-            final int nodeID = entry.getKey();
-            final long filePointer = entry.getValue().postingsFilePointer;
-            map.put(filePointer, nodeID);
-        }
-        return map;
-    }
-
-    public long memoryUsage()
-    {
-        // IntLongHashMap uses two arrays: one for keys, one for values.
-        return MemoryLayoutSpecification.sizeOfArray(index.size(), 4L)
-               + MemoryLayoutSpecification.sizeOfArray(index.size(), 8L);
     }
 
     /**
@@ -102,7 +77,7 @@ public class BKDPostingsIndex
     public long getPostingsFilePointer(int nodeID)
     {
         checkArgument(exists(nodeID));
-        return index.get(nodeID).postingsFilePointer;
+        return index.get(nodeID);
     }
 
     public int size()

@@ -19,9 +19,11 @@ package org.apache.cassandra.index.sai.memory;
 
 import java.nio.ByteBuffer;
 
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -35,6 +37,12 @@ import static org.junit.Assert.assertFalse;
 public abstract class AbstractKeyRangeIteratorTest
 {
     private static final ByteBuffer KEY_BUFFER = ByteBufferUtil.bytes(0L);
+
+    @BeforeClass
+    public static void initialise() throws Throwable
+    {
+        DatabaseDescriptor.daemonInitialization();
+    }
 
     @Test
     public void singleTokenIsReturned() throws Exception

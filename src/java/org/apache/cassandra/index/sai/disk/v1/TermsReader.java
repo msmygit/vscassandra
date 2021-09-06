@@ -30,11 +30,14 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
@@ -48,7 +51,7 @@ import static org.apache.cassandra.index.sai.utils.SAICodecUtils.validate;
 /**
  * Synchronous reader of terms dictionary and postings lists to produce a {@link PostingList} with matching row ids.
  *
- * {@link #exactMatch(ByteComparable, QueryEventListener.TrieIndexEventListener, QueryContext)} does:
+ * {@link #exactMatch(ByteComparable, QueryEventListener.TrieIndexEventListener, SSTableQueryContext)} does:
  * <ul>
  * <li>{@link TermQuery#lookupTermDictionary(ByteComparable)}: does term dictionary lookup to find the posting list file
  * position</li>
@@ -64,17 +67,20 @@ public class TermsReader implements Closeable
     private final FileHandle termDictionaryFile;
     private final FileHandle postingsFile;
     private final long termDictionaryRoot;
+    private final PrimaryKeyMap.Factory primaryKeyMapFactory;
 
     public TermsReader(IndexContext indexContext,
                        FileHandle termsData,
                        FileHandle postingLists,
                        long root,
-                       long termsFooterPointer) throws IOException
+                       long termsFooterPointer,
+                       PrimaryKeyMap.Factory primaryKeyMapFactory) throws IOException
     {
         this.indexContext = indexContext;
-        termDictionaryFile = termsData;
-        postingsFile = postingLists;
-        termDictionaryRoot = root;
+        this.termDictionaryFile = termsData;
+        this.postingsFile = postingLists;
+        this.termDictionaryRoot = root;
+        this.primaryKeyMapFactory = primaryKeyMapFactory;
 
         try (final IndexInput indexInput = IndexFileUtils.instance.openInput(termDictionaryFile))
         {
@@ -97,32 +103,19 @@ public class TermsReader implements Closeable
         }
     }
 
-    public static int openPerIndexFiles()
-    {
-        // terms and postings
-        return 2;
-    }
-
     @Override
     public void close()
     {
-        try
-        {
-            termDictionaryFile.close();
-        }
-        finally
-        {
-            postingsFile.close();
-        }
+        FileUtils.closeQuietly(termDictionaryFile, postingsFile);
     }
 
-    public TermsIterator allTerms(long segmentOffset, QueryEventListener.TrieIndexEventListener listener)
+    public TermsIterator allTerms(long segmentOffset)
     {
         // blocking, since we use it only for segment merging for now
-        return new TermsScanner(segmentOffset, listener);
+        return new TermsScanner(segmentOffset);
     }
 
-    public PostingList exactMatch(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
+    public PostingList exactMatch(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, SSTableQueryContext context)
     {
         perQueryEventListener.onSegmentHit();
         return new TermQuery(term, perQueryEventListener, context).execute();
@@ -135,11 +128,11 @@ public class TermsReader implements Closeable
         private final IndexInput postingsSummaryInput;
         private final QueryEventListener.TrieIndexEventListener listener;
         private final long lookupStartTime;
-        private final QueryContext context;
+        private final SSTableQueryContext context;
 
         private ByteComparable term;
 
-        TermQuery(ByteComparable term, QueryEventListener.TrieIndexEventListener listener, QueryContext context)
+        TermQuery(ByteComparable term, QueryEventListener.TrieIndexEventListener listener, SSTableQueryContext context)
         {
             this.listener = listener;
             postingsInput = IndexFileUtils.instance.openInput(postingsFile);
@@ -161,7 +154,7 @@ public class TermsReader implements Closeable
                     return null;
                 }
 
-                context.checkpoint();
+                context.queryContext.checkpoint();
 
                 // when posting is found, resources will be closed when posting reader is closed.
                 return getPostingReader(postingOffset);
@@ -202,7 +195,7 @@ public class TermsReader implements Closeable
         {
             PostingsReader.BlocksSummary header = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
 
-            return new PostingsReader(postingsInput, header, listener.postingListEventListener());
+            return new PostingsReader(postingsInput, header, listener.postingListEventListener(), primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context));
         }
     }
 
@@ -210,20 +203,18 @@ public class TermsReader implements Closeable
     private class TermsScanner implements TermsIterator
     {
         private final long segmentOffset;
-        private final QueryEventListener.TrieIndexEventListener listener;
         private final TrieTermsDictionaryReader termsDictionaryReader;
         private final Iterator<Pair<ByteComparable, Long>> iterator;
         private final ByteBuffer minTerm, maxTerm;
         private Pair<ByteComparable, Long> entry;
 
-        private TermsScanner(long segmentOffset, QueryEventListener.TrieIndexEventListener listener)
+        private TermsScanner(long segmentOffset)
         {
             this.termsDictionaryReader = new TrieTermsDictionaryReader(termDictionaryFile.instantiateRebufferer(), termDictionaryRoot);
 
             this.minTerm = ByteBuffer.wrap(ByteSourceInverse.readBytes(termsDictionaryReader.getMinTerm().asComparableBytes(ByteComparable.Version.OSS41)));
             this.maxTerm = ByteBuffer.wrap(ByteSourceInverse.readBytes(termsDictionaryReader.getMaxTerm().asComparableBytes(ByteComparable.Version.OSS41)));
             this.iterator = termsDictionaryReader.iterator();
-            this.listener = listener;
             this.segmentOffset = segmentOffset;
         }
 
@@ -233,7 +224,7 @@ public class TermsReader implements Closeable
         {
             assert entry != null;
             final IndexInput input = IndexFileUtils.instance.openInput(postingsFile);
-            return new OffsetPostingList(segmentOffset, new PostingsReader(input, new PostingsReader.BlocksSummary(input, entry.right), listener.postingListEventListener()));
+            return new OffsetPostingList(segmentOffset, new ScanningPostingsReader(input, new PostingsReader.BlocksSummary(input, entry.right)));
         }
 
         @Override
@@ -299,12 +290,24 @@ public class TermsReader implements Closeable
         }
 
         @Override
-        public long advance(long targetRowID) throws IOException
+        public long advance(PrimaryKey primaryKey) throws IOException
         {
-            long next = wrapped.advance(targetRowID);
+            long next = wrapped.advance(primaryKey);
             if (next == PostingList.END_OF_STREAM)
                 return next;
             return next + offset;
+        }
+
+        @Override
+        public PrimaryKey mapRowId(long rowId) throws IOException
+        {
+            return wrapped.mapRowId(rowId);
+        }
+
+        @Override
+        public void close() throws IOException
+        {
+            wrapped.close();
         }
     }
 }

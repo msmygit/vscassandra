@@ -20,7 +20,6 @@ package org.apache.cassandra.index.sai.utils;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -32,6 +31,9 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -45,12 +47,10 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 {
     private static final ClusteringComparator EMPTY_COMPARATOR = new ClusteringComparator();
 
-    private AtomicLong mutableCounter = new AtomicLong();
-
-
     public enum Kind
     {
         TOKEN,
+        PARTITION,
         MAPPED,
         UNMAPPED,
     }
@@ -60,37 +60,34 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private Clustering clustering;
     private ClusteringComparator clusteringComparator;
     private long sstableRowId;
-    private boolean mutable = false;
-    private long mutableId;
 
     public static class PrimaryKeyFactory
     {
         private final IPartitioner partitioner;
         private final ClusteringComparator comparator;
-        private final PrimaryKey mutablePrimaryKey;
-        private final boolean mutable;
+        private final IndexFeatureSet indexFeatureSet;
 
-        PrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator, boolean mutable)
+        PrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator, IndexFeatureSet indexFeatureSet)
         {
             this.partitioner = partitioner;
             this.comparator = comparator;
-            this.mutablePrimaryKey = new PrimaryKey();
-            this.mutable = mutable;
-        }
-
-        public PrimaryKeyFactory copyOf()
-        {
-            return new PrimaryKeyFactory(partitioner, comparator, mutable);
+            this.indexFeatureSet = indexFeatureSet;
         }
 
         public PrimaryKey createKey(DecoratedKey partitionKey, Clustering clustering, long sstableRowId)
         {
-            return makeMutableKey(partitionKey, clustering, sstableRowId);
+            return new PrimaryKey(partitionKey,
+                                  indexFeatureSet.isRowAware() ? clustering : Clustering.EMPTY,
+                                  indexFeatureSet.isRowAware() ? comparator : EMPTY_COMPARATOR,
+                                  sstableRowId);
         }
 
         public PrimaryKey createKey(DecoratedKey partitionKey, Clustering clustering)
         {
-            return makeMutableKey(partitionKey, clustering, -1);
+            return new PrimaryKey(partitionKey,
+                                  indexFeatureSet.isRowAware() ? clustering : Clustering.EMPTY,
+                                  indexFeatureSet.isRowAware() ? comparator : EMPTY_COMPARATOR,
+                                  -1);
         }
 
         public PrimaryKey createKey(ByteComparable comparable, long sstableRowId)
@@ -108,10 +105,9 @@ public class PrimaryKey implements Comparable<PrimaryKey>
             return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes)), sstableRowId);
         }
 
-        @VisibleForTesting
         public PrimaryKey createKey(DecoratedKey key)
         {
-            return new PrimaryKey(key, Clustering.EMPTY, EMPTY_COMPARATOR);
+            return new PrimaryKey(key);
         }
 
         public PrimaryKey createKey(Token token)
@@ -130,8 +126,8 @@ public class PrimaryKey implements Comparable<PrimaryKey>
             byte[] keyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable));
             DecoratedKey key =  new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
 
-            if ((comparator.size() == 0) || peekable.peek() == ByteSource.TERMINATOR)
-                return new PrimaryKey(key, Clustering.EMPTY, comparator, sstableRowId);
+            if (!indexFeatureSet.isRowAware() || (comparator.size() == 0) || (peekable.peek() == ByteSource.TERMINATOR))
+                return new PrimaryKey(key, sstableRowId);
 
             ByteBuffer[] values = new ByteBuffer[comparator.size()];
 
@@ -147,54 +143,25 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
             Clustering clustering = Clustering.make(values);
 
-            return makeMutableKey(key, clustering, sstableRowId);
-        }
-
-        private PrimaryKey makeMutableKey(DecoratedKey partitionKey, Clustering clustering, long sstableRowId)
-        {
-//            if (mutable)
-//            {
-//                mutablePrimaryKey.kind = sstableRowId >= 0 ? Kind.MAPPED : Kind.UNMAPPED;
-//                mutablePrimaryKey.partitionKey = partitionKey;
-//                mutablePrimaryKey.clustering = clustering;
-//                mutablePrimaryKey.clusteringComparator = comparator;
-//                mutablePrimaryKey.sstableRowId = sstableRowId;
-//                return mutablePrimaryKey;
-//            }
-            return new PrimaryKey(partitionKey, clustering, comparator, sstableRowId);
+            return new PrimaryKey(key, clustering, comparator, sstableRowId);
         }
     }
 
-    public static PrimaryKeyFactory immutableFactory(TableMetadata tableMetadata)
+    public static PrimaryKeyFactory factory(TableMetadata tableMetadata, IndexFeatureSet indexFeatureSet)
     {
-        return new PrimaryKeyFactory(tableMetadata.partitioner, tableMetadata.comparator, false);
-    }
-
-    public static PrimaryKeyFactory factory(TableMetadata tableMetadata)
-    {
-        return new PrimaryKeyFactory(tableMetadata.partitioner, tableMetadata.comparator, true);
+        return new PrimaryKeyFactory(tableMetadata.partitioner, tableMetadata.comparator, indexFeatureSet);
     }
 
     @VisibleForTesting
-    public static PrimaryKeyFactory factory(IPartitioner partitioner, ClusteringComparator comparator)
+    public static PrimaryKeyFactory factory(IPartitioner partitioner, ClusteringComparator comparator, IndexFeatureSet indexFeatureSet)
     {
-        return new PrimaryKeyFactory(partitioner, comparator, false);
+        return new PrimaryKeyFactory(partitioner, comparator, indexFeatureSet);
     }
 
+    @VisibleForTesting
     public static PrimaryKeyFactory factory()
     {
-        return new PrimaryKeyFactory(Murmur3Partitioner.instance, EMPTY_COMPARATOR, false);
-    }
-
-    private PrimaryKey()
-    {
-        mutable = true;
-        mutableId = mutableCounter.getAndIncrement();
-    }
-
-    private PrimaryKey(DecoratedKey partitionKey, Clustering clustering, ClusteringComparator comparator)
-    {
-        this(partitionKey, clustering, comparator, -1);
+        return new PrimaryKeyFactory(Murmur3Partitioner.instance, EMPTY_COMPARATOR, Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
     private PrimaryKey(DecoratedKey partitionKey, Clustering clustering, ClusteringComparator comparator, long sstableRowId)
@@ -212,6 +179,16 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         this(Kind.MAPPED, new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER), Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId);
     }
 
+    private PrimaryKey(DecoratedKey partitionKey)
+    {
+        this(Kind.PARTITION, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, -1);
+    }
+
+    private PrimaryKey(DecoratedKey partitionKey, long sstableRowId)
+    {
+        this(Kind.PARTITION, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId);
+    }
+
     private PrimaryKey(Kind kind, DecoratedKey partitionKey, Clustering clustering, ClusteringComparator clusteringComparator, long sstableRowId)
     {
         this.kind = kind;
@@ -224,17 +201,6 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     public int size()
     {
         return partitionKey.getKey().remaining() + clustering.dataSize();
-    }
-
-    @Override
-    public String toString()
-    {
-        return String.format("PrimaryKey: { partition : %s, clustering: %s, sstableRowId: %s} ",
-                             partitionKey,
-                             String.join(",", Arrays.stream(clustering.getBufferArray())
-                                                    .map(ByteBufferUtil::bytesToHex)
-                                                    .collect(Collectors.toList())),
-                             sstableRowId);
     }
 
     public byte[] asBytes()
@@ -295,13 +261,24 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     @Override
     public int compareTo(PrimaryKey o)
     {
-//        assert this.mutable && o.mutable && this.mutableId == o.mutableId : "Trying to compare the mutable primary key for a mapped value";
         if (kind == Kind.TOKEN || o.kind == Kind.TOKEN)
             return partitionKey.getToken().compareTo(o.partitionKey.getToken());
         int cmp = partitionKey.compareTo(o.partitionKey);
-        if (clustering.isEmpty() || o.clustering.isEmpty())
+        if (cmp != 0 || kind == Kind.PARTITION || o.kind == Kind.PARTITION || (clustering.isEmpty() && o.clustering.isEmpty()))
             return cmp;
-        return (cmp != 0) ? cmp : clusteringComparator().compare(clustering, o.clustering);
+        return clusteringComparator.equals(o.clusteringComparator) ? clusteringComparator.compare(clustering, o.clustering) : 0;
+    }
+
+    @Override
+    public String toString()
+    {
+        return String.format("PrimaryKey: { partition : %s, clustering: %s:%s, sstableRowId: %s} ",
+                             partitionKey,
+                             clustering.kind(),
+                             String.join(",", Arrays.stream(clustering.getBufferArray())
+                                                    .map(ByteBufferUtil::bytesToHex)
+                                                    .collect(Collectors.toList())),
+                             sstableRowId);
     }
 
     @Override

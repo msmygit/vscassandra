@@ -29,6 +29,7 @@ import com.google.common.base.Throwables;
 
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.SequentialWriterOption;
@@ -43,7 +44,7 @@ public class TrackingIndexFileUtils extends IndexFileUtils
 
     public TrackingIndexFileUtils(SequentialWriterOption writerOption)
     {
-        setWriterOptions(writerOption);
+        setWriterOption(writerOption);
     }
 
     @Override
@@ -61,7 +62,7 @@ public class TrackingIndexFileUtils extends IndexFileUtils
 
     public static void reset()
     {
-        setWriterOptions(IndexFileUtils.defaultWriterOption);
+        setWriterOption(IndexFileUtils.defaultWriterOption);
     }
 
     public class TrackingIndexInput extends FilterIndexInput
@@ -80,17 +81,16 @@ public class TrackingIndexFileUtils extends IndexFileUtils
         }
     }
 
-    public static void setWriterOptions(SequentialWriterOption writerOptions)
+    public static void setWriterOption(SequentialWriterOption option)
     {
         try
         {
-            Field instance = IndexFileUtils.class.getDeclaredField("instance");
-            instance.setAccessible(true);
-            Object instanceValue = instance.get(null);
+            Field writerOption = IndexFileUtils.class.getDeclaredField("writerOption");
+            writerOption.setAccessible(true);
             Field modifiersField = Field.class.getDeclaredField("modifiers");
             modifiersField.setAccessible(true);
-            //        modifiersField.setInt(selectivity, selectivity.getModifiers() & ~Modifier.FINAL);
-            //        selectivity.set(null, selectivityLimit);
+            modifiersField.setInt(writerOption, writerOption.getModifiers() & ~Modifier.FINAL);
+            writerOption.set(null, option);
         }
         catch (Throwable e)
         {

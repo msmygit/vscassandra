@@ -21,7 +21,7 @@ import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
-import org.apache.cassandra.index.sai.disk.v2.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 
 import java.io.IOException;
 
@@ -78,7 +78,7 @@ public class ArrayPostingList implements OrdinalPostingList
     @Override
     public PrimaryKey mapRowId(long rowId) throws IOException
     {
-        return PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(rowId);
+        return V2PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(rowId);
     }
 
     @Override

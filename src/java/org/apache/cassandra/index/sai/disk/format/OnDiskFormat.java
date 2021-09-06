@@ -25,34 +25,90 @@ import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.ColumnIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexWriter;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
-import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
+import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.schema.CompressionParams;
 
+/**
+ * Represents the on-disk format of an index. This determines how the per-sstable and
+ * per-index files are written to and read from disk.
+ *
+ * The methods on this interface can be logically mapped into the following groups
+ * based on their method parameters:
+ * <ul>
+ *     <li>Methods taking no parameters. These methods return static information about the
+ *     format. This can include static information about the per-sstable components</li>
+ *     <li>Methods taking just an {@link IndexContext}. These methods return static information
+ *     specific to the index. This can the information relating to the type of index being used</li>
+ *     <li>Methods taking an {@link IndexDescriptor}. These methods interact with the on-disk components or
+ *     return objects that will interact with the on-disk components or return information about the on-disk
+ *     components. If they take an {@link IndexContext} as well they will be interacting with per-index files
+ *     otherwise they will be interacting with per-sstable files</li>
+ *     <li>Methods taking an {@link IndexComponent}. This methods only interact with a single component or
+ *     set of components</li>
+ *
+ * </ul>
+ */
 public interface OnDiskFormat
 {
-    public String componentName(IndexComponent indexComponent, String index);
+    /**
+     * Returns the {@link IndexFeatureSet} for the on-disk format
+     *
+     * @return the index feature set
+     */
+    public IndexFeatureSet indexFeatureSet();
 
-    public boolean isGroupIndexComplete(IndexDescriptor indexDescriptor);
+    /**
+     * Returns true if the per-sstable index components have been built and are valid.
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable SAI index
+     * @return true if the per-sstable index components have been built and are complete
+     */
+    public boolean isPerSSTableBuildComplete(IndexDescriptor indexDescriptor);
 
-    public boolean isColumnIndexComplete(IndexDescriptor indexDescriptor, IndexContext indexContext);
+    /**
+     * Returns true if the per-index index components have been built and are valid.
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable SAI Index
+     * @param indexContext The {@link IndexContext} for the index
+     * @return true if the per-index index components have been built and are complete
+     */
+    public boolean isPerIndexBuildComplete(IndexDescriptor indexDescriptor, IndexContext indexContext);
 
-    public boolean isCompletionMarker(IndexComponent indexComponent);
+    /**
+     * Returns true if the component is used to indicate that the index files are
+     * built and complete.
+     *
+     * @param indexComponent The {@link IndexComponent} to be tested
+     * @return true if the component is a build completion marker
+     */
+    public boolean isBuildCompletionMarker(IndexComponent indexComponent);
 
+    /**
+     * Returns true if the {@link IndexComponent} can be encrypted on disk
+     *
+     * @param indexComponent The {@link IndexComponent} to be tested
+     * @return true if the component can be encrypted
+     */
     public boolean isEncryptable(IndexComponent indexComponent);
 
-    public PerSSTableComponentsWriter createPerSSTableComponentsWriter(boolean perColumnOnly,
-                                                                       IndexDescriptor indexDescriptor,
-                                                                       CompressionParams compressionParams) throws IOException;
+    public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException;
 
-    public ColumnIndexWriter newIndexWriter(StorageAttachedIndex index,
+    public SearchableIndex newSearchableIndex(SSTableContext ssTableContext, IndexContext indexContext);
+
+    public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException;
+
+    public PerIndexWriter newPerIndexWriter(StorageAttachedIndex index,
                                             IndexDescriptor indexDescriptor,
                                             LifecycleNewTracker tracker,
-                                            RowMapping rowMapping,
-                                            CompressionParams compressionParams);
+                                            RowMapping rowMapping);
+
+    public IndexOnDiskMetadata.IndexMetadataSerializer newIndexMetadataSerializer();
 
     public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException;
 
@@ -64,7 +120,7 @@ public interface OnDiskFormat
 
     public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
 
-    public int openPerIndexFiles(boolean isLiteral);
+    public int openFilesPerSSTable();
 
-    public SSTableContext newSSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor);
+    public int openFilesPerIndex(IndexContext indexContext);
 }

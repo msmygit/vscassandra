@@ -32,17 +32,22 @@ public class EmptyMemtableFlushTest extends SAITester
     {
         requireNetwork();
         createTable("CREATE TABLE %s (id int PRIMARY KEY, val1 int, val2 int)");
-        createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'");
-        createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'");
+        String val1IndexName = createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'");
+        String val2IndexName = createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'");
         execute("INSERT INTO %s (id, val1, val2) VALUES (0, 0, 0)");
         execute("INSERT INTO %s (id, val2) VALUES (1, 1)");
         execute("DELETE FROM %s WHERE id = 0");
         flush();
         // After this we should have only 1 set of index files but 2 completion markers
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE.representation).size());
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE_POSTING_LISTS.representation).size());
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.META.representation).size());
-        assertEquals(2, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER.representation).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.KD_TREE, val1IndexName).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.KD_TREE_POSTING_LISTS, val1IndexName).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.META, val1IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val1IndexName).size());
+
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE_POSTING_LISTS, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.META, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val2IndexName).size());
 
         assertEquals(0, execute("SELECT * from %s WHERE val1 = 0").size());
         assertEquals(1, execute("SELECT * from %s WHERE val2 = 1").size());
@@ -53,17 +58,22 @@ public class EmptyMemtableFlushTest extends SAITester
     {
         requireNetwork();
         createTable("CREATE TABLE %s (id int PRIMARY KEY, val1 text, val2 text)");
-        createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'");
-        createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'");
+        String val1IndexName = createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'");
+        String val2IndexName = createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'");
         execute("INSERT INTO %s (id, val1, val2) VALUES (0, '0', '0')");
         execute("INSERT INTO %s (id, val2) VALUES (1, '1')");
         execute("DELETE FROM %s WHERE id = 0");
         flush();
         // After this we should have only 1 set of index files but 2 completion markers
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.TERMS_DATA.representation).size());
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.POSTING_LISTS.representation).size());
-        assertEquals(1, componentFiles(indexFiles(), IndexComponent.META.representation).size());
-        assertEquals(2, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER.representation).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.TERMS_DATA, val1IndexName).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.POSTING_LISTS, val1IndexName).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.META, val1IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val1IndexName).size());
+
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.TERMS_DATA, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.POSTING_LISTS, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.META, val2IndexName).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val2IndexName).size());
 
         assertEquals(0, execute("SELECT * from %s WHERE val1 = '0'").size());
         assertEquals(1, execute("SELECT * from %s WHERE val2 = '1'").size());

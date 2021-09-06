@@ -17,7 +17,14 @@
  */
 package org.apache.cassandra.index.sai.virtual;
 
+import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Consumer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
@@ -34,6 +41,11 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.V1IndexOnDiskMetadata;
+import org.apache.cassandra.index.sai.disk.v2.V2IndexOnDiskMetadata;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.Schema;
@@ -44,6 +56,8 @@ import org.apache.cassandra.schema.TableMetadata;
  */
 public class SegmentsSystemView extends AbstractVirtualTable
 {
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
     static final String NAME = "sstable_index_segments";
 
     static final String KEYSPACE_NAME = "keyspace_name";
@@ -96,24 +110,38 @@ public class SegmentsSystemView extends AbstractVirtualTable
             for (SSTableIndex sstableIndex : columnContext.getView())
             {
                 SSTableReader sstable = sstableIndex.getSSTable();
-//                List<SegmentMetadata> segments = sstableIndex.segments();
-                Descriptor descriptor = sstable.descriptor;
-                Token.TokenFactory tokenFactory = sstable.metadata().partitioner.getTokenFactory();
+                IndexDescriptor indexDescriptor = sstableIndex.getSSTableContext().indexDescriptor;
 
-//                for (SegmentMetadata metadata : segments)
-//                {
-//                    dataset.row(sstable.metadata().keyspace, columnContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
-//                           .column(TABLE_NAME, descriptor.cfname)
-//                           .column(COLUMN_NAME, columnContext.getColumnName())
-//                           .column(CELL_COUNT, metadata.numRows)
-//                           .column(MIN_SSTABLE_ROW_ID, metadata.minSSTableRowId)
-//                           .column(MAX_SSTABLE_ROW_ID, metadata.maxSSTableRowId)
-//                           .column(START_TOKEN, tokenFactory.toString(metadata.minKey.getToken()))
-//                           .column(END_TOKEN, tokenFactory.toString(metadata.maxKey.getToken()))
-//                           .column(MIN_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
-//                           .column(MAX_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
-//                           .column(COMPONENT_METADATA, metadata.componentMetadatas.asMap());
-//                }
+                try
+                {
+                    IndexOnDiskMetadata indexOnDiskMetadata = indexDescriptor.newIndexMetadataSerializer()
+                                                                             .deserialize(indexDescriptor, sstableIndex.getIndexContext());
+                    List<SegmentMetadata> segments =
+                    indexOnDiskMetadata instanceof V1IndexOnDiskMetadata ? ((V1IndexOnDiskMetadata)indexOnDiskMetadata).segments
+                                                                         : Collections.singletonList(((V2IndexOnDiskMetadata)indexOnDiskMetadata).segment);
+
+                    Descriptor descriptor = sstable.descriptor;
+                    Token.TokenFactory tokenFactory = sstable.metadata().partitioner.getTokenFactory();
+
+                    for (SegmentMetadata metadata : segments)
+                    {
+                        dataset.row(sstable.metadata().keyspace, columnContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
+                               .column(TABLE_NAME, descriptor.cfname)
+                               .column(COLUMN_NAME, columnContext.getColumnName())
+                               .column(CELL_COUNT, metadata.numRows)
+                               .column(MIN_SSTABLE_ROW_ID, metadata.minSSTableRowId)
+                               .column(MAX_SSTABLE_ROW_ID, metadata.maxSSTableRowId)
+                               .column(START_TOKEN, tokenFactory.toString(metadata.minKey.partitionKey().getToken()))
+                               .column(END_TOKEN, tokenFactory.toString(metadata.maxKey.partitionKey().getToken()))
+                               .column(MIN_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
+                               .column(MAX_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
+                               .column(COMPONENT_METADATA, metadata.componentMetadatas.asMap());
+                    }
+                }
+                catch (IOException e)
+                {
+                    logger.error(indexDescriptor.logMessage("Unable to deserialize segment metadata"), e);
+                }
             }
         });
 

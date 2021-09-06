@@ -17,8 +17,6 @@
  */
 package org.apache.cassandra.index.sai.disk;
 
-import org.apache.cassandra.index.sai.disk.PostingList;
-
 public interface OrdinalPostingList extends PostingList
 {
     /**

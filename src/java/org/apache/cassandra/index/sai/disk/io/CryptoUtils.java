@@ -48,19 +48,6 @@ public class CryptoUtils
         return meta != null ? meta.parameters : null;
     }
 
-    //TODO Encryption tidyup
-//    public static ICompressor getEncryptionCompressor(CompressionParams compressionParams)
-//    {
-//        ICompressor compressor = compressionParams != null ? compressionParams.getSstableCompressor() : null;
-//        return compressor != null ? compressor.encryptionOnly() : null;
-//    }
-//
-//    public static boolean isCryptoEnabled(CompressionParams params)
-//    {
-//        ICompressor sstableCompressor = params != null ? params.getSstableCompressor() : null;
-//        return sstableCompressor != null && sstableCompressor.encryptionOnly() != null ? true : false;
-//    }
-
     public static IndexInput uncompress(IndexInput input, ICompressor compressor) throws IOException
     {
         return uncompress(input, compressor,

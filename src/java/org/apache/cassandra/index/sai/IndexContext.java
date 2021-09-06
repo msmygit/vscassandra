@@ -56,6 +56,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
@@ -131,7 +132,7 @@ public class IndexContext
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), config.options)
                                     : this.analyzerFactory;
 
-        this.primaryKeyFactory = PrimaryKey.factory(tableMeta);
+        this.primaryKeyFactory = PrimaryKey.factory(tableMeta, Version.LATEST.onDiskFormat().indexFeatureSet());
         logger.info(logMessage("Initialized column context with index writer config: {}"),
                 this.indexWriterConfig.toString());
     }
@@ -163,7 +164,9 @@ public class IndexContext
         this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(options)
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), options)
                                     : this.analyzerFactory;
-        this.primaryKeyFactory = PrimaryKey.factory(DatabaseDescriptor.getPartitioner(), clusteringComparator);
+        this.primaryKeyFactory = PrimaryKey.factory(DatabaseDescriptor.getPartitioner(),
+                                                    clusteringComparator,
+                                                    Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
     public IndexContext(TableMetadata table, ColumnMetadata column)
@@ -184,7 +187,7 @@ public class IndexContext
         this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(options)
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), options)
                                     : this.analyzerFactory;
-        this.primaryKeyFactory = PrimaryKey.immutableFactory(table);
+        this.primaryKeyFactory = PrimaryKey.factory(table, Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
     public AbstractType<?> keyValidator()
@@ -370,7 +373,7 @@ public class IndexContext
      */
     public int openPerIndexFiles()
     {
-        return viewManager.getView().size() * Version.LATEST.onDiskFormat().openPerIndexFiles(isLiteral());
+        return viewManager.getView().size() * Version.LATEST.onDiskFormat().openFilesPerIndex(this);
     }
 
     public void drop(Collection<SSTableReader> sstablesToRebuild)
@@ -623,5 +626,12 @@ public class IndexContext
                         .stream()
                         .mapToLong(SSTableIndex::indexFileCacheSize)
                         .sum();
+    }
+
+    public IndexFeatureSet indexFeatureSet()
+    {
+        IndexFeatureSet.Accumulator accumulator = new IndexFeatureSet.Accumulator();
+        getView().getIndexes().stream().map(SSTableIndex::indexFeatureSet).forEach(set -> accumulator.accumulate(set));
+        return accumulator.complete();
     }
 }

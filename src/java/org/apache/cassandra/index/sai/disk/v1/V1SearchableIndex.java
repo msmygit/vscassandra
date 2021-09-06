@@ -20,37 +20,37 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
 
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.SearchContext;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.RangeConcatIterator;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 
-public class V1SearchContext extends SearchContext
+public class V1SearchableIndex extends SearchableIndex
 {
     private final ImmutableList<Segment> segments;
     private PerIndexFiles indexFiles;
 
     private final List<SegmentMetadata> metadatas;
-    private final DecoratedKey minKey, maxKey; // in token order
+    private final PrimaryKey minKey, maxKey; // in token order
     private final ByteBuffer minTerm, maxTerm;
     private final long minSSTableRowId, maxSSTableRowId;
     private final long numRows;
 
-    public V1SearchContext(V1SSTableContext sstableContext, IndexContext indexContext)
+    public V1SearchableIndex(SSTableContext sstableContext, IndexContext indexContext)
     {
         try
         {
@@ -58,9 +58,8 @@ public class V1SearchContext extends SearchContext
 
             ImmutableList.Builder<Segment> segmentsBuilder = ImmutableList.builder();
 
-            final MetadataSource source = MetadataSource.load(sstableContext.indexDescriptor.openPerIndexInput(IndexComponent.META,
-                                                                                                               indexContext.getIndexName()));
-            metadatas = SegmentMetadata.load(source, null);
+            metadatas = ((V1IndexOnDiskMetadata)sstableContext.indexDescriptor.newIndexMetadataSerializer()
+                                                                              .deserialize(sstableContext.indexDescriptor, indexContext)).segments;
 
             for (SegmentMetadata metadata : metadatas)
             {
@@ -126,31 +125,31 @@ public class V1SearchContext extends SearchContext
     }
 
     @Override
-    public DecoratedKey minKey()
+    public PrimaryKey minKey()
     {
         return minKey;
     }
 
     @Override
-    public DecoratedKey maxKey()
+    public PrimaryKey maxKey()
     {
         return maxKey;
     }
 
     @Override
-    public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer)
+    public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
-        RangeConcatIterator.Builder builder = RangeConcatIterator.builder();
+        List<RangeIterator> iterators = new ArrayList<>();
 
         for (Segment segment : segments)
         {
             if (segment.intersects(keyRange))
             {
-                builder.add(segment.search(expression, context, defer));
+                iterators.addAll(segment.search(expression, context));
             }
         }
 
-        return builder.build();
+        return iterators;
     }
 
     @Override
