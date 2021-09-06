@@ -18,7 +18,9 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 
 import com.google.common.collect.ImmutableList;
 import org.junit.Before;
@@ -28,14 +30,17 @@ import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
@@ -130,7 +135,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         // Next test that an intersection only returns the query values
         List<Long> expected = Lists.list(8L, 9L);
         int expectedCount = 0;
-        PostingList intersection = reader1.intersect(buildQuery(8, 9), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        PostingList intersection = intersect(reader1.intersect(buildQuery(8, 9), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
             assertEquals(expected.get(expectedCount++), id);
@@ -152,7 +157,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         final int queryMin = 8;
         final int queryMax = 9;
 
-        intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        intersection = intersect(reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
 
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
@@ -169,6 +174,17 @@ public class BKDReaderTest extends NdiRandomizedTest
         reader1.close();
         reader2.close();
         reader.close();
+    }
+
+    private PostingList intersect(List<PostingList.PeekablePostingList> postings)
+    {
+        if (postings == null || postings.isEmpty())
+            return null;
+
+        PriorityQueue<PostingList.PeekablePostingList> queue = new PriorityQueue<>(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        queue.addAll(postings);
+
+        return MergePostingList.merge(queue, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }
 
     private BKDReader createReader(int numRows) throws IOException
@@ -207,13 +223,13 @@ public class BKDReaderTest extends NdiRandomizedTest
             }
         }
 
-        try (PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext()))
+        try (PostingList intersection = intersect(reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
         {
             assertNull(intersection);
         }
 
-        try (PostingList collectAllIntersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
-             PostingList filteringIntersection = reader.intersect(ALL_MATCH_WITH_FILTERING, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext()))
+        try (PostingList collectAllIntersection = intersect(reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+             PostingList filteringIntersection = intersect(reader.intersect(ALL_MATCH_WITH_FILTERING, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
         {
             assertEquals(numRows, collectAllIntersection.size());
             assertEquals(numRows, filteringIntersection.size());
@@ -232,7 +248,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         final int queryMin = 42;
         final int queryMax = 87;
 
-        final PostingList intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        final PostingList intersection = intersect(reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
 
         assertThat(intersection, is(instanceOf(MergePostingList.class)));
         long expectedRowID = queryMin;
@@ -272,23 +288,22 @@ public class BKDReaderTest extends NdiRandomizedTest
 
         final BKDReader reader = finishAndOpenReaderOneDim(2, buffer);
 
-        PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        PostingList intersection = intersect(reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
         assertNull(intersection);
 
-        intersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        intersection = intersect(reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
         assertEquals(numRows, intersection.size());
-        assertEquals(100, intersection.advance(100));
-        assertEquals(200, intersection.advance(200));
-        assertEquals(300, intersection.advance(300));
-        assertEquals(400, intersection.advance(400));
-
-        assertEquals(401, intersection.advance(401));
+        assertEquals(100, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(100)));
+        assertEquals(200, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(200)));
+        assertEquals(300, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(300)));
+        assertEquals(400, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(400)));
+        assertEquals(401, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(401)));
         long expectedRowID = 402;
         for (long id = intersection.nextPosting(); expectedRowID < 500; id = intersection.nextPosting())
         {
             assertEquals(expectedRowID++, id);
         }
-        assertEquals(PostingList.END_OF_STREAM, intersection.advance(numRows + 1));
+        assertEquals(PostingList.END_OF_STREAM, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(numRows + 1)));
 
         intersection.close();
     }
@@ -312,7 +327,7 @@ public class BKDReaderTest extends NdiRandomizedTest
 
         final BKDReader reader = finishAndOpenReaderOneDim(50, buffer);
 
-        final PostingList intersection = reader.intersect(buildQuery(1017, 1096), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, new QueryContext());
+        final PostingList intersection = intersect(reader.intersect(buildQuery(1017, 1096), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
         assertNull(intersection);
     }
 
@@ -369,13 +384,14 @@ public class BKDReaderTest extends NdiRandomizedTest
         final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
-        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
         return new BKDReader(indexContext,
                              kdtreeHandle,
                              bkdPosition,
                              kdtreePostingsHandle,
-                             postingsPosition);
+                             postingsPosition,
+                             PrimaryKeyMap.Factory.IDENTITY);
     }
 
     private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf, MutableOneDimPointValues values, int numRows) throws IOException
@@ -395,12 +411,13 @@ public class BKDReaderTest extends NdiRandomizedTest
         final long postingsPosition = metadata.get(IndexComponent.KD_TREE_POSTING_LISTS).root;
         assertThat(postingsPosition, is(greaterThan(0L)));
 
-        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext.getIndexName());
-        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName());
+        FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
+        FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
         return new BKDReader(indexContext,
                              kdtreeHandle,
                              bkdPosition,
                              kdtreePostingsHandle,
-                             postingsPosition);
+                             postingsPosition,
+                             PrimaryKeyMap.Factory.IDENTITY);
     }
 }

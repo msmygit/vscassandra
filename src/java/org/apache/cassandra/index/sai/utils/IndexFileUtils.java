@@ -49,7 +49,7 @@ public class IndexFileUtils
 
     public static final IndexFileUtils instance = new IndexFileUtils();
 
-    private final SequentialWriterOption writerOption = defaultWriterOption;
+    private static final SequentialWriterOption writerOption = defaultWriterOption;
 
     @VisibleForTesting
     protected IndexFileUtils()

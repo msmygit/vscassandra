@@ -22,8 +22,9 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
+import org.apache.cassandra.index.sai.disk.FilteringPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v2.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.util.FixedBitSet;
@@ -134,7 +135,7 @@ public class FilteringPostingListTest extends NdiRandomizedTest
 
         try
         {
-            long id = filteringPostings.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
+            long id = filteringPostings.advance(V2PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
 
             assertEquals(expectedAdvanceTo, id);
 
@@ -145,7 +146,7 @@ public class FilteringPostingListTest extends NdiRandomizedTest
         }
         catch (Exception e)
         {
-            long id = filteringPostings.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
+            long id = filteringPostings.advance(V2PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
 
             assertEquals(expectedAdvanceTo, id);
 
@@ -156,7 +157,7 @@ public class FilteringPostingListTest extends NdiRandomizedTest
         }
 
         ArrayPostingList expected = new ArrayPostingList(postingsArray);
-        expected.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
+        expected.advance(V2PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
 
         // Advance to the first actual match...
         while (expected.getOrdinal() <= from)

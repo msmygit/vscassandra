@@ -15,15 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk;
 
 
 import java.util.Arrays;
 
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.disk.ByteSliceReader;
-import org.apache.cassandra.index.sai.disk.v1.RAMPostingSlices;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.FixedBitSet;

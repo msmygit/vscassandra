@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.inject.Injection;
@@ -306,13 +307,13 @@ public class NodeStartupTest extends SAITester
     private boolean isGroupIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isGroupIndexComplete());
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor, sstable.metadata()).isPerSSTableBuildComplete());
     }
 
     private boolean isColumnIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor).isColumnIndexComplete(indexContext));
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable.descriptor, sstable.metadata()).isPerIndexBuildComplete(indexContext));
     }
 
     private void setState(IndexStateOnRestart state)
@@ -322,20 +323,20 @@ public class NodeStartupTest extends SAITester
             case VALID:
                 break;
             case ALL_EMPTY:
-                V1OnDiskFormat.PER_SSTABLE_COMPONENTS.forEach(this::remove);
-                V1OnDiskFormat.NUMERIC_COMPONENTS.forEach(c -> remove(c, indexName));
+                Version.LATEST.onDiskFormat().perSSTableComponents().forEach(this::remove);
+                Version.LATEST.onDiskFormat().perIndexComponents(indexContext).forEach(c -> remove(c, indexContext));
                 break;
             case PER_SSTABLE_INCOMPLETE:
                 remove(IndexComponent.GROUP_COMPLETION_MARKER);
                 break;
             case PER_COLUMN_INCOMPLETE:
-                remove(IndexComponent.COLUMN_COMPLETION_MARKER, indexName);
+                remove(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
                 break;
             case PER_SSTABLE_CORRUPT:
                 corrupt(IndexComponent.GROUP_META);
                 break;
             case PER_COLUMN_CORRUPT:
-                corrupt(IndexComponent.META, indexName);
+                corrupt(IndexComponent.META, indexContext);
                 break;
         }
     }
@@ -361,11 +362,11 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private void remove(IndexComponent component, String index)
+    private void remove(IndexComponent component, IndexContext indexContext)
     {
         try
         {
-            corruptIndexComponent(component, index, CorruptionType.REMOVED);
+            corruptIndexComponent(component, indexContext, CorruptionType.REMOVED);
         }
         catch (Exception e)
         {
@@ -387,11 +388,11 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private void corrupt(IndexComponent component, String index)
+    private void corrupt(IndexComponent component, IndexContext indexContext)
     {
         try
         {
-            corruptIndexComponent(component, index, CorruptionType.TRUNCATED_HEADER);
+            corruptIndexComponent(component, indexContext, CorruptionType.TRUNCATED_HEADER);
         }
         catch (Exception e)
         {

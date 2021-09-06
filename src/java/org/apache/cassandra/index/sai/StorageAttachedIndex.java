@@ -141,8 +141,8 @@ public class StorageAttachedIndex implements Index
                                 {
                                     ss = sstablesToRebuild.stream()
                                                           .filter(s -> {
-                                                              IndexDescriptor indexDescriptor = IndexDescriptor.create(s.descriptor);
-                                                              return !indexDescriptor.isColumnIndexComplete(context);
+                                                              IndexDescriptor indexDescriptor = IndexDescriptor.create(s.descriptor, s.metadata());
+                                                              return !indexDescriptor.isPerIndexBuildComplete(context);
                                                           })
                                                           .collect(Collectors.toList());
                                 }
@@ -558,9 +558,8 @@ public class StorageAttachedIndex implements Index
 
             //   3. The column index does not have a completion marker
             if (!view.containsSSTable(sstable) && !sstable.isMarkedCompacted() &&
-                !IndexDescriptor.create(sstable.descriptor)
-                                .registerIndex(indexContext)
-                                .isColumnIndexComplete(indexContext))
+                !IndexDescriptor.create(sstable.descriptor, sstable.metadata())
+                                .isPerIndexBuildComplete(indexContext))
             {
                 nonIndexed.add(sstable);
             }
@@ -644,7 +643,7 @@ public class StorageAttachedIndex implements Index
                              .perIndexComponents(indexContext)
                              .stream()
                              .map(c -> new Component(Component.Type.CUSTOM,
-                                                     Version.LATEST.onDiskFormat().componentName(c, indexContext.getIndexName())))
+                                                     Version.LATEST.fileNameFormatter().format(c, indexContext)))
                              .collect(Collectors.toSet());
     }
 

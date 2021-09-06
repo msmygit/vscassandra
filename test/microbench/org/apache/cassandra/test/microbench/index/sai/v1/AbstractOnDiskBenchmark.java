@@ -25,20 +25,28 @@ import java.util.stream.IntStream;
 
 import org.apache.cassandra.cache.ChunkCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.marshal.IntegerType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.BlockPackedReader;
+import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
+import org.apache.cassandra.index.sai.disk.v1.NumericValuesMeta;
 import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v1.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
-import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.lucene.store.IndexInput;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
@@ -50,9 +58,12 @@ public abstract class AbstractOnDiskBenchmark
 
     private Descriptor descriptor;
 
+    TableMetadata metadata;
     IndexDescriptor indexDescriptor;
     String index;
+    IndexContext indexContext;
     private FileHandle token;
+    PrimaryKeyMap primaryKeyMap;
 
     private FileHandle postings;
     private long summaryPosition;
@@ -98,9 +109,19 @@ public abstract class AbstractOnDiskBenchmark
         DatabaseDescriptor.daemonInitialization(); // required to use ChunkCache
         assert ChunkCache.instance != null;
 
-        descriptor = new Descriptor(Files.createTempDirectory("jmh").toFile(), "ks", this.getClass().getSimpleName(), 1);
-        indexDescriptor = IndexDescriptor.create(descriptor);
+        String keyspaceName = "ks";
+        String tableName = this.getClass().getSimpleName();
+        metadata = TableMetadata
+                   .builder(keyspaceName, tableName)
+                   .partitioner(Murmur3Partitioner.instance)
+                   .addPartitionKeyColumn("pk", UTF8Type.instance)
+                   .addRegularColumn("col", IntegerType.instance)
+                   .build();
+
+        descriptor = new Descriptor(Files.createTempDirectory("jmh").toFile(), metadata.keyspace, metadata.name, 1);
+        indexDescriptor = IndexDescriptor.create(descriptor, metadata);
         index = "test";
+        indexContext = SAITester.createIndexContext(index, IntegerType.instance);
 
         // write per-sstable components: token and offset
         writeSSTableComponents(numRows());
@@ -108,7 +129,7 @@ public abstract class AbstractOnDiskBenchmark
 
         // write postings
         summaryPosition = writePostings(numPostings());
-        postings = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, index);
+        postings = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, SAITester.createIndexContext(index, UTF8Type.instance));
     }
 
     @TearDown(Level.Trial)
@@ -136,7 +157,7 @@ public abstract class AbstractOnDiskBenchmark
         final int[] postings = IntStream.range(0, rows).map(this::toPosting).toArray();
         final ArrayPostingList postingList = new ArrayPostingList(postings);
 
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             long summaryPosition = writer.write(postingList);
             writer.complete();
@@ -151,12 +172,14 @@ public abstract class AbstractOnDiskBenchmark
         IndexInput summaryInput = IndexFileUtils.instance.openInput(postings);
 
         PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(summaryInput, summaryPosition);
-        return new PostingsReader(input, summary, QueryEventListener.PostingListEventListener.NO_OP);
+        //TODO This currently won't work because the PostingsReader needs a SSTableReader to get the keys.
+        // we probably need to abstract the key provider.
+        return new PostingsReader(input, summary, QueryEventListener.PostingListEventListener.NO_OP, indexDescriptor.newPrimaryKeyMapFactory(null).newPerSSTablePrimaryKeyMap(null));
     }
 
     private void writeSSTableComponents(int rows) throws IOException
     {
-        SSTableComponentsWriter writer = new SSTableComponentsWriter(indexDescriptor, null);
+        SSTableComponentsWriter writer = new SSTableComponentsWriter(indexDescriptor);
         for (int i = 0; i < rows; i++)
             writer.recordCurrentTokenOffset(toToken(i), toOffset(i));
 
@@ -166,6 +189,7 @@ public abstract class AbstractOnDiskBenchmark
     protected final LongArray openRowIdToTokenReader() throws IOException
     {
         MetadataSource source = MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
-        return new BlockPackedReader(token, IndexComponent.TOKEN_VALUES, source).open();
+        NumericValuesMeta tokensMeta = new NumericValuesMeta(source.get(indexDescriptor.version.fileNameFormatter().format(IndexComponent.TOKEN_VALUES, null)));
+        return new BlockPackedReader(token, tokensMeta).open();
     }
 }

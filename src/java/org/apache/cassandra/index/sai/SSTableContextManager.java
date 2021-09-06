@@ -69,9 +69,9 @@ public class SSTableContextManager
                 continue;
             }
 
-            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
+            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
 
-            if (!indexDescriptor.isGroupIndexComplete())
+            if (!indexDescriptor.isPerSSTableBuildComplete())
             {
                 // Don't even try to validate or add the context if the completion marker is missing.
                 continue;
@@ -87,7 +87,7 @@ public class SSTableContextManager
 
                 // ConcurrentHashMap#computeIfAbsent guarantees atomicity, so {@link SSTableContext#create(SSTableReader)}}
                 // is called at most once per key.
-                contexts.add(sstableContexts.computeIfAbsent(sstable, s -> indexDescriptor.newSSTableContext(s)));
+                contexts.add(sstableContexts.computeIfAbsent(sstable, SSTableContext::create));
             }
             catch (Throwable t)
             {

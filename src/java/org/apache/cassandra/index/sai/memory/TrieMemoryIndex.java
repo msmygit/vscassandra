@@ -77,16 +77,15 @@ public class TrieMemoryIndex extends MemoryIndex
         }
     };
 
-
-    public TrieMemoryIndex(IndexContext columnContext)
+    public TrieMemoryIndex(IndexContext indexContext)
     {
-        super(columnContext);
+        super(indexContext);
         //TODO Do we need to follow a setting for this?
         this.data = new MemtableTrie<>(BufferType.OFF_HEAP);
         this.primaryKeysReducer = new PrimaryKeysReducer();
         // MemoryIndex is per-core, so analyzer should be thread-safe..
-        this.analyzerFactory = columnContext.getAnalyzerFactory();
-        this.validator = columnContext.getValidator();
+        this.analyzerFactory = indexContext.getAnalyzerFactory();
+        this.validator = indexContext.getValidator();
         this.isLiteral = TypeUtil.isLiteral(validator);
     }
 
@@ -100,7 +99,7 @@ public class TrieMemoryIndex extends MemoryIndex
             {
                 value = TypeUtil.encode(value, validator);
                 analyzer.reset(value.duplicate());
-                final PrimaryKey primaryKey = columnContext.keyFactory().createKey(key, clustering);
+                final PrimaryKey primaryKey = indexContext.keyFactory().createKey(key, clustering);
                 final long initialSizeOnHeap = data.sizeOnHeap();
                 final long initialSizeOffHeap = data.sizeOffHeap();
                 final long reducerHeapSize = primaryKeysReducer.heapAllocations();

@@ -50,11 +50,11 @@ public class MemtableIndex
     private final LongAdder writeCount = new LongAdder();
     private final LongAdder estimatedMemoryUsed = new LongAdder();
 
-    public MemtableIndex(IndexContext columnContext, Memtable mt)
+    public MemtableIndex(IndexContext indexContext, Memtable mt)
     {
-        this.index = new TrieMemoryIndex(columnContext);
-        this.validator = columnContext.getValidator();
-        this.clusteringComparator = columnContext.clusteringComparator();
+        this.index = new TrieMemoryIndex(indexContext);
+        this.validator = indexContext.getValidator();
+        this.clusteringComparator = indexContext.clusteringComparator();
     }
 
     public long writeCount()

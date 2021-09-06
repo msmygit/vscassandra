@@ -20,15 +20,18 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+
+import org.apache.cassandra.io.sstable.Descriptor;
 
 import static org.apache.commons.io.FileUtils.copyDirectory;
 
 public class FileUtils
 {
-    public static void copySSTablesAndIndexes(String version) throws IOException
+    public static void copySSTablesAndIndexes(Descriptor descriptor, String version) throws IOException
     {
-        File dataDir = new File("build/test/cassandra/data/legacy-sai/" + version);
         File srcDir = new File("test/data/legacy-sai/" + version);
-        copyDirectory(srcDir, dataDir);
+        copyDirectory(srcDir, descriptor.directory);
+        Arrays.stream(descriptor.directory.listFiles()).forEach(System.out::println);
     }
 }

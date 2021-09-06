@@ -24,6 +24,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.io.util.DataInputBuffer;
+import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.lucene.store.BufferedChecksumIndexInput;
 import org.apache.lucene.store.ByteArrayIndexInput;
 import org.apache.lucene.store.IndexInput;
@@ -84,6 +86,18 @@ public class MetadataSource
         }
 
         return new ByteArrayIndexInput(name, bytes.bytes);
+    }
+
+    public DataInputPlus getDataInput(String name)
+    {
+        BytesRef bytes = components.get(name);
+
+        if (bytes == null)
+        {
+            throw new IllegalArgumentException(String.format("Could not find component '%s'. Available properties are %s.",
+                                                             name, components.keySet()));
+        }
+        return new DataInputBuffer(bytes.bytes);
     }
 
     public Version getVersion()

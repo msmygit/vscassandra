@@ -44,7 +44,6 @@ import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DES
 /**
  * Limited Lucene Directory for use with writing the KD-Tree only
  */
-//TODO Fix this
 public class BKDTempFilesDirectory extends Directory
 {
     private static final Logger logger = LoggerFactory.getLogger(BKDTempFilesDirectory.class);

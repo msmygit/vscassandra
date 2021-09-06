@@ -24,62 +24,47 @@ import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.db.rows.Unfiltered;
-import org.apache.cassandra.index.sai.disk.PerSSTableComponentsWriter;
+import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.schema.CompressionParams;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.lucene.util.IOUtils;
 
-public class SSTableComponentsWriter implements PerSSTableComponentsWriter
+public class SSTableComponentsWriter implements PerSSTableWriter
 {
-    protected static final Logger logger = LoggerFactory.getLogger(PerSSTableComponentsWriter.class);
+    protected static final Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
 
+    private final IndexDescriptor indexDescriptor;
     private final NumericValuesWriter tokenWriter;
     private final NumericValuesWriter offsetWriter;
     private final MetadataWriter metadataWriter;
 
-    private final IndexDescriptor indexDescriptor;
-
-    private DecoratedKey currentKey;
-
     private long currentKeyPartitionOffset;
 
-    public SSTableComponentsWriter(IndexDescriptor indexDescriptor, CompressionParams compressionParams) throws IOException
+    public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         this.indexDescriptor = indexDescriptor;
 
         this.metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
 
-        this.tokenWriter = new NumericValuesWriter(IndexComponent.TOKEN_VALUES,
+        this.tokenWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.TOKEN_VALUES, null),
                                                    indexDescriptor.openPerSSTableOutput(IndexComponent.TOKEN_VALUES),
                                                    metadataWriter, false);
-        this.offsetWriter = new NumericValuesWriter(IndexComponent.OFFSETS_VALUES,
+        this.offsetWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.OFFSETS_VALUES, null),
                                                     indexDescriptor.openPerSSTableOutput(IndexComponent.OFFSETS_VALUES),
                                                     metadataWriter, true);
     }
 
-    public void startPartition(DecoratedKey key, long position)
+    @Override
+    public void startPartition(long position)
     {
-        currentKey = key;
         currentKeyPartitionOffset = position;
     }
 
-    public void nextUnfilteredCluster(Unfiltered unfiltered, long position) throws IOException
+    @Override
+    public void nextRow(PrimaryKey key) throws IOException
     {
-        recordCurrentTokenOffset();
-    }
-
-    public void staticRow(Row staticRow, long position) throws IOException
-    {
-        recordCurrentTokenOffset();
-    }
-
-    private void recordCurrentTokenOffset() throws IOException
-    {
-        recordCurrentTokenOffset((long) currentKey.getToken().getTokenValue(), currentKeyPartitionOffset);
+        recordCurrentTokenOffset((long)key.partitionKey().getToken().getTokenValue(), currentKeyPartitionOffset);
     }
 
     @VisibleForTesting

@@ -30,8 +30,10 @@ import org.junit.rules.TemporaryFolder;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.schema.TableMetadata;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -40,6 +42,7 @@ public class IndexDescriptorTest
 {
     private TemporaryFolder temporaryFolder = new TemporaryFolder();
     private Descriptor descriptor;
+    private TableMetadata tableMetadata;
 
     @BeforeClass
     public static void initialise()
@@ -52,6 +55,7 @@ public class IndexDescriptorTest
     {
         temporaryFolder.create();
         descriptor = Descriptor.fromFilename(temporaryFolder.newFolder().getAbsolutePath() + "/ca-1-bti-Data.db");
+        tableMetadata = TableMetadata.builder("test", "test").addPartitionKeyColumn("pk", Int32Type.instance).build();
     }
 
     @After
@@ -65,7 +69,7 @@ public class IndexDescriptorTest
     {
         Files.touch(new File(descriptor.baseFilename() + "-SAI_GroupComplete.db"));
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
 
         assertEquals(Version.AA, indexDescriptor.version);
         assertTrue(indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER));
@@ -77,11 +81,11 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_GroupComplete.db"));
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_ColumnComplete.db"));
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
         assertEquals(Version.AA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
     }
 
     @Test
@@ -89,7 +93,7 @@ public class IndexDescriptorTest
     {
         Files.touch(new File(descriptor.baseFilename() + "-SAI+ba+GroupComplete.db"));
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
 
         assertEquals(Version.BA, indexDescriptor.version);
         assertTrue(indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER));
@@ -101,11 +105,11 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI+ba+GroupComplete.db"));
         Files.touch(new File(descriptor.baseFilename() + "-SAI+ba+test_index+ColumnComplete.db"));
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
         assertEquals(Version.BA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
     }
 
     @Test
@@ -116,7 +120,7 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_TokenValues.db"));
         Files.touch(new File(descriptor.baseFilename() + "-SAI_OffsetsValues.db"));
 
-        IndexDescriptor result = IndexDescriptor.create(descriptor);
+        IndexDescriptor result = IndexDescriptor.create(descriptor, tableMetadata);
 
         assertTrue(result.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER));
         assertTrue(result.hasComponent(IndexComponent.GROUP_META));
@@ -134,13 +138,13 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_PostingLists.db"));
 
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, indexContext));
     }
 
     @Test
@@ -152,12 +156,12 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_KDTree.db"));
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_KDTreePostingLists.db"));
 
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", Int32Type.instance));
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
+        IndexContext indexContext = SAITester.createIndexContext("test_index", Int32Type.instance);
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, indexContext));
     }
 }

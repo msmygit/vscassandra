@@ -36,7 +36,7 @@ public class OnDiskKeyProducer
 {
     public static final long NO_OFFSET = -1;
 
-    private final V1SSTableContext.KeyFetcher keyFetcher;
+    private final KeyFetcher keyFetcher;
     private final RandomAccessReader reader;
     private final LongArray segmentRowIdToOffset;
 
@@ -44,7 +44,7 @@ public class OnDiskKeyProducer
 
     private long lastOffset = NO_OFFSET;
 
-    public OnDiskKeyProducer(V1SSTableContext.KeyFetcher keyFetcher, RandomAccessReader reader, LongArray segmentRowIdToOffset, long maxPartitionOffset)
+    public OnDiskKeyProducer(KeyFetcher keyFetcher, RandomAccessReader reader, LongArray segmentRowIdToOffset, long maxPartitionOffset)
     {
         this.keyFetcher = keyFetcher;
         this.reader = reader;

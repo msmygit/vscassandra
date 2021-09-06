@@ -34,11 +34,9 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
-import org.apache.cassandra.index.sai.disk.v1.BKDPostingsIndex;
-import org.apache.cassandra.index.sai.disk.v1.OneDimBKDPostingsWriter;
-import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
@@ -74,12 +72,12 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(112, 4, pathToRoot(1, 3, 7, 14, 28));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
 
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(10, postingsIndex.size());
 
         // Internal postings...
@@ -119,13 +117,13 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(1, postingsIndex.size());
     }
 
@@ -139,26 +137,26 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
 
         // There is only a single posting list...the leaf posting list.
-        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, index), fp);
+        BKDPostingsIndex postingsIndex = new BKDPostingsIndex(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext), fp);
         assertEquals(1, postingsIndex.size());
     }
 
     private void assertPostingReaderEquals(BKDPostingsIndex postingsIndex, int nodeID, int[] postings) throws IOException
     {
-        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, index),
+        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext),
                                   postingsIndex.getPostingsFilePointer(nodeID),
                                   new ArrayPostingList(postings));
     }
 
     private void assertPostingReaderEquals(IndexInput input, long offset, PostingList expected) throws IOException
     {
-        try (PostingsReader reader = new PostingsReader(input, offset, NO_OP_POSTINGS_LISTENER))
+        try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), offset, NO_OP_POSTINGS_LISTENER))
         {
             assertPostingListEquals(expected, reader);
         }

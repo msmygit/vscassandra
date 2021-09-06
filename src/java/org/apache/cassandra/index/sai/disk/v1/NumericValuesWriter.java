@@ -34,16 +34,16 @@ public class NumericValuesWriter implements Closeable
     private final IndexOutput output;
     private final AbstractBlockPackedWriter writer;
     private final MetadataWriter metadataWriter;
-    private final IndexComponent component;
+    private final String componentName;
     private final int blockSize;
     private long count = 0;
 
-    public NumericValuesWriter(IndexComponent component,
+    public NumericValuesWriter(String componentName,
                                IndexOutput indexOutput,
                                MetadataWriter metadataWriter,
                                boolean monotonic) throws IOException
     {
-        this(component, indexOutput, metadataWriter, monotonic, monotonic ? MONOTONIC_BLOCK_SIZE : BLOCK_SIZE);
+        this(componentName, indexOutput, metadataWriter, monotonic, monotonic ? MONOTONIC_BLOCK_SIZE : BLOCK_SIZE);
     }
 
     public NumericValuesWriter(IndexDescriptor indexDescriptor,
@@ -52,10 +52,14 @@ public class NumericValuesWriter implements Closeable
                                boolean monotonic,
                                int blockSize) throws IOException
     {
-        this(component, indexDescriptor.openPerSSTableOutput(component), metadataWriter, monotonic, blockSize);
+        this(indexDescriptor.version.fileNameFormatter().format(component, null),
+             indexDescriptor.openPerSSTableOutput(component),
+             metadataWriter,
+             monotonic,
+             blockSize);
     }
 
-    private NumericValuesWriter(IndexComponent component,
+    private NumericValuesWriter(String componentName,
                                 IndexOutput indexOutput,
                                 MetadataWriter metadataWriter,
                                 boolean monotonic, int blockSize) throws IOException
@@ -64,7 +68,7 @@ public class NumericValuesWriter implements Closeable
         this.writer = monotonic ? new MonotonicBlockPackedWriter(indexOutput, blockSize)
                                 : new BlockPackedWriter(indexOutput, blockSize);
         this.output = indexOutput;
-        this.component = component;
+        this.componentName = componentName;
         this.metadataWriter = metadataWriter;
         this.blockSize = blockSize;
     }
@@ -72,7 +76,7 @@ public class NumericValuesWriter implements Closeable
     @Override
     public void close() throws IOException
     {
-        try (IndexOutput o = metadataWriter.builder(component.name()))
+        try (IndexOutput o = metadataWriter.builder(componentName))
         {
             final long fp = writer.finish();
             SAICodecUtils.writeFooter(output);

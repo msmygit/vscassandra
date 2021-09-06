@@ -15,33 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
 
-import java.io.IOException;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.io.util.RandomAccessReader;
 
-/**
- * Creates an on-disk index for a given column.
- */
-public interface ColumnIndexWriter
+public interface KeyFetcher
 {
-    /**
-     * Adds a row to this index.
-     */
-    void addRow(PrimaryKey rowKey, Row row) throws IOException;
+    DecoratedKey apply(RandomAccessReader reader, long keyOffset);
 
     /**
-     * Builds on-disk index data structures from accumulated data, moves them all to the filesystem, and fsync created files.
+     * Create a shared RAR for all tokens in the same segment.
      */
-    void flush() throws IOException;
-
-    /**
-     * Aborts accumulating data. Allows to clean up resources on error.
-     * 
-     * Note: Implementations should be idempotent, i.e. safe to call multiple times without producing undesirable side-effects.
-     */
-    void abort(Throwable cause);
+    RandomAccessReader createReader();
 }

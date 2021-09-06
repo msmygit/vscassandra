@@ -15,36 +15,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.cassandra.index.sai.disk;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
+import java.io.IOException;
 
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.db.rows.Row;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
-public abstract class SearchContext implements Closeable
+/**
+ * Creates an on-disk index for a given index.
+ */
+public interface PerIndexWriter
 {
-    public abstract long indexFileCacheSize();
+    /**
+     * Adds a row to this index.
+     */
+    void addRow(PrimaryKey rowKey, Row row) throws IOException;
 
-    public abstract long getRowCount();
+    /**
+     * Builds on-disk index data structures from accumulated data, moves them all to the filesystem, and fsync created files.
+     */
+    void flush() throws IOException;
 
-    public abstract long minSSTableRowId();
-
-    public abstract long maxSSTableRowId();
-
-    public abstract ByteBuffer minTerm();
-
-    public abstract ByteBuffer maxTerm();
-
-    public abstract DecoratedKey minKey();
-
-    public abstract DecoratedKey maxKey();
-
-    public abstract RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer);
+    /**
+     * Aborts accumulating data. Allows to clean up resources on error.
+     * 
+     * Note: Implementations should be idempotent, i.e. safe to call multiple times without producing undesirable side-effects.
+     */
+    void abort(Throwable cause);
 }

@@ -19,10 +19,14 @@ package org.apache.cassandra.index.sai;
 
 import java.io.File;
 
-import org.apache.cassandra.index.sai.disk.SearchContext;
+import com.google.common.base.Objects;
+
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
+import org.apache.cassandra.utils.Throwables;
+import org.apache.cassandra.utils.concurrent.Ref;
 import org.apache.cassandra.utils.concurrent.RefCounted;
 import org.apache.cassandra.utils.concurrent.SharedCloseableImpl;
 
@@ -32,37 +36,73 @@ import org.apache.cassandra.utils.concurrent.SharedCloseableImpl;
  * SSTableContext itself will be released when receiving sstable removed notification, but its shared copies in individual
  * SSTableIndex will be released when in-flight read requests complete.
  */
-public abstract class SSTableContext extends SharedCloseableImpl
+public class SSTableContext extends SharedCloseableImpl
 {
     public final SSTableReader sstable;
     public final IndexDescriptor indexDescriptor;
+    public final PrimaryKeyMap.Factory primaryKeyMapFactory;
 
-    protected SSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor, RefCounted.Tidy tidy)
+    protected SSTableContext(SSTableReader sstable, PrimaryKeyMap.Factory primaryKeyMapFactory, IndexDescriptor indexDescriptor, RefCounted.Tidy tidy)
     {
         super(tidy);
         this.sstable = sstable;
         this.indexDescriptor = indexDescriptor;
+        this.primaryKeyMapFactory = primaryKeyMapFactory;
     }
 
-    protected SSTableContext(SSTableReader sstable, IndexDescriptor indexDescriptor, SharedCloseableImpl copy)
+    protected SSTableContext(SSTableContext copy)
     {
         super(copy);
-        this.sstable = sstable;
-        this.indexDescriptor = indexDescriptor;
+        this.sstable = copy.sstable;
+        this.indexDescriptor = copy.indexDescriptor;
+        this.primaryKeyMapFactory = copy.primaryKeyMapFactory;
+    }
+
+    @SuppressWarnings("resource")
+    public static SSTableContext create(SSTableReader sstable)
+    {
+        Ref<? extends SSTableReader> sstableRef = null;
+        PrimaryKeyMap.Factory primaryKeyMapFactory = null;
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
+        try
+        {
+            sstableRef = sstable.tryRef();
+
+            if (sstableRef == null)
+            {
+                throw new IllegalStateException("Couldn't acquire reference to the sstable: " + sstable);
+            }
+
+            primaryKeyMapFactory = indexDescriptor.newPrimaryKeyMapFactory(sstable);
+
+            Cleanup cleanup = new SSTableContext.Cleanup(primaryKeyMapFactory, sstableRef);
+
+            return new SSTableContext(sstable, primaryKeyMapFactory, indexDescriptor, cleanup);
+        }
+        catch (Throwable t)
+        {
+            if (sstableRef != null)
+            {
+                sstableRef.release();
+            }
+
+            t = Throwables.close(t, primaryKeyMapFactory);
+            throw Throwables.unchecked(t);
+        }
     }
 
     @Override
-    public abstract SSTableContext sharedCopy();
-
-    public abstract SearchContext newSearchContext(IndexContext indexContext);
-
+    public SSTableContext sharedCopy()
+    {
+        return new SSTableContext(this);
+    }
 
     /**
      * @return number of open files per {@link SSTableContext} instance
      */
     public int openFilesPerSSTable()
     {
-        return indexDescriptor.version.onDiskFormat().perSSTableComponents().size();
+        return indexDescriptor.version.onDiskFormat().openFilesPerSSTable();
     }
 
     /**
@@ -81,6 +121,56 @@ public abstract class SSTableContext extends SharedCloseableImpl
 
     public PerIndexFiles perIndexFiles(IndexContext indexContext)
     {
-        return indexDescriptor.perIndexFiles(indexContext, false);
+        return indexDescriptor.newPerIndexFiles(indexContext, false);
+    }
+
+    @Override
+    public String toString()
+    {
+        return "SSTableContext{" +
+               "sstable=" + indexDescriptor.descriptor +
+               '}';
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SSTableContext that = (SSTableContext) o;
+        return Objects.equal(indexDescriptor.descriptor, that.indexDescriptor.descriptor);
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return Objects.hashCode(indexDescriptor.descriptor.hashCode());
+    }
+
+    private static class Cleanup implements RefCounted.Tidy
+    {
+        private final PrimaryKeyMap.Factory primaryKeyMapFactory;
+        private final Ref<? extends SSTableReader> sstableRef;
+
+        private Cleanup(PrimaryKeyMap.Factory primaryKeyMapFactory, Ref<? extends SSTableReader> sstableRef)
+        {
+            this.primaryKeyMapFactory = primaryKeyMapFactory;
+            this.sstableRef = sstableRef;
+        }
+
+        @Override
+        public void tidy()
+        {
+            Throwable t = sstableRef.ensureReleased(null);
+            t = Throwables.close(t, primaryKeyMapFactory);
+
+            Throwables.maybeFail(t);
+        }
+
+        @Override
+        public String name()
+        {
+            return null;
+        }
     }
 }

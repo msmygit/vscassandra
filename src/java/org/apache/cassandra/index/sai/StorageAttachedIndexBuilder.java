@@ -50,7 +50,6 @@ import org.apache.cassandra.db.rows.DeserializationHelper;
 import org.apache.cassandra.index.SecondaryIndexBuilder;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTableIdentityIterator;
 import org.apache.cassandra.io.sstable.SSTableSimpleIterator;
@@ -59,7 +58,6 @@ import org.apache.cassandra.io.sstable.format.RowIndexEntry;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Throwables;
@@ -152,15 +150,12 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
             perSSTableFileLock = shouldWriteTokenOffsetFiles(sstable);
             boolean perColumnOnly = perSSTableFileLock == null;
             // remove existing per column index files instead of overwriting
-            indexes.forEach(index -> IndexDescriptor.create(sstable.descriptor).deleteColumnIndex(index.getIndexContext()));
+            indexes.forEach(index -> IndexDescriptor.create(sstable.descriptor, sstable.metadata()).deleteColumnIndex(index.getIndexContext()));
 
-            final CompressionParams compressionParams = CryptoUtils.getCompressionParams(sstable);
-
-            indexWriter = new StorageAttachedIndexWriter(IndexDescriptor.create(sstable.descriptor),
+            indexWriter = new StorageAttachedIndexWriter(IndexDescriptor.create(sstable.descriptor, sstable.metadata()),
                                                          indexes,
                                                          txn,
-                                                         perColumnOnly,
-                                                         compressionParams);
+                                                         perColumnOnly);
 
             long previousKeyPosition = 0;
             indexWriter.begin();
@@ -283,8 +278,8 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
     private CountDownLatch shouldWriteTokenOffsetFiles(SSTableReader sstable)
     {
         // if per-table files are incomplete or checksum failed during full rebuild.
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
-        if (!indexDescriptor.isGroupIndexComplete() ||
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
+        if (!indexDescriptor.isPerSSTableBuildComplete() ||
             (isFullRebuild && !indexDescriptor.validatePerSSTableComponentsChecksum()))
         {
             CountDownLatch latch = new CountDownLatch(1);

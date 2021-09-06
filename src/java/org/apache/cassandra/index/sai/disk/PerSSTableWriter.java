@@ -15,19 +15,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.cassandra.index.sai.disk;
 
-package org.apache.cassandra.index.sai.disk.format;
+import java.io.IOException;
 
-import org.junit.Test;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
-import org.apache.cassandra.index.sai.SAITester;
-
-public class NamingTest extends SAITester
+/**
+ * Writes all SSTable-attached index token and offset structures.
+ */
+public interface PerSSTableWriter
 {
-    @Test
-    public void test() throws Throwable
-    {
-        createTable("CREATE TABLE %s (pk int, value int, primary key(pk))");
-        String indexName = createIndex("CREATE CUSTOM INDEX my_index_name ON %s(value) USING 'StorageAttachedIndex'");
-    }
+    public static final PerSSTableWriter NONE = (key) -> {};
+
+    default void startPartition(long position)
+    {}
+
+    void nextRow(PrimaryKey key) throws IOException;
+
+    default void complete() throws IOException
+    {}
+
+    default void abort(Throwable accumulator)
+    {}
 }

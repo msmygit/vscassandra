@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.function.Supplier;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 
 /**
  * Abstraction over a long-indexed array of longs.

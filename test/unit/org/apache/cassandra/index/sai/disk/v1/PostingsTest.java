@@ -26,13 +26,18 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.IndexInput;
 
 public class PostingsTest extends NdiRandomizedTest
@@ -42,12 +47,15 @@ public class PostingsTest extends NdiRandomizedTest
 
     private IndexDescriptor indexDescriptor;
     private String index;
+    private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
+        indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
+
     }
 
     @Test
@@ -57,13 +65,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expectedPostingList = new ArrayPostingList(new int[]{ 10, 20, 30, 40, 50, 60 });
 
         long postingPointer;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             postingPointer = writer.write(expectedPostingList);
             writer.complete();
         }
 
-        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         SAICodecUtils.validate(input);
         input.seek(postingPointer);
 
@@ -71,7 +79,7 @@ public class PostingsTest extends NdiRandomizedTest
         assertEquals(1, summary.offsets.length());
 
         CountingPostingListEventListener listener = new CountingPostingListEventListener();
-        PostingsReader reader = new PostingsReader(input, postingPointer, listener);
+        PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointer, listener);
 
         expectedPostingList.reset();
         assertEquals(expectedPostingList.getOrdinal(), reader.getOrdinal());
@@ -88,13 +96,12 @@ public class PostingsTest extends NdiRandomizedTest
         reader.close();
         assertEquals(reader.size(), listener.decodes);
 
-        input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         listener = new CountingPostingListEventListener();
-        reader = new PostingsReader(input, postingPointer, listener);
+        reader = new PostingsReader(new SharedIndexInput(input), postingPointer, listener);
 
-        assertEquals(50, reader.advance(45));
-
-        assertEquals(60, reader.advance(60));
+        assertEquals(50, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(45)));
+        assertEquals(60, reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(60)));
         assertEquals(PostingList.END_OF_STREAM, reader.nextPosting());
         assertEquals(2, listener.advances);
         reader.close();
@@ -111,7 +118,7 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList[] expected = new ArrayPostingList[numPostingLists];
         final long[] postingPointers = new long[numPostingLists];
 
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             for (int i = 0; i < numPostingLists; ++i)
             {
@@ -123,21 +130,21 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
         }
 
         for (int i = 0; i < numPostingLists; ++i)
         {
-            IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+            IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
             input.seek(postingPointers[i]);
             final ArrayPostingList expectedPostingList = expected[i];
             final PostingsReader.BlocksSummary summary = assertBlockSummary(blockSize, expectedPostingList, input);
             assertTrue(summary.offsets.length() > 1);
 
             final CountingPostingListEventListener listener = new CountingPostingListEventListener();
-            try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
+            try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointers[i], listener))
             {
                 expectedPostingList.reset();
                 assertEquals(expectedPostingList.getOrdinal(), reader.getOrdinal());
@@ -148,8 +155,8 @@ public class PostingsTest extends NdiRandomizedTest
             }
 
             // test skipping to the last block
-            input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
-            try (PostingsReader reader = new PostingsReader(input, postingPointers[i], listener))
+            input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
+            try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointers[i], listener))
             {
                 long tokenToAdvance = -1;
                 expectedPostingList.reset();
@@ -159,8 +166,8 @@ public class PostingsTest extends NdiRandomizedTest
                 }
 
                 expectedPostingList.reset();
-                assertEquals(expectedPostingList.advance(tokenToAdvance),
-                             reader.advance(tokenToAdvance));
+                assertEquals(expectedPostingList.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(tokenToAdvance)),
+                             reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(tokenToAdvance)));
 
                 assertPostingListEquals(expectedPostingList, reader);
                 assertEquals(1, listener.advances);
@@ -177,13 +184,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
         long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -218,13 +225,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
         long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -244,7 +251,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testNullPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(null);
@@ -255,7 +262,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testEmptyPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[0]));
@@ -265,7 +272,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testNonAscendingPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[]{ 1, 0 }));
@@ -285,8 +292,8 @@ public class PostingsTest extends NdiRandomizedTest
 
         for (int target : targetIDs)
         {
-            final long actualRowId = reader.advance(target);
-            final long expectedRowId = expected.advance(target);
+            final long actualRowId = reader.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
+            final long expectedRowId = expected.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(target));
 
             assertEquals(expectedRowId, actualRowId);
 
@@ -303,9 +310,9 @@ public class PostingsTest extends NdiRandomizedTest
 
     private PostingsReader openReader(long fp, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         input.seek(fp);
-        return new PostingsReader(input, fp, listener);
+        return new PostingsReader(new SharedIndexInput(input), fp, listener);
     }
 
     private PostingsReader.BlocksSummary assertBlockSummary(int blockSize, PostingList expected, IndexInput input) throws IOException

@@ -26,6 +26,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -81,7 +82,6 @@ import static org.apache.lucene.codecs.lucene50.Lucene50PostingsFormat.BLOCK_SIZ
  *  </pre>
  */
 @NotThreadSafe
-//TODO Review this for DSP-19608
 public class PostingsWriter implements Closeable
 {
     private final static String POSTINGS_MUST_BE_SORTED_ERROR_MSG = "Postings must be sorted ascending, got [%s] after [%s]";
@@ -101,9 +101,9 @@ public class PostingsWriter implements Closeable
     private long totalPostings;
 
     @VisibleForTesting
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+    public PostingsWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {
-        this(indexDescriptor, index, BLOCK_SIZE, segmented);
+        this(indexDescriptor, indexContext, BLOCK_SIZE, segmented);
     }
 
     PostingsWriter(IndexOutput dataOutput) throws IOException
@@ -111,9 +111,9 @@ public class PostingsWriter implements Closeable
         this(dataOutput, BLOCK_SIZE);
     }
 
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
+    public PostingsWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, int blockSize, boolean segmented) throws IOException
     {
-        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index, true, segmented), blockSize);
+        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext, true, segmented), blockSize);
     }
 
     private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException

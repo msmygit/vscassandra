@@ -18,21 +18,24 @@
 
 package org.apache.cassandra.index.sai;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.disk.SearchContext;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileUtils;
@@ -52,7 +55,7 @@ public class SSTableIndex
     private final IndexContext indexContext;
     private final SSTableReader sstable;
 
-    private final SearchContext indexSearchContext;
+    private final SearchableIndex searchableIndex;
 
     private final AtomicInteger references = new AtomicInteger(1);
     private final AtomicBoolean obsolete = new AtomicBoolean(false);
@@ -66,7 +69,7 @@ public class SSTableIndex
         final AbstractType<?> validator = indexContext.getValidator();
         assert validator != null;
 
-        this.indexSearchContext = sstableContext.newSearchContext(indexContext);
+        this.searchableIndex = sstableContext.indexDescriptor.newSearchableIndex(sstableContext, indexContext);
     }
 
     public IndexContext getIndexContext()
@@ -81,7 +84,7 @@ public class SSTableIndex
 
     public long indexFileCacheSize()
     {
-        return indexSearchContext.indexFileCacheSize();
+        return searchableIndex.indexFileCacheSize();
     }
 
     /**
@@ -89,7 +92,7 @@ public class SSTableIndex
      */
     public long getRowCount()
     {
-        return indexSearchContext.getRowCount();
+        return searchableIndex.getRowCount();
     }
 
     /**
@@ -97,7 +100,7 @@ public class SSTableIndex
      */
     public long sizeOfPerColumnComponents()
     {
-        return sstableContext.indexDescriptor.sizeOfPerColumnComponents(indexContext.getIndexName());
+        return sstableContext.indexDescriptor.sizeOnDiskOfPerIndexComponents(indexContext);
     }
 
     /**
@@ -105,7 +108,7 @@ public class SSTableIndex
      */
     public long minSSTableRowId()
     {
-        return indexSearchContext.minSSTableRowId();
+        return searchableIndex.minSSTableRowId();
     }
 
     /**
@@ -113,42 +116,42 @@ public class SSTableIndex
      */
     public long maxSSTableRowId()
     {
-        return indexSearchContext.maxSSTableRowId();
+        return searchableIndex.maxSSTableRowId();
     }
 
     public ByteBuffer minTerm()
     {
-        return indexSearchContext.minTerm();
+        return searchableIndex.minTerm();
     }
 
     public ByteBuffer maxTerm()
     {
-        return indexSearchContext.maxTerm();
+        return searchableIndex.maxTerm();
     }
 
-    public DecoratedKey minKey()
+    public PrimaryKey minKey()
     {
-        return indexSearchContext.minKey();
+        return searchableIndex.minKey();
     }
 
-    public DecoratedKey maxKey()
+    public PrimaryKey maxKey()
     {
-        return indexSearchContext.maxKey();
+        return searchableIndex.maxKey();
     }
 
-    public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer)
+    public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
-        return indexSearchContext.search(expression, keyRange, context, defer);
+        return searchableIndex.search(expression, keyRange, context);
     }
-
-//    public List<SegmentMetadata> segments()
-//    {
-//        return Collections.emptyList();
-//    }
 
     public Version getVersion()
     {
         return sstableContext.indexDescriptor.version;
+    }
+
+    public IndexFeatureSet indexFeatureSet()
+    {
+        return sstableContext.indexDescriptor.version.onDiskFormat().indexFeatureSet();
     }
 
     public SSTableReader getSSTable()
@@ -181,7 +184,7 @@ public class SSTableIndex
 
         if (n == 0)
         {
-            FileUtils.closeQuietly(indexSearchContext);
+            FileUtils.closeQuietly(searchableIndex);
             sstableContext.close();
 
             /*
