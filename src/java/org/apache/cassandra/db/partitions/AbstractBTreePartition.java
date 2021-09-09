@@ -133,19 +133,6 @@ public abstract class AbstractBTreePartition implements Partition, Iterable<Row>
         return row == null ? Rows.EMPTY_STATIC_ROW : row;
     }
 
-    @Override
-    public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, NavigableSet<Clustering<?>> clusteringsInQueryOrder, boolean reversed)
-    {
-        Row staticRow = staticRow(holder(), selection, false);
-        if (clusteringsInQueryOrder.isEmpty())
-        {
-            DeletionTime partitionDeletion = holder().deletionInfo.getPartitionDeletion();
-            return UnfilteredRowIterators.noRowsIterator(metadata(), partitionKey(), staticRow, partitionDeletion, reversed);
-        }
-
-        return new ClusteringsIterator(selection, clusteringsInQueryOrder, reversed, holder(), staticRow);
-    }
-
     public UnfilteredRowIterator unfilteredIterator()
     {
         return unfilteredIterator(ColumnFilter.selection(columns()), Slices.ALL, false);
@@ -188,114 +175,6 @@ public abstract class AbstractBTreePartition implements Partition, Iterable<Row>
                                                canHaveShadowedData());
     }
 
-    private abstract class AbstractIterator extends AbstractUnfilteredRowIterator
-    {
-        final BTreePartitionData current;
-        final ColumnFilter selection;
-
-        private AbstractIterator(BTreePartitionData current, Row staticRow, ColumnFilter selection, boolean isReversed)
-        {
-            super(AbstractBTreePartition.this.metadata(),
-                  AbstractBTreePartition.this.partitionKey(),
-                  current.deletionInfo.getPartitionDeletion(),
-                  selection.fetchedColumns(), // non-selected columns will be filtered in subclasses by RowAndDeletionMergeIterator
-                  // it would also be more precise to return the intersection of the selection and current.columns,
-                  // but its probably not worth spending time on computing that.
-                  staticRow,
-                  isReversed,
-                  current.stats);
-            this.current = current;
-            this.selection = selection;
-        }
-    }
-
-    private class SlicesIterator extends AbstractIterator
-    {
-        private final Slices slices;
-
-        private int idx;
-        private Iterator<Unfiltered> currentSlice;
-
-        private SlicesIterator(ColumnFilter selection, Slices slices, boolean isReversed, BTreePartitionData current, Row staticRow)
-        {
-            super(current, staticRow, selection, isReversed);
-            this.slices = slices;
-        }
-
-        protected Unfiltered computeNext()
-        {
-            while (true)
-            {
-                if (currentSlice == null)
-                {
-                    if (idx >= slices.size())
-                        return endOfData();
-
-                    int sliceIdx = isReverseOrder ? slices.size() - idx - 1 : idx;
-                    currentSlice = sliceIterator(selection, slices.get(sliceIdx), isReverseOrder, current, Rows.EMPTY_STATIC_ROW);
-                    idx++;
-                }
-
-                if (currentSlice.hasNext())
-                    return currentSlice.next();
-
-                currentSlice = null;
-            }
-        }
-    }
-
-    private class ClusteringsIterator extends AbstractIterator
-    {
-        private final Iterator<Clustering<?>> clusteringsInQueryOrder;
-        private final SearchIterator<Clustering<?>, Row> rowSearcher;
-
-        private Iterator<Unfiltered> currentIterator;
-
-        private ClusteringsIterator(ColumnFilter selection,
-                                    NavigableSet<Clustering<?>> clusteringsInQueryOrder,
-                                    boolean isReversed,
-                                    BTreePartitionData current,
-                                    Row staticRow)
-        {
-            super(current, staticRow, selection, isReversed);
-
-            this.clusteringsInQueryOrder = clusteringsInQueryOrder.iterator();
-            this.rowSearcher = BTree.slice(current.tree, metadata().comparator, desc(isReversed));
-        }
-
-        protected Unfiltered computeNext()
-        {
-            while (true)
-            {
-                if (currentIterator == null)
-                {
-                    if (!clusteringsInQueryOrder.hasNext())
-                        return endOfData();
-
-                    currentIterator = nextIterator(clusteringsInQueryOrder.next());
-                }
-
-                if (currentIterator != null && currentIterator.hasNext())
-                    return currentIterator.next();
-
-                currentIterator = null;
-            }
-        }
-
-        private Iterator<Unfiltered> nextIterator(Clustering<?> next)
-        {
-            Row nextRow = rowSearcher.next(next);
-            // rangeCovering() will return original RT covering clustering key, but we want to generate fake RT with
-            // given clustering bound to be consistent with fake RT generated from sstable read.
-            Iterator<RangeTombstone> deleteIter = current.deletionInfo.rangeIterator(Slice.make(next), isReverseOrder());
-
-            if (nextRow == null && !deleteIter.hasNext())
-                return null;
-
-            Iterator<Row> rowIterator = nextRow == null ? Collections.emptyIterator() : Iterators.singletonIterator(nextRow);
-            return merge(rowIterator, deleteIter, selection, isReverseOrder, current, staticRow);
-        }
-    }
 
     protected static BTreePartitionData build(UnfilteredRowIterator iterator, int initialRowCapacity)
     {

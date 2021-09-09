@@ -18,9 +18,9 @@
 package org.apache.cassandra.db.partitions;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.google.common.collect.Iterables;
@@ -38,7 +38,6 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.btree.BTree;
-import org.apache.cassandra.utils.btree.UpdateFunction;
 
 /**
  * Stores updates made on a partition.
@@ -136,7 +135,7 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
         }
         else
         {
-            RegularAndStaticColumns columns = new RegularAndStaticColumns(Columns.NONE, Columns.from(row.columns());
+            RegularAndStaticColumns columns = new RegularAndStaticColumns(Columns.NONE, Columns.from(row.columns()));
             data = new ArrayBackedPartitionData(columns,
                                                 Rows.EMPTY_STATIC_ROW,
                                                 new Row[]{ row },
@@ -276,7 +275,7 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
         if (size == 1)
             return Iterables.getOnlyElement(updates);
 
-        List<UnfilteredRowIterator> asIterators = Lists.transform(updates, AbstractBTreePartition::unfilteredIterator);
+        List<UnfilteredRowIterator> asIterators = Lists.transform(updates, ImmutableArrayBackedPartition::unfilteredIterator);
         return fromIterator(UnfilteredRowIterators.merge(asIterators), ColumnFilter.all(updates.get(0).metadata()));
     }
 
@@ -362,6 +361,15 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
         }
 
         return maxTimestamp;
+    }
+
+    public Builder unbuild()
+    {
+        Builder builder = new Builder(metadata(), partitionKey(), columns(), rowCount(), canHaveShadowedData());
+        builder.staticRow = staticRow();
+        builder.deletionInfo.add(deletionInfo());
+        builder.dataBuilder.addAllSorted(data().rows, data().rowCount);
+        return builder;
     }
 
     /**
@@ -594,15 +602,20 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
                     else
                         deletionBuilder.add((RangeTombstoneMarker)unfiltered);
                 }
+
+                ArrayBackedPartitionData data = ArrayBackedPartitionData.build(partition, header.rowEstimate);
+                return new PartitionUpdate(metadata,
+                                           header.key,
+                                           data,
+                                           false);
             }
 
-            MutableDeletionInfo deletionInfo = deletionBuilder.build();
-            ArrayBackedPartitionData data = new ArrayBackedPartitionData.build(partition
-            return new PartitionUpdate(metadata,
-                                       header.key,
-                                       new BTreePartitionData(header.sHeader.columns(), rows.build(), deletionInfo, header.staticRow, header.sHeader.stats()),
-                                       deletionInfo,
-                                       false);
+            catch (IOError e)
+            {
+                if (e.getCause() != null && e.getCause() instanceof IncompatibleSchemaException)
+                    throw (IncompatibleSchemaException) e.getCause();
+                throw e;
+            }
         }
 
         public long serializedSize(PartitionUpdate update, int version)
@@ -675,11 +688,78 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
         private final DecoratedKey key;
         private final MutableDeletionInfo deletionInfo;
         private final boolean canHaveShadowedData;
-        private Object[] tree = BTree.empty();
-        private final BTree.Builder<Row> rowBuilder;
+        private final DataBuilder dataBuilder;
         private Row staticRow = Rows.EMPTY_STATIC_ROW;
         private final RegularAndStaticColumns columns;
         private boolean isBuilt = false;
+
+        private class DataBuilder extends ArrayBackedPartitionData.ArrayDataBuilder
+        {
+            private boolean needsSort;
+
+            DataBuilder(int initialCapacity)
+            {
+                super(initialCapacity);
+                rebuildEncodingStats(true);
+            }
+
+            @Override
+            public DataBuilder add(Row row)
+            {
+                if (!needsSort)
+                    needsSort = rowCount > 0 && metadata.comparator.compare(rows[rowCount - 1].clustering(), row) > 0;
+                super.add(row);
+                return this;
+            }
+
+            private void addAllSorted(Row[] toAdd, int toAddCount)
+            {
+                if (toAddCount == 0)
+                    return;
+
+                // The input is sorted, so we'll stay sorted as long as we were before and the first added is after the
+                // last current.
+                if (!needsSort)
+                    needsSort = rowCount > 0 && metadata.comparator.compare(rows[rowCount - 1].clustering(), toAdd[0]) > 0;
+
+                int totalRow = rowCount + toAddCount;
+                if (totalRow > rows.length)
+                    rows = Arrays.copyOf(rows, Math.max(rows.length * 2, totalRow));
+                System.arraycopy(toAdd, 0, rows, rowCount, toAddCount);
+                rowCount = totalRow;
+            }
+
+            void updateAllTimestamp(long newTimestamp)
+            {
+                deletionInfo.updateAllTimestamp(newTimestamp - 1);
+                staticRow = staticRow.updateAllTimestamp(newTimestamp);
+                for (int i = 0; i < rowCount; i++)
+                    rows[i] = rows[i].updateAllTimestamp(newTimestamp);
+            }
+
+            ArrayBackedPartitionData build()
+            {
+                if (rowCount > 0)
+                {
+                    if (needsSort)
+                        Arrays.sort(rows, 0, rowCount, metadata.comparator);
+
+                    // Merge equal values. lastIdx is on the last 'processed' row, i on the next row to check. If the row
+                    // at i is the same than on lastIdx, we merge into lastIdx, otherwise we move it to ++lastIdx (which
+                    // be a no-op).
+                    int lastIdx = 0;
+                    for (int i = 1; i < rowCount; i++)
+                    {
+                        if (metadata.comparator.compare(rows[lastIdx], rows[i]) == 0)
+                            rows[lastIdx] = Rows.merge(rows[lastIdx], rows[i]);
+                        else
+                            rows[++lastIdx] = rows[i];
+                    }
+                    rowCount = lastIdx + 1;
+                }
+                return build(columns, staticRow, deletionInfo, EncodingStats.NO_STATS);
+            }
+        }
 
         public Builder(TableMetadata metadata,
                        DecoratedKey key,
@@ -687,36 +767,24 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
                        int initialRowCapacity,
                        boolean canHaveShadowedData)
         {
-            this(metadata, key, columns, initialRowCapacity, canHaveShadowedData, Rows.EMPTY_STATIC_ROW, MutableDeletionInfo.live(), BTree.empty());
+            this(metadata, key, columns, initialRowCapacity, canHaveShadowedData, Rows.EMPTY_STATIC_ROW, MutableDeletionInfo.live());
         }
 
-        private Builder(TableMetadata metadata,
-                       DecoratedKey key,
-                       RegularAndStaticColumns columns,
-                       int initialRowCapacity,
-                       boolean canHaveShadowedData,
-                       BTreePartitionData holder)
-        {
-            this(metadata, key, columns, initialRowCapacity, canHaveShadowedData, holder.staticRow, holder.deletionInfo, holder.tree);
-        }
-
-        private Builder(TableMetadata metadata,
+       private Builder(TableMetadata metadata,
                         DecoratedKey key,
                         RegularAndStaticColumns columns,
                         int initialRowCapacity,
                         boolean canHaveShadowedData,
                         Row staticRow,
-                        DeletionInfo deletionInfo,
-                        Object[] tree)
+                        DeletionInfo deletionInfo)
         {
             this.metadata = metadata;
             this.key = key;
             this.columns = columns;
-            this.rowBuilder = rowBuilder(initialRowCapacity);
+            this.dataBuilder = new DataBuilder(initialRowCapacity);
             this.canHaveShadowedData = canHaveShadowedData;
             this.deletionInfo = deletionInfo.mutableCopy();
             this.staticRow = staticRow;
-            this.tree = tree;
         }
 
         public Builder(TableMetadata metadata, DecoratedKey key, RegularAndStaticColumns columnDefinitions, int size)
@@ -726,7 +794,7 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
 
         public Builder(PartitionUpdate base, int initialRowCapacity)
         {
-            this(base.metadata, base.partitionKey, base.columns(), initialRowCapacity, base.canHaveShadowedData, base.holder);
+            this(base.metadata, base.partitionKey, base.columns(), initialRowCapacity, base.canHaveShadowedData);
         }
 
         public Builder(TableMetadata metadata,
@@ -767,7 +835,7 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
                 // this assert is expensive, and possibly of limited value; we should consider removing it
                 // or introducing a new class of assertions for test purposes
                 assert columns().regulars.containsAll(row.columns()) : columns().regulars + " is not superset of " + row.columns();
-                rowBuilder.add(row);
+                dataBuilder.add(row);
             }
         }
 
@@ -795,22 +863,13 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
         {
             // assert that we are not calling build() several times
             assert !isBuilt : "A PartitionUpdate.Builder should only get built once";
-            Object[] add = rowBuilder.build();
-            Object[] merged = BTree.<Row>merge(tree, add, metadata.comparator,
-                                               UpdateFunction.Simple.of(Rows::merge));
 
-            EncodingStats newStats = EncodingStats.Collector.collect(staticRow, BTree.iterator(merged), deletionInfo);
-
+            PartitionUpdate pu = new PartitionUpdate(metadata,
+                                                     key,
+                                                     dataBuilder.build(),
+                                                     canHaveShadowedData);
             isBuilt = true;
-            return new PartitionUpdate(metadata,
-                                       partitionKey(),
-                                       new BTreePartitionData(columns,
-                                                              merged,
-                                                              deletionInfo,
-                                                              staticRow,
-                                                              newStats),
-                                       deletionInfo,
-                                       canHaveShadowedData);
+            return pu;
         }
 
         public RegularAndStaticColumns columns()
@@ -823,11 +882,6 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
             return deletionInfo.getPartitionDeletion();
         }
 
-        private BTree.Builder<Row> rowBuilder(int initialCapacity)
-        {
-            return BTree.<Row>builder(metadata.comparator, initialCapacity)
-                   .setQuickResolver(Rows::merge);
-        }
         /**
          * Modify this update to set every timestamp for live data to {@code newTimestamp} and
          * every deletion timestamp to {@code newTimestamp - 1}.
@@ -844,9 +898,7 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
          */
         public Builder updateAllTimestamp(long newTimestamp)
         {
-            deletionInfo.updateAllTimestamp(newTimestamp - 1);
-            tree = BTree.<Row>transformAndFilter(tree, (x) -> x.updateAllTimestamp(newTimestamp));
-            staticRow = this.staticRow.updateAllTimestamp(newTimestamp);
+            dataBuilder.updateAllTimestamp(newTimestamp);
             return this;
         }
 

@@ -18,8 +18,11 @@
 
 package org.apache.cassandra.db.partitions;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.NavigableSet;
+
+import com.google.common.collect.Iterators;
 
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
@@ -39,7 +42,6 @@ import org.apache.cassandra.db.rows.Rows;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.db.rows.UnfilteredRowIterators;
-import org.apache.cassandra.utils.AbstractIterator;
 import org.apache.cassandra.utils.SearchIterator;
 
 /**
@@ -218,8 +220,8 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
         return merge(rowIter, deleteIter, selection, reversed, data, staticRow);
     }
 
-
-    public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, NavigableSet<Clustering> clusteringsInQueryOrder, boolean reversed)
+    @Override
+    public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, NavigableSet<Clustering<?>> clusteringsInQueryOrder, boolean reversed)
     {
         DATA data = data();
         Row staticRow = staticRow(data, selection, false);
@@ -229,29 +231,7 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
             return UnfilteredRowIterators.noRowsIterator(metadata(), partitionKey(), staticRow, partitionDeletion, reversed);
         }
 
-        Iterator<Row> rowIter = new AbstractIterator<Row>() {
-
-            Iterator<Clustering> clusterings = clusteringsInQueryOrder.iterator();
-            SearchIterator<Clustering, Row> rowSearcher = data.searchRows(metadata().comparator, reversed);
-
-            @Override
-            protected Row computeNext()
-            {
-                while (clusterings.hasNext())
-                {
-                    Row row = rowSearcher.next(clusterings.next());
-                    if (row != null)
-                        return row;
-                }
-                return endOfData();
-            }
-        };
-
-        // not using DeletionInfo.rangeCovering(Clustering), because it returns the original range tombstone,
-        // but we need DeletionInfo.rangeIterator(Set<Clustering>) that generates tombstones based on given clustering bound.
-        Iterator<RangeTombstone> deleteIter = data.deletionInfo.rangeIterator(clusteringsInQueryOrder, reversed);
-
-        return merge(rowIter, deleteIter, selection, reversed, data, staticRow);
+        return new ClusteringsIterator(selection, clusteringsInQueryOrder, reversed, data, staticRow);
     }
 
     private RowAndDeletionMergeIterator merge(Iterator<Row> rowIter,
@@ -338,6 +318,80 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
 
                 currentSlice = null;
             }
+        }
+    }
+
+    private abstract class AbstractIterator extends AbstractUnfilteredRowIterator
+    {
+        final DATA data;
+        final ColumnFilter selection;
+
+        private AbstractIterator(DATA data, Row staticRow, ColumnFilter selection, boolean isReversed)
+        {
+            super(AbstractPartition.this.metadata(),
+                  AbstractPartition.this.partitionKey(),
+                  data.deletionInfo.getPartitionDeletion(),
+                  selection.fetchedColumns(), // non-selected columns will be filtered in subclasses by RowAndDeletionMergeIterator
+                  // it would also be more precise to return the intersection of the selection and current.columns,
+                  // but its probably not worth spending time on computing that.
+                  staticRow,
+                  isReversed,
+                  data.stats);
+            this.data = data;
+            this.selection = selection;
+        }
+    }
+
+    private class ClusteringsIterator extends AbstractPartition.AbstractIterator
+    {
+        private final Iterator<Clustering<?>> clusteringsInQueryOrder;
+        private final SearchIterator<Clustering<?>, Row> rowSearcher;
+
+        private Iterator<Unfiltered> currentIterator;
+
+        private ClusteringsIterator(ColumnFilter selection,
+                                    NavigableSet<Clustering<?>> clusteringsInQueryOrder,
+                                    boolean isReversed,
+                                    DATA data,
+                                    Row staticRow)
+        {
+            super(data, staticRow, selection, isReversed);
+
+            this.clusteringsInQueryOrder = clusteringsInQueryOrder.iterator();
+            this.rowSearcher = data.searchRows(metadata().comparator, isReversed);
+        }
+
+        protected Unfiltered computeNext()
+        {
+            while (true)
+            {
+                if (currentIterator == null)
+                {
+                    if (!clusteringsInQueryOrder.hasNext())
+                        return endOfData();
+
+                    currentIterator = nextIterator(clusteringsInQueryOrder.next());
+                }
+
+                if (currentIterator != null && currentIterator.hasNext())
+                    return currentIterator.next();
+
+                currentIterator = null;
+            }
+        }
+
+        private Iterator<Unfiltered> nextIterator(Clustering<?> next)
+        {
+            Row nextRow = rowSearcher.next(next);
+            // rangeCovering() will return original RT covering clustering key, but we want to generate fake RT with
+            // given clustering bound to be consistent with fake RT generated from sstable read.
+            Iterator<RangeTombstone> deleteIter = data.deletionInfo.rangeIterator(Slice.make(next), isReverseOrder());
+
+            if (nextRow == null && !deleteIter.hasNext())
+                return null;
+
+            Iterator<Row> rowIterator = nextRow == null ? Collections.emptyIterator() : Iterators.singletonIterator(nextRow);
+            return merge(rowIterator, deleteIter, selection, isReverseOrder, data, staticRow);
         }
     }
 }

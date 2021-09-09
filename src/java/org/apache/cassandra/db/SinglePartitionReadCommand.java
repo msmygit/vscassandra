@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.db;
 
-import java.awt.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -26,8 +25,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
-
-import org.apache.commons.httpclient.methods.multipart.Part;
 
 import org.apache.cassandra.cache.IRowCacheEntry;
 import org.apache.cassandra.cache.RowCacheKey;

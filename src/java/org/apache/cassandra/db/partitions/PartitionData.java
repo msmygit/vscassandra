@@ -100,7 +100,7 @@ abstract class PartitionData
      * @param reversed whether the returned search iterator should search in reverse clustering order.
      * @return a search iterator for the non-static rows of this partition.
      */
-    abstract SearchIterator<Clustering, Row> searchRows(ClusteringComparator comparator, boolean reversed);
+    abstract SearchIterator<Clustering<?>, Row> searchRows(ClusteringComparator comparator, boolean reversed);
 
     /**
      * Creates an iterator over the non-static rows of the partition this is a data of that are within the provided

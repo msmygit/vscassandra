@@ -121,7 +121,7 @@ class ArrayBackedPartitionData extends PartitionData
     }
 
     @Override
-    SearchIterator<Clustering, Row> searchRows(ClusteringComparator comparator, boolean reversed)
+    SearchIterator<Clustering<?>, Row> searchRows(ClusteringComparator comparator, boolean reversed)
     {
         return new ArrayBackedSearchIterator(comparator, reversed);
     }
@@ -147,7 +147,7 @@ class ArrayBackedPartitionData extends PartitionData
         return Iterators.forArray(rows, startAt, endAt, reversed);
     }
 
-    private class ArrayBackedSearchIterator implements SearchIterator<Clustering, Row>
+    private class ArrayBackedSearchIterator implements SearchIterator<Clustering<?>, Row>
     {
         private final ClusteringComparator comparator;
         private final boolean reversed;
