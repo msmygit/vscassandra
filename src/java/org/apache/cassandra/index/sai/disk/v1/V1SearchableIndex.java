@@ -89,7 +89,7 @@ public class V1SearchableIndex extends SearchableIndex
     }
 
     @Override
-    public long indexFileCacheSize()
+    public long heapMemoryUsed()
     {
         return segments.stream().mapToLong(Segment::indexFileCacheSize).sum();
     }

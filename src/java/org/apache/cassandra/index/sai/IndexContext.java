@@ -83,8 +83,8 @@ public class IndexContext
 {
     private static final Logger logger = LoggerFactory.getLogger(IndexContext.class);
 
-    private static final Set<AbstractType<?>> EQ_ONLY_TYPES =
-            ImmutableSet.of(UTF8Type.instance, AsciiType.instance, BooleanType.instance, UUIDType.instance);
+//    private static final Set<AbstractType<?>> EQ_ONLY_TYPES =
+//            ImmutableSet.of(UTF8Type.instance, AsciiType.instance, BooleanType.instance, UUIDType.instance);
 
     private final AbstractType<?> partitionKeyType;
     private final ClusteringComparator clusteringComparator;
@@ -412,7 +412,7 @@ public class IndexContext
 
     public boolean supports(Operator op)
     {
-        if (op.isLike() || op == Operator.LIKE) return false;
+        //if (op.isLike() || op == Operator.LIKE) return false;
 
         Expression.Op operator = Expression.Op.valueOf(op);
         IndexTarget.Type type = target.right;
@@ -432,10 +432,11 @@ public class IndexContext
         if (operator == Expression.Op.IN)
             return true;
 
-        if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
+        //if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
 
         // RANGE only applicable to non-literal indexes
-        return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
+        return true;
+        //return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
     }
 
     public ByteBuffer getValueOf(DecoratedKey key, Row row, int nowInSecs)

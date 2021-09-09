@@ -351,6 +351,19 @@ public class IndexDescriptor
         return IndexFileUtils.instance.openBlockingInput(file);
     }
 
+
+    public IndexInput openPerIndexInput(IndexComponent component, String index, boolean temp)
+    {
+        final File file = temp ? tmpFileFor(component, index) : fileFor(component, index);
+        if (logger.isTraceEnabled())
+            logger.trace(logMessage("Opening blocking index input for file {} ({}) temp {}"),
+                         file,
+                         FBUtilities.prettyPrintMemory(file.length()),
+                         temp);
+
+        return IndexFileUtils.instance.openBlockingInput(file);
+    }
+
     public IndexOutputWriter openPerSSTableOutput(IndexComponent component) throws IOException
     {
         return openPerSSTableOutput(component, false);

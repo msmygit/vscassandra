@@ -38,9 +38,11 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Interval;
 import org.apache.cassandra.utils.IntervalTree;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 public class RangeTermTree implements TermTree
 {
@@ -51,7 +53,10 @@ public class RangeTermTree implements TermTree
     
     private final IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree;
 
-    private RangeTermTree(ByteBuffer min, ByteBuffer max, IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree, AbstractType<?> comparator)
+    private RangeTermTree(ByteBuffer min,
+                          ByteBuffer max,
+                          IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree,
+                          AbstractType<?> comparator)
     {
         this.min = min;
         this.max = max;
@@ -64,8 +69,14 @@ public class RangeTermTree implements TermTree
         ByteBuffer minTerm = e.lower == null ? min : e.lower.value.encoded;
         ByteBuffer maxTerm = e.upper == null ? max : e.upper.value.encoded;
 
-        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTerm, comparator),
-                                                              new Term(maxTerm, comparator),
+        ByteSource minTermSource = comparator.asComparableBytes(minTerm, ByteComparable.Version.OSS41);
+        byte[] minTermBytes = ByteSourceInverse.readBytes(minTermSource);
+
+        ByteSource maxTermSource = comparator.asComparableBytes(maxTerm, ByteComparable.Version.OSS41);
+        byte[] maxTermBytes = ByteSourceInverse.readBytes(maxTermSource);
+
+        return new HashSet<>(rangeTree.search(Interval.create(new Term(ByteBuffer.wrap(minTermBytes), comparator),
+                                                              new Term(ByteBuffer.wrap(maxTermBytes), comparator),
                                                               null)));
     }
 
@@ -118,7 +129,7 @@ public class RangeTermTree implements TermTree
 
         public int compareTo(Term o)
         {
-            return TypeUtil.compare(term, o.term, comparator);
+            return comparator.compare(term, o.term);
         }
     }
 }

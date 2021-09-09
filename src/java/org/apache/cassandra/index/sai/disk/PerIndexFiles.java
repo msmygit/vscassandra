@@ -32,20 +32,23 @@ import org.apache.cassandra.io.util.FileUtils;
  */
 public abstract class PerIndexFiles implements Closeable
 {
-    private final IndexDescriptor indexDescriptor;
-    private final IndexContext indexContext;
-    private final Map<IndexComponent, FileHandle> files;
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
+    protected final Map<IndexComponent, FileHandle> files;
+    protected final boolean temporary;
 
     public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
     {
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
+        this.temporary = temporary;
         files = populate(indexDescriptor, indexContext, temporary);
     }
 
     public FileHandle get(IndexComponent indexComponent)
     {
         FileHandle file = files.get(indexComponent);
+
         if (file == null)
             throw new IllegalArgumentException(String.format(indexContext.logMessage("Component for %s not found for SSTable %s"),
                                                              indexComponent.representation,

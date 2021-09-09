@@ -84,7 +84,7 @@ public class SSTableIndex
 
     public long indexFileCacheSize()
     {
-        return searchableIndex.indexFileCacheSize();
+        return searchableIndex.heapMemoryUsed();
     }
 
     /**

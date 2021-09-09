@@ -38,6 +38,8 @@ public class BooleanTypeTest extends SAITester
         execute("INSERT INTO %s (id, val) VALUES ('1', true)");
         execute("INSERT INTO %s (id, val) VALUES ('2', true)");
 
+        flush();
+
         assertEquals(2, execute("SELECT id FROM %s WHERE val = true").size());
         assertEquals(1, execute("SELECT id FROM %s WHERE val = false").size());
     }

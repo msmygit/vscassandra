@@ -34,6 +34,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -77,6 +78,14 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     }
 
     @Override
+    public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor,
+                                       IndexContext indexContext,
+                                       boolean temporary)
+    {
+        return new V2PerIndexFiles(indexDescriptor, indexContext, temporary);
+    }
+
+    @Override
     public Set<IndexComponent> perSSTableComponents()
     {
         return PER_SSTABLE_COMPONENTS;
@@ -112,10 +121,10 @@ public class V2OnDiskFormat extends V1OnDiskFormat
             NamedMemoryLimiter limiter = SEGMENT_BUILD_MEMORY_LIMITER;
             logger.info(index.getIndexContext().logMessage("Starting a compaction index build. Global segment memory usage: {}"), prettyPrintMemory(limiter.currentBytesUsed()));
 
-            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
+            return new V2SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
         }
 
-        return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);
+        return new V2MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);
     }
 
     @Override
