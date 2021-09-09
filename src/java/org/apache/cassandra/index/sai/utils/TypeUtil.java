@@ -284,11 +284,11 @@ public class TypeUtil
      */
     public static int comparePostFilter(Expression.Value requestedValue, Expression.Value columnValue, AbstractType<?> type)
     {
-        if (isInetAddress(type))
-            return compareInet(requestedValue.encoded, columnValue.encoded);
-        // Override comparisons for frozen collections and composite types (map entries)
-        else if (isCompositeOrFrozen(type))
-            return FastByteOperations.compareUnsigned(requestedValue.raw, columnValue.raw);
+//        if (isInetAddress(type))
+//            return compareInet(requestedValue.encoded, columnValue.encoded);
+//        // Override comparisons for frozen collections and composite types (map entries)
+//          if (isCompositeOrFrozen(type))
+//            return FastByteOperations.compareUnsigned(requestedValue.raw, columnValue.raw);
 
         return type.compare(requestedValue.raw, columnValue.raw);
     }

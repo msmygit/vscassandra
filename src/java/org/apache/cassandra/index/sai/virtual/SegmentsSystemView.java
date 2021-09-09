@@ -116,9 +116,11 @@ public class SegmentsSystemView extends AbstractVirtualTable
                 {
                     IndexOnDiskMetadata indexOnDiskMetadata = indexDescriptor.newIndexMetadataSerializer()
                                                                              .deserialize(indexDescriptor, sstableIndex.getIndexContext());
-                    List<SegmentMetadata> segments =
-                    indexOnDiskMetadata instanceof V1IndexOnDiskMetadata ? ((V1IndexOnDiskMetadata)indexOnDiskMetadata).segments
-                                                                         : Collections.singletonList(((V2IndexOnDiskMetadata)indexOnDiskMetadata).segment);
+//                    List<SegmentMetadata> segments =
+//                    indexOnDiskMetadata instanceof V1IndexOnDiskMetadata ? ((V1IndexOnDiskMetadata)indexOnDiskMetadata).segments
+//                                                                         : Collections.singletonList(((V2IndexOnDiskMetadata)indexOnDiskMetadata).segment);
+
+                    List<SegmentMetadata> segments = ((V1IndexOnDiskMetadata)indexOnDiskMetadata).segments;
 
                     Descriptor descriptor = sstable.descriptor;
                     Token.TokenFactory tokenFactory = sstable.metadata().partitioner.getTokenFactory();

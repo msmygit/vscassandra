@@ -97,7 +97,7 @@ public class TrieMemoryIndex extends MemoryIndex
             AbstractAnalyzer analyzer = analyzerFactory.create();
             try
             {
-                value = TypeUtil.encode(value, validator);
+                //value = TypeUtil.encode(value, validator);
                 analyzer.reset(value.duplicate());
                 final PrimaryKey primaryKey = columnContext.keyFactory().createKey(key, clustering);
                 final long initialSizeOnHeap = data.sizeOnHeap();
@@ -183,7 +183,7 @@ public class TrieMemoryIndex extends MemoryIndex
     private ByteComparable encode(ByteBuffer input)
     {
         return isLiteral ? version -> append(ByteSource.of(input, version), ByteSource.TERMINATOR)
-                         : version -> TypeUtil.asComparableBytes(input, validator, version);
+                         : version -> validator.asComparableBytes(input, version);//TypeUtil.asComparableBytes(input, validator, version);
     }
 
     private ByteComparable decode(ByteComparable term)

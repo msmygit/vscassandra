@@ -35,12 +35,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Interval;
 import org.apache.cassandra.utils.IntervalTree;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 public class RangeTermTree implements TermTree
 {
@@ -51,7 +52,10 @@ public class RangeTermTree implements TermTree
     
     private final IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree;
 
-    private RangeTermTree(ByteBuffer min, ByteBuffer max, IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree, AbstractType<?> comparator)
+    private RangeTermTree(ByteBuffer min,
+                          ByteBuffer max,
+                          IntervalTree<Term, SSTableIndex, Interval<Term, SSTableIndex>> rangeTree,
+                          AbstractType<?> comparator)
     {
         this.min = min;
         this.max = max;
@@ -59,14 +63,41 @@ public class RangeTermTree implements TermTree
         this.comparator = comparator;
     }
 
+    public ByteBuffer create(ByteBuffer term)
+    {
+        ByteSource source = comparator.asComparableBytes(term, ByteComparable.Version.OSS41);
+        return ByteBuffer.wrap(ByteSourceInverse.readBytes(source));
+    }
+
     public Set<SSTableIndex> search(Expression e)
     {
-        ByteBuffer minTerm = e.lower == null ? min : e.lower.value.encoded;
-        ByteBuffer maxTerm = e.upper == null ? max : e.upper.value.encoded;
+//        System.out.println("search min1=" + Arrays.toString(min.array()));
+//        System.out.println("search max1=" + Arrays.toString(max.array()));
 
-        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTerm, comparator),
-                                                              new Term(maxTerm, comparator),
-                                                              null)));
+        // min and max are already encoded, the expression upper and lower values are not encoded
+        ByteBuffer minTerm = e.lower == null ? min : create(e.lower.value.encoded);
+        ByteBuffer maxTerm = e.upper == null ? max : create(e.upper.value.encoded);
+
+        ByteBuffer minTermBytes = minTerm;
+
+        ByteBuffer maxTermBytes = maxTerm;
+
+        System.out.println("search expression="+e);
+
+//        System.out.println("search min2=" + Arrays.toString(min.array()));
+//        System.out.println("search minTerm=" + Arrays.toString(minTerm.array()));
+//
+//        System.out.println("search minTermBytes=" + Arrays.toString(minTermBytes.array()));
+//
+//        System.out.println("search maxTerm=" + Arrays.toString(maxTerm.array()));
+//        System.out.println("search maxTermBytes=" + Arrays.toString(maxTermBytes.array()));
+
+        HashSet set = new HashSet<>(rangeTree.search(Interval.create(new Term(minTermBytes, comparator),
+                                                                     new Term(maxTermBytes, comparator),
+                                                                     null)));
+
+        System.out.println("search set.size=" + set.size());
+        return set;
     }
 
     static class Builder extends TermTree.Builder
@@ -83,14 +114,14 @@ public class RangeTermTree implements TermTree
             Interval<Term, SSTableIndex> interval =
                     Interval.create(new Term(index.minTerm(), comparator), new Term(index.maxTerm(), comparator), index);
 
-            if (logger.isTraceEnabled())
-            {
-                IndexContext context = index.getIndexContext();
-                logger.trace(context.logMessage("Adding index for SSTable {} with minTerm={} and maxTerm={}..."), 
-                                                index.getSSTable().descriptor, 
-                                                comparator.compose(index.minTerm()), 
-                                                comparator.compose(index.maxTerm()));
-            }
+//            if (logger.isTraceEnabled())
+//            {
+//                IndexContext context = index.getIndexContext();
+//                logger.trace(context.logMessage("Adding index for SSTable {} with minTerm={} and maxTerm={}..."),
+//                                                index.getSSTable().descriptor,
+//                                                comparator.compose(index.minTerm()),
+//                                                comparator.compose(index.maxTerm()));
+//            }
 
             intervals.add(interval);
         }
@@ -116,9 +147,15 @@ public class RangeTermTree implements TermTree
             this.comparator = comparator;
         }
 
+        // TODO: needs to made index format version specific
         public int compareTo(Term o)
         {
-            return TypeUtil.compare(term, o.term, comparator);
+            return term.compareTo(o.term);
         }
+
+//        public int compareTo(Term o)
+//        {
+//            return comparator.compare(term, o.term);
+//        }
     }
 }

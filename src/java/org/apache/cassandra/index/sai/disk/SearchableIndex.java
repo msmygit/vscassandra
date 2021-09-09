@@ -33,7 +33,7 @@ import org.apache.cassandra.index.sai.utils.RangeIterator;
 
 public abstract class SearchableIndex implements Closeable
 {
-    public abstract long indexFileCacheSize();
+    public abstract long heapMemoryUsed();
 
     public abstract long getRowCount();
 

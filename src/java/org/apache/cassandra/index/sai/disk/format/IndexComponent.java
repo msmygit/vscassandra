@@ -30,11 +30,15 @@ public enum IndexComponent
      */
     KD_TREE("KDTree"),
     KD_TREE_POSTING_LISTS("KDTreePostingLists"),
+    ROW_ID_POINT_ID_MAP("RowIDPointIDMap"),
     /**
      * Term dictionary written by {@code TrieTermsDictionaryWriter} stores mappings of term and
      * file pointer to posting block on posting file.
      */
     TERMS_DATA("TermsData"),
+    COMPRESSED_TERMS_DATA("CompressedTermsData"),
+    TERMS_INDEX("TermsIndex"),
+    ORDER_MAP("OrderMap"),
     /**
      * Stores postings written by {@code PostingsWriter}
      */

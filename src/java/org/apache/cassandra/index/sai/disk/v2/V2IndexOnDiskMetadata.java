@@ -19,110 +19,61 @@
 package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
+// TODO: this class is superceded by BlockIndexMeta
 public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
 {
-    private static final String NAME = "SegmentMetadata";
-
     public static final V2IndexOnDiskMetadata.Serializer serializer = new V2IndexOnDiskMetadata.Serializer();
 
-    public final SegmentMetadata segment;
+    public final BlockIndexMeta segment;
 
-    public V2IndexOnDiskMetadata(SegmentMetadata segment)
+    public V2IndexOnDiskMetadata(BlockIndexMeta segment)
     {
         this.segment = segment;
     }
 
-    private static class Serializer implements IndexMetadataSerializer
+    public static class Serializer implements IndexMetadataSerializer
     {
         @Override
         public void serialize(IndexOnDiskMetadata indexMetadata, IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
-            SegmentMetadata segment = ((V2IndexOnDiskMetadata) indexMetadata).segment;
+            final BlockIndexMeta meta = (BlockIndexMeta)indexMetadata;
 
-            try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName()));
-                 IndexOutput output = writer.builder(NAME))
+            try (final IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName()))
             {
-                output.writeLong(segment.segmentRowIdOffset);
-                output.writeLong(segment.numRows);
-                output.writeLong(segment.minSSTableRowId);
-                output.writeLong(segment.maxSSTableRowId);
-                writeBytes(ByteSourceInverse.readBytes(segment.minKey.asComparableBytes(ByteComparable.Version.OSS41)), output);
-                writeBytes(ByteSourceInverse.readBytes(segment.maxKey.asComparableBytes(ByteComparable.Version.OSS41)), output);
-                writeBytes(ByteBufferUtil.getArray(segment.minTerm), output);
-                writeBytes(ByteBufferUtil.getArray(segment.maxTerm), output);
-
-                segment.componentMetadatas.write(output);
+                try
+                {
+                    meta.write(out);
+                }
+                catch (Exception ex)
+                {
+                     throw new IOException(ex);
+                }
             }
         }
 
         @Override
         public IndexOnDiskMetadata deserialize(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
-            PrimaryKey.PrimaryKeyFactory primaryKeyFactory = indexDescriptor.primaryKeyFactory;
-            MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META,
-                                                                                          indexContext.getIndexName()));
-
-            IndexInput input = source.get(NAME);
-
-            long segmentRowIdOffset = input.readLong();
-
-            long numRows = input.readLong();
-            long minSSTableRowId = input.readLong();
-            long maxSSTableRowId = input.readLong();
-
-
-            PrimaryKey minKey = primaryKeyFactory.createKey(readBytes(input));
-            PrimaryKey maxKey = primaryKeyFactory.createKey(readBytes(input));
-
-            ByteBuffer minTerm = ByteBuffer.wrap(readBytes(input));
-            ByteBuffer maxTerm = ByteBuffer.wrap(readBytes(input));
-            SegmentMetadata.ComponentMetadataMap componentMetadatas = new SegmentMetadata.ComponentMetadataMap(input);
-
-            return new V2IndexOnDiskMetadata(new SegmentMetadata(segmentRowIdOffset,
-                                                                 numRows,
-                                                                 minSSTableRowId,
-                                                                 maxSSTableRowId,
-                                                                 minKey,
-                                                                 maxKey,
-                                                                 minTerm,
-                                                                 maxTerm,
-                                                                 componentMetadatas));
-        }
-
-        private byte[] readBytes(IndexInput input) throws IOException
-        {
-            int len = input.readVInt();
-            byte[] bytes = new byte[len];
-            input.readBytes(bytes, 0, len);
-            return bytes;
-        }
-
-        private void writeBytes(byte[] bytes, IndexOutput out)
-        {
-            try
+            try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext.getIndexName()))
             {
-                out.writeVInt(bytes.length);
-                out.writeBytes(bytes, 0, bytes.length);
-            }
-            catch (IOException ioe)
-            {
-                throw new RuntimeException(ioe);
+                try
+                {
+                    return new BlockIndexMeta(input);
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException(ex);
+                }
             }
         }
     }

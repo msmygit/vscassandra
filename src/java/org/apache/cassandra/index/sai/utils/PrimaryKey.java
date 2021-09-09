@@ -116,6 +116,11 @@ public class PrimaryKey implements Comparable<PrimaryKey>
             return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes)), -1);
         }
 
+        public PrimaryKey createKey(byte[] bytes, int offset, int length)
+        {
+            return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes, offset, length)), -1);
+        }
+
         public PrimaryKey createKey(byte[] bytes, long sstableRowId)
         {
             return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes)), sstableRowId);

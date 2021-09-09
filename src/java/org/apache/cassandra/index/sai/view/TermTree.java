@@ -50,8 +50,11 @@ public interface TermTree
         {
             addIndex(index);
 
-            min = min == null || TypeUtil.compare(min, index.minTerm(), comparator) > 0 ? index.minTerm() : min;
-            max = max == null || TypeUtil.compare(max, index.maxTerm(), comparator) < 0 ? index.maxTerm() : max;
+            min = min == null || min.compareTo(index.minTerm()) > 0 ? index.minTerm() : min;
+            max = max == null || max.compareTo(index.maxTerm()) < 0 ? index.maxTerm() : max;
+
+            //min = min == null || TypeUtil.compare(min, index.minTerm(), comparator) > 0 ? index.minTerm() : min;
+            //max = max == null || TypeUtil.compare(max, index.maxTerm(), comparator) < 0 ? index.maxTerm() : max;
         }
 
         protected abstract void addIndex(SSTableIndex index);
