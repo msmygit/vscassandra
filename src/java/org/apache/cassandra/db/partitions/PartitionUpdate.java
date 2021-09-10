@@ -609,13 +609,6 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
                                            data,
                                            false);
             }
-
-            catch (IOError e)
-            {
-                if (e.getCause() != null && e.getCause() instanceof IncompatibleSchemaException)
-                    throw (IncompatibleSchemaException) e.getCause();
-                throw e;
-            }
         }
 
         public long serializedSize(PartitionUpdate update, int version)
