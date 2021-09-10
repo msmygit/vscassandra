@@ -42,7 +42,7 @@ import org.apache.cassandra.utils.memory.MemtableAllocator;
  * other thread can see the state where only parts but not all rows have
  * been added.
  */
-public final class AtomicBTreePartition extends AbstractBTreePartition
+public final class AtomicBTreePartition extends AbstractPartition<BTreePartitionData>
 {
     public static final long EMPTY_SIZE = ObjectSizes.measure(new AtomicBTreePartition(null,
                                                                                        DatabaseDescriptor.getPartitioner().decorateKey(ByteBuffer.allocate(1)),
@@ -79,23 +79,29 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
 
     private final TableMetadataRef metadata;
 
-    public AtomicBTreePartition(TableMetadataRef metadata, DecoratedKey partitionKey, MemtableAllocator allocator)
+    public AtomicBTreePartition(TableMetadataRef metadata, DecoratedKey partitionKey, MemtableAllocator allocator, BTreePartitionData data)
     {
         // involved in potential bug? partition columns may be a subset if we alter columns while it's in memtable
         super(partitionKey);
         this.metadata = metadata;
         this.allocator = allocator;
-        this.ref = BTreePartitionData.EMPTY;
+        this.ref = data;
     }
 
-    protected BTreePartitionData holder()
+    public AtomicBTreePartition(TableMetadataRef metadata, DecoratedKey partitionKey, MemtableAllocator allocator)
     {
-        return ref;
+        this(metadata, partitionKey, allocator, BTreePartitionData.EMPTY);
     }
 
     public TableMetadata metadata()
     {
         return metadata.get();
+    }
+
+    @Override
+    protected BTreePartitionData data()
+    {
+        return ref;
     }
 
     protected boolean canHaveShadowedData()
@@ -217,12 +223,6 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
     public UnfilteredRowIterator unfilteredIterator()
     {
         return allocator.ensureOnHeap().applyToPartition(super.unfilteredIterator());
-    }
-
-    @Override
-    public UnfilteredRowIterator unfilteredIterator(BTreePartitionData current, ColumnFilter selection, Slices slices, boolean reversed)
-    {
-        return allocator.ensureOnHeap().applyToPartition(super.unfilteredIterator(current, selection, slices, reversed));
     }
 
     @Override

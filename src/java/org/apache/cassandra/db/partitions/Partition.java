@@ -66,7 +66,10 @@ public interface Partition
     /**
      * Returns an UnfilteredRowIterator over all the rows/RT contained by this partition.
      */
-    public UnfilteredRowIterator unfilteredIterator();
+    default public UnfilteredRowIterator unfilteredIterator()
+    {
+        return unfilteredIterator(ColumnFilter.selection(columns()), Slices.ALL, false);
+    }
 
     /**
      * Returns an UnfilteredRowIterator over the rows/RT contained by this partition

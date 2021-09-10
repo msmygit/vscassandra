@@ -22,7 +22,7 @@ import java.util.*;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.ColumnFilter;
-import org.apache.cassandra.db.partitions.ImmutableBTreePartition;
+import org.apache.cassandra.db.partitions.SimpleBTreePartition;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.io.sstable.format.AbstractSSTableIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -393,7 +393,7 @@ public class SSTableReversedIterator extends AbstractSSTableIterator<BigTableRow
         private MutableDeletionInfo.Builder deletionBuilder;
         private MutableDeletionInfo deletionInfo;
         private BTree.Builder<Row> rowBuilder;
-        private ImmutableBTreePartition built;
+        private SimpleBTreePartition built;
 
         private ReusablePartitionData(TableMetadata metadata,
                                       DecoratedKey partitionKey,
@@ -425,8 +425,14 @@ public class SSTableReversedIterator extends AbstractSSTableIterator<BigTableRow
         public void build()
         {
             deletionInfo = deletionBuilder.build();
-            built = new ImmutableBTreePartition(metadata, partitionKey, columns, Rows.EMPTY_STATIC_ROW, rowBuilder.build(),
-                                                deletionInfo, EncodingStats.NO_STATS);
+            built = SimpleBTreePartition.create(metadata,
+                                                partitionKey,
+                                                columns,
+                                                Rows.EMPTY_STATIC_ROW,
+                                                rowBuilder.build(),
+                                                deletionInfo,
+                                                EncodingStats.NO_STATS,
+                                                false);
             deletionBuilder = null;
         }
     }

@@ -131,7 +131,7 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
         return data().rowCount();
     }
 
-    public Row getRow(Clustering clustering)
+    public Row getRow(Clustering<?> clustering)
     {
         ColumnFilter columns = ColumnFilter.selection(columns());
         final DATA data = data();
@@ -321,12 +321,20 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
         }
     }
 
-    private abstract class AbstractIterator extends AbstractUnfilteredRowIterator
+    private class ClusteringsIterator extends AbstractUnfilteredRowIterator
     {
+        private final Iterator<Clustering<?>> clusteringsInQueryOrder;
+        private final SearchIterator<Clustering<?>, Row> rowSearcher;
         final DATA data;
-        final ColumnFilter selection;
 
-        private AbstractIterator(DATA data, Row staticRow, ColumnFilter selection, boolean isReversed)
+        final ColumnFilter selection;
+        private Iterator<Unfiltered> currentIterator;
+
+        private ClusteringsIterator(ColumnFilter selection,
+                                    NavigableSet<Clustering<?>> clusteringsInQueryOrder,
+                                    boolean isReversed,
+                                    DATA data,
+                                    Row staticRow)
         {
             super(AbstractPartition.this.metadata(),
                   AbstractPartition.this.partitionKey(),
@@ -339,23 +347,6 @@ abstract class AbstractPartition<DATA extends PartitionData> implements Partitio
                   data.stats);
             this.data = data;
             this.selection = selection;
-        }
-    }
-
-    private class ClusteringsIterator extends AbstractPartition.AbstractIterator
-    {
-        private final Iterator<Clustering<?>> clusteringsInQueryOrder;
-        private final SearchIterator<Clustering<?>, Row> rowSearcher;
-
-        private Iterator<Unfiltered> currentIterator;
-
-        private ClusteringsIterator(ColumnFilter selection,
-                                    NavigableSet<Clustering<?>> clusteringsInQueryOrder,
-                                    boolean isReversed,
-                                    DATA data,
-                                    Row staticRow)
-        {
-            super(data, staticRow, selection, isReversed);
 
             this.clusteringsInQueryOrder = clusteringsInQueryOrder.iterator();
             this.rowSearcher = data.searchRows(metadata().comparator, isReversed);

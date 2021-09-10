@@ -21,15 +21,14 @@ import java.util.Iterator;
 
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.DeletionInfo;
 import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.rows.*;
 
-public class FilteredPartition extends ImmutableBTreePartition
+public class FilteredPartition extends SimpleBTreePartition
 {
     public FilteredPartition(RowIterator rows)
     {
-        super(rows.metadata(), rows.partitionKey(), build(rows, DeletionInfo.LIVE, false, 16));
+        super(rows.metadata(), rows.partitionKey(), BTreePartitionData.build(rows));
     }
 
     /**
@@ -90,5 +89,18 @@ public class FilteredPartition extends ImmutableBTreePartition
                 return staticRow().isEmpty() && !hasRows();
             }
         };
+    }
+
+    @Override
+    protected boolean canHaveShadowedData()
+    {
+        // We only ever create FilteredPartition from a single source iterator, so it can't have shadowed data
+        return false;
+    }
+
+    @Override
+    public UnfilteredRowIterator unfilteredIterator()
+    {
+        return null;
     }
 }

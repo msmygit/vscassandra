@@ -48,9 +48,9 @@ import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.partitions.AbstractUnfilteredPartitionIterator;
 import org.apache.cassandra.db.partitions.BTreePartitionData;
 import org.apache.cassandra.db.partitions.BTreePartitionUpdater;
-import org.apache.cassandra.db.partitions.ImmutableBTreePartition;
 import org.apache.cassandra.db.partitions.Partition;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
+import org.apache.cassandra.db.partitions.SimpleBTreePartition;
 import org.apache.cassandra.db.rows.EncodingStats;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
@@ -582,7 +582,7 @@ public class TrieMemtable extends AbstractAllocatorMemtable
         {
             int minLocalDeletionTime = Integer.MAX_VALUE;
             for (BTreePartitionData partition : source.values())
-                minLocalDeletionTime = Math.min(minLocalDeletionTime, partition.stats.minLocalDeletionTime);
+                minLocalDeletionTime = Math.min(minLocalDeletionTime, partition.stats().minLocalDeletionTime);
 
             return minLocalDeletionTime;
         }
@@ -607,7 +607,7 @@ public class TrieMemtable extends AbstractAllocatorMemtable
         }
     }
 
-    static class MemtablePartition extends ImmutableBTreePartition
+    static class MemtablePartition extends SimpleBTreePartition
     {
 
         private final EnsureOnHeap ensureOnHeap;
@@ -658,12 +658,6 @@ public class TrieMemtable extends AbstractAllocatorMemtable
         }
 
         @Override
-        public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, Slices slices, boolean reversed)
-        {
-            return unfilteredIterator(holder(), selection, slices, reversed);
-        }
-
-        @Override
         public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, NavigableSet<Clustering<?>> clusteringsInQueryOrder, boolean reversed)
         {
             return ensureOnHeap
@@ -676,11 +670,10 @@ public class TrieMemtable extends AbstractAllocatorMemtable
             return unfilteredIterator(ColumnFilter.selection(super.columns()), Slices.ALL, false);
         }
 
-        @Override
-        public UnfilteredRowIterator unfilteredIterator(BTreePartitionData current, ColumnFilter selection, Slices slices, boolean reversed)
+        public UnfilteredRowIterator unfilteredIterator(ColumnFilter selection, Slices slices, boolean reversed)
         {
             return ensureOnHeap
-                            .applyToPartition(super.unfilteredIterator(current, selection, slices, reversed));
+                            .applyToPartition(super.unfilteredIterator(selection, slices, reversed));
         }
 
         @Override

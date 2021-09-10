@@ -454,7 +454,7 @@ public class Scrubber implements Closeable
         // TODO bitch if the row is too large?  if it is there's not much we can do ...
         outputHandler.warn(String.format("Out of order partition detected (%s found after %s)",
                                          keyString(key), keyString(prevKey)));
-        outOfOrder.add(ImmutableBTreePartition.create(iterator));
+        outOfOrder.add(ImmutableArrayBackedPartition.create(iterator));
     }
 
     private void throwIfFatal(Throwable th)
@@ -712,7 +712,7 @@ public class Scrubber implements Closeable
             // in a separate SSTable.
             if (previous != null && comparator.compare(next, previous) < 0)
             {
-                rowsOutOfOrder = ImmutableBTreePartition.create(UnfilteredRowIterators.concat(next, iterator), false);
+                rowsOutOfOrder = SimpleBTreePartition.create(UnfilteredRowIterators.concat(next, iterator), false);
                 return endOfData();
             }
             previous = next;

@@ -132,23 +132,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
 
     protected BTreePartitionData makeMergedPartition(BTreePartitionData current, PartitionUpdate update)
     {
-        DeletionInfo newDeletionInfo = apply(current.deletionInfo, update.deletionInfo());
-
-        RegularAndStaticColumns columns = current.columns;
-        RegularAndStaticColumns newColumns = update.columns().mergeTo(columns);
-        allocated(newColumns.unsharedHeapSize() - columns.unsharedHeapSize());
-        Row newStatic = update.staticRow();
-        newStatic = newStatic.isEmpty()
-                    ? current.staticRow
-                    : (current.staticRow.isEmpty()
-                       ? this.apply(newStatic)
-                       : this.apply(current.staticRow, newStatic));
-
-        Object[] tree = BTree.update(current.tree, update.metadata().comparator, update, update.rowCount(), this);
-        EncodingStats newStats = current.stats.mergeWith(update.stats());
-        allocated(newStats.unsharedHeapSize() - current.stats.unsharedHeapSize());
-
-        return new BTreePartitionData(newColumns, tree, newDeletionInfo, newStatic, newStats);
+        return current.add(update, this::apply, this);
     }
 
     public boolean abortEarly()

@@ -29,9 +29,8 @@ import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.utils.btree.BTree;
 
-public class CachedBTreePartition extends ImmutableBTreePartition implements CachedPartition
+public class CachedBTreePartition extends SimpleBTreePartition implements CachedPartition
 {
     private final int createdAtInSec;
 
@@ -63,30 +62,13 @@ public class CachedBTreePartition extends ImmutableBTreePartition implements Cac
      */
     public static CachedBTreePartition create(UnfilteredRowIterator iterator, int nowInSec)
     {
-        return create(iterator, 16, nowInSec);
-    }
-
-    /**
-     * Creates an {@code ArrayBackedCachedPartition} holding all the data of the provided iterator.
-     *
-     * Warning: Note that this method does not close the provided iterator and it is
-     * up to the caller to do so.
-     *
-     * @param iterator the iterator got gather in memory.
-     * @param initialRowCapacity sizing hint (in rows) to use for the created partition. It should ideally
-     * correspond or be a good estimation of the number or rows in {@code iterator}.
-     * @param nowInSec the time of the creation in seconds. This is the time at which {@link #cachedLiveRows} applies.
-     * @return the created partition.
-     */
-    public static CachedBTreePartition create(UnfilteredRowIterator iterator, int initialRowCapacity, int nowInSec)
-    {
-        BTreePartitionData holder = ImmutableBTreePartition.build(iterator, initialRowCapacity);
+        BTreePartitionData data = BTreePartitionData.build(iterator, true);
 
         int cachedLiveRows = 0;
         int rowsWithNonExpiringCells = 0;
         boolean enforceStrictLiveness = iterator.metadata().enforceStrictLiveness();
 
-        for (Row row : BTree.<Row>iterable(holder.tree))
+        for (Row row : (Iterable<Row>) data::rowIterator)
         {
             if (row.hasLiveData(nowInSec, enforceStrictLiveness))
                 ++cachedLiveRows;
@@ -107,7 +89,7 @@ public class CachedBTreePartition extends ImmutableBTreePartition implements Cac
 
         return new CachedBTreePartition(iterator.metadata(),
                                         iterator.partitionKey(),
-                                        holder,
+                                        data,
                                         nowInSec,
                                         cachedLiveRows,
                                         rowsWithNonExpiringCells);
@@ -139,6 +121,19 @@ public class CachedBTreePartition extends ImmutableBTreePartition implements Cac
     public int rowsWithNonExpiringCells()
     {
         return rowsWithNonExpiringCells;
+    }
+
+    @Override
+    protected boolean canHaveShadowedData()
+    {
+        // We only ever create CachedBTreePartition from a single source iterator, so it can't have shadowed data
+        return false;
+    }
+
+    @Override
+    public UnfilteredRowIterator unfilteredIterator()
+    {
+        return null;
     }
 
     static class Serializer implements ISerializer<CachedPartition>
@@ -180,19 +175,16 @@ public class CachedBTreePartition extends ImmutableBTreePartition implements Cac
             UnfilteredRowIteratorSerializer.Header header = UnfilteredRowIteratorSerializer.serializer.deserializeHeader(metadata, null, in, version, DeserializationHelper.Flag.LOCAL);
             assert !header.isReversed && header.rowEstimate >= 0;
 
-            BTreePartitionData holder;
             try (UnfilteredRowIterator partition = UnfilteredRowIteratorSerializer.serializer.deserialize(in, version, metadata, DeserializationHelper.Flag.LOCAL, header))
             {
-                holder = ImmutableBTreePartition.build(partition, header.rowEstimate);
+                return new CachedBTreePartition(metadata,
+                                                header.key,
+                                                BTreePartitionData.build(partition, true),
+                                                createdAtInSec,
+                                                cachedLiveRows,
+                                                rowsWithNonExpiringCells);
+
             }
-
-            return new CachedBTreePartition(metadata,
-                                            header.key,
-                                            holder,
-                                            createdAtInSec,
-                                            cachedLiveRows,
-                                            rowsWithNonExpiringCells);
-
         }
 
         public long serializedSize(CachedPartition partition)
