@@ -58,7 +58,7 @@ import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.ValueAccessors;
 import org.apache.cassandra.db.partitions.FilteredPartition;
-import org.apache.cassandra.db.partitions.ImmutableBTreePartition;
+import org.apache.cassandra.db.partitions.ImmutableArrayBackedPartition;
 import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
@@ -401,7 +401,7 @@ public class CompactionsTest
 
         Collection<SSTableReader> sstablesBefore = cfs.getLiveSSTables();
 
-        ImmutableBTreePartition partition = Util.getOnlyPartitionUnfiltered(Util.cmd(cfs, key).build());
+        ImmutableArrayBackedPartition partition = Util.getOnlyPartitionUnfiltered(Util.cmd(cfs, key).build());
         assertTrue(!partition.isEmpty());
 
         RowUpdateBuilder deleteRowBuilder = new RowUpdateBuilder(table, 2, key);

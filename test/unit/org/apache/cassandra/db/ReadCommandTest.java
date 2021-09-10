@@ -988,7 +988,7 @@ public class ReadCommandTest
         cfs.getLiveSSTables().forEach(sstable -> mutateRepaired(cfs, sstable, 111, null));
 
         command.trackRepairedStatus();
-        List<ImmutableBTreePartition> partitions = Util.getAllUnfiltered(command);
+        List<ImmutableArrayBackedPartition> partitions = Util.getAllUnfiltered(command);
         assertEquals(1, partitions.size());
         ByteBuffer digestWithTombstones = command.getRepairedDataDigest();
         assertTrue(ByteBufferUtil.compareUnsigned(EMPTY_BYTE_BUFFER, digestWithTombstones) != 0);
@@ -1038,7 +1038,7 @@ public class ReadCommandTest
         cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
 
         command.trackRepairedStatus();
-        List<ImmutableBTreePartition> partitions = Util.getAllUnfiltered(command);
+        List<ImmutableArrayBackedPartition> partitions = Util.getAllUnfiltered(command);
         assertEquals(1, partitions.size());
         ByteBuffer digestWithoutPurgedPartition = command.getRepairedDataDigest();
         assertTrue(ByteBufferUtil.compareUnsigned(EMPTY_BYTE_BUFFER, digestWithoutPurgedPartition) != 0);

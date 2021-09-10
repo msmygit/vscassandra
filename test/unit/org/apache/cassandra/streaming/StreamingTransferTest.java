@@ -202,7 +202,7 @@ public class StreamingTransferTest
         assertEquals(1, cfs.getLiveSSTables().size());
 
         // and that the index and filter were properly recovered
-        List<ImmutableBTreePartition> partitions = Util.getAllUnfiltered(Util.cmd(cfs).build());
+        List<ImmutableArrayBackedPartition> partitions = Util.getAllUnfiltered(Util.cmd(cfs).build());
         assertEquals(offs.length, partitions.size());
         for (int i = 0; i < offs.length; i++)
         {
@@ -210,7 +210,7 @@ public class StreamingTransferTest
             String col = "col" + offs[i];
 
             assert !Util.getAll(Util.cmd(cfs, key).build()).isEmpty();
-            ImmutableBTreePartition partition = partitions.get(i);
+            ImmutableArrayBackedPartition partition = partitions.get(i);
             assert ByteBufferUtil.compareUnsigned(partition.partitionKey().getKey(), ByteBufferUtil.bytes(key)) == 0;
             assert ByteBufferUtil.compareUnsigned(partition.iterator().next().clustering().bufferAt(0), ByteBufferUtil.bytes(col)) == 0;
         }

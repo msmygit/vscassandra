@@ -338,9 +338,9 @@ public class Util
         }
     }
 
-    public static List<ImmutableBTreePartition> getAllUnfiltered(ReadCommand command)
+    public static List<ImmutableArrayBackedPartition> getAllUnfiltered(ReadCommand command)
     {
-        List<ImmutableBTreePartition> results = new ArrayList<>();
+        List<ImmutableArrayBackedPartition> results = new ArrayList<>();
         try (ReadExecutionController executionController = command.executionController();
              UnfilteredPartitionIterator iterator = command.executeLocally(executionController))
         {
@@ -348,7 +348,7 @@ public class Util
             {
                 try (UnfilteredRowIterator partition = iterator.next())
                 {
-                    results.add(ImmutableBTreePartition.create(partition));
+                    results.add(ImmutableArrayBackedPartition.create(partition));
                 }
             }
         }
@@ -407,7 +407,7 @@ public class Util
         }
     }
 
-    public static ImmutableBTreePartition getOnlyPartitionUnfiltered(ReadCommand cmd)
+    public static ImmutableArrayBackedPartition getOnlyPartitionUnfiltered(ReadCommand cmd)
     {
         try (ReadExecutionController executionController = cmd.executionController();
              UnfilteredPartitionIterator iterator = cmd.executeLocally(executionController))
@@ -416,7 +416,7 @@ public class Util
             try (UnfilteredRowIterator partition = iterator.next())
             {
                 assert !iterator.hasNext() : "Expecting a single partition but got more";
-                return ImmutableBTreePartition.create(partition);
+                return ImmutableArrayBackedPartition.create(partition);
             }
         }
     }

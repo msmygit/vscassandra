@@ -35,11 +35,12 @@ import org.apache.cassandra.db.filter.ColumnFilter;
  * and so Partition objects should be use as sparingly as possible. There is a couple
  * of cases where we do need to represent partition in-memory (memtables and row cache).
  */
-public interface Partition
+public interface Partition extends Iterable<Row>
 {
     public TableMetadata metadata();
     public DecoratedKey partitionKey();
     public DeletionTime partitionLevelDeletion();
+    public DeletionInfo deletionInfo();
 
     public RegularAndStaticColumns columns();
 
