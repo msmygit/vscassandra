@@ -130,12 +130,6 @@ public class CachedBTreePartition extends SimpleBTreePartition implements Cached
         return false;
     }
 
-    @Override
-    public UnfilteredRowIterator unfilteredIterator()
-    {
-        return null;
-    }
-
     static class Serializer implements ISerializer<CachedPartition>
     {
         public void serialize(CachedPartition partition, DataOutputPlus out) throws IOException

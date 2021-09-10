@@ -82,13 +82,6 @@ public class ImmutableArrayBackedPartition extends AbstractPartition<ArrayBacked
         return metadata;
     }
 
-    // TODO mfleming
-    @Override
-    public UnfilteredRowIterator unfilteredIterator()
-    {
-        return null;
-    }
-
     @Override
     protected ArrayBackedPartitionData data()
     {
