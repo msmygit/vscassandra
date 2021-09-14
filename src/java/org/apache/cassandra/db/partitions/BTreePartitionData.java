@@ -20,6 +20,7 @@ package org.apache.cassandra.db.partitions;
 
 import java.util.Iterator;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import org.apache.cassandra.db.Clusterable;
 import org.apache.cassandra.db.Clustering;
@@ -149,9 +150,11 @@ public final class BTreePartitionData extends PartitionData
      */
     BTreePartitionData add(PartitionUpdate update,
                            BiFunction<DeletionInfo, DeletionInfo, DeletionInfo> deletionFct,
-                           UpdateFunction<Row, Row> rowFct)
+                           UpdateFunction<Row, Row> rowFct,
+                           Consumer<Long> allocatedFct)
     {
         RegularAndStaticColumns newColumns = update.columns().mergeTo(columns);
+        allocatedFct.accept(newColumns.unsharedHeapSize() - columns.unsharedHeapSize());
         Row newStaticRow = staticRow;
         if (!update.staticRow().isEmpty())
         {
@@ -163,6 +166,7 @@ public final class BTreePartitionData extends PartitionData
         Object[] newRows = BTree.update(rows, update.metadata().comparator, update, update.rowCount(), rowFct);
         DeletionInfo newDeletionInfo = deletionFct.apply(deletionInfo, update.deletionInfo());
         EncodingStats newStats = stats.mergeWith(update.stats());
+        allocatedFct.accept(newStats.unsharedHeapSize() - stats.unsharedHeapSize());
         return new BTreePartitionData(newColumns, newStaticRow, newRows, newDeletionInfo, newStats);
     }
 

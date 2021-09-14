@@ -132,7 +132,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
 
     protected BTreePartitionData makeMergedPartition(BTreePartitionData current, PartitionUpdate update)
     {
-        return current.add(update, this::apply, this);
+        return current.add(update, this::apply, this, this::allocated);
     }
 
     public boolean abortEarly()
