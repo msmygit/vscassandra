@@ -23,9 +23,11 @@ import java.io.IOException;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.utils.ByteBufferUtil;
 
 public interface PrimaryKeyMap extends Closeable
 {
