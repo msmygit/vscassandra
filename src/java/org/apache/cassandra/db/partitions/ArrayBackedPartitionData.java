@@ -157,7 +157,7 @@ class ArrayBackedPartitionData extends PartitionData
         {
             this.comparator = comparator;
             this.reversed = reversed;
-            this.index = reversed ? rowCount() - 1 : 0;
+            this.index = reversed ? rowCount() : 0;
         }
 
         // Perform a binary search of the data
