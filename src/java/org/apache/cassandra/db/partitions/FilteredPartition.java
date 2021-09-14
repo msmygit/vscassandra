@@ -97,10 +97,4 @@ public class FilteredPartition extends SimpleBTreePartition
         // We only ever create FilteredPartition from a single source iterator, so it can't have shadowed data
         return false;
     }
-
-    @Override
-    public UnfilteredRowIterator unfilteredIterator()
-    {
-        return null;
-    }
 }
