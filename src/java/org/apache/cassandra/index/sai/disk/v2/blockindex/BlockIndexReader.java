@@ -48,9 +48,12 @@ import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.LongArrayList;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdDictDecompress;
+import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.ByteArrayIndexInput;
@@ -58,6 +61,7 @@ import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.FilteringPostingList;
 import org.apache.cassandra.index.sai.disk.v2.V2PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -108,16 +112,19 @@ public class BlockIndexReader implements Closeable
     final String indexName;
     final IntLongHashMap leafIDToPostingsFP = new IntLongHashMap();
     final V2PerIndexFiles perIndexFiles;
+    final V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory;
 
     public BlockIndexReader(IndexDescriptor indexDescriptor,
                             String indexName,
                             BlockIndexMeta meta,
-                            V2PerIndexFiles perIndexFiles) throws IOException
+                            V2PerIndexFiles perIndexFiles,
+                            V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory) throws IOException
     {
         this.indexDescriptor = indexDescriptor;
         this.indexName = indexName;
         this.meta = meta;
         this.perIndexFiles = perIndexFiles;
+        this.primaryKeyMapFactory = primaryKeyMapFactory;
 
         HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = (HashMap<IndexComponent, FileValidator.FileInfo>)SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes);
         for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
@@ -272,11 +279,12 @@ public class BlockIndexReader implements Closeable
         private byte[] compBytes = new byte[10];
         private byte[] uncompBytes = new byte[10];
         SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput;
+        PrimaryKeyMap primaryKeyMap;
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(seekingInput, compBytesInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
+            FileUtils.closeQuietly(primaryKeyMap, seekingInput, compBytesInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
         }
     }
 
@@ -569,7 +577,7 @@ public class BlockIndexReader implements Closeable
                         postingsReader = null;
                     }
 
-                    postingsReader = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                    postingsReader = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
 
                     System.out.println("new postingsReader.size="+postingsReader.size()+" ordermap="+leafToOrderMapFP.containsKey(context.leaf));
 
@@ -694,6 +702,7 @@ public class BlockIndexReader implements Closeable
         context.bytesCompressedInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.COMPRESSED_TERMS_DATA));
         context.leafLevelPostingsInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.POSTING_LISTS));
         context.multiPostingsInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.KD_TREE_POSTING_LISTS));
+        context.primaryKeyMap = this.primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(new SSTableQueryContext(new QueryContext()));
 
         // if there's only 1 leaf in the index, filter on it
         if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
@@ -836,14 +845,14 @@ public class BlockIndexReader implements Closeable
             if (nodeIDLeafOrd.filePointer < 0)
             {
                 long fp = nodeIDLeafOrd.filePointer * -1;
-                PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
+                PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
                 postingLists.add(postings.peekable());
             }
             else
             {
                 final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
                 System.out.println("nodeID=" + nodeIDLeafOrd.nodeID + " postingsFP=" + postingsFP);
-                PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
                 postingLists.add(postings.peekable());
             }
         }
@@ -974,7 +983,7 @@ public class BlockIndexReader implements Closeable
 
         final long postingsFP = nodeIDToPostingsFP.get(nodeID);
         System.out.println("leaf="+leaf+" nodeID=" + nodeID + " postingsFP=" + postingsFP + " startIdx=" + startIdx+" orderMapFP="+orderMapFP);
-        final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+        final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
         FilteringPostingList filterPostings = new FilteringPostingList(
         cardinality,
         // get the row id's term ordinal to compare against the startOrdinal

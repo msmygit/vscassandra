@@ -253,6 +253,8 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
+        V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
+
         BlockIndexWriter blockIndexWriter = new BlockIndexWriter(indexName, indexDescriptor, false);
 
         TermsIterator terms = new MemtableTermsIterator(null,
@@ -282,7 +284,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         BlockIndexMeta meta = blockIndexWriter.finish();
 
-        return new BlockIndexReader(indexDescriptor, indexName, meta, perIndexFiles);
+        return new BlockIndexReader(indexDescriptor, indexName, meta, perIndexFiles, primaryKeyMapFactory);
     }
 
     private Row createRow(ColumnMetadata column, ByteBuffer value)
@@ -328,8 +330,10 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, false);
 
+        V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
+
         BlockIndexMeta blockIndexMeta = (BlockIndexMeta)V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
-        BlockIndexReader reader = new BlockIndexReader(indexDescriptor, indexName, blockIndexMeta, perIndexFiles);
+        BlockIndexReader reader = new BlockIndexReader(indexDescriptor, indexName, blockIndexMeta, perIndexFiles, primaryKeyMapFactory);
 
         BlockIndexReader.IndexIterator iterator = reader.iterator();
         while (true)
@@ -370,8 +374,11 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         V2PerIndexFiles perIndexFiles1 = new V2PerIndexFiles(indexDescriptor1, indexContext1, true);
         V2PerIndexFiles perIndexFiles2 = new V2PerIndexFiles(indexDescriptor2, indexContext2, true);
 
-        BlockIndexReader reader1 = new BlockIndexReader(indexDescriptor1, "index1", meta1, perIndexFiles1);
-        BlockIndexReader reader2 = new BlockIndexReader(indexDescriptor2, "index2", meta2, perIndexFiles2);
+        V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory1 = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor1);
+        V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory2 = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor1);
+
+        BlockIndexReader reader1 = new BlockIndexReader(indexDescriptor1, "index1", meta1, perIndexFiles1, primaryKeyMapFactory1);
+        BlockIndexReader reader2 = new BlockIndexReader(indexDescriptor2, "index2", meta2, perIndexFiles2, primaryKeyMapFactory2);
 
         BlockIndexReader.IndexIterator iterator = reader1.iterator();
         BlockIndexReader.IndexIterator iterator2 = reader2.iterator();

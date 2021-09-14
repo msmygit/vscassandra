@@ -48,6 +48,7 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -267,7 +268,7 @@ public class BlockIndexWriter
         for (Map.Entry<Integer,Long> entry : this.leafToPostingsFP.entrySet())
         {
             final long postingsFP = entry.getValue();
-            final PostingsReader postingsReader = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+            final PostingsReader postingsReader = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, PrimaryKeyMap.IDENTITY);
 
             final RowPoint rowPoint = new RowPoint();
 
@@ -601,7 +602,7 @@ public class BlockIndexWriter
 
         final SharedIndexInput leafPostingsInput = new SharedIndexInput(this.indexDescriptor.openPerIndexInput(POSTING_LISTS, indexName, temporary));
 
-        MultiLevelPostingsWriter multiLevelPostingsWriter = new MultiLevelPostingsWriter(leafPostingsInput,
+        final MultiLevelPostingsWriter multiLevelPostingsWriter = new MultiLevelPostingsWriter(leafPostingsInput,
                                                                                          IndexWriterConfig.defaultConfig("indexName"),
                                                                                          nodeIDPostingsFP,
                                                                                          leafBytesFPs.size(),

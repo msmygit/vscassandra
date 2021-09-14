@@ -34,6 +34,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
@@ -341,9 +342,11 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, true);
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
 
+        V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
+
         for (final BlockIndexMeta meta : segments)
         {
-            BlockIndexReader reader = new BlockIndexReader(indexDescriptor, indexContext.getIndexName(), meta, perIndexFiles);
+            BlockIndexReader reader = new BlockIndexReader(indexDescriptor, indexContext.getIndexName(), meta, perIndexFiles, primaryKeyMapFactory);
             iterators.add(reader.iterator());
         }
 
@@ -364,6 +367,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             }
             writer.add(BytesUtil.fixedLength(state.term), state.rowid);
         }
+
+        primaryKeyMapFactory.close();
 
         BlockIndexMeta meta = writer.finish();
 

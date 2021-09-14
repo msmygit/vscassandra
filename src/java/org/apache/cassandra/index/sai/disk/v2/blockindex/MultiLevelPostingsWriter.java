@@ -42,6 +42,7 @@ import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsWriter;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -205,7 +206,7 @@ public class MultiLevelPostingsWriter
                 {
                     final long postingsFP = nodeIDPostingsFP.get(leafNodeID);
                     final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
-                    final PostingsReader reader = new PostingsReader(leafPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                    final PostingsReader reader = new PostingsReader(leafPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, PrimaryKeyMap.IDENTITY);
                     postingLists.add(reader.peekable());
                 }
             }

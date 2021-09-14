@@ -69,14 +69,24 @@ public class RangeTermTree implements TermTree
         ByteBuffer minTerm = e.lower == null ? min : e.lower.value.encoded;
         ByteBuffer maxTerm = e.upper == null ? max : e.upper.value.encoded;
 
-        ByteSource minTermSource = comparator.asComparableBytes(minTerm, ByteComparable.Version.OSS41);
-        byte[] minTermBytes = ByteSourceInverse.readBytes(minTermSource);
+        ByteBuffer minTermBytes = null;
 
-        ByteSource maxTermSource = comparator.asComparableBytes(maxTerm, ByteComparable.Version.OSS41);
-        byte[] maxTermBytes = ByteSourceInverse.readBytes(maxTermSource);
+        if (minTerm != null)
+        {
+            ByteSource minTermSource = comparator.asComparableBytes(minTerm, ByteComparable.Version.OSS41);
+            minTermBytes = ByteBuffer.wrap(ByteSourceInverse.readBytes(minTermSource));
+        }
 
-        return new HashSet<>(rangeTree.search(Interval.create(new Term(ByteBuffer.wrap(minTermBytes), comparator),
-                                                              new Term(ByteBuffer.wrap(maxTermBytes), comparator),
+        ByteBuffer maxTermBytes = null;
+
+        if (maxTerm != null)
+        {
+            ByteSource maxTermSource = comparator.asComparableBytes(maxTerm, ByteComparable.Version.OSS41);
+            maxTermBytes = ByteBuffer.wrap(ByteSourceInverse.readBytes(maxTermSource));
+        }
+
+        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTermBytes, comparator),
+                                                              new Term(maxTermBytes, comparator),
                                                               null)));
     }
 

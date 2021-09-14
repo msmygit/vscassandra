@@ -233,7 +233,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
 
             lastKey = key;
 
-            // SPRC should only return UnfilteredRowIterator, but it returns UnfilteredPartitionIterator due to Flow.
             try (UnfilteredRowIterator partition = controller.getPartition(key, executionController))
             {
                 return applyIndexFilter(key, partition, filterTree, queryContext);

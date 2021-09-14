@@ -38,7 +38,6 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
-import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -87,7 +86,8 @@ public class V2SearchableIndex extends SearchableIndex
             reader = new BlockIndexReader(sstableContext.indexDescriptor,
                                           indexContext.getIndexName(),
                                           meta,
-                                          indexFiles);
+                                          indexFiles,
+                                          primaryKeyMapFactory);
 
             minKey = primaryKeyMap.primaryKeyFromRowId(meta.minRowID);
             maxKey = primaryKeyMap.primaryKeyFromRowId(meta.maxRowID);

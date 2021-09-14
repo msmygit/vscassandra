@@ -75,9 +75,9 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
     private long postingsDecoded = 0;
 
     @VisibleForTesting
-    public PForDeltaPostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
+    public PForDeltaPostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener, PrimaryKeyMap primaryKeyMap) throws IOException
     {
-        this(sharedInput, new PostingsReader.BlocksSummary(sharedInput.sharedCopy(), summaryOffset), listener, PrimaryKeyMap.IDENTITY);
+        this(sharedInput, new PostingsReader.BlocksSummary(sharedInput.sharedCopy(), summaryOffset), listener, primaryKeyMap);
     }
 
     @VisibleForTesting
