@@ -588,24 +588,11 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
             assert !header.isReversed;
             assert header.rowEstimate >= 0;
 
-            MutableDeletionInfo.Builder deletionBuilder = MutableDeletionInfo.builder(header.partitionDeletion, metadata.comparator, false);
-            BTree.Builder<Row> rows = BTree.builder(metadata.comparator, header.rowEstimate);
-            rows.auto(false);
-
             try (UnfilteredRowIterator partition = UnfilteredRowIteratorSerializer.serializer.deserialize(in, version, metadata, flag, header))
             {
-                while (partition.hasNext())
-                {
-                    Unfiltered unfiltered = partition.next();
-                    if (unfiltered.kind() == Unfiltered.Kind.ROW)
-                        rows.add((Row)unfiltered);
-                    else
-                        deletionBuilder.add((RangeTombstoneMarker)unfiltered);
-                }
-
                 ArrayBackedPartitionData data = ArrayBackedPartitionData.build(partition, header.rowEstimate);
                 return new PartitionUpdate(metadata,
-                                           header.key,
+                                           partition.partitionKey(),
                                            data,
                                            false);
             }
