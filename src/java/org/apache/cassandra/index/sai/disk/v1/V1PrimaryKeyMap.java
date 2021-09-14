@@ -21,9 +21,9 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.IOException;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -112,7 +112,9 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
-        return primaryKeyFactory.createKey(keyFetcher.apply(reader, rowIdToOffset.get(sstableRowId)), sstableRowId);
+        return primaryKeyFactory.createKey(new Murmur3Partitioner.LongToken(rowIdToToken.get(sstableRowId)),
+                                           sstableRowId,
+                                           () -> keyFetcher.apply(reader, rowIdToOffset.get(sstableRowId)));
     }
 
     @Override

@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -49,17 +50,32 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
     public enum Kind
     {
-        TOKEN,
-        PARTITION,
-        MAPPED,
-        UNMAPPED,
+        TOKEN(true, false, false),
+        TOKEN_MAPPED(true, false, true),
+        PARTITION(false, true, false),
+        PARTITION_MAPPED(false, true, true),
+        MAPPED(false, false, false),
+        UNMAPPED(false, false, true);
+
+        final boolean token;
+        final boolean partition;
+        final boolean mapped;
+
+        Kind(boolean token, boolean partition, boolean mapped)
+        {
+            this.token = token;
+            this.partition = partition;
+            this.mapped = mapped;
+        }
     }
 
     private Kind kind;
+    private Token token;
     private DecoratedKey partitionKey;
     private Clustering clustering;
     private ClusteringComparator clusteringComparator;
     private long sstableRowId;
+    private Supplier<DecoratedKey> decoratedKeySupplier;
 
     public static class PrimaryKeyFactory
     {
@@ -117,7 +133,12 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
         public PrimaryKey createKey(Token token, long sstableRowId)
         {
-            return new PrimaryKey(token, sstableRowId);
+            return new PrimaryKey(token, sstableRowId, () -> new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER));
+        }
+
+        public PrimaryKey createKey(Token token, long sstableRowId, Supplier<DecoratedKey> decoratedKeySupplier)
+        {
+            return new PrimaryKey(token, sstableRowId, decoratedKeySupplier);
         }
 
         private PrimaryKey createKeyFromPeekable(ByteSource.Peekable peekable, long sstableRowId)
@@ -166,36 +187,44 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
     private PrimaryKey(DecoratedKey partitionKey, Clustering clustering, ClusteringComparator comparator, long sstableRowId)
     {
-        this(sstableRowId >= 0 ? Kind.MAPPED : Kind.UNMAPPED, partitionKey, clustering, comparator, sstableRowId);
+        this(sstableRowId >= 0 ? Kind.MAPPED : Kind.UNMAPPED, null, partitionKey, clustering, comparator, sstableRowId, null);
     }
 
     private PrimaryKey(Token token)
     {
-        this(Kind.TOKEN, new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER), Clustering.EMPTY, EMPTY_COMPARATOR, -1);
+        this(Kind.TOKEN, token, null, Clustering.EMPTY, EMPTY_COMPARATOR, -1, () -> new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER));
     }
 
-    private PrimaryKey(Token token, long sstableRowId)
+    private PrimaryKey(Token token, long sstableRowId, Supplier<DecoratedKey> decoratedKeySupplier)
     {
-        this(Kind.MAPPED, new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER), Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId);
+        this(Kind.TOKEN_MAPPED, token, null, Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId, decoratedKeySupplier);
     }
 
     private PrimaryKey(DecoratedKey partitionKey)
     {
-        this(Kind.PARTITION, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, -1);
+        this(Kind.PARTITION, null, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, -1, null);
     }
 
     private PrimaryKey(DecoratedKey partitionKey, long sstableRowId)
     {
-        this(Kind.PARTITION, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId);
+        this(Kind.PARTITION_MAPPED, null, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId, null);
     }
 
-    private PrimaryKey(Kind kind, DecoratedKey partitionKey, Clustering clustering, ClusteringComparator clusteringComparator, long sstableRowId)
+    private PrimaryKey(Kind kind,
+                       Token token,
+                       DecoratedKey partitionKey,
+                       Clustering clustering,
+                       ClusteringComparator clusteringComparator,
+                       long sstableRowId,
+                       Supplier<DecoratedKey> decoratedKeySupplier)
     {
         this.kind = kind;
+        this.token = token;
         this.partitionKey = partitionKey;
         this.clustering = clustering;
         this.clusteringComparator = clusteringComparator;
         this.sstableRowId = sstableRowId;
+        this.decoratedKeySupplier = decoratedKeySupplier;
     }
 
     public int size()
@@ -225,9 +254,14 @@ public class PrimaryKey implements Comparable<PrimaryKey>
                                          sources);
     }
 
+    public Token token()
+    {
+        return kind.token ? token : partitionKey.getToken();
+    }
+
     public DecoratedKey partitionKey()
     {
-        return partitionKey;
+        return partitionKey == null ? decoratedKeySupplier.get() : partitionKey;
     }
 
     public Clustering clustering()
@@ -261,10 +295,10 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     @Override
     public int compareTo(PrimaryKey o)
     {
-        if (kind == Kind.TOKEN || o.kind == Kind.TOKEN)
-            return partitionKey.getToken().compareTo(o.partitionKey.getToken());
-        int cmp = partitionKey.compareTo(o.partitionKey);
-        if (cmp != 0 || kind == Kind.PARTITION || o.kind == Kind.PARTITION || (clustering.isEmpty() && o.clustering.isEmpty()))
+        if (kind.token || o.kind.token)
+            return token().compareTo(o.token());
+        int cmp = partitionKey().compareTo(o.partitionKey());
+        if (cmp != 0 || kind.partition || o.kind.partition || (clustering.isEmpty() && o.clustering.isEmpty()))
             return cmp;
         return clusteringComparator.equals(o.clusteringComparator) ? clusteringComparator.compare(clustering, o.clustering) : 0;
     }
@@ -272,7 +306,8 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     @Override
     public String toString()
     {
-        return String.format("PrimaryKey: { partition : %s, clustering: %s:%s, sstableRowId: %s} ",
+        return String.format("PrimaryKey: { token : %s, partition : %s, clustering: %s:%s, sstableRowId: %s} ",
+                             token,
                              partitionKey,
                              clustering.kind(),
                              String.join(",", Arrays.stream(clustering.getBufferArray())
