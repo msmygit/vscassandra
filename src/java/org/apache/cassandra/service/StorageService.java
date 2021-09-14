@@ -47,6 +47,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.*;
 import com.google.common.util.concurrent.*;
 
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.ParameterizedClass;
 import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.dht.RangeStreamer.FetchReplica;
@@ -154,16 +155,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     private static int getRingDelay()
     {
-        String newdelay = System.getProperty("cassandra.ring_delay_ms");
-        if (newdelay != null)
-        {
-            logger.info("Overriding RING_DELAY to {}ms", newdelay);
-            return Integer.parseInt(newdelay);
-        }
-        else
-        {
-            return 30 * 1000;
-        }
+        int defaultDelay = 30 * 1000;
+        int newDelay = CassandraRelevantProperties.RING_DELAY.getInt(defaultDelay);
+        Preconditions.checkArgument(newDelay >= 0, "%s must be >= 0", CassandraRelevantProperties.RING_DELAY.getKey());
+        if (newDelay != defaultDelay)
+            logger.info("Overriding {} to {}ms", CassandraRelevantProperties.RING_DELAY.getKey(), newDelay);
+        return newDelay;
     }
 
     private static int getSchemaDelay()
@@ -1199,7 +1196,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             if (setUpSchema)
             {
                 Optional<Mutation> mutation = evolveSystemKeyspace(AuthKeyspace.metadata(), AuthKeyspace.GENERATION);
-                mutation.ifPresent(value -> FBUtilities.waitOnFuture(MigrationManager.announceWithoutPush(Collections.singleton(value))));
+                mutation.ifPresent(value -> FBUtilities.waitOnFuture(MigrationCoordinator.instance.announceWithoutPush(Collections.singleton(value))));
             }
 
             DatabaseDescriptor.getRoleManager().setup();
@@ -1233,7 +1230,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         evolveSystemKeyspace(             AuthKeyspace.metadata(),              AuthKeyspace.GENERATION).ifPresent(changes::add);
 
         if (!changes.isEmpty())
-            FBUtilities.waitOnFuture(MigrationManager.announceWithoutPush(changes));
+            FBUtilities.waitOnFuture(MigrationCoordinator.instance.announceWithoutPush(changes));
     }
 
     public boolean isJoined()
