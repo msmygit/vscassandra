@@ -23,6 +23,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.apache.commons.collections.map.LRUMap;
+
 import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -65,6 +67,11 @@ public class PostingsReader implements OrdinalPostingList
     private long currentPosition;
     private DirectReaders.Reader currentFORValues;
     private long postingsDecoded = 0;
+
+    // We cache the last loaded PrimaryKey because it is likely to be used again
+    // in mapRowId following an advance
+    private long cachedRowId;
+    private PrimaryKey cachedPrimaryKey;
 
     @VisibleForTesting
     PostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
@@ -244,7 +251,9 @@ public class PostingsReader implements OrdinalPostingList
 
             advanceOnePosition(segmentRowId);
 
-            if (primaryKeyMap.primaryKeyFromRowId(segmentRowId).compareTo(nextPrimaryKey) >= 0)
+            cachedRowId = segmentRowId;
+            cachedPrimaryKey = primaryKeyMap.primaryKeyFromRowId(segmentRowId);
+            if (cachedPrimaryKey.compareTo(nextPrimaryKey) >= 0)
                 return segmentRowId;
         }
         return END_OF_STREAM;
@@ -304,7 +313,11 @@ public class PostingsReader implements OrdinalPostingList
     @Override
     public PrimaryKey mapRowId(long rowId) throws IOException
     {
-        return primaryKeyMap.primaryKeyFromRowId(rowId);
+        if (rowId == cachedRowId)
+            return cachedPrimaryKey;
+        cachedRowId = rowId;
+        cachedPrimaryKey = primaryKeyMap.primaryKeyFromRowId(rowId);
+        return cachedPrimaryKey;
     }
 
     @Override

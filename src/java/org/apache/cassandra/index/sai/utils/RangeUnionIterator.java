@@ -105,16 +105,23 @@ public class RangeUnionIterator extends RangeIterator
 
     public static RangeIterator build(List<RangeIterator> tokens)
     {
-        return new Builder().add(tokens).build();
+        return new Builder(tokens.size()).add(tokens).build();
     }
 
     public static class Builder extends RangeIterator.Builder
     {
-        protected List<RangeIterator> rangeIterators = new ArrayList<>();
+        protected List<RangeIterator> rangeIterators;
 
         public Builder()
         {
             super(IteratorType.UNION);
+            this.rangeIterators = new ArrayList<>();
+        }
+
+        public Builder(int size)
+        {
+            super(IteratorType.UNION);
+            this.rangeIterators = new ArrayList<>(size);
         }
 
         public RangeIterator.Builder add(RangeIterator range)

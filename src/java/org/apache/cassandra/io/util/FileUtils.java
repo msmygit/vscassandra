@@ -411,7 +411,22 @@ public final class FileUtils
 
     public static void close(AutoCloseable... cs) throws IOException
     {
-        close(Arrays.asList(cs));
+        Throwable e = null;
+        for (AutoCloseable c : cs)
+        {
+            try
+            {
+                if (c != null)
+                    c.close();
+            }
+            catch (Throwable ex)
+            {
+                if (e == null) e = ex;
+                else e.addSuppressed(ex);
+                logger.warn("Failed closing stream {}", c, ex);
+            }
+        }
+        maybeFail(e, IOException.class);
     }
 
     public static void close(Iterable<? extends AutoCloseable> cs) throws IOException
@@ -436,7 +451,8 @@ public final class FileUtils
 
     public static void closeQuietly(AutoCloseable... cs)
     {
-        closeQuietly(Arrays.asList(cs));
+        for (AutoCloseable c : cs)
+            closeQuietly(c);
     }
 
     public static void closeQuietly(Iterable<? extends AutoCloseable> cs)

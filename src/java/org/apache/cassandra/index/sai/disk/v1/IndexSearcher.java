@@ -87,7 +87,7 @@ public abstract class IndexSearcher implements Closeable
         if (postingLists == null || postingLists.isEmpty())
             return Collections.emptyList();
 
-        List<RangeIterator> iterators = new ArrayList<>();
+        List<RangeIterator> iterators = new ArrayList<>(postingLists.size());
 
         for (PostingList.PeekablePostingList postingList : postingLists)
         {

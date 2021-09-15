@@ -54,7 +54,9 @@ public class TermIterator extends RangeIterator
     @SuppressWarnings("resource")
     public static TermIterator build(final Expression e, Set<SSTableIndex> perSSTableIndexes, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext)
     {
-        final List<RangeIterator> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
+        // Allow for the KDTree returning up to 100 posting lists per search. This reduces the
+        // number of ArrayList copies
+        final List<RangeIterator> tokens = new ArrayList<>(1 + (perSSTableIndexes.size() * 100));;
 
         RangeIterator memtableIterator = e.context.searchMemtable(e, keyRange);
         if (memtableIterator != null)

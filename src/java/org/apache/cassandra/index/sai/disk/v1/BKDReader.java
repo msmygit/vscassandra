@@ -66,7 +66,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private static final Comparator<PostingList.PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
+    private static final int DEFAULT_POSTING_LIST_SIZE = 100;
 
     private final IndexContext indexContext;
     private final FileHandle postingsFile, kdtreeFile;
@@ -387,7 +387,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         {
             try
             {
-                List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
+                List<PostingList.PeekablePostingList> postingLists = new ArrayList<>(DEFAULT_POSTING_LIST_SIZE);
 
                 executeInternal(postingLists);
 
