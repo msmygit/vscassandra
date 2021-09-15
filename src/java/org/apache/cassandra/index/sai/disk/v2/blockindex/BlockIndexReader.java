@@ -952,12 +952,12 @@ public class BlockIndexReader implements Closeable
 
         if (start != null)
         {
-            try (TermsRangeIterator reader = new TermsRangeIterator(indexFile.instantiateRebufferer(),
-                                                                    meta.indexFP,
-                                                                    start,
-                                                                    null,
-                                                                    true,
-                                                                    true))
+            try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
+                                                                  meta.indexFP,
+                                                                  start,
+                                                                  null,
+                                                                  true,
+                                                                  true))
             {
                 Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
                 if (iterator.hasNext())
@@ -977,12 +977,12 @@ public class BlockIndexReader implements Closeable
 
         if (end != null)
         {
-            try (TermsRangeIterator reader = new TermsRangeIterator(indexFile.instantiateRebufferer(),
-                                                                    meta.indexFP,
-                                                                    end,
-                                                                    null,
-                                                                    true,
-                                                                    true))
+            try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
+                                                                  meta.indexFP,
+                                                                  end,
+                                                                  null,
+                                                                  true,
+                                                                  true))
             {
                 Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
                 if (iterator.hasNext())
@@ -1039,12 +1039,12 @@ public class BlockIndexReader implements Closeable
     public BytesRef seekTo(BytesRef target,
                            BlockIndexReaderContext context) throws IOException
     {
-        try (TermsRangeIterator reader = new TermsRangeIterator(indexFile.instantiateRebufferer(),
-                                                                meta.indexFP,
-                                                                BytesUtil.fixedLength(target),
-                                                                null,
-                                                                false,
-                                                                true))
+        try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
+                                                              meta.indexFP,
+                                                              BytesUtil.fixedLength(target),
+                                                              null,
+                                                              false,
+                                                              true))
         {
             Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
             Pair<ByteSource, Long> pair = iterator.next();

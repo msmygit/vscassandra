@@ -52,7 +52,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  * Thread-unsafe term -> long trie range iterator.
  * The payload may be changed to something else.
  */
-public class TermsRangeIterator<Concrete extends TermsRangeIterator<Concrete>> extends Walker<Concrete>
+public class TrieRangeIterator<Concrete extends TrieRangeIterator<Concrete>> extends Walker<Concrete>
 {
     protected final ByteSource limit;
     protected IterationPosition stack;
@@ -83,12 +83,12 @@ public class TermsRangeIterator<Concrete extends TermsRangeIterator<Concrete>> e
         }
     }
 
-    public TermsRangeIterator(Rebufferer source,
-                              long root,
-                              ByteComparable start,
-                              ByteComparable end,
-                              boolean admitPrefix,
-                              boolean inclEnd)
+    public TrieRangeIterator(Rebufferer source,
+                             long root,
+                             ByteComparable start,
+                             ByteComparable end,
+                             boolean admitPrefix,
+                             boolean inclEnd)
     {
         super(source, root);
         limit = end != null ? end.asComparableBytes(BYTE_COMPARABLE_VERSION) : null;
