@@ -70,7 +70,7 @@ public class PostingsReader implements OrdinalPostingList
 
     // We cache the last loaded PrimaryKey because it is likely to be used again
     // in mapRowId following an advance
-    private long cachedRowId;
+    private long cachedRowId = Long.MAX_VALUE;
     private PrimaryKey cachedPrimaryKey;
 
     @VisibleForTesting
