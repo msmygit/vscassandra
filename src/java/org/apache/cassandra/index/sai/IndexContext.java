@@ -412,10 +412,10 @@ public class IndexContext
 
     public boolean supports(Operator op)
     {
-        //if (op.isLike() || op == Operator.LIKE) return false;
-
         Expression.Op operator = Expression.Op.valueOf(op);
         IndexTarget.Type type = target.right;
+
+        // TODO: maybe need a check that only prefix LIKE is supported
 
         if (isNonFrozenCollection())
         {
@@ -427,16 +427,10 @@ public class IndexContext
         if (type == IndexTarget.Type.FULL)
             return operator == Expression.Op.EQ;
 
-        AbstractType<?> validator = getValidator();
-
         if (operator == Expression.Op.IN)
             return true;
 
-        //if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
-
-        // RANGE only applicable to non-literal indexes
         return true;
-        //return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
     }
 
     public ByteBuffer getValueOf(DecoratedKey key, Row row, int nowInSecs)

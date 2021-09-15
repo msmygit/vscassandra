@@ -33,13 +33,11 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
-
 import org.apache.commons.lang3.SerializationUtils;
 
 import com.carrotsearch.hppc.IntArrayList;
@@ -51,7 +49,6 @@ import com.github.luben.zstd.ZstdDictDecompress;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
-import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -65,7 +62,6 @@ import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.cassandra.io.util.FileHandle;
@@ -80,7 +76,6 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
-import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.packed.DirectWriter;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
@@ -339,129 +334,6 @@ public class BlockIndexReader implements Closeable
         }
         return traverse(realStart, realEnd);
     }
-
-//    public static class RowPoint
-//    {
-//        public long rowID;
-//        public long pointID;
-//
-//        @Override
-//        public String toString()
-//        {
-//            return "RowPoint{" +
-//                   "rowID=" + rowID +
-//                   ", pointID=" + pointID +
-//                   '}';
-//        }
-//    }
-//
-//    public interface RowPointIterator extends Closeable
-//    {
-//        public RowPoint next() throws IOException;
-//
-//        public RowPoint current();
-//    }
-//
-//    // iterator row id order
-//    public RowPointIterator rowPointIterator() throws IOException
-//    {
-//        final BlockIndexReaderContext context = new BlockIndexReaderContext();
-//        context.bytesInput = new SharedIndexInput(perIndexFiles.openInput(TERMS_DATA));
-//        context.bytesCompressedInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.COMPRESSED_TERMS_DATA));
-//        context.leafLevelPostingsInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.POSTING_LISTS));
-//        context.multiPostingsInput = new SharedIndexInput(perIndexFiles.openInput(IndexComponent.KD_TREE_POSTING_LISTS));
-//
-//        final List<RowPointIterator> iterators = new ArrayList<>();
-//        // create ordered readers
-//        for (final IntLongCursor cursor : this.leafIDToPostingsFP)
-//        {
-//            final long postingsFP = cursor.value;
-//            final PostingsReader postingsReader = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
-//
-//            final RowPoint rowPoint = new RowPoint();
-//
-//            // leaf with ordered map
-//            if (this.leafToOrderMapFP.containsKey(cursor.key))
-//            {
-//                final long orderMapFP = this.leafToOrderMapFP.get(cursor.key);
-//
-//                final long start = cursor.key * LEAF_SIZE;
-//
-//                final RowPointIterator iterator = new RowPointIterator()
-//                {
-//                    int i = 0;
-//
-//                    @Override
-//                    public RowPoint current()
-//                    {
-//                        return rowPoint;
-//                    }
-//
-//                    @Override
-//                    public RowPoint next() throws IOException
-//                    {
-//                        final long rowid = postingsReader.nextPosting();
-//                        if (rowid == PostingList.END_OF_STREAM)
-//                        {
-//                            // TODO: current needs to return null
-//                            return null;
-//                        }
-//                        final int ordinal = (int)orderMapReader.get(orderMapRandoInput, orderMapFP, i);
-//                        rowPoint.pointID = start + ordinal;
-//                        rowPoint.rowID = rowid;
-//                        i++;
-//                        return rowPoint;
-//                    }
-//
-//                    @Override
-//                    public void close() throws IOException
-//                    {
-//                        FileUtils.closeQuietly(postingsReader);
-//                    }
-//                };
-//                iterators.add(iterator);
-//            }
-//            else
-//            {
-//                // leaf with no ordered map so the postings row id order is the order
-//                final long start = cursor.key * LEAF_SIZE;
-//
-//                final RowPointIterator iterator = new RowPointIterator()
-//                {
-//                    int i = 0;
-//
-//                    @Override
-//                    public RowPoint current()
-//                    {
-//                        return rowPoint;
-//                    }
-//
-//                    @Override
-//                    public RowPoint next() throws IOException
-//                    {
-//                        final long rowid = postingsReader.nextPosting();
-//                        if (rowid == PostingList.END_OF_STREAM)
-//                        {
-//                            // TODO: current needs to return null
-//                            return null;
-//                        }
-//                        rowPoint.pointID = start + i;
-//                        rowPoint.rowID = rowid;
-//                        i++;
-//                        return rowPoint;
-//                    }
-//
-//                    @Override
-//                    public void close() throws IOException
-//                    {
-//                        FileUtils.closeQuietly(postingsReader);
-//                    }
-//                };
-//                iterators.add(iterator);
-//            }
-//        }
-//        return new MergeRowPoints(iterators);
-//    }
 
     public IndexIterator iterator()
     {
@@ -748,8 +620,6 @@ public class BlockIndexReader implements Closeable
                 {
                     leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
                 }
-
-                System.out.println("nodeID=" + nodeID + " leafOrdinal=" + leafOrdinal + " postingsFP=" + postingsFP);
             }
         }
         // sort by leaf id
@@ -761,8 +631,6 @@ public class BlockIndexReader implements Closeable
 
         // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
         //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
-
-        System.out.println("nodeIDToLeafOrd="+leafNodeIDToLeafOrd);
 
         final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
 
@@ -781,8 +649,6 @@ public class BlockIndexReader implements Closeable
                                                  context).peekable()
             );
         }
-
-        System.out.println("minLeafOrd=" + minLeafOrd + " maxLeafOrd=" + maxLeafOrd + " minRangeExists=" + minRangeExists);
 
         Integer firstFilterNodeID = null;
 
@@ -807,8 +673,6 @@ public class BlockIndexReader implements Closeable
         final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
         final boolean allSameValues = leafValuesSame != null ? leafValuesSame.get(maxLeafOrd) : false;
 
-        System.out.println("last leaf maxRangeExists="+maxRangeExists+" allSameValues="+allSameValues);
-
         if (end == null || maxRangeExists || allSameValues)
         {
             endOrd = leafNodeIDToLeafOrd.size();
@@ -822,7 +686,6 @@ public class BlockIndexReader implements Closeable
             if (firstFilterNodeID == null ||
                 (firstFilterNodeID != null && firstFilterNodeID.intValue() != maxNodeID))
             {
-                System.out.println("filterLastLeaf endBytes=" + NumericUtils.sortableBytesToInt(endBytes.bytes, 0));//endBytes.utf8ToString());
                 PostingList lastList = filterLeaf(maxNodeID,
                                                   startBytes,
                                                   endBytes,
@@ -851,7 +714,6 @@ public class BlockIndexReader implements Closeable
             else
             {
                 final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
-                System.out.println("nodeID=" + nodeIDLeafOrd.nodeID + " postingsFP=" + postingsFP);
                 PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
                 postingLists.add(postings.peekable());
             }
@@ -885,7 +747,6 @@ public class BlockIndexReader implements Closeable
         Pair<Integer, Integer> pair = traverseForMinMaxLeafOrdinals(start, end);
         int min = pair.left;
         int max = pair.right;
-        System.out.println("traverseForNodeIDs pair="+pair);
         if (pair.right == -1)
         {
             max = (int)meta.numLeaves;
@@ -905,18 +766,13 @@ public class BlockIndexReader implements Closeable
             int prevMin = min - 1;
 
             boolean prevSameValues = leafValuesSame != null ? leafValuesSame.get(prevMin) : false;//leafValuesSame.get(prevMin);
-            System.out.println("     prevMin="+prevMin+" leafValuesSame="+prevSameValues);
             if (!prevSameValues)
             {
-                System.out.println("   min-- min="+min);
                 min--;
             }
         }
 
-        System.out.println("multiBlockRange=" + multiBlockRange + " max=" + max + " multiBlockLeafRanges=" + multiBlockLeafRanges);
-
         TreeSet<Integer> nodeIDs = traverseIndex(min, max);
-        System.out.println("traverseForNodeIDs min/max="+pair+" nodeIDs="+nodeIDs+" min="+min+" max="+max);
         return new TraverseTreeResult(nodeIDs, min, max);
     }
 
@@ -954,10 +810,6 @@ public class BlockIndexReader implements Closeable
         {
             final BytesRef term = seekInBlock(idx, context, true);
 
-//            System.out.println("filterFirstLastLeaf idx="+idx+" term=" + NumericUtils.sortableBytesToInt(term.bytes, 0)
-//                               + " start=" + NumericUtils.sortableBytesToInt(start.bytes, 0)
-//                               + " end=" + NumericUtils.sortableBytesToInt(end.bytes, 0));
-
             if (startIdx == -1 && term.compareTo(start) >= 0)
             {
                 startIdx = idx;
@@ -979,10 +831,7 @@ public class BlockIndexReader implements Closeable
         final int startIdxFinal = startIdx;
         final int endIdxFinal = endIdx;
 
-        System.out.println("startIdxFinal="+startIdxFinal+" endIdxFinal="+endIdxFinal);
-
         final long postingsFP = nodeIDToPostingsFP.get(nodeID);
-        System.out.println("leaf="+leaf+" nodeID=" + nodeID + " postingsFP=" + postingsFP + " startIdx=" + startIdx+" orderMapFP="+orderMapFP);
         final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
         FilteringPostingList filterPostings = new FilteringPostingList(
         cardinality,
@@ -995,7 +844,6 @@ public class BlockIndexReader implements Closeable
             {
                 ord = (int) this.orderMapReader.get(this.orderMapRandoInput, orderMapFP, postingsOrd);
             }
-            System.out.println("postingsOrd="+postingsOrd+" ord="+ord+" startIdxFinal="+startIdxFinal+" endIdxFinal="+endIdxFinal+" rowID="+rowID);
             return ord >= startIdxFinal && ord <= endIdxFinal;
         },
         postings);
@@ -1023,8 +871,6 @@ public class BlockIndexReader implements Closeable
                             visitor,
                             resultNodeIDs);
 
-        System.out.println("traverseIndex resultNodeIDs=" + resultNodeIDs);
-
         return resultNodeIDs;
     }
 
@@ -1037,8 +883,7 @@ public class BlockIndexReader implements Closeable
         final int nodeID = index.getNodeID();
         final PointValues.Relation r = visitor.compare(cellMinLeafOrdinal, cellMaxLeafOrdinal);
 
-        int leafID = (int)this.nodeIDToLeaf.get(nodeID);
-        System.out.println("  collectPostingLists nodeID="+nodeID+" leafID="+leafID+" relation="+r);
+        int leafID = this.nodeIDToLeaf.get(nodeID);
 
         if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
         {
@@ -1051,7 +896,6 @@ public class BlockIndexReader implements Closeable
             // if there is pre-built posting list for the entire subtree
             if (nodeIDToPostingsFP.containsKey(nodeID))
             {
-                System.out.println("  nodeID="+nodeID+" has postings");
                 resultNodeIDs.add(nodeID);
                 return;
             }
@@ -1071,7 +915,6 @@ public class BlockIndexReader implements Closeable
         {
             if (index.nodeExists())
             {
-                System.out.println("leafNodeID="+nodeID);
                 resultNodeIDs.add(nodeID);
             }
             return;
@@ -1092,8 +935,6 @@ public class BlockIndexReader implements Closeable
     {
         int nodeID = index.getNodeID();
         int splitLeafOrdinal = (int) nodeIDToLeaf.get(nodeID);
-
-        System.out.println("  visitNode nodeID="+nodeID+" splitLeafOrdinal="+splitLeafOrdinal);
 
         index.pushLeft();
         collectPostingLists(cellMinPacked, splitLeafOrdinal, index, visitor, resultNodeIDs);
@@ -1162,9 +1003,6 @@ public class BlockIndexReader implements Closeable
                     {
                         maxLeafOrdinal = maxLeaf;
                     }
-//                    System.out.println("maxFoundTerm=" + NumericUtils.sortableBytesToInt(bytes, 0) +
-//                                       " minLeaf=" + minLeaf +
-//                                       " maxLeaf=" + maxLeaf);
                 }
                 else
                 {
@@ -1172,8 +1010,6 @@ public class BlockIndexReader implements Closeable
                 }
             }
         }
-
-        System.out.println("minLeafOrdinal="+minLeafOrdinal+" maxLeafOrdinal="+maxLeafOrdinal);
 
         return Pair.create(minLeafOrdinal, maxLeafOrdinal);
     }
@@ -1186,8 +1022,6 @@ public class BlockIndexReader implements Closeable
         final int leafIdx = (int) (pointID % LEAF_SIZE);
 
         final long leafFP = leafFilePointers.get(leaf);
-
-        System.out.println("leaf="+leaf+" pointID="+pointID+" leafIdx="+leafIdx+" leafFP="+leafFP);
 
         if (context.currentLeafFP != leafFP)
         {
@@ -1216,18 +1050,14 @@ public class BlockIndexReader implements Closeable
             Pair<ByteSource, Long> pair = iterator.next();
             int leafOrdinal = pair.right.intValue();
 
-            System.out.println("leafOrdinal=" + pair.right + " term=" + new String(ByteSourceInverse.readBytes(pair.left, 10), Charsets.UTF_8));
-
             if (leafOrdinal != context.leaf)
             {
-                //final long leafFP = leafFilePointers.get(leafOrdinal);
                 readBlock(leafOrdinal, context);
             }
 
             for (int x = 0; x < context.leafSize; x++)
             {
                 BytesRef term = seekInBlock(x, context, true);
-                System.out.println("seekInBlock term="+term.utf8ToString());
                 if (target.compareTo(term) <= 0)
                 {
                     return term;
@@ -1240,7 +1070,6 @@ public class BlockIndexReader implements Closeable
 
     private void readBlock(long filePointer, BlockIndexReaderContext context) throws IOException
     {
-        System.out.println("readBlock filePointer="+filePointer);
         context.bytesInput.seek(filePointer);
         context.currentLeafFP = filePointer;
         context.leafSize = context.bytesInput.readInt();
@@ -1339,15 +1168,12 @@ public class BlockIndexReader implements Closeable
             len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
             prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
 
-            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
-
             if (x == 0)
             {
                 context.firstTerm = new byte[len];
                 context.compBytesInput.seek(context.leafBytesStartFP);
                 context.compBytesInput.readBytes(context.firstTerm, 0, len);
                 context.lastPrefix = len;
-                System.out.println("firstTerm="+new BytesRef(context.firstTerm).utf8ToString());
                 context.bytesLength = 0;
                 context.leafBytesFP += len;
             }
@@ -1357,7 +1183,6 @@ public class BlockIndexReader implements Closeable
                 context.bytesLength = len - prefix;
                 context.lastLen = len;
                 context.lastPrefix = prefix;
-                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
             }
             else
             {
@@ -1371,9 +1196,6 @@ public class BlockIndexReader implements Closeable
         {
             builder.clear();
 
-            //System.out.println("bytesPosition=" + leafBytesFP + " bytesPositionStart=" + leafBytesStartFP + " total=" + (leafBytesFP - leafBytesStartFP));
-            //System.out.println("lastlen=" + lastLen + " lastPrefix=" + lastPrefix + " bytesLength=" + bytesLength);
-
             // TODO: fix this allocation by reading directly into builder
             final byte[] bytes = new byte[context.bytesLength];
             context.compBytesInput.seek(context.leafBytesFP);
@@ -1381,13 +1203,10 @@ public class BlockIndexReader implements Closeable
 
             context.leafBytesFP += context.bytesLength;
 
-            //System.out.println("bytes read=" + new BytesRef(bytes).utf8ToString());
-
             builder.append(context.firstTerm, 0, context.lastPrefix);
             builder.append(bytes, 0, bytes.length);
         }
 
-        //System.out.println("term="+builder.get().utf8ToString());
         return builder.get();
     }
 
@@ -1457,9 +1276,6 @@ public class BlockIndexReader implements Closeable
         {
             builder.clear();
 
-            //System.out.println("bytesPosition=" + leafBytesFP + " bytesPositionStart=" + leafBytesStartFP + " total=" + (leafBytesFP - leafBytesStartFP));
-            //System.out.println("lastlen=" + lastLen + " lastPrefix=" + lastPrefix + " bytesLength=" + bytesLength);
-
             // TODO: fix this allocation by reading directly into builder
             final byte[] bytes;
             if (context.bytesLength > 0)
@@ -1475,8 +1291,6 @@ public class BlockIndexReader implements Closeable
                 bytes = null;
             }
 
-            //System.out.println("bytes read=" + new BytesRef(bytes).utf8ToString());
-
             builder.append(context.firstTerm, 0, context.lastPrefix);
             if (bytes != null)
             {
@@ -1484,7 +1298,6 @@ public class BlockIndexReader implements Closeable
             }
         }
 
-        //System.out.println("term="+builder.get().utf8ToString());
         return builder.get();
     }
 
@@ -1492,34 +1305,4 @@ public class BlockIndexReader implements Closeable
     {
         PointValues.Relation compare(int minOrdinal, int maxOrdinal);
     }
-
-    // TODO: add test of BytesUtil.nudgeReverse and BytesUtil.nudge
-
-//    public static void main(String[] args)
-//    {
-//        byte[] bytes = new byte[] {-1, -1, -1, -1};
-//        ByteComparable bc = BytesUtil.nudgeReverse(ByteComparable.fixedLength(bytes), bytes.length - 1);
-//
-//        ByteSource byteSource = bc.asComparableBytes(ByteComparable.Version.OSS41);
-//        int length = 0;
-//        // gather the term bytes from the byteSource
-//        int[] ints = new int[4];
-//        while (true)
-//        {
-//            final int val = byteSource.next();
-//            if (val != ByteSource.END_OF_STREAM)
-//            {
-//                System.out.println("val="+val);
-//                ints[length] = val;
-//
-//                ++length;
-//            }
-//            else
-//            {
-//                break;
-//            }
-//        }
-//
-//        System.out.println("ints=" + Arrays.toString(ints));
-//    }
 }

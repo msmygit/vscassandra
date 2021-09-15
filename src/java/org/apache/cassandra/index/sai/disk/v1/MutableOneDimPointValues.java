@@ -72,24 +72,6 @@ public abstract class MutableOneDimPointValues extends Lucene75MutablePointValue
         throw new UnsupportedOperationException();
     }
 
-//    @Override
-//    public long estimatePointCount(PointValues.IntersectVisitor visitor)
-//    {
-//        throw new UnsupportedOperationException();
-//    }
-//
-//    @Override
-//    public byte[] getMinPackedValue()
-//    {
-//        return EMPTY;
-//    }
-//
-//    @Override
-//    public byte[] getMaxPackedValue()
-//    {
-//        return EMPTY;
-//    }
-
     @Override
     public int getNumDimensions()
     {

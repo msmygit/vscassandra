@@ -361,8 +361,6 @@ public class BlockIndexWriter
 
         final long valuesOutLastBytesFP = valuesOut.getFilePointer();
 
-        System.out.println("unique terms="+(this.termOrdinal + 1)); // 2, 1 for starting at 0
-
         // write the block min values index
         IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter());
         int distinctCount = 0;
@@ -414,7 +412,6 @@ public class BlockIndexWriter
                 long encodedLong = (((long)start) << 32) | (endLeaf & 0xffffffffL);
                 if (minValue.equals(prevMinValue))
                 {
-                    System.out.println("start="+start+" endLeaf="+endLeaf);
                     if (leafValuesSame.get(endLeaf))
                     {
                         if (start < endLeaf)
@@ -449,8 +446,6 @@ public class BlockIndexWriter
 
         final int numLeaves = leafBytesFPs.size();
 
-        System.out.println("numLeaves="+numLeaves);
-
         final long leafFilePointersFP = valuesOut.getFilePointer();
 
         for (int x = 0; x < realLeafBytesFPs.size(); x++)
@@ -461,8 +456,6 @@ public class BlockIndexWriter
         final TreeMap<Integer,Integer> nodeIDToLeafOrdinal = new TreeMap();
 
         rotateToTree(1, 0, leafBytesFPs.size() - 1, nodeIDToLeafOrdinal);
-
-        System.out.println("leafFilePointers.size=" + leafBytesFPs.size() + " nodeIDToLeafOrdinal=" + nodeIDToLeafOrdinal);
 
         final TreeMap<Integer, Long> nodeIDToLeafPointer = new TreeMap<>();
 
@@ -568,8 +561,6 @@ public class BlockIndexWriter
         }
 
         final long indexFP = termsIndexWriter.complete();
-
-        System.out.println("leafToPostingsFP=" + leafToPostingsFP);
 
         // write multiBlockLeafRanges
         final long multiBlockLeafRangesFP = this.leafPostingsOut.getFilePointer();
@@ -930,7 +921,6 @@ public class BlockIndexWriter
             }
             else
             {
-                System.out.println("   flushPreviousBufferAndSwap completePostings previousBuffer.leaf="+previousBuffer.leaf);
                 final long postingsFP = postingsWriter.completePostings();
                 this.leafToPostingsFP.put(previousBuffer.leaf, postingsFP);
             }
@@ -958,8 +948,6 @@ public class BlockIndexWriter
         {
             leafValuesSame.set(buffer.leaf);
         }
-
-        //System.out.println("  writeLeaf buffer.leaf=" + buffer.leaf + " minValue=" + minValue.utf8ToString() + " allLeafValuesSame=" + buffer.allLeafValuesSame);
 
         if (buffer.leaf > 0)
         {
@@ -1022,8 +1010,6 @@ public class BlockIndexWriter
             postingsWriter.add(rowID);
         }
 
-        System.out.println("inRowIDOrder="+inRowIDOrder+" rowIDLeafOrdinals="+Arrays.toString(buffer.rowIDLeafOrdinals));
-
         // write an order map if the row ids are not in order
         if (!inRowIDOrder)
         {
@@ -1064,16 +1050,9 @@ public class BlockIndexWriter
 
     private void rotateToTree(int nodeID, int offset, int count, Map<Integer,Integer> nodeIDToLeafOrdinal)
     {
-        //System.out.println("ROTATE: nodeID=" + nodeID + " offset=" + offset + " count=" + count + " bpd=" + bytesPerDim + " index.length=" + index.length);
         if (count == 1)
         {
-            // Leaf index node
-            //System.out.println("  leaf index node");
-            //System.out.println("  index[" + nodeID + "] = blockStartValues[" + offset + "]");
-
             nodeIDToLeafOrdinal.put(nodeID, offset + 1);
-
-            //System.arraycopy(leafBlockStartValues.get(offset), 0, index, nodeID * (1 + bytesPerDim) + 1, bytesPerDim);
         }
         else if (count > 1)
         {
@@ -1083,7 +1062,6 @@ public class BlockIndexWriter
             while (true)
             {
                 int countLeft = count - totalCount;
-                //System.out.println("    cycle countLeft=" + countLeft + " coutAtLevel=" + countAtLevel);
                 if (countLeft <= countAtLevel)
                 {
                     // This is the last level, possibly partially filled:
@@ -1092,19 +1070,8 @@ public class BlockIndexWriter
                     int leftHalf = (totalCount - 1) / 2 + lastLeftCount;
 
                     int rootOffset = offset + leftHalf;
-          /*
-          System.out.println("  last left count " + lastLeftCount);
-          System.out.println("  leftHalf " + leftHalf + " rightHalf=" + (count-leftHalf-1));
-          System.out.println("  rootOffset=" + rootOffset);
-          */
 
                     nodeIDToLeafOrdinal.put(nodeID, rootOffset + 1);
-
-                    //System.arraycopy(leafBlockStartValues.get(rootOffset), 0, index, nodeID * (1 + bytesPerDim) + 1, bytesPerDim);
-                    //System.out.println("  index[" + nodeID + "] = blockStartValues[" + rootOffset + "]");
-
-                    // TODO: we could optimize/specialize, when we know it's simply fully balanced binary tree
-                    // under here, to save this while loop on each recursion
 
                     // Recurse left
                     rotateToTree(2 * nodeID, offset, leftHalf, nodeIDToLeafOrdinal);
