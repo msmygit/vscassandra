@@ -71,6 +71,7 @@ public class EmptyValuesTest extends CQLTester
 
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         for (SSTableReader ssTable : cfs.getLiveSSTables())
         {
             try (PrintStream out = new PrintStream(buf, true))
@@ -79,12 +80,16 @@ public class EmptyValuesTest extends CQLTester
                 Process process = pb.start();
                 process.waitFor();
                 IOUtils.copy(process.getInputStream(), buf);
+                IOUtils.copy(process.getErrorStream(), errBuf);
             }
             catch (Throwable t)
             {
                 Assert.fail(t.getClass().getName());
             }
         }
+
+        String errString = new String(errBuf.toByteArray(), StandardCharsets.UTF_8);
+        Assert.assertEquals("", errString);
         
         String outString = new String(buf.toByteArray(), StandardCharsets.UTF_8);
         Assert.assertTrue(outString, outString.contains("{ \"name\" : \"v\", \"value\" : \"" + emptyValue + "\" }"));
