@@ -196,7 +196,8 @@ public class PostingsReader implements OrdinalPostingList
     public void close() throws IOException
     {
         listener.postingDecoded(postingsDecoded);
-        FileUtils.closeQuietly(input, primaryKeyMap);
+        FileUtils.closeQuietly(input);
+        FileUtils.closeQuietly(primaryKeyMap);
         summary.close();
     }
 

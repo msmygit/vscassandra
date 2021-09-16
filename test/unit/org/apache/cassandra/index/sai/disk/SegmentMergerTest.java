@@ -31,11 +31,8 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
@@ -181,10 +178,10 @@ public class SegmentMergerTest extends SAITester
         Descriptor descriptor = new Descriptor(dataFolder, cfs.keyspace.getName(), cfs.getTableName(), generation, SSTableFormat.Type.current());
         TableMetadata table = currentTableMetadata();
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, table);
-        assertTrue(indexDescriptor.isGroupIndexComplete());
+        assertTrue(indexDescriptor.isPerSSTableBuildComplete());
         IndexMetadata index = table.indexes.get(indexName).get();
         IndexContext indexContext = new IndexContext(table, index);
-        assertTrue(indexDescriptor.isColumnIndexComplete(indexContext));
+        assertTrue(indexDescriptor.isPerIndexBuildComplete(indexContext));
         return indexDescriptor.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
     }
 }

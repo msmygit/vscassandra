@@ -106,8 +106,8 @@ public class SegmentsSystemView extends AbstractVirtualTable
     {
         SimpleDataSet dataset = new SimpleDataSet(metadata());
 
-        forEachIndex(columnContext -> {
-            for (SSTableIndex sstableIndex : columnContext.getView())
+        forEachIndex(indexContext -> {
+            for (SSTableIndex sstableIndex : indexContext.getView())
             {
                 SSTableReader sstable = sstableIndex.getSSTable();
                 IndexDescriptor indexDescriptor = sstableIndex.getSSTableContext().indexDescriptor;
@@ -125,16 +125,16 @@ public class SegmentsSystemView extends AbstractVirtualTable
 
                     for (SegmentMetadata metadata : segments)
                     {
-                        dataset.row(sstable.metadata().keyspace, columnContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
+                        dataset.row(sstable.metadata().keyspace, indexContext.getIndexName(), sstable.getFilename(), metadata.segmentRowIdOffset)
                                .column(TABLE_NAME, descriptor.cfname)
-                               .column(COLUMN_NAME, columnContext.getColumnName())
+                               .column(COLUMN_NAME, indexContext.getColumnName())
                                .column(CELL_COUNT, metadata.numRows)
                                .column(MIN_SSTABLE_ROW_ID, metadata.minSSTableRowId)
                                .column(MAX_SSTABLE_ROW_ID, metadata.maxSSTableRowId)
                                .column(START_TOKEN, tokenFactory.toString(metadata.minKey.partitionKey().getToken()))
                                .column(END_TOKEN, tokenFactory.toString(metadata.maxKey.partitionKey().getToken()))
-                               .column(MIN_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
-                               .column(MAX_TERM, columnContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
+                               .column(MIN_TERM, indexContext.getValidator().getSerializer().deserialize(metadata.minTerm).toString())
+                               .column(MAX_TERM, indexContext.getValidator().getSerializer().deserialize(metadata.maxTerm).toString())
                                .column(COMPONENT_METADATA, metadata.componentMetadatas.asMap());
                     }
                 }

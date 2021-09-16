@@ -22,6 +22,7 @@ import java.util.List;
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 
@@ -105,7 +106,7 @@ public class Version
 
     public static interface FileNameFormatter
     {
-        public String format(IndexComponent indexComponent, String index);
+        public String format(IndexComponent indexComponent, IndexContext indexContext);
     }
 
     //
@@ -116,12 +117,12 @@ public class Version
     private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
     private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
 
-    private static String aaFileNameFormat(IndexComponent indexComponent, String index)
+    private static String aaFileNameFormat(IndexComponent indexComponent, IndexContext indexContext)
     {
         StringBuilder stringBuilder = new StringBuilder();
 
-        stringBuilder.append(index == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
-                                           : String.format(VERSION_AA_PER_INDEX_FORMAT, index, indexComponent.representation));
+        stringBuilder.append(indexContext == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
+                                                  : String.format(VERSION_AA_PER_INDEX_FORMAT, indexContext.getIndexName(), indexComponent.representation));
 
         return stringBuilder.toString();
     }
@@ -134,14 +135,14 @@ public class Version
     private static final String SAI_SEPARATOR = "+";
     private static final String EXTENSION = ".db";
 
-    private static String baFileNameFormat(IndexComponent indexComponent, String index)
+    private static String baFileNameFormat(IndexComponent indexComponent, IndexContext indexContext)
     {
         StringBuilder stringBuilder = new StringBuilder();
 
         stringBuilder.append(SAI_DESCRIPTOR);
         stringBuilder.append(SAI_SEPARATOR).append(Version.BA);
-        if (index != null)
-            stringBuilder.append(SAI_SEPARATOR).append(index);
+        if (indexContext != null)
+            stringBuilder.append(SAI_SEPARATOR).append(indexContext.getIndexName());
         stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
         stringBuilder.append(EXTENSION);
 

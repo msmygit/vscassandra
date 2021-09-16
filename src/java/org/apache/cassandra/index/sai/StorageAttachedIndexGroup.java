@@ -125,7 +125,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         if (indices.isEmpty())
         {
             for (SSTableReader sstable : contextManager.sstables())
-                sstable.unregisterComponents(IndexDescriptor.create(sstable.descriptor, sstable.metadata()).getSSTableComponents(), baseCfs.getTracker());
+                sstable.unregisterComponents(IndexDescriptor.create(sstable.descriptor, sstable.metadata()).getLivePerSSTableComponents(), baseCfs.getTracker());
             deletePerSSTableFiles(baseCfs.getLiveSSTables());
             baseCfs.getTracker().unsubscribe(this);
         }
@@ -243,9 +243,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     public static Set<Component> getLiveComponents(SSTable sstable, Collection<StorageAttachedIndex> indices)
     {
         IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
-        Set<Component> components = indexDescriptor.getSSTableComponents();
-        indices.stream().forEach(index -> components.addAll(indexDescriptor.registerIndex(index.getIndexContext())
-                                                                           .getSSTableComponents(index.getIndexContext().getIndexName())));
+        Set<Component> components = indexDescriptor.getLivePerSSTableComponents();
+        indices.stream().forEach(index -> components.addAll(indexDescriptor.getLivePerIndexComponents(index.getIndexContext())));
         return components;
     }
 

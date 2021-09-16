@@ -153,7 +153,7 @@ public class NumericIndexWriter implements Closeable
 
         final LeafCallback leafCallback = new LeafCallback();
 
-        try (IndexOutput bkdOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, indexContext.getIndexName(), true, segmented))
+        try (IndexOutput bkdOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, indexContext, true, segmented))
         {
             // The SSTable kd-tree component file is opened in append mode, so our offset is the current file pointer.
             final long bkdOffset = bkdOutput.getFilePointer();
@@ -178,7 +178,7 @@ public class NumericIndexWriter implements Closeable
         }
 
         try (TraversingBKDReader reader = new TraversingBKDReader(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, segmented), bkdPosition);
-             IndexOutput postingsOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext.getIndexName(), true, segmented))
+             IndexOutput postingsOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, true, segmented))
         {
             final long postingsOffset = postingsOutput.getFilePointer();
 

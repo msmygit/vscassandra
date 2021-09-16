@@ -61,10 +61,10 @@ public abstract class IndexSearcher implements Closeable
         this.indexContext = indexContext;
     }
 
-    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory, PerIndexFiles indexFiles, SegmentMetadata segmentMetadata, IndexDescriptor indexDescriptor, IndexContext columnContext) throws IOException
+    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory, PerIndexFiles indexFiles, SegmentMetadata segmentMetadata, IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
     {
-        return columnContext.isLiteral() ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, columnContext)
-                                         : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, columnContext);
+        return indexContext.isLiteral() ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
+                                         : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
 
     /**

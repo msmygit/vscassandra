@@ -41,14 +41,14 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
 public abstract class MemoryIndex
 {
-    protected final IndexContext columnContext;
+    protected final IndexContext indexContext;
 
     private ByteBuffer minTerm;
     private ByteBuffer maxTerm;
 
-    protected MemoryIndex(IndexContext columnContext)
+    protected MemoryIndex(IndexContext indexContext)
     {
-        this.columnContext = columnContext;
+        this.indexContext = indexContext;
     }
 
     public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value);
@@ -59,8 +59,8 @@ public abstract class MemoryIndex
     {
         assert term != null;
 
-        minTerm = TypeUtil.min(term, minTerm, columnContext.getValidator());
-        maxTerm = TypeUtil.max(term, maxTerm, columnContext.getValidator());
+        minTerm = TypeUtil.min(term, minTerm, indexContext.getValidator());
+        maxTerm = TypeUtil.max(term, maxTerm, indexContext.getValidator());
     }
 
     public ByteBuffer getMinTerm()

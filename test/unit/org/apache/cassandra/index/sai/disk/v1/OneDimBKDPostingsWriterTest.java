@@ -72,7 +72,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(112, 4, pathToRoot(1, 3, 7, 14, 28));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
@@ -117,7 +117,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
@@ -137,7 +137,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
         writer.onLeaf(16, 1, pathToRoot(1, 2, 4, 8));
 
         long fp;
-        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, index))
+        try (IndexOutputWriter output = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
         {
             fp = writer.finish(output);
         }
@@ -149,7 +149,7 @@ public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
 
     private void assertPostingReaderEquals(BKDPostingsIndex postingsIndex, int nodeID, int[] postings) throws IOException
     {
-        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, index),
+        assertPostingReaderEquals(indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext),
                                   postingsIndex.getPostingsFilePointer(nodeID),
                                   new ArrayPostingList(postings));
     }

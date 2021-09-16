@@ -76,13 +76,13 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         this.primaryKeyFactory = indexDescriptor.primaryKeyFactory;
         this.indices = indices;
         this.rowMapping = RowMapping.create(lifecycleNewTracker.opType());
-        this.columnIndexWriters = indices.stream().map(i -> indexDescriptor.newIndexWriter(i,
-                                                                                           lifecycleNewTracker,
-                                                                                           rowMapping))
+        this.columnIndexWriters = indices.stream().map(i -> indexDescriptor.newPerIndexWriter(i,
+                                                                                              lifecycleNewTracker,
+                                                                                              rowMapping))
                                          .filter(Objects::nonNull) // a null here means the column had no data to flush
                                          .collect(Collectors.toList());
 
-        this.sstableComponentsWriter = perColumnOnly ? PerSSTableWriter.NONE : indexDescriptor.newPerSSTableComponentsWriter();
+        this.sstableComponentsWriter = perColumnOnly ? PerSSTableWriter.NONE : indexDescriptor.newPerSSTableWriter();
     }
 
     @Override

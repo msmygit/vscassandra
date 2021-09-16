@@ -554,13 +554,13 @@ public class IndexContext
             if (context.sstable.isMarkedCompacted())
                 continue;
 
-            if (!context.indexDescriptor.isColumnIndexComplete(this))
+            if (!context.indexDescriptor.isPerIndexBuildComplete(this))
             {
                 logger.debug(logMessage("An on-disk index build for SSTable {} has not completed."), context.sstable.descriptor);
                 continue;
             }
 
-            if (context.indexDescriptor.isColumnIndexEmpty(this))
+            if (context.indexDescriptor.isIndexEmpty(this))
             {
                 logger.debug(logMessage("No on-disk index was built for SSTable {} because the SSTable " +
                                                 "had no indexable rows for the index."), context.sstable.descriptor);

@@ -71,7 +71,7 @@ public class SSTableContextManager
 
             IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
 
-            if (!indexDescriptor.isGroupIndexComplete())
+            if (!indexDescriptor.isPerSSTableBuildComplete())
             {
                 // Don't even try to validate or add the context if the completion marker is missing.
                 continue;

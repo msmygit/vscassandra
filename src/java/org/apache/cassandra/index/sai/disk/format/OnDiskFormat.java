@@ -97,6 +97,14 @@ public interface OnDiskFormat
      */
     public boolean isEncryptable(IndexComponent indexComponent);
 
+    /**
+     * Returns a {@link PrimaryKeyMap.Factory} for the SSTable
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
+     * @param sstable
+     * @return
+     * @throws IOException
+     */
     public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException;
 
     public SearchableIndex newSearchableIndex(SSTableContext ssTableContext, IndexContext indexContext);

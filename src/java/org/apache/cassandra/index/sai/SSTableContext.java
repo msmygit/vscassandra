@@ -121,7 +121,7 @@ public class SSTableContext extends SharedCloseableImpl
 
     public PerIndexFiles perIndexFiles(IndexContext indexContext)
     {
-        return indexDescriptor.perIndexFiles(indexContext, false);
+        return indexDescriptor.newPerIndexFiles(indexContext, false);
     }
 
     @Override

@@ -28,6 +28,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.IntegerType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -60,6 +61,7 @@ public abstract class AbstractOnDiskBenchmark
     TableMetadata metadata;
     IndexDescriptor indexDescriptor;
     String index;
+    IndexContext indexContext;
     private FileHandle token;
     PrimaryKeyMap primaryKeyMap;
 
@@ -119,6 +121,7 @@ public abstract class AbstractOnDiskBenchmark
         descriptor = new Descriptor(Files.createTempDirectory("jmh").toFile(), metadata.keyspace, metadata.name, 1);
         indexDescriptor = IndexDescriptor.create(descriptor, metadata);
         index = "test";
+        indexContext = SAITester.createIndexContext(index, IntegerType.instance);
 
         // write per-sstable components: token and offset
         writeSSTableComponents(numRows());
@@ -154,7 +157,7 @@ public abstract class AbstractOnDiskBenchmark
         final int[] postings = IntStream.range(0, rows).map(this::toPosting).toArray();
         final ArrayPostingList postingList = new ArrayPostingList(postings);
 
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             long summaryPosition = writer.write(postingList);
             writer.complete();

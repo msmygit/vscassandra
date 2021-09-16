@@ -30,6 +30,7 @@ import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -155,9 +156,10 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
         final int size = terms * postings;
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
+        final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, index, false))
+        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
         {
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }
@@ -172,7 +174,7 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
                                                                     wrap(termsEnum.get(terms - 1).left),
                                                                     indexMetas);
 
-        try (PerIndexFiles indexFiles = indexDescriptor.perIndexFiles(SAITester.createIndexContext(index, UTF8Type.instance), false))
+        try (PerIndexFiles indexFiles = indexDescriptor.newPerIndexFiles(SAITester.createIndexContext(index, UTF8Type.instance), false))
         {
             final LongArray.Factory factory = () -> LongArrays.identity().build();
             final IndexSearcher searcher = IndexSearcher.open(PrimaryKeyMap.Factory.IDENTITY, indexFiles, segmentMetadata, indexDescriptor, SAITester.createIndexContext(index, UTF8Type.instance));

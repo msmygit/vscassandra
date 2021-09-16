@@ -62,7 +62,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context)
         {
             return new V2PrimaryKeyMap(primaryKeyOffsetsFile.path(),
-                                       primaryKeyOffsetsFactory.open(),
+                                       new LongArray.DeferredLongArray(() -> primaryKeyOffsetsFactory.open()),
                                        primaryKeysFile.createReader(),
                                        keyFactory,
                                        size);

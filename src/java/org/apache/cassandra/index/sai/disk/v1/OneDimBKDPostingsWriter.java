@@ -72,15 +72,15 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
     private final Multimap<Integer, Integer> nodeToChildLeaves = HashMultimap.create();
 
     private final IndexWriterConfig config;
-    private final IndexContext columnContext;
+    private final IndexContext indexContext;
     int numNonLeafPostings = 0;
     int numLeafPostings = 0;
 
-    OneDimBKDPostingsWriter(List<PackedLongValues> postings, IndexWriterConfig config, IndexContext columnContext)
+    OneDimBKDPostingsWriter(List<PackedLongValues> postings, IndexWriterConfig config, IndexContext indexContext)
     {
         this.postings = postings;
         this.config = config;
-        this.columnContext = columnContext;
+        this.indexContext = indexContext;
     }
 
     @Override
@@ -126,7 +126,7 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
 
         final Collection<Integer> leafNodeIDs = leafOffsetToNodeID.values();
 
-        logger.debug(columnContext.logMessage("Writing posting lists for {} internal and {} leaf kd-tree nodes. Leaf postings memory usage: {}."),
+        logger.debug(indexContext.logMessage("Writing posting lists for {} internal and {} leaf kd-tree nodes. Leaf postings memory usage: {}."),
                      internalNodeIDs.size(), leafNodeIDs.size(), FBUtilities.prettyPrintMemory(postingsRamBytesUsed));
 
         final long startFP = out.getFilePointer();
@@ -158,7 +158,7 @@ public class OneDimBKDPostingsWriter implements TraversingBKDReader.IndexTreeTra
                 nodeIDToPostingsFilePointer.put(nodeID, postingFilePosition);
         }
         flushTime.stop();
-        logger.debug(columnContext.logMessage("Flushed {} of posting lists for kd-tree nodes in {} ms."),
+        logger.debug(indexContext.logMessage("Flushed {} of posting lists for kd-tree nodes in {} ms."),
                      FBUtilities.prettyPrintMemory(out.getFilePointer() - startFP),
                      flushTime.elapsed(TimeUnit.MILLISECONDS));
 

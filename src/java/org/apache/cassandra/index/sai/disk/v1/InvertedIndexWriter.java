@@ -25,6 +25,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.commons.lang3.mutable.MutableLong;
 
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -42,10 +43,10 @@ public class InvertedIndexWriter implements Closeable
     private final PostingsWriter postingsWriter;
     private long postingsAdded;
 
-    public InvertedIndexWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+    public InvertedIndexWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {
-        this.termsDictionaryWriter = new TrieTermsDictionaryWriter(indexDescriptor, index, segmented);
-        this.postingsWriter = new PostingsWriter(indexDescriptor, index, segmented);
+        this.termsDictionaryWriter = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, segmented);
+        this.postingsWriter = new PostingsWriter(indexDescriptor, indexContext, segmented);
     }
 
     /**

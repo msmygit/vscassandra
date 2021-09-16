@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -31,9 +30,7 @@ import java.util.stream.Stream;
 
 import org.junit.Assert;
 
-import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.DecimalType;
 import org.apache.cassandra.db.marshal.Int32Type;
@@ -49,7 +46,6 @@ import org.apache.cassandra.index.sai.disk.v1.ImmutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.KDTreeIndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.Segment;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -111,7 +107,7 @@ public class KDTreeIndexBuilder
                                            indexMetas);
         }
 
-        try (PerIndexFiles indexFiles = indexDescriptor.perIndexFiles(SAITester.createIndexContext("test", Int32Type.instance), false))
+        try (PerIndexFiles indexFiles = indexDescriptor.newPerIndexFiles(SAITester.createIndexContext("test", Int32Type.instance), false))
         {
             IndexSearcher searcher = IndexSearcher.open(PrimaryKeyMap.Factory.IDENTITY, indexFiles, metadata, indexDescriptor, columnContext);
             assertThat(searcher, is(instanceOf(KDTreeIndexSearcher.class)));

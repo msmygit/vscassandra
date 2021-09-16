@@ -23,6 +23,9 @@ import java.util.Set;
 
 import org.junit.Test;
 
+import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
@@ -46,6 +49,7 @@ public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
         final int numRows = between(300_000, 500_000);
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
+        final IndexContext indexContext = SAITester.createIndexContext(index, Int32Type.instance);
         final TempFileTrackingDirectoryWrapper directoryWrapper =
                 new TempFileTrackingDirectoryWrapper(new BKDTempFilesDirectory(indexDescriptor, index, randomLong()));
 
@@ -70,14 +74,14 @@ public class BKDTempFilesDirectoryTest extends NdiRandomizedTest
 
             long indexFP;
 
-            try (IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, index))
+            try (IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, indexContext))
             {
                 indexFP = w.finish(out);
             }
 
             assertThat(directoryWrapper.createdTempFiles.size(), is(greaterThan(0)));
 
-            try (final IndexInput indexInput = indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE, index))
+            try (final IndexInput indexInput = indexDescriptor.openPerIndexInput(IndexComponent.KD_TREE, indexContext))
             {
                 indexInput.seek(indexFP);
                 final BKDReader bkdReader = new BKDReader(indexInput);

@@ -110,11 +110,11 @@ public class Expression
 
     final List<ByteBuffer> exclusions = new ArrayList<>();
 
-    public Expression(IndexContext columnContext)
+    public Expression(IndexContext indexContext)
     {
-        this.context = columnContext;
-        this.analyzerFactory = columnContext.getQueryAnalyzerFactory();
-        this.validator = columnContext.getValidator();
+        this.context = indexContext;
+        this.analyzerFactory = indexContext.getQueryAnalyzerFactory();
+        this.validator = indexContext.getValidator();
     }
 
     public Expression add(Operator op, ByteBuffer value)

@@ -56,7 +56,7 @@ public abstract class PerIndexFiles implements Closeable
         return file;
     }
 
-    protected abstract Map<IndexComponent, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext columnContext, boolean temporary);
+    protected abstract Map<IndexComponent, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
 
     @Override
     public void close()

@@ -30,6 +30,7 @@ import org.junit.rules.TemporaryFolder;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.schema.TableMetadata;
@@ -81,10 +82,10 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_ColumnComplete.db"));
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
         assertEquals(Version.AA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
     }
 
     @Test
@@ -105,10 +106,10 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI+ba+test_index+ColumnComplete.db"));
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
         assertEquals(Version.BA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
     }
 
     @Test
@@ -138,12 +139,12 @@ public class IndexDescriptorTest
 
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", UTF8Type.instance));
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, indexContext));
     }
 
     @Test
@@ -156,11 +157,11 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_KDTreePostingLists.db"));
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
-        indexDescriptor.registerIndex(SAITester.createIndexContext("test_index", Int32Type.instance));
+        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
 
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, "test_index"));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, "test_index"));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, indexContext));
+        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, indexContext));
     }
 }

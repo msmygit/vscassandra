@@ -96,7 +96,7 @@ public class MemtableIndexWriter implements PerIndexWriter
                 logger.debug(indexContext.logMessage("No indexed rows to flush from SSTable {}."), indexDescriptor.descriptor);
                 // Write a completion marker even though we haven't written anything to the index
                 // so we won't try to build the index again for the SSTable
-                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
                 return;
             }
 
@@ -109,7 +109,7 @@ public class MemtableIndexWriter implements PerIndexWriter
             {
                 long cellCount = flush(minKey, maxKey, indexContext.getValidator(), terms, rowMapping.maxSegmentRowId);
 
-                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
 
                 indexContext.getIndexMetrics().memtableIndexFlushCount.inc();
 
@@ -139,7 +139,7 @@ public class MemtableIndexWriter implements PerIndexWriter
 
         if (TypeUtil.isLiteral(termComparator))
         {
-            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext.getIndexName(), false))
+            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
             {
                 indexMetas = writer.writeAll(terms);
                 numRows = writer.getPostingsCount();

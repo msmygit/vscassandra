@@ -36,6 +36,7 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -69,6 +70,7 @@ public abstract class AbstractOnDiskBenchmark
     private FileHandle primaryKeys;
     PrimaryKeyMap primaryKeyMap;
     String index;
+    IndexContext indexContext;
 
     private FileHandle postings;
     private long summaryPosition;
@@ -118,6 +120,7 @@ public abstract class AbstractOnDiskBenchmark
         indexDescriptor = IndexDescriptor.create(descriptor, metadata);
         keyFactory = PrimaryKey.factory(metadata, Version.LATEST.onDiskFormat().indexFeatureSet());
         index = "test";
+        indexContext = SAITester.createIndexContext(index, IntegerType.instance);
 
         writePrimaryKeysComponent(numRows());
         primaryKeys = indexDescriptor.createPerSSTableFileHandle(IndexComponent.PRIMARY_KEYS);
@@ -153,7 +156,7 @@ public abstract class AbstractOnDiskBenchmark
         final int[] postings = IntStream.range(0, rows).map(this::toPosting).toArray();
         final ArrayPostingList postingList = new ArrayPostingList(postings);
 
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             long summaryPosition = writer.write(postingList);
             writer.complete();
@@ -186,7 +189,7 @@ public abstract class AbstractOnDiskBenchmark
             primaryKeys.add(dk);
         }
 
-        PerSSTableWriter writer = indexDescriptor.newPerSSTableComponentsWriter();
+        PerSSTableWriter writer = indexDescriptor.newPerSSTableWriter();
         long rowId = 0;
         for (DecoratedKey dk: primaryKeys)
         {

@@ -50,7 +50,6 @@ import org.apache.cassandra.db.rows.DeserializationHelper;
 import org.apache.cassandra.index.SecondaryIndexBuilder;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTableIdentityIterator;
 import org.apache.cassandra.io.sstable.SSTableSimpleIterator;
@@ -59,7 +58,6 @@ import org.apache.cassandra.io.sstable.format.RowIndexEntry;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Throwables;
@@ -281,7 +279,7 @@ public class StorageAttachedIndexBuilder extends SecondaryIndexBuilder
     {
         // if per-table files are incomplete or checksum failed during full rebuild.
         IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
-        if (!indexDescriptor.isGroupIndexComplete() ||
+        if (!indexDescriptor.isPerSSTableBuildComplete() ||
             (isFullRebuild && !indexDescriptor.validatePerSSTableComponentsChecksum()))
         {
             CountDownLatch latch = new CountDownLatch(1);

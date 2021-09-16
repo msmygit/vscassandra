@@ -23,6 +23,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.commons.lang3.mutable.MutableLong;
 
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
@@ -44,9 +45,9 @@ public class TrieTermsDictionaryWriter implements Closeable
     private final IndexOutputWriter termDictionaryOutput;
     private final long startOffset;
 
-    public TrieTermsDictionaryWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+    public TrieTermsDictionaryWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {
-        termDictionaryOutput = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, index, true, segmented);
+        termDictionaryOutput = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext, true, segmented);
         startOffset = termDictionaryOutput.getFilePointer();
 
         SAICodecUtils.writeHeader(termDictionaryOutput);

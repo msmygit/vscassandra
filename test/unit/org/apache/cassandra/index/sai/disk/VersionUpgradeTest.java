@@ -94,9 +94,9 @@ public class VersionUpgradeTest extends SAITester
             for (IndexComponent indexComponent : indexDescriptor.version.onDiskFormat().perSSTableComponents())
                 assertTrue(indexDescriptor.fileFor(indexComponent).exists());
             for (IndexComponent indexComponent : indexDescriptor.version.onDiskFormat().perIndexComponents(intContext))
-                assertTrue(indexDescriptor.fileFor(indexComponent, intContext.getIndexName()).exists());
+                assertTrue(indexDescriptor.fileFor(indexComponent, intContext).exists());
             for (IndexComponent indexComponent : indexDescriptor.version.onDiskFormat().perIndexComponents(textContext))
-                assertTrue(indexDescriptor.fileFor(indexComponent, textContext.getIndexName()).exists());
+                assertTrue(indexDescriptor.fileFor(indexComponent, textContext).exists());
         }
 
         // Finally check that we can do a query across the 2 SSTable indexes

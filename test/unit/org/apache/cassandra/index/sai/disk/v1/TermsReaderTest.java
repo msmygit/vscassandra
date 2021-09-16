@@ -75,7 +75,7 @@ public class TermsReaderTest extends NdiRandomizedTest
         final List<Pair<ByteComparable, LongArrayList>> termsEnum = buildTermsEnum(terms, postings);
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, index, false))
+        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
         {
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }
@@ -112,7 +112,7 @@ public class TermsReaderTest extends NdiRandomizedTest
         final List<Pair<ByteComparable, LongArrayList>> termsEnum = buildTermsEnum(numTerms, numPostings);
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, index, false))
+        try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
         {
             indexMetas = writer.writeAll(new MemtableTermsIterator(null, null, termsEnum.iterator()));
         }

@@ -26,6 +26,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -44,12 +47,15 @@ public class PostingsTest extends NdiRandomizedTest
 
     private IndexDescriptor indexDescriptor;
     private String index;
+    private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
+        indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
+
     }
 
     @Test
@@ -59,13 +65,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expectedPostingList = new ArrayPostingList(new int[]{ 10, 20, 30, 40, 50, 60 });
 
         long postingPointer;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             postingPointer = writer.write(expectedPostingList);
             writer.complete();
         }
 
-        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         SAICodecUtils.validate(input);
         input.seek(postingPointer);
 
@@ -90,7 +96,7 @@ public class PostingsTest extends NdiRandomizedTest
         reader.close();
         assertEquals(reader.size(), listener.decodes);
 
-        input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         listener = new CountingPostingListEventListener();
         reader = new PostingsReader(new SharedIndexInput(input), postingPointer, listener);
 
@@ -112,7 +118,7 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList[] expected = new ArrayPostingList[numPostingLists];
         final long[] postingPointers = new long[numPostingLists];
 
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             for (int i = 0; i < numPostingLists; ++i)
             {
@@ -124,14 +130,14 @@ public class PostingsTest extends NdiRandomizedTest
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
         }
 
         for (int i = 0; i < numPostingLists; ++i)
         {
-            IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+            IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
             input.seek(postingPointers[i]);
             final ArrayPostingList expectedPostingList = expected[i];
             final PostingsReader.BlocksSummary summary = assertBlockSummary(blockSize, expectedPostingList, input);
@@ -149,7 +155,7 @@ public class PostingsTest extends NdiRandomizedTest
             }
 
             // test skipping to the last block
-            input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+            input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
             try (PostingsReader reader = new PostingsReader(new SharedIndexInput(input), postingPointers[i], listener))
             {
                 long tokenToAdvance = -1;
@@ -178,13 +184,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
         long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -219,13 +225,13 @@ public class PostingsTest extends NdiRandomizedTest
         final ArrayPostingList expected = new ArrayPostingList(postings);
 
         long fp;
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, blockSize, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, blockSize, false))
         {
             fp = writer.write(expected);
             writer.complete();
         }
 
-        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index))
+        try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext))
         {
             SAICodecUtils.validate(input);
             input.seek(fp);
@@ -245,7 +251,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testNullPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(null);
@@ -256,7 +262,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testEmptyPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[0]));
@@ -266,7 +272,7 @@ public class PostingsTest extends NdiRandomizedTest
     @Test
     public void testNonAscendingPostingList() throws IOException
     {
-        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, index, false))
+        try (PostingsWriter writer = new PostingsWriter(indexDescriptor, indexContext, false))
         {
             expectedException.expect(IllegalArgumentException.class);
             writer.write(new ArrayPostingList(new int[]{ 1, 0 }));
@@ -304,7 +310,7 @@ public class PostingsTest extends NdiRandomizedTest
 
     private PostingsReader openReader(long fp, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, index);
+        IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
         input.seek(fp);
         return new PostingsReader(new SharedIndexInput(input), fp, listener);
     }

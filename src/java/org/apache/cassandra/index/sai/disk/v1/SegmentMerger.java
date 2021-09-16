@@ -44,7 +44,7 @@ public interface SegmentMerger extends Closeable
 
     boolean isEmpty();
 
-    SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext context, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException;
+    SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext indexContext, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException;
 
     @SuppressWarnings("resource")
     static SegmentMerger newSegmentMerger(boolean literal)
@@ -70,15 +70,15 @@ public interface SegmentMerger extends Closeable
         }
 
         @Override
-        public SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext context, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException
+        public SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext indexContext, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException
         {
-            try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), context.getValidator()))
+            try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), indexContext.getValidator()))
             {
 
                 SegmentMetadata.ComponentMetadataMap indexMetas;
                 long numRows;
 
-                try (InvertedIndexWriter indexWriter = new InvertedIndexWriter(indexDescriptor, context.getIndexName(), false))
+                try (InvertedIndexWriter indexWriter = new InvertedIndexWriter(indexDescriptor, indexContext, false))
                 {
                     indexMetas = indexWriter.writeAll(merger);
                     numRows = indexWriter.getPostingsCount();
@@ -145,17 +145,17 @@ public interface SegmentMerger extends Closeable
         }
 
         @Override
-        public SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext context, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException
+        public SegmentMetadata merge(IndexDescriptor indexDescriptor, IndexContext indexContext, PrimaryKey minKey, PrimaryKey maxKey, long maxSSTableRowId) throws IOException
         {
-            final MergeOneDimPointValues merger = new MergeOneDimPointValues(segmentIterators, context.getValidator());
+            final MergeOneDimPointValues merger = new MergeOneDimPointValues(segmentIterators, indexContext.getValidator());
 
             final SegmentMetadata.ComponentMetadataMap componentMetadataMap;
             try (NumericIndexWriter indexWriter = new NumericIndexWriter(indexDescriptor,
-                                                                         context,
-                                                                         TypeUtil.fixedSizeOf(context.getValidator()),
+                                                                         indexContext,
+                                                                         TypeUtil.fixedSizeOf(indexContext.getValidator()),
                                                                          maxSSTableRowId,
                                                                          Integer.MAX_VALUE,
-                                                                         context.getIndexWriterConfig(),
+                                                                         indexContext.getIndexWriterConfig(),
                                                                          false))
             {
                 componentMetadataMap = indexWriter.writeAll(merger);

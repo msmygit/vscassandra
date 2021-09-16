@@ -927,7 +927,7 @@ public class NativeIndexDDLTest extends SAITester
 
         // corrupt file
         if (corruptionContext != null)
-            corruptIndexComponent(component, corruptionContext.getIndexName(), corruptionType);
+            corruptIndexComponent(component, corruptionContext, corruptionType);
         else
             corruptIndexComponent(component, corruptionType);
 

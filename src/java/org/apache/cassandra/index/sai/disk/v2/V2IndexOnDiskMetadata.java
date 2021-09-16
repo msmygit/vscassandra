@@ -55,7 +55,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
         {
             SegmentMetadata segment = ((V2IndexOnDiskMetadata) indexMetadata).segment;
 
-            try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName()));
+            try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext));
                  IndexOutput output = writer.builder(NAME))
             {
                 output.writeLong(segment.segmentRowIdOffset);
@@ -75,8 +75,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
         public IndexOnDiskMetadata deserialize(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
             PrimaryKey.PrimaryKeyFactory primaryKeyFactory = indexDescriptor.primaryKeyFactory;
-            MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META,
-                                                                                          indexContext.getIndexName()));
+            MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext));
 
             IndexInput input = source.get(NAME);
 

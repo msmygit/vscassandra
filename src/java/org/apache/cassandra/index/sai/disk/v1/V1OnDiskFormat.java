@@ -128,15 +128,14 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public boolean isPerSSTableBuildComplete(IndexDescriptor indexDescriptor)
     {
-        return indexDescriptor.registerSSTable().hasComponent(IndexComponent.GROUP_COMPLETION_MARKER);
+        return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 
     @Override
     public boolean isPerIndexBuildComplete(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
-        indexDescriptor.registerSSTable().registerIndex(indexContext);
         return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER) &&
-               indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+               indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
     }
 
     @Override
@@ -225,7 +224,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         if (!isBuildCompletionMarker(indexComponent))
         {
-            try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext.getIndexName()))
+            try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext))
             {
                 if (checksum)
                     SAICodecUtils.validateChecksum(input);

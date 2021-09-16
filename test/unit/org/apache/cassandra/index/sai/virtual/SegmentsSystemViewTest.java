@@ -32,6 +32,7 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.virtual.VirtualKeyspace;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -204,17 +205,18 @@ public class SegmentsSystemViewTest extends SAITester
             {
                 SSTableReader sstable = sstableIndex.getSSTable();
 
-                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata()).registerIndex(index.getIndexContext());
+                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
+                indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, index.getIndexContext());
 
                 if (sstableIndex.getIndexContext().isLiteral())
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext().getIndexName(), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext().getIndexName(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext(), indexDescriptor);
                 }
                 else
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext().getIndexName(), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext().getIndexName(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext(), indexDescriptor);
+                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext(), indexDescriptor);
                 }
             }
         }
@@ -222,10 +224,10 @@ public class SegmentsSystemViewTest extends SAITester
         return lengths;
     }
 
-    private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, String index, IndexDescriptor indexDescriptor)
+    private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, IndexContext indexContext, IndexDescriptor indexDescriptor)
     {
         map.compute(key.name(), (typeName, acc) -> {
-            final long size = indexDescriptor.sizeOfPerColumnComponents(index, key);
+            final long size = indexDescriptor.sizeOnDiskOfPerIndexComponent(key, indexContext);
             return acc == null ? size : size + acc;
         });
     }

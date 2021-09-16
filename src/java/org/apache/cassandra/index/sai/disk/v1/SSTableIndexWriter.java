@@ -273,7 +273,7 @@ public class SSTableIndexWriter implements PerIndexWriter
             compactSegments();
 
             writeSegmentsMetadata();
-            indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+            indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
         }
         finally
         {
@@ -334,7 +334,7 @@ public class SSTableIndexWriter implements PerIndexWriter
         PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
 
         try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
-             PerIndexFiles perIndexFiles = indexDescriptor.perIndexFiles(indexContext, true))
+             PerIndexFiles perIndexFiles = indexDescriptor.newPerIndexFiles(indexContext, true))
         {
             for (final SegmentMetadata segment : segments)
             {
