@@ -80,7 +80,7 @@ public interface Partition extends Iterable<Row>
 
     /**
      * Returns an UnfilteredRowIterator over the rows/RT contained by this partition
-     * selected by the provided clusterings.
+     * selected by the clusterings in clustering order or reversed clustering order if {@code reversed} is true.
      */
     public UnfilteredRowIterator unfilteredIterator(ColumnFilter columns, NavigableSet<Clustering<?>> clusteringsInQueryOrder, boolean reversed);
 }
