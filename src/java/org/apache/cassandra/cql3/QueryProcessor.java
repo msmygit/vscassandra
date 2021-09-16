@@ -38,7 +38,8 @@ import org.antlr.runtime.*;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.metrics.ClientRequestMetrics;
-import org.apache.cassandra.metrics.ClientRequestsMetricsHolder;
+import org.apache.cassandra.metrics.ClientRequestsMetrics;
+import org.apache.cassandra.metrics.ClientRequestsMetricsProvider;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaChangeListener;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -261,8 +262,9 @@ public class QueryProcessor implements QueryHandler
 
     private ResultMessage processNodeLocalWrite(CQLStatement statement, QueryState queryState, QueryOptions options)
     {
-        ClientRequestMetrics  levelMetrics = ClientRequestsMetricsHolder.writeMetricsForLevel(ConsistencyLevel.NODE_LOCAL);
-        ClientRequestMetrics globalMetrics = ClientRequestsMetricsHolder.writeMetrics;
+        ClientRequestsMetrics metrics = ClientRequestsMetricsProvider.instance.metrics((statement instanceof QualifiedStatement) ? ((QualifiedStatement) statement).keyspace() : null);
+        ClientRequestMetrics  levelMetrics = metrics.writeMetricsForLevel(ConsistencyLevel.NODE_LOCAL);
+        ClientRequestMetrics globalMetrics = metrics.writeMetrics;
 
         long startTime = System.nanoTime();
         try
@@ -279,8 +281,9 @@ public class QueryProcessor implements QueryHandler
 
     private ResultMessage processNodeLocalSelect(SelectStatement statement, QueryState queryState, QueryOptions options)
     {
-        ClientRequestMetrics  levelMetrics = ClientRequestsMetricsHolder.readMetricsForLevel(ConsistencyLevel.NODE_LOCAL);
-        ClientRequestMetrics globalMetrics = ClientRequestsMetricsHolder.readMetrics;
+        ClientRequestsMetrics metrics = ClientRequestsMetricsProvider.instance.metrics(statement.keyspace());
+        ClientRequestMetrics  levelMetrics = metrics.readMetricsForLevel(ConsistencyLevel.NODE_LOCAL);
+        ClientRequestMetrics globalMetrics = metrics.readMetrics;
 
         if (StorageService.instance.isBootstrapMode() && !SchemaConstants.isLocalSystemKeyspace(statement.keyspace()))
         {
