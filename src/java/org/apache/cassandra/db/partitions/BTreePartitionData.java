@@ -145,6 +145,7 @@ public final class BTreePartitionData extends PartitionData
      * @param deletionFct function called on the previous and existing deletion info (in that order) to compute the
      *                    final deletion returned.
      * @param rowFct update function to use when applying the newly added rows to the existing ones.
+     * @param allocatedFct function called to update the heap allocation
      * @return a newly created {@link BTreePartitionData} object containing both the data of this object, and data
      * passed as argument.
      */
