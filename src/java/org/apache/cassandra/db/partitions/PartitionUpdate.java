@@ -114,20 +114,19 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
      *
      * @param metadata the metadata for the created update.
      * @param key the partition key for the partition to update.
-     * @param row the row for the update (may be null).
-     * @param row the static row for the update (may be null).
+     * @param row the row for the update (may be static).
      *
      * @return the newly created partition update containing only {@code row}.
      */
-    public static PartitionUpdate singleRowUpdate(TableMetadata metadata, DecoratedKey key, Row row, Row staticRow)
+    public static PartitionUpdate singleRowUpdate(TableMetadata metadata, DecoratedKey key, Row row)
     {
         MutableDeletionInfo deletionInfo = MutableDeletionInfo.live();
         ArrayBackedPartitionData data;
-        if (staticRow != null)
+        if (row.isStatic())
         {
-            RegularAndStaticColumns columns = new RegularAndStaticColumns(Columns.from(staticRow.columns()), Columns.NONE);
+            RegularAndStaticColumns columns = new RegularAndStaticColumns(Columns.from(row.columns()), Columns.NONE);
             data = new ArrayBackedPartitionData(columns,
-                                                staticRow,
+                                                row,
                                                 ArrayBackedPartitionData.EMPTY_ROWS,
                                                 0,
                                                 deletionInfo,
@@ -144,20 +143,6 @@ public class PartitionUpdate extends ImmutableArrayBackedPartition
                                                 EncodingStats.NO_STATS);
         }
         return new PartitionUpdate(metadata, key, data, false);
-    }
-
-    /**
-     * Creates an immutable partition update that contains a single row update.
-     *
-     * @param metadata the metadata for the created update.
-     * @param key the partition key for the partition to update.
-     * @param row the row for the update (may be static).
-     *
-     * @return the newly created partition update containing only {@code row}.
-     */
-    public static PartitionUpdate singleRowUpdate(TableMetadata metadata, DecoratedKey key, Row row)
-    {
-        return singleRowUpdate(metadata, key, row.isStatic() ? null : row, row.isStatic() ? row : null);
     }
 
     /**
