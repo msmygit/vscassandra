@@ -19,6 +19,7 @@
 package org.apache.cassandra.utils;
 
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * General utility methods related to iterators.
@@ -89,6 +90,11 @@ public abstract class Iterators
                 @Override
                 public T next()
                 {
+                    if (!hasNext())
+                    {
+                        throw new NoSuchElementException();
+                    }
+
                     return array[--index];
                 }
             };
@@ -106,6 +112,11 @@ public abstract class Iterators
                 @Override
                 public T next()
                 {
+                    if (!hasNext())
+                    {
+                        throw new NoSuchElementException();
+                    }
+
                     return array[index++];
                 }
             };
