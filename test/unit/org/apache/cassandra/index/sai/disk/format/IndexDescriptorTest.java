@@ -157,7 +157,7 @@ public class IndexDescriptorTest
         Files.touch(new File(descriptor.baseFilename() + "-SAI_test_index_KDTreePostingLists.db"));
 
         IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata);
-        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
+        IndexContext indexContext = SAITester.createIndexContext("test_index", Int32Type.instance);
 
         assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
         assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));

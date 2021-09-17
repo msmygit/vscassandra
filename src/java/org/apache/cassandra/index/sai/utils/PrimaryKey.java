@@ -288,7 +288,7 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
     public long sstableRowId()
     {
-        assert kind == Kind.MAPPED : "Should be MAPPED to read sstableRowId but was " + kind;
+        assert kind.mapped : "Should be MAPPED to read sstableRowId but was " + kind;
         return sstableRowId;
     }
 
