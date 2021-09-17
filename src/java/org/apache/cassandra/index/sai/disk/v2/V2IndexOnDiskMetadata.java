@@ -26,14 +26,11 @@ import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
-import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
 
 public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
 {
@@ -56,17 +53,16 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
             SegmentMetadata segment = ((V2IndexOnDiskMetadata) indexMetadata).segment;
 
             try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext));
-                 IndexOutput output = writer.builder(NAME))
+                 MetadataWriter.Builder output = writer.builder(NAME))
             {
                 output.writeLong(segment.segmentRowIdOffset);
                 output.writeLong(segment.numRows);
                 output.writeLong(segment.minSSTableRowId);
                 output.writeLong(segment.maxSSTableRowId);
-                writeBytes(ByteSourceInverse.readBytes(segment.minKey.asComparableBytes(ByteComparable.Version.OSS41)), output);
-                writeBytes(ByteSourceInverse.readBytes(segment.maxKey.asComparableBytes(ByteComparable.Version.OSS41)), output);
+                PrimaryKey.serializer.serialize(output, 0, segment.minKey);
+                PrimaryKey.serializer.serialize(output, 0, segment.maxKey);
                 writeBytes(ByteBufferUtil.getArray(segment.minTerm), output);
                 writeBytes(ByteBufferUtil.getArray(segment.maxTerm), output);
-
                 segment.componentMetadatas.write(output);
             }
         }
@@ -77,7 +73,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
             PrimaryKey.PrimaryKeyFactory primaryKeyFactory = indexDescriptor.primaryKeyFactory;
             MetadataSource source = MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext));
 
-            IndexInput input = source.get(NAME);
+            DataInputPlus input = source.getDataInput(NAME);
 
             long segmentRowIdOffset = input.readLong();
 
@@ -86,8 +82,8 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
             long maxSSTableRowId = input.readLong();
 
 
-            PrimaryKey minKey = primaryKeyFactory.createKey(readBytes(input));
-            PrimaryKey maxKey = primaryKeyFactory.createKey(readBytes(input));
+            PrimaryKey minKey = primaryKeyFactory.createKey(input, -1);
+            PrimaryKey maxKey = primaryKeyFactory.createKey(input, -1);
 
             ByteBuffer minTerm = ByteBuffer.wrap(readBytes(input));
             ByteBuffer maxTerm = ByteBuffer.wrap(readBytes(input));
@@ -104,20 +100,20 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
                                                                  componentMetadatas));
         }
 
-        private byte[] readBytes(IndexInput input) throws IOException
+        private byte[] readBytes(DataInputPlus input) throws IOException
         {
-            int len = input.readVInt();
+            int len = input.readInt();
             byte[] bytes = new byte[len];
-            input.readBytes(bytes, 0, len);
+            input.readFully(bytes, 0, len);
             return bytes;
         }
 
-        private void writeBytes(byte[] bytes, IndexOutput out)
+        private void writeBytes(byte[] bytes, DataOutputPlus out)
         {
             try
             {
-                out.writeVInt(bytes.length);
-                out.writeBytes(bytes, 0, bytes.length);
+                out.writeInt(bytes.length);
+                out.write(bytes, 0, bytes.length);
             }
             catch (IOException ioe)
             {

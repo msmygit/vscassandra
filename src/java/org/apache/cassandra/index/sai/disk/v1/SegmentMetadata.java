@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
@@ -154,6 +156,16 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
             }
         }
 
+        public ComponentMetadataMap(DataInputPlus input) throws IOException
+        {
+            int size = input.readInt();
+
+            for (int i = 0; i < size; i++)
+            {
+                metas.put(IndexComponent.valueOf(input.readUTF()), new ComponentMetadata(input));
+            }
+        }
+
         public ComponentMetadataMap()
         {
         }
@@ -175,6 +187,17 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
             for (Map.Entry<IndexComponent, ComponentMetadata> entry : metas.entrySet())
             {
                 output.writeString(entry.getKey().name());
+                entry.getValue().write(output);
+            }
+        }
+
+        public void write(DataOutputPlus output) throws IOException
+        {
+            output.writeInt(metas.size());
+
+            for (Map.Entry<IndexComponent, ComponentMetadata> entry : metas.entrySet())
+            {
+                output.writeUTF(entry.getKey().name());
                 entry.getValue().write(output);
             }
         }
@@ -263,6 +286,23 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
             }
         }
 
+        ComponentMetadata(DataInputPlus input) throws IOException
+        {
+            this.root = input.readLong();
+            this.offset = input.readLong();
+            this.length = input.readLong();
+            int size = input.readInt();
+
+            attributes = new HashMap<>(size);
+            for (int x=0; x < size; x++)
+            {
+                String key = input.readUTF();
+                String value = input.readUTF();
+
+                attributes.put(key, value);
+            }
+        }
+
         public void write(IndexOutput output) throws IOException
         {
             output.writeLong(root);
@@ -274,6 +314,20 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
             {
                 output.writeString(entry.getKey());
                 output.writeString(entry.getValue());
+            }
+        }
+
+        public void write(DataOutputPlus output) throws IOException
+        {
+            output.writeLong(root);
+            output.writeLong(offset);
+            output.writeLong(length);
+
+            output.writeInt(attributes.size());
+            for (Map.Entry<String,String> entry : attributes.entrySet())
+            {
+                output.writeUTF(entry.getKey());
+                output.writeUTF(entry.getValue());
             }
         }
 

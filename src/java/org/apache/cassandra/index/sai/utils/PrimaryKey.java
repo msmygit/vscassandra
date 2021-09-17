@@ -18,7 +18,6 @@
 package org.apache.cassandra.index.sai.utils;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -44,7 +43,6 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
-import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 /**
  * The primary key of a row, composed by the partition key and the clustering key.
@@ -61,12 +59,19 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         TOKEN_MAPPED(true, false, true),
         PARTITION(false, true, false),
         PARTITION_MAPPED(false, true, true),
-        MAPPED(false, false, false),
-        UNMAPPED(false, false, true);
+        MAPPED(false, false, true),
+        UNMAPPED(false, false, false);
 
         final boolean token;
         final boolean partition;
         final boolean mapped;
+
+        private static final Kind[] allKinds = Kind.values();
+
+        static Kind fromOrdinal(int ordinal)
+        {
+            return allKinds[ordinal];
+        }
 
         Kind(boolean token, boolean partition, boolean mapped)
         {
@@ -119,21 +124,6 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
         }
 
-        public PrimaryKey createKey(ByteComparable comparable, long sstableRowId)
-        {
-            return createKeyFromPeekable(comparable.asPeekableBytes(ByteComparable.Version.OSS41), sstableRowId);
-        }
-
-        public PrimaryKey createKey(byte[] bytes)
-        {
-            return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes)), -1);
-        }
-
-        public PrimaryKey createKey(byte[] bytes, long sstableRowId)
-        {
-            return createKeyFromPeekable(ByteSource.peekable(ByteSource.fixedLength(bytes)), sstableRowId);
-        }
-
         public PrimaryKey createKey(DecoratedKey key)
         {
             return new PrimaryKey(key);
@@ -152,32 +142,6 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         public PrimaryKey createKey(Token token, long sstableRowId, Supplier<DecoratedKey> decoratedKeySupplier)
         {
             return new PrimaryKey(token, sstableRowId, decoratedKeySupplier);
-        }
-
-        private PrimaryKey createKeyFromPeekable(ByteSource.Peekable peekable, long sstableRowId)
-        {
-            Token token = partitioner.getTokenFactory().fromComparableBytes(ByteSourceInverse.nextComponentSource(peekable), ByteComparable.Version.OSS41);
-            byte[] keyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable));
-            DecoratedKey key =  new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
-
-            if (!indexFeatureSet.isRowAware() || (comparator.size() == 0) || (peekable.peek() == ByteSource.TERMINATOR))
-                return new PrimaryKey(key, sstableRowId);
-
-            ByteBuffer[] values = new ByteBuffer[comparator.size()];
-
-            byte[] clusteringKeyBytes;
-            int index = 0;
-
-            while ((clusteringKeyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable))) != null)
-            {
-                values[index++] = ByteBuffer.wrap(clusteringKeyBytes);
-                if (peekable.peek() == ByteSource.TERMINATOR)
-                    break;
-            }
-
-            Clustering clustering = Clustering.make(values);
-
-            return new PrimaryKey(key, clustering, comparator, sstableRowId);
         }
     }
 
@@ -216,11 +180,6 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private PrimaryKey(DecoratedKey partitionKey)
     {
         this(Kind.PARTITION, null, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, -1, null);
-    }
-
-    private PrimaryKey(DecoratedKey partitionKey, long sstableRowId)
-    {
-        this(Kind.PARTITION_MAPPED, null, partitionKey, Clustering.EMPTY, EMPTY_COMPARATOR, sstableRowId, null);
     }
 
     private PrimaryKey(Kind kind,
@@ -338,12 +297,19 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
     public static class Serializer
     {
+        private static final ClusteringPrefix.Kind[] ALL_CLUSTERING_KINDS = ClusteringPrefix.Kind.values();
+
         public void serialize(DataOutputPlus output, int version, PrimaryKey primaryKey) throws IOException
         {
+            assert !primaryKey.kind.token : "TOKEN only primary keys can't be serialized";
+            output.writeByte(primaryKey.kind.ordinal());
             PartitionPosition.serializer.serialize(primaryKey.partitionKey, output, version);
-            output.writeByte(primaryKey.clustering.kind().ordinal());
-            if (primaryKey.clustering.kind() != ClusteringPrefix.Kind.STATIC_CLUSTERING)
-                Clustering.serializer.serialize(primaryKey.clustering, output, version, primaryKey.clusteringComparator.subtypes());
+            if (!primaryKey.kind.partition)
+            {
+                output.writeByte(primaryKey.clustering.kind().ordinal());
+                if (primaryKey.clustering.kind() != ClusteringPrefix.Kind.STATIC_CLUSTERING)
+                    Clustering.serializer.serialize(primaryKey.clustering, output, version, primaryKey.clusteringComparator.subtypes());
+            }
         }
 
         public PrimaryKey deserialize(DataInputPlus input,
@@ -352,9 +318,11 @@ public class PrimaryKey implements Comparable<PrimaryKey>
                                       ClusteringComparator clusteringComparator,
                                       long sstableRowId) throws IOException
         {
+            Kind partitionKind = Kind.fromOrdinal(input.readByte());
             DecoratedKey partitionKey = (DecoratedKey)PartitionPosition.serializer.deserialize(input, partitioner, version);
-            int ordinal = input.readByte();
-            ClusteringPrefix.Kind kind = ClusteringPrefix.Kind.values()[ordinal];
+            if (partitionKind.partition)
+                return new PrimaryKey(partitionKey);
+            ClusteringPrefix.Kind kind = ALL_CLUSTERING_KINDS[input.readByte()];
             Clustering clustering = kind == ClusteringPrefix.Kind.STATIC_CLUSTERING ? Clustering.STATIC_CLUSTERING
                                                                                     : Clustering.serializer.deserialize(input,
                                                                                                                         version,

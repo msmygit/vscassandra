@@ -29,12 +29,14 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.io.util.DataInputBuffer;
+import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 import static org.junit.Assert.assertTrue;
 
-public class PrimaryKeyTest
+public class PrimaryKeySerializationTest
 {
     @BeforeClass
     public static void initialise() throws Throwable
@@ -51,9 +53,13 @@ public class PrimaryKeyTest
         DecoratedKey decoratedKey = Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.decompose("A"));
         PrimaryKey expected = keyFactory.createKey(decoratedKey);
 
-        ByteComparable comparable = v -> expected.asComparableBytes(v);
+        DataOutputBuffer output = new DataOutputBuffer();
 
-        PrimaryKey result = keyFactory.createKey(comparable, 1);
+        PrimaryKey.serializer.serialize(output, 0, expected);
+
+        DataInputBuffer input = new DataInputBuffer(output.toByteArray());
+
+        PrimaryKey result = keyFactory.createKey(input, 1);
 
         assertTrue(expected.compareTo(result) == 0);
     }
@@ -72,9 +78,13 @@ public class PrimaryKeyTest
 
         PrimaryKey expected = keyFactory.createKey(decoratedKey, clustering);
 
-        ByteComparable comparable = v -> expected.asComparableBytes(v);
+        DataOutputBuffer output = new DataOutputBuffer();
 
-        PrimaryKey result = keyFactory.createKey(comparable, 1);
+        PrimaryKey.serializer.serialize(output, 0, expected);
+
+        DataInputBuffer input = new DataInputBuffer(output.toByteArray());
+
+        PrimaryKey result = keyFactory.createKey(input, 1);
 
         assertTrue(expected.compareTo(result) == 0);
     }
