@@ -258,7 +258,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
+    public PerIndexFiles newPerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
     {
         return new PerIndexFiles(indexDescriptor, indexContext, temporary)
         {

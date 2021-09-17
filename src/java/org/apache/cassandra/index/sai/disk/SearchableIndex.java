@@ -31,6 +31,15 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 
+/**
+ * This is used to abstract the index search between on-disk versions.
+ * Callers to this interface should be unaware of the on-disk version for
+ * the index.
+ *
+ * It is responsible for supplying metadata about the on-disk index. This is
+ * used during query time to help coordinate queries and is also returned
+ * by the virtual tables.
+ */
 public abstract class SearchableIndex implements Closeable
 {
     public abstract long indexFileCacheSize();

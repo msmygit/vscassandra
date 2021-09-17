@@ -27,16 +27,14 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 
+/**
+ * This class is a container for the per-index files used during a query.
+ */
 public abstract class PerIndexFiles implements Closeable
 {
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
     private final Map<IndexComponent, FileHandle> files;
-
-    public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext)
-    {
-        this(indexDescriptor, indexContext, false);
-    }
 
     public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
     {

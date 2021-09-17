@@ -101,34 +101,109 @@ public interface OnDiskFormat
      * Returns a {@link PrimaryKeyMap.Factory} for the SSTable
      *
      * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
-     * @param sstable
-     * @return
+     * @param sstable The {@link SSTableReader} associated with the {@link IndexDescriptor}
+     * @return a {@link PrimaryKeyMap.Factory} for the SSTable
      * @throws IOException
      */
     public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException;
 
-    public SearchableIndex newSearchableIndex(SSTableContext ssTableContext, IndexContext indexContext);
+    /**
+     * Create a new {@link SearchableIndex} for an on-disk index. This is held by the {@SSTableIndex}
+     * and shared between queries.
+     *
+     * @param sstableContext The {@link SSTableContext} holding the per-SSTable information for the index
+     * @param indexContext The {@link IndexContext} holding the per-index information for the index
+     * @return
+     */
+    public SearchableIndex newSearchableIndex(SSTableContext sstableContext, IndexContext indexContext);
 
+    /**
+     * Create a new {@link PerIndexFiles} for an index. This contains an {@link IndexComponent} to
+     * {@link org.apache.cassandra.io.util.FileHandle} mapping for the per-index components used in
+     * a query.
+     *
+     * The files to be opened can be temporary files. This can be the case during post-write compaction.
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
+     * @param indexContext The {@link IndexContext} for the index
+     * @param temporary true if the files are temporary
+     * @return The {@link PerIndexFiles} for the index
+     */
+    public PerIndexFiles newPerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
+
+    /**
+     * Create a new writer for the per-SSTable on-disk components of an index.
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
+     * @return The {@link PerSSTableWriter} to write the per-SSTable on-disk components
+     * @throws IOException
+     */
     public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException;
 
+    /**
+     * Create a new writer for the per-index on-disk components of an index. The {@link LifecycleNewTracker}
+     * is used to determine the type of index write about to happen this will either be an
+     * {@code OperationType.FLUSH} indicating that we are about to flush a {@link org.apache.cassandra.index.sai.memory.MemtableIndex}
+     * or one of the other operation types indicating that we will be writing from an existing SSTable
+     *
+     * @param index The {@link StorageAttachedIndex} holding the current index build status
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
+     * @param tracker The {@link LifecycleNewTracker} for index build operation.
+     * @param rowMapping The {@link RowMapping} that is used to map rowID to {@code PrimaryKey} during the write
+     * @return The {@link PerIndexWriter} that will write the per-index on-disk components
+     */
     public PerIndexWriter newPerIndexWriter(StorageAttachedIndex index,
                                             IndexDescriptor indexDescriptor,
                                             LifecycleNewTracker tracker,
                                             RowMapping rowMapping);
 
+    /**
+     * Create a new {@link IndexOnDiskMetadata.IndexMetadataSerializer} for an index. This is responsible
+     * for reading and writing {@link IndexOnDiskMetadata} from and to disk.
+     *
+     * @return The {@link IndexOnDiskMetadata.IndexMetadataSerializer} for the index
+     */
     public IndexOnDiskMetadata.IndexMetadataSerializer newIndexMetadataSerializer();
 
     public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException;
 
     public void validatePerIndexComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, IndexContext indexContext, boolean checksum) throws IOException;
 
+    /**
+     * Returns the set of {@link IndexComponent} for the per-SSTable part of an index.
+     * This is a complete set of components that could exist on-disk. It does not imply that the
+     * components currently exist on-disk.
+     *
+     * @return The set of {@link IndexComponent} for the per-SSTable index
+     */
     public Set<IndexComponent> perSSTableComponents();
 
+    /**
+     * Returns the set of {@link IndexComponent} for the per-index part of an index.
+     * This is a complete set of components that could exist on-disk. It does not imply that the
+     * components currently exist on-disk.
+     *
+     * @param indexContext The {@link IndexContext} for the index
+     * @return The set of {@link IndexComponent} for the per-index index
+     */
     public Set<IndexComponent> perIndexComponents(IndexContext indexContext);
 
-    public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary);
-
+    /**
+     * Return the number of open per-SSTable files that can be open during a query.
+     * This is a static indication of the files that can be held open by an index
+     * for queries. It is not a dynamic calculation.
+     *
+     * @return The number of open per-SSTable files
+     */
     public int openFilesPerSSTable();
 
+    /**
+     * Return the number of open per-index files that can be open during a query.
+     * This is a static indication of the files that can be help open by an index
+     * for queries. It is not a dynamic calculation.
+     *
+     * @param indexContext The {@link IndexContext} for the index
+     * @return The number of open per-index files
+     */
     public int openFilesPerIndex(IndexContext indexContext);
 }

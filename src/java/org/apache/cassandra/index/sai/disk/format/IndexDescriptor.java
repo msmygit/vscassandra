@@ -62,6 +62,14 @@ import org.apache.lucene.util.IOUtils;
 /**
  * The {@link IndexDescriptor} is an analog of the SSTable {@link Descriptor} and provides version
  * specific information about the on-disk state of a {@link StorageAttachedIndex}.
+ *
+ * The {@IndexDescriptor} is primarily responsible for maintaining a view of the on-disk state
+ * of an index for a specific {@link org.apache.cassandra.io.sstable.SSTable}. It maintains mappings
+ * of the current on-disk components and files. It is responsible for opening files for use by
+ * writers and readers.
+ *
+ * It's remaining responsibility is to act as a proxy to the {@link OnDiskFormat} associated with the
+ * index {@link Version}.
  */
 public class IndexDescriptor
 {
@@ -162,7 +170,7 @@ public class IndexDescriptor
 
     public PerIndexFiles newPerIndexFiles(IndexContext indexContext, boolean temporary)
     {
-        return version.onDiskFormat().perIndexFiles(this, indexContext, temporary);
+        return version.onDiskFormat().newPerIndexFiles(this, indexContext, temporary);
     }
 
     public PerSSTableWriter newPerSSTableWriter() throws IOException
