@@ -78,6 +78,7 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
                 field.setLong(this, value);
             }
         }
+        System.out.println("BlockIndexMeta load minTerm="+Arrays.toString(minTerm.bytes));
     }
 
     public BlockIndexMeta(long orderMapFP,

@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.index.sai.disk.v2;
 
-import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Map;
 

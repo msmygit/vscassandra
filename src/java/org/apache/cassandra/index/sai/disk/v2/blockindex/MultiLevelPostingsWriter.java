@@ -135,7 +135,6 @@ public class MultiLevelPostingsWriter
             }
 
             // if there are multi-block ranges then remove their node ids from the ultimate posting list
-
             assert minLeaf != Integer.MAX_VALUE;
             assert maxLeaf != -1;
 
@@ -168,7 +167,6 @@ public class MultiLevelPostingsWriter
                     Integer toRemoveNodeID = this.leafToNodeID.get(leaf);
                     assert toRemoveNodeID != null;
                     boolean removed = leafNodeIDsCopy.remove(toRemoveNodeID);
-                    //System.out.println("multiBlockMin removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
                 }
             }
 
@@ -192,7 +190,6 @@ public class MultiLevelPostingsWriter
                     Integer toRemoveNodeID = this.leafToNodeID.get(leaf);
                     assert toRemoveNodeID != null;
                     boolean removed = leafNodeIDsCopy.remove(toRemoveNodeID);
-                    //System.out.println("multiBlockMax removed=" + removed + " leaf=" + leaf + " toRemoveNodeID=" + toRemoveNodeID);
                 }
             }
 
@@ -200,7 +197,7 @@ public class MultiLevelPostingsWriter
 
             for (final Integer leafNodeID : leafNodeIDsCopy)
             {
-                assert leafNodeID.intValue() >= numLeaves;
+                assert leafNodeID.intValue() >= numLeaves; // is leaf node
 
                 if (nodeIDPostingsFP.containsKey(leafNodeID))
                 {

@@ -59,8 +59,12 @@ public abstract class MemoryIndex
     {
         assert term != null;
 
-        minTerm = TypeUtil.min(term, minTerm, indexContext.getValidator());
-        maxTerm = TypeUtil.max(term, maxTerm, indexContext.getValidator());
+        minTerm = term == null ? minTerm : (minTerm == null || minTerm.compareTo(term) > 0) ? term : minTerm;
+
+        minTerm = term == null ? maxTerm : (maxTerm == null || maxTerm.compareTo(term) < 0) ? term : maxTerm;
+
+        //minTerm = TypeUtil.min(term, minTerm, columnContext.getValidator());
+        //maxTerm = TypeUtil.max(term, maxTerm, columnContext.getValidator());
     }
 
     public ByteBuffer getMinTerm()

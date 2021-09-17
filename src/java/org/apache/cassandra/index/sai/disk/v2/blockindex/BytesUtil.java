@@ -89,7 +89,11 @@ public class BytesUtil
 
     public static int gatherBytes(ByteComparable term, BytesRefBuilder builder)
     {
-        final ByteSource byteSource = term.asComparableBytes(ByteComparable.Version.OSS41);
+        return gatherBytes(term.asComparableBytes(ByteComparable.Version.OSS41), builder);
+    }
+
+    public static int gatherBytes(ByteSource byteSource, BytesRefBuilder builder)
+    {
         int length = 0;
         // gather the term bytes from the byteSource
         while (true)

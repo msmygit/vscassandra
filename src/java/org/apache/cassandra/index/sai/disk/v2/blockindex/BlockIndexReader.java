@@ -121,15 +121,15 @@ public class BlockIndexReader implements Closeable
         this.perIndexFiles = perIndexFiles;
         this.primaryKeyMapFactory = primaryKeyMapFactory;
 
-        HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = (HashMap<IndexComponent, FileValidator.FileInfo>)SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes);
-        for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
-        {
-            FileValidator.FileInfo fileInfo = FileValidator.generate(indexName, entry.getKey(), indexDescriptor);
-            if (!fileInfo.equals(entry.getValue()))
-            {
-                throw new IOException("CRC check on component "+entry.getKey()+" failed.");
-            }
-        }
+//        HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes);
+//        for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
+//        {
+//            FileValidator.FileInfo fileInfo = FileValidator.generate(entry.getKey(), perIndexFiles);
+//            if (!fileInfo.equals(entry.getValue()))
+//            {
+//                throw new IOException("CRC check on component "+entry.getKey()+" failed.");
+//            }
+//        }
 
         SharedIndexInput bytesInput = new SharedIndexInput(perIndexFiles.openInput(TERMS_DATA));
         this.indexFile = perIndexFiles.get(TERMS_INDEX);
@@ -419,7 +419,6 @@ public class BlockIndexReader implements Closeable
 
         private long posting() throws IOException
         {
-            System.out.println("posting leaf="+context.leaf+" currentPostingLeaf="+currentPostingLeaf+" leafIndex="+context.leafIndex);
             Range<Integer> multiBlockRange = null;
             if (currentPostingLeaf != context.leaf &&
                 (multiBlockUpperEndPoint == -1 ||
@@ -450,8 +449,6 @@ public class BlockIndexReader implements Closeable
                     }
 
                     postingsReader = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP, context.primaryKeyMap);
-
-                    System.out.println("new postingsReader.size="+postingsReader.size()+" ordermap="+leafToOrderMapFP.containsKey(context.leaf));
 
                     // if there's an order map the leaf size is normal
                     // use the postings array
@@ -678,8 +675,11 @@ public class BlockIndexReader implements Closeable
             endOrd = leafNodeIDToLeafOrd.size();
             NodeIDLeafFP pair = leafNodeIDToLeafOrd.get(endOrd - 1);
 
-            // there is no order map for blocks with all the same value
-            assert !leafToOrderMapFP.containsKey(pair.leaf);
+            if (allSameValues)
+            {
+                // there is no order map for blocks with all the same value
+                assert !leafToOrderMapFP.containsKey(pair.leaf);
+            }
         }
         else
         {
@@ -810,7 +810,7 @@ public class BlockIndexReader implements Closeable
         {
             final BytesRef term = seekInBlock(idx, context, true);
 
-            if (startIdx == -1 && term.compareTo(start) >= 0)
+            if (startIdx == -1 && (start == null || term.compareTo(start) >= 0))
             {
                 startIdx = idx;
             }
@@ -1147,8 +1147,6 @@ public class BlockIndexReader implements Closeable
             throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+context.leafSize);
         }
 
-        System.out.println("seekInBlock seekInBlock="+seekIndex+" leafIndex="+context.leafIndex);
-
         int len = 0;
         int prefix = 0;
 
@@ -1218,8 +1216,6 @@ public class BlockIndexReader implements Closeable
         {
             throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+context.leafSize);
         }
-
-        System.out.println("seekInBlock seekInBlock="+seekIndex+" leafIndex="+context.leafIndex);
 
         int len = 0;
         int prefix = 0;

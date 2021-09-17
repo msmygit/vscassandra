@@ -60,8 +60,100 @@ public class SimpleTest extends SAITester
 
         flush();
 
+        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
+        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
+        execute("INSERT INTO %s (id, val) VALUES ('12', 11)");
+
+        flush();
+
+        compact();
+
         assertEquals(2, execute("SELECT id FROM %s WHERE val = 1").size());
         assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
+
+        assertEquals(2, execute("SELECT id FROM %s WHERE val = 11").size());
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 10").size());
+    }
+
+    @Test
+    public void testDouble() throws Throwable
+    {
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, val double)");
+
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (id, val) VALUES ('0', 0.0)");
+        execute("INSERT INTO %s (id, val) VALUES ('1', 1.0)");
+        execute("INSERT INTO %s (id, val) VALUES ('2', 1.0)");
+
+        flush();
+
+        execute("INSERT INTO %s (id, val) VALUES ('10', 10.0)");
+        execute("INSERT INTO %s (id, val) VALUES ('11', 11.0)");
+        execute("INSERT INTO %s (id, val) VALUES ('12', 11.0)");
+
+        flush();
+
+        compact();
+
+        assertEquals(3, execute("SELECT id FROM %s WHERE val > 1.0").size());
+        assertEquals(3, execute("SELECT id FROM %s WHERE val < 10.0").size());
+
+        assertEquals(2, execute("SELECT id FROM %s WHERE val = 1.0").size());
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0.0").size());
+
+        assertEquals(2, execute("SELECT id FROM %s WHERE val = 11.0").size());
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 10.0").size());
+    }
+
+    // smallint
+
+    @Test
+    public void testSmallint() throws Throwable
+    {
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, val smallint)");
+
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (id, val) VALUES ('0', 50)");
+        execute("INSERT INTO %s (id, val) VALUES ('1', 100)");
+
+        flush();
+
+        execute("INSERT INTO %s (id, val) VALUES ('10', 1050)");
+        execute("INSERT INTO %s (id, val) VALUES ('11', 1100)");
+
+        flush();
+
+        //compact();
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 50").size());
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 100").size());
+
+        assertEquals(2, execute("SELECT id FROM %s WHERE val > 100").size());
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 1050").size());
+    }
+
+    @Test
+    public void testInet() throws Throwable
+    {
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, val inet)");
+
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (id, val) VALUES ('0', '170.63.206.57')");
+        execute("INSERT INTO %s (id, val) VALUES ('1', '164.165.67.10')");
+
+        flush();
+
+        compact();
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = '170.63.206.57'").size());
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = '164.165.67.10'").size());
     }
 
     @Test
@@ -96,7 +188,17 @@ public class SimpleTest extends SAITester
         execute("INSERT INTO %s (id, val) VALUES ('1', '1')");
         execute("INSERT INTO %s (id, val) VALUES ('2', '2')");
 
+        //flush();
+
+        execute("INSERT INTO %s (id, val) VALUES ('10', '10')");
+        execute("INSERT INTO %s (id, val) VALUES ('11', '11')");
+        execute("INSERT INTO %s (id, val) VALUES ('12', '12')");
+
         flush();
+
+        //this.compact();
+
+        // cassandra.test.sai.segment_build_memory_limit
 
         assertEquals(1, execute("SELECT id FROM %s WHERE val < '2' AND val > '0'").size());
     }

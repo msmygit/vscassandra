@@ -293,9 +293,9 @@ public class IndexQuerySupport
 
         void execute(DataModel.Executor tester, DataModel model) throws Throwable
         {
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
 
             query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 4800000000L);
             query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 5000000000L);

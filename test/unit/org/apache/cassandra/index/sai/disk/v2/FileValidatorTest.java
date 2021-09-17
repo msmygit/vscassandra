@@ -20,11 +20,15 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import org.junit.Test;
 
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.FileValidator;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.store.IndexOutput;
+
+import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter.createIndexContext;
 
 public class FileValidatorTest extends NdiRandomizedTest
 {
@@ -44,15 +48,14 @@ public class FileValidatorTest extends NdiRandomizedTest
         }
         out.close();
 
-        FileValidator.FileInfo fileInfo = FileValidator.generate(index,
-                                                                 IndexComponent.TERMS_DATA,
-                                                                 indexDescriptor);
+        IndexContext indexContext = createIndexContext("column", index, UTF8Type.instance);
+        V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext);
+
+        FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);
 
         System.out.println("fileInfo=" + fileInfo);
 
-        FileValidator.FileInfo fileInfo2 = FileValidator.generate(index,
-                                                                  IndexComponent.TERMS_DATA,
-                                                                  indexDescriptor);
+        FileValidator.FileInfo fileInfo2 = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);
 
         assertEquals(fileInfo, fileInfo2);
     }
@@ -73,15 +76,14 @@ public class FileValidatorTest extends NdiRandomizedTest
         }
         out.close();
 
-        FileValidator.FileInfo fileInfo = FileValidator.generate(index,
-                                                                 IndexComponent.TERMS_DATA,
-                                                                 indexDescriptor);
+        IndexContext indexContext = createIndexContext("column", index, UTF8Type.instance);
+        V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext);
+
+        FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);
 
         System.out.println("fileInfo=" + fileInfo);
 
-        FileValidator.FileInfo fileInfo2 = FileValidator.generate(index,
-                                                                  IndexComponent.TERMS_DATA,
-                                                                  indexDescriptor);
+        FileValidator.FileInfo fileInfo2 = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);
 
         assertEquals(fileInfo, fileInfo2);
     }

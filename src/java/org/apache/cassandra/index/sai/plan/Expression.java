@@ -381,7 +381,7 @@ public class Expression
         public Value(ByteBuffer value, AbstractType<?> type)
         {
             this.raw = value;
-            this.encoded = TypeUtil.encode(value, type);
+            this.encoded = value.duplicate();//TypeUtil.encode(value, type);
         }
 
         @Override

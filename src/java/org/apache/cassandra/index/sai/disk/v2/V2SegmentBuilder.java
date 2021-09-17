@@ -46,6 +46,8 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.util.BytesRefBuilder;
 
+import static org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil.gatherBytes;
+
 /**
  * Creates an on-heap index data structure to be flushed to an SSTable index.
  */
@@ -96,29 +98,9 @@ public class V2SegmentBuilder
         this.ramIndexer = new RAMStringIndexer(termComparator);
     }
 
-    public static int gatherBytes(final ByteSource byteSource, BytesRefBuilder builder)
-    {
-        int length = 0;
-        // gather the term bytes from the byteSource
-        while (true)
-        {
-            final int val = byteSource.next();
-            if (val != ByteSource.END_OF_STREAM)
-            {
-                ++length;
-                builder.append((byte) val);
-            }
-            else
-            {
-                break;
-            }
-        }
-        return length;
-    }
-
     public long add(ByteBuffer term, int segmentRowId)
     {
-        ByteSource byteSource = termComparator.asComparableBytes(term.duplicate(), ByteComparable.Version.OSS41);
+        final ByteSource byteSource = termComparator.asComparableBytes(term.duplicate(), ByteComparable.Version.OSS41);
         stringBuffer.clear();
         gatherBytes(byteSource, stringBuffer);
         rowCount++;
@@ -145,35 +127,6 @@ public class V2SegmentBuilder
         writer.addAll(ramIndexer.getTermsWithPostings());
         return writer.finish();
     }
-
-//    public long add(ByteBuffer term, PrimaryKey key)
-//    {
-//        assert !flushed : "Cannot add to flushed segment.";
-//        assert key.sstableRowId() >= maxSSTableRowId;
-//        minSSTableRowId = minSSTableRowId < 0 ? key.sstableRowId() : minSSTableRowId;
-//        maxSSTableRowId = key.sstableRowId();
-//
-//        assert maxKey == null || maxKey.compareTo(key) <= 0;
-//        minKey = minKey == null ? key : minKey;
-//        maxKey = key;
-//
-//        if (rowCount == 0)
-//        {
-//            // use first global rowId in the segment as segment rowId offset
-//            segmentRowIdOffset = key.sstableRowId();
-//        }
-//
-//        rowCount++;
-//
-//        // segmentRowIdOffset should encode sstableRowId into Integer
-//        int segmentRowId = RowMapping.castToSegmentRowId(key.sstableRowId(), segmentRowIdOffset);
-//        maxSegmentRowId = Math.max(maxSegmentRowId, segmentRowId);
-//
-//        long bytesAllocated = addInternal(term, segmentRowId);
-//        totalBytesAllocated += bytesAllocated;
-//
-//        return bytesAllocated;
-//    }
 
     public long totalBytesAllocated()
     {

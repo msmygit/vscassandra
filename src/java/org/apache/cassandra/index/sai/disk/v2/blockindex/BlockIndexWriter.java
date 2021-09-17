@@ -359,6 +359,10 @@ public class BlockIndexWriter
     {
         flushLastBuffers();
 
+        // TODO: column doesn't matter here however it might be good to set the correct column
+        final IndexContext indexContext = createIndexContext("column", indexName, UTF8Type.instance);
+        final V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, temporary);
+
         final long valuesOutLastBytesFP = valuesOut.getFilePointer();
 
         // write the block min values index
@@ -516,8 +520,6 @@ public class BlockIndexWriter
             ordinal++;
         }
 
-        System.out.println("nodeIDToLeafOrdinal2="+nodeIDToLeafOrdinal);
-
         final IntLongHashMap nodeIDPostingsFP = new IntLongHashMap();
 
         final long nodeIDToLeafOrdinalFP = valuesOut.getFilePointer();
@@ -667,7 +669,7 @@ public class BlockIndexWriter
         if (zstdDictionaryFP != -1)
         {
             try (ZstdDictCompress dictCompress = new ZstdDictCompress(zstdDictionary, 0, zstdDictionaryLen, 1);
-                 IndexInput bytesInput = indexDescriptor.openPerIndexInput(TERMS_DATA, indexName))
+                 IndexInput bytesInput = perIndexFiles.openInput(TERMS_DATA))//openPerIndexInput(TERMS_DATA, indexName))
             {
                 byte[] rawBytes = new byte[10];
                 byte[] compressedBytes = new byte[10];
@@ -758,10 +760,13 @@ public class BlockIndexWriter
 
         // all files are written, create the CRC check
         final HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = FileValidator.generate(Lists.newArrayList(components),
-                                                                                                   indexName,
-                                                                                                   indexDescriptor);
+                                                                                                   perIndexFiles);
 
         final byte[] fileInfoMapBytes = SerializationUtils.serialize(fileInfoMap);
+        perIndexFiles.close();
+
+        System.out.println("minTerm="+Arrays.toString(minTerm.bytes));
+        System.out.println("maxTerm="+Arrays.toString(realLastTerm.toBytesRef().bytes));
 
         return new BlockIndexMeta(orderMapFP,
                                   indexFP,

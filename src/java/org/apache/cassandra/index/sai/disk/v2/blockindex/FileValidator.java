@@ -27,6 +27,7 @@ import java.util.zip.CRC32;
 
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v2.V2PerIndexFiles;
 import org.apache.lucene.store.IndexInput;
 
 public class FileValidator
@@ -74,25 +75,21 @@ public class FileValidator
     }
 
     public static HashMap<IndexComponent, FileInfo> generate(Collection<IndexComponent> comps,
-                                                             String indexName,
-                                                             IndexDescriptor indexDescriptor) throws IOException
+                                                             V2PerIndexFiles perIndexFiles) throws IOException
     {
-        HashMap<IndexComponent, FileInfo> map = new HashMap<>();
+        final HashMap<IndexComponent, FileInfo> map = new HashMap<>();
         for (IndexComponent comp : comps)
         {
-            FileInfo fileInfo = generate(indexName,
-                                         comp,
-                                         indexDescriptor);
+            FileInfo fileInfo = generate(comp, perIndexFiles);
             map.put(comp, fileInfo);
         }
         return map;
     }
 
-    public static FileInfo generate(String indexName,
-                                    IndexComponent indexComponent,
-                                    IndexDescriptor indexDescriptor) throws IOException
+    public static FileInfo generate(IndexComponent indexComponent,
+                                    V2PerIndexFiles perIndexFiles) throws IOException
     {
-        final IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexName);
+        final IndexInput input = perIndexFiles.openInput(indexComponent);
         final long fileLength = input.length();
 
         int bufferLen = fileLength < 1024 ? (int)fileLength / 3 : 1024;

@@ -48,6 +48,7 @@ import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.lucene.util.BytesRef;
 
 public class V2SearchableIndex extends SearchableIndex
 {
@@ -134,7 +135,9 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public ByteBuffer minTerm()
     {
-        return ByteBuffer.wrap(meta.minTerm.bytes, meta.minTerm.offset, meta.minTerm.length);
+        BytesRef copy = BytesRef.deepCopyOf(meta.minTerm);
+        System.out.println("V2SearchableIndex minTerm="+Arrays.toString(copy.bytes));
+        return ByteBuffer.wrap(copy.bytes, copy.offset, copy.length);
     }
 
     @Override
@@ -160,22 +163,22 @@ public class V2SearchableIndex extends SearchableIndex
                                       AbstractBounds<PartitionPosition> keyRange,
                                       SSTableQueryContext context) throws IOException
     {
-        final ByteBuffer lower = expression.lower.value.encoded;
+        final ByteBuffer lower = expression.lower != null ? expression.lower.value.encoded : null;
         final ByteBuffer upper = expression.upper != null ? expression.upper.value.encoded : null;
 
         if (intersects(keyRange))
         {
-            ByteSource lowerSource = this.indexContext.getValidator().asComparableBytes(lower.duplicate(), ByteComparable.Version.OSS41);
+            ByteSource lowerSource = lower != null ? this.indexContext.getValidator().asComparableBytes(lower.duplicate(), ByteComparable.Version.OSS41) : null;
             ByteSource upperSource = upper != null ? this.indexContext.getValidator().asComparableBytes(upper.duplicate(), ByteComparable.Version.OSS41) : null;
 
-            byte[] lowerBytes = ByteSourceInverse.readBytes(lowerSource);
+            byte[] lowerBytes = lowerSource != null ? ByteSourceInverse.readBytes(lowerSource) : null;
             byte[] upperBytes = upperSource != null ? ByteSourceInverse.readBytes(upperSource) : null;
 
             boolean upperExclusive = expression.upper != null ? !expression.upper.inclusive : false;
 
             if (expression.getOp().equals(Expression.Op.PREFIX))
             {
-                // there's an extra byte with LIKE prefix
+                // remove the extra byte with LIKE prefix
                 lowerBytes = Arrays.copyOf(lowerBytes, lowerBytes.length - 1);
                 upperBytes = Arrays.copyOf(upperBytes, upperBytes.length - 1);
 
@@ -192,8 +195,8 @@ public class V2SearchableIndex extends SearchableIndex
                 upperExclusive = false;
             }
 
-            final List<PostingList.PeekablePostingList> postingLists = reader.traverse(ByteComparable.fixedLength(lowerBytes),
-                                                                                       !expression.lower.inclusive,
+            final List<PostingList.PeekablePostingList> postingLists = reader.traverse(lowerBytes != null ? ByteComparable.fixedLength(lowerBytes) : null,
+                                                                                       lowerBytes != null ? !expression.lower.inclusive : false,
                                                                                        upperBytes != null ? ByteComparable.fixedLength(upperBytes) : null,
                                                                                        upperExclusive);
 
