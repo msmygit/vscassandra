@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Sets;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
@@ -54,7 +55,6 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.utils.Pair;
 
 import static com.google.common.collect.Iterables.size;
 import static java.lang.String.format;
@@ -65,11 +65,7 @@ public final class Schema implements SchemaProvider
 
     private volatile Keyspaces keyspaces = Keyspaces.none();
 
-    // UUID -> mutable metadata ref map. We have to update these in place every time a table changes.
-    private final Map<TableId, TableMetadataRef> metadataRefs = new NonBlockingHashMap<>();
-
-    // (keyspace name, index name) -> mutable metadata ref map. We have to update these in place every time an index changes.
-    private final Map<Pair<String, String>, TableMetadataRef> indexMetadataRefs = new NonBlockingHashMap<>();
+    private volatile TableMetadataRefCache tableMetadataRefCache = TableMetadataRefCache.EMPTY;
 
     // Keyspace objects, one per keyspace. Only one instance should ever exist for any given keyspace.
     private final Map<String, Keyspace> keyspaceInstances = new NonBlockingHashMap<>();
@@ -161,19 +157,14 @@ public final class Schema implements SchemaProvider
         keyspaces = keyspaces.withAddedOrUpdated(ksm);
     }
 
-    private void loadNew(KeyspaceMetadata ksm)
+    private synchronized void loadNew(KeyspaceMetadata ksm)
     {
-        ksm.tablesAndViews()
-           .forEach(metadata -> metadataRefs.put(metadata.id, new TableMetadataRef(metadata)));
-
-        ksm.tables
-           .indexTables()
-           .forEach((name, metadata) -> indexMetadataRefs.put(Pair.create(ksm.name, name), new TableMetadataRef(metadata)));
+        this.tableMetadataRefCache = tableMetadataRefCache.withNewRefs(ksm);
 
         SchemaDiagnostics.metadataInitialized(this, ksm);
     }
 
-    private void reload(KeyspaceMetadata previous, KeyspaceMetadata updated)
+    private synchronized void reload(KeyspaceMetadata previous, KeyspaceMetadata updated)
     {
         Keyspace keyspace = getKeyspaceInstance(updated.name);
         if (null != keyspace)
@@ -184,31 +175,7 @@ public final class Schema implements SchemaProvider
 
         MapDifference<String, TableMetadata> indexesDiff = previous.tables.indexesDiff(updated.tables);
 
-        // clean up after removed entries
-        tablesDiff.dropped.forEach(table -> metadataRefs.remove(table.id));
-        viewsDiff.dropped.forEach(view -> metadataRefs.remove(view.metadata.id));
-
-        indexesDiff.entriesOnlyOnLeft()
-                   .values()
-                   .forEach(indexTable -> indexMetadataRefs.remove(Pair.create(indexTable.keyspace, indexTable.indexName().get())));
-
-        // load up new entries
-        tablesDiff.created.forEach(table -> metadataRefs.put(table.id, new TableMetadataRef(table)));
-        viewsDiff.created.forEach(view -> metadataRefs.put(view.metadata.id, new TableMetadataRef(view.metadata)));
-
-        indexesDiff.entriesOnlyOnRight()
-                   .values()
-                   .forEach(indexTable -> indexMetadataRefs.put(Pair.create(indexTable.keyspace, indexTable.indexName().get()), new TableMetadataRef(indexTable)));
-
-        // refresh refs to updated ones
-        tablesDiff.altered.forEach(diff -> metadataRefs.get(diff.after.id).set(diff.after));
-        viewsDiff.altered.forEach(diff -> metadataRefs.get(diff.after.metadata.id).set(diff.after.metadata));
-
-        indexesDiff.entriesDiffering()
-                   .values()
-                   .stream()
-                   .map(MapDifference.ValueDifference::rightValue)
-                   .forEach(indexTable -> indexMetadataRefs.get(Pair.create(indexTable.keyspace, indexTable.indexName().get())).set(indexTable));
+        this.tableMetadataRefCache = tableMetadataRefCache.withUpdatedRefs(previous, updated);
 
         SchemaDiagnostics.metadataReloaded(this, previous, updated, tablesDiff, viewsDiff, indexesDiff);
     }
@@ -292,13 +259,7 @@ public final class Schema implements SchemaProvider
     {
         keyspaces = keyspaces.without(ksm.name);
 
-        ksm.tablesAndViews()
-           .forEach(t -> metadataRefs.remove(t.id));
-
-        ksm.tables
-           .indexTables()
-           .keySet()
-           .forEach(name -> indexMetadataRefs.remove(Pair.create(ksm.name, name)));
+        this.tableMetadataRefCache = tableMetadataRefCache.withRemovedRefs(ksm);
 
         SchemaDiagnostics.metadataRemoved(this, ksm);
     }
@@ -370,7 +331,7 @@ public final class Schema implements SchemaProvider
     /**
      * @return collection of the user defined keyspaces
      */
-    public List<String> getUserKeyspaces()
+    public ImmutableList<String> getUserKeyspaces()
     {
         return ImmutableList.copyOf(Sets.difference(getNonSystemKeyspacesSet(), SchemaConstants.REPLICATED_SYSTEM_KEYSPACE_NAMES));
     }
@@ -401,7 +362,7 @@ public final class Schema implements SchemaProvider
     /**
      * @return collection of the all keyspace names registered in the system (system and non-system)
      */
-    public Set<String> getKeyspaces()
+    public ImmutableSet<String> getKeyspaces()
     {
         return keyspaces.names();
     }
@@ -418,20 +379,12 @@ public final class Schema implements SchemaProvider
     @Override
     public TableMetadataRef getTableMetadataRef(String keyspace, String table)
     {
-        TableMetadata tm = getTableMetadata(keyspace, table);
-        return tm == null
-             ? null
-             : metadataRefs.get(tm.id);
+        return tableMetadataRefCache.getTableMetadataRef(keyspace, table);
     }
 
     public TableMetadataRef getIndexTableMetadataRef(String keyspace, String index)
     {
-        return indexMetadataRefs.get(Pair.create(keyspace, index));
-    }
-
-    Map<Pair<String, String>, TableMetadataRef> getIndexTableMetadataRefs()
-    {
-        return indexMetadataRefs;
+        return tableMetadataRefCache.getIndexTableMetadataRef(keyspace, index);
     }
 
     /**
@@ -444,18 +397,13 @@ public final class Schema implements SchemaProvider
     @Override
     public TableMetadataRef getTableMetadataRef(TableId id)
     {
-        return metadataRefs.get(id);
+        return tableMetadataRefCache.getTableMetadataRef(id);
     }
 
     @Override
     public TableMetadataRef getTableMetadataRef(Descriptor descriptor)
     {
         return getTableMetadataRef(descriptor.ksname, descriptor.cfname);
-    }
-
-    Map<TableId, TableMetadataRef> getTableMetadataRefs()
-    {
-        return metadataRefs;
     }
 
     /**
@@ -805,13 +753,13 @@ public final class Schema implements SchemaProvider
     private void createTable(TableMetadata table)
     {
         SchemaDiagnostics.tableCreating(this, table);
-        Keyspace.open(table.keyspace).initCf(metadataRefs.get(table.id), true);
+        Keyspace.open(table.keyspace).initCf(tableMetadataRefCache.getTableMetadataRef(table.id), true);
         SchemaDiagnostics.tableCreated(this, table);
     }
 
     private void createView(ViewMetadata view)
     {
-        Keyspace.open(view.keyspace()).initCf(metadataRefs.get(view.metadata.id), true);
+        Keyspace.open(view.keyspace()).initCf(tableMetadataRefCache.getTableMetadataRef(view.metadata.id), true);
     }
 
     private void alterTable(TableMetadata updated)
