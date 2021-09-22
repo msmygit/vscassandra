@@ -105,15 +105,6 @@ import static org.apache.cassandra.schema.MigrationManager.MigrationsSerializer;
  */
 public class Verb
 {
-    public enum Priority
-    {
-        P0,  // sends on the urgent connection (i.e. for Gossip, Echo)
-        P1,  // small or empty responses
-        P2,  // larger messages that can be dropped but who have a larger impact on system stability (e.g. READ_REPAIR, READ_RSP)
-        P3,
-        P4
-    }
-
     private static final List<Verb> verbs = new ArrayList<>();
 
     public static List<Verb> getValues()
@@ -211,6 +202,15 @@ public class Verb
 
     // CUSTOM VERBS
     public static Verb UNUSED_CUSTOM_VERB     = new Verb("CUSTOM", CUSTOM,         0,   P1, rpcTimeout,      INTERNAL_RESPONSE, null,                                 () -> null                                                     );
+
+    public enum Priority
+    {
+        P0,  // sends on the urgent connection (i.e. for Gossip, Echo)
+        P1,  // small or empty responses
+        P2,  // larger messages that can be dropped but who have a larger impact on system stability (e.g. READ_REPAIR, READ_RSP)
+        P3,
+        P4
+    }
 
     public enum Kind
     {
@@ -469,9 +469,9 @@ public class Verb
     /**
      * Add a new custom verb to the list of verbs.
      *
-     * While we could dynamically generate an {code}id{/code} for callers, it's safer to have users
+     * <p>While we could dynamically generate an {@code id} for callers, it's safer to have users
      * explicitly control the ID space since it prevents nodes with different versions disagreeing on which
-     * verb has which ID, e.g. during upgrade.
+     * verb has which ID, e.g. during upgrade.</p>
      *
      * @param name the name of the new verb.
      * @param id the identifier for this custom verb (must be >= 0 and <= MAX_CUSTOM_VERB_ID).
@@ -509,9 +509,9 @@ public class Verb
     /**
      * Decorates the specified verb handler with the provided method.
      *
-     * An example use case is to run a custom method after every write request.
+     * <p>An example use case is to run a custom method after every write request.</p>
      *
-     * @param verbs the list of verbs whose handlers should be wrapped by method.
+     * @param verbs the list of verbs whose handlers should be wrapped by {@code decoratorFn}.
      * @param decoratorFn the method that decorates the handlers in verbs.
      */
     public static void decorateHandler(List<Verb> verbs, Function<IVerbHandler<?>, IVerbHandler<?>> decoratorFn)
