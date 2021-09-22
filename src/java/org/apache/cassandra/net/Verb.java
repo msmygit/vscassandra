@@ -371,6 +371,11 @@ public class Verb
         return name;
     }
 
+    public String name()
+    {
+        return name;
+    }
+
     // This is the largest number we can store in 2 bytes using VIntCoding (1 bit per byte is used to indicate if there is more data coming).
     // When generating ids we count *down* from this number
     private static final int CUSTOM_VERB_START = (1 << (7 * 2)) - 1;
