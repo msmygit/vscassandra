@@ -117,7 +117,7 @@ public class Verb
     public static Verb HINT_RSP               = new Verb("HINT_RSP",               61,  P1, writeTimeout,    REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
     public static Verb HINT_REQ               = new Verb("HINT_REQ",               1,   P4, writeTimeout,    MUTATION,          () -> HintMessage.serializer,               () -> HintVerbHandler.instance,            HINT_RSP            );
     public static Verb READ_REPAIR_RSP        = new Verb("READ_REPAIR_RSP",        62,  P1, writeTimeout,    REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
-    public static Verb READ_REPAIR_REQ        = new Verb("READ_REPAIR_REP",        2,   P1, writeTimeout,    MUTATION,          () -> Mutation.serializer,                  () -> ReadRepairVerbHandler.instance,      READ_REPAIR_RSP     );
+    public static Verb READ_REPAIR_REQ        = new Verb("READ_REPAIR_REQ",        2,   P1, writeTimeout,    MUTATION,          () -> Mutation.serializer,                  () -> ReadRepairVerbHandler.instance,      READ_REPAIR_RSP     );
     public static Verb BATCH_STORE_RSP        = new Verb("BATCH_STORE_RSP",        65,  P1, writeTimeout,    REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
     public static Verb BATCH_STORE_REQ        = new Verb("BATCH_STORE_REQ",        5,   P3, writeTimeout,    MUTATION,          () -> Batch.serializer,                     () -> BatchStoreVerbHandler.instance,      BATCH_STORE_RSP     );
     public static Verb BATCH_REMOVE_RSP       = new Verb("BATCH_REMOVE_RSP",       66,  P1, writeTimeout,    REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
@@ -201,7 +201,7 @@ public class Verb
     // largest used public static Verb ID: 116
 
     // CUSTOM VERBS
-    public static Verb UNUSED_CUSTOM_VERB     = new Verb("CUSTOM", CUSTOM,         0,   P1, rpcTimeout,      INTERNAL_RESPONSE, null,                                 () -> null                                                     );
+    public static Verb UNUSED_CUSTOM_VERB     = new Verb("UNUSED_CUSTOM_VERB", CUSTOM,         0,   P1, rpcTimeout,      INTERNAL_RESPONSE, null,                                 () -> null                                                     );
 
     public enum Priority
     {
