@@ -485,7 +485,7 @@ public class Verb
      * verb has which id, e.g. during upgrade.</p>
      *
      * @param name the name of the new verb.
-     * @param id the identifier for this custom verb (must be >= 0 and <= MAX_CUSTOM_VERB_ID).
+     * @param id the identifier for this custom verb (must be relative id and >= 0 && <= MAX_CUSTOM_VERB_ID).
      * @param priority the priority of the new verb.
      * @param expiration an optional timeout for this verb. @see VerbTimeouts.
      * @param stage The stage this verb should execute in.
