@@ -498,7 +498,7 @@ public class Verb
     {
         assertNameIsUnused(name);
         assertCustomIdIsUnused(idToCustomVerbMap, id, name);
-        Verb verb =  new Verb(name, CUSTOM, id, priority, expiration, stage, serializer, handler, responseVerb);
+        Verb verb = new Verb(name, CUSTOM, id, priority, expiration, stage, serializer, handler, responseVerb);
 
         int absoluteId = idForCustomVerb(id);
         minCustomId = Math.min(absoluteId, minCustomId);
