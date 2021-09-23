@@ -218,7 +218,7 @@ public class Verb
         CUSTOM
     }
 
-    public final String name;
+    private final String name;
     public final int id;
     public final Priority priority;
     public final Stage stage;
@@ -368,7 +368,7 @@ public class Verb
     @Override
     public String toString()
     {
-        return name;
+        return name();
     }
 
     public String name()
@@ -459,7 +459,18 @@ public class Verb
     }
 
     /**
-     * calculate an id for a custom verb
+     * Convert to/from relative and absolute id for a custom verb.
+     *
+     * <pre>{@code
+     *          relId = idForCustomVerb(absId)
+     *          absId = idForCustomVerb(relId).
+     * }</pre>
+     *
+     * <p>Relative ids can be used for indexing idToCustomVerbMap. Absolute ids exist to distinguish
+     * regular verbs from custom verbs in the id space.</p>
+     *
+     * @param id the relative or absolute id.
+     * @return a relative id if {@code id} is absolute, or absolute id if {@code id} is relative.
      */
     private static int idForCustomVerb(int id)
     {
@@ -470,8 +481,8 @@ public class Verb
      * Add a new custom verb to the list of verbs.
      *
      * <p>While we could dynamically generate an {@code id} for callers, it's safer to have users
-     * explicitly control the ID space since it prevents nodes with different versions disagreeing on which
-     * verb has which ID, e.g. during upgrade.</p>
+     * explicitly control the id space since it prevents nodes with different versions disagreeing on which
+     * verb has which id, e.g. during upgrade.</p>
      *
      * @param name the name of the new verb.
      * @param id the identifier for this custom verb (must be >= 0 and <= MAX_CUSTOM_VERB_ID).
