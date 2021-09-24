@@ -385,8 +385,8 @@ public class Verb
     private static final int MAX_CUSTOM_VERB_ID = 1000;
 
     private static final Verb[] idToVerbMap;
-    private static Verb[] idToCustomVerbMap;
-    private static int minCustomId;
+    private static volatile Verb[] idToCustomVerbMap;
+    private static volatile int minCustomId;
 
     static
     {
@@ -511,6 +511,7 @@ public class Verb
         return verb;
     }
 
+    // Callers must take care of synchronizing to protect against concurrent updates to verbs.
     private static void assertNameIsUnused(String name)
     {
         if (verbs.stream().map(v -> v.name).collect(Collectors.toList()).contains(name))
@@ -525,7 +526,7 @@ public class Verb
      * @param verbs the list of verbs whose handlers should be wrapped by {@code decoratorFn}.
      * @param decoratorFn the method that decorates the handlers in verbs.
      */
-    public static void decorateHandler(List<Verb> verbs, Function<IVerbHandler<?>, IVerbHandler<?>> decoratorFn)
+    public static synchronized void decorateHandler(List<Verb> verbs, Function<IVerbHandler<?>, IVerbHandler<?>> decoratorFn)
     {
         for (Verb v : verbs)
         {
