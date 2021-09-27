@@ -19,6 +19,9 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -80,6 +83,9 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     private final RandomAccessReader primaryKeys;
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
+    private LoadingCache<Long, PrimaryKey> keyCache = Caffeine.newBuilder()
+                                                              .maximumSize(10000)
+                                                              .build(rowId -> fetchKey(rowId));
 
     private V2PrimaryKeyMap(String offsetsPath,
                             LongArray primaryKeyOffsets,
@@ -103,14 +109,22 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
-        long startOffset = primaryKeyOffsets.get(sstableRowId);
-        primaryKeys.seek(startOffset);
-        return keyFactory.createKey(primaryKeys, sstableRowId);
+        return keyCache.get(sstableRowId);
+//        long startOffset = primaryKeyOffsets.get(sstableRowId);
+//        primaryKeys.seek(startOffset);
+//        return keyFactory.createKey(primaryKeys, sstableRowId);
     }
 
     @Override
     public void close() throws IOException
     {
         FileUtils.close(primaryKeyOffsets, primaryKeys);
+    }
+
+    private PrimaryKey fetchKey(long sstableRowId) throws IOException
+    {
+        long startOffset = primaryKeyOffsets.get(sstableRowId);
+        primaryKeys.seek(startOffset);
+        return keyFactory.createKey(primaryKeys, sstableRowId);
     }
 }
