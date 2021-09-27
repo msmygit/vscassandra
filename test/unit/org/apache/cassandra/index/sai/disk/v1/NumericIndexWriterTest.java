@@ -112,7 +112,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         ))
         {
             final Counter visited = Counter.newCounter();
-            try (final PostingList ignored = intersect(reader.intersect(new BKDReader.IntersectVisitor()
+            try (final PostingList ignored = reader.intersect(new BKDReader.IntersectVisitor()
             {
                 @Override
                 public boolean visit(byte[] packedValue)
@@ -128,7 +128,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()))
             {
                 assertEquals(numRows, visited.get());
             }
@@ -165,7 +165,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         ))
         {
             final Counter visited = Counter.newCounter();
-            try (final PostingList ignored = intersect(reader.intersect(new BKDReader.IntersectVisitor()
+            try (final PostingList ignored = reader.intersect(new BKDReader.IntersectVisitor()
             {
                 @Override
                 public boolean visit(byte[] packedValue)
@@ -184,7 +184,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
                 {
                     return PointValues.Relation.CELL_CROSSES_QUERY;
                 }
-            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
+            }, (QueryEventListener.BKDIndexEventListener)QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()))
             {
                 assertEquals(maxSegmentRowId, visited.get());
             }

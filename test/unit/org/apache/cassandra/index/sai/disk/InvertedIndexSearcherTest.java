@@ -78,8 +78,8 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
         {
             for (int t = 0; t < numTerms; ++t)
             {
-                try (RangeIterator results = makeIterator(searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
-                        .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest())))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                        .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest()))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
                     assertTrue(results.hasNext());
@@ -94,8 +94,8 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
                     assertFalse(results.hasNext());
                 }
 
-                try (RangeIterator results = makeIterator(searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
-                        .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest())))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                        .add(Operator.EQ, wrap(termsEnum.get(t).left)), SSTableQueryContext.forTest()))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
                     assertTrue(results.hasNext());
@@ -117,13 +117,13 @@ public class InvertedIndexSearcherTest extends NdiRandomizedTest
 
             // try searching for terms that weren't indexed
             final String tooLongTerm = randomSimpleString(10, 12);
-            RangeIterator results = makeIterator(searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
-                                                                .add(Operator.EQ, UTF8Type.instance.decompose(tooLongTerm)), SSTableQueryContext.forTest()));
+            RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                                                                .add(Operator.EQ, UTF8Type.instance.decompose(tooLongTerm)), SSTableQueryContext.forTest());
             assertFalse(results.hasNext());
 
             final String tooShortTerm = randomSimpleString(1, 2);
-            results = makeIterator(searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
-                                                      .add(Operator.EQ, UTF8Type.instance.decompose(tooShortTerm)), SSTableQueryContext.forTest()));
+            results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                                                      .add(Operator.EQ, UTF8Type.instance.decompose(tooShortTerm)), SSTableQueryContext.forTest());
             assertFalse(results.hasNext());
         }
     }

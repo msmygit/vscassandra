@@ -63,6 +63,12 @@ public class PackedLongsPostingList implements PostingList
     }
 
     @Override
+    public long advance(long targetRowId) throws IOException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public PrimaryKey mapRowId(long rowId)
     {
         throw new UnsupportedOperationException();

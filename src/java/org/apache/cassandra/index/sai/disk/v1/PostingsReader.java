@@ -244,6 +244,29 @@ public class PostingsReader implements OrdinalPostingList
         return slowAdvance(nextPrimaryKey);
     }
 
+    @Override
+    public long advance(long targetRowId) throws IOException
+    {
+        listener.onAdvance();
+        int block = binarySearchBlock(targetRowId);
+
+        if (block < 0)
+        {
+            block = -block - 1;
+        }
+
+        if (postingsBlockIdx == block + 1)
+        {
+            // we're in the same block, just iterate through
+            return slowAdvance(targetRowId);
+        }
+        assert block > 0;
+        // Even if there was an exact match, block might contain duplicates.
+        // We iterate to the target token from the beginning.
+        lastPosInBlock(block - 1);
+        return slowAdvance(targetRowId);
+    }
+
     private long slowAdvance(PrimaryKey nextPrimaryKey) throws IOException
     {
         while (totalPostingsRead < numPostings)
@@ -255,6 +278,20 @@ public class PostingsReader implements OrdinalPostingList
             cachedRowId = segmentRowId;
             cachedPrimaryKey = primaryKeyMap.primaryKeyFromRowId(segmentRowId);
             if (cachedPrimaryKey.compareTo(nextPrimaryKey) >= 0)
+                return segmentRowId;
+        }
+        return END_OF_STREAM;
+    }
+
+    private long slowAdvance(long targetRowId) throws IOException
+    {
+        while (totalPostingsRead < numPostings)
+        {
+            final long segmentRowId = peekNext();
+
+            advanceOnePosition(segmentRowId);
+
+            if (segmentRowId >= targetRowId)
                 return segmentRowId;
         }
         return END_OF_STREAM;
@@ -286,6 +323,47 @@ public class PostingsReader implements OrdinalPostingList
             {
                 // target found, but we need to check for duplicates
                 if (mid > 0 && primaryKeyMap.primaryKeyFromRowId(blockMaxValues.get(mid - 1)).compareTo(primaryKey) == 0)
+                {
+                    // there are duplicates, pivot left
+                    high = mid - 1;
+                }
+                else
+                {
+                    // no duplicates
+                    return mid;
+                }
+            }
+        }
+        return -(low + 1);  // target not found
+    }
+
+    private int binarySearchBlock(long targetRowId) throws IOException
+    {
+        int low = postingsBlockIdx - 1;
+        int high = Math.toIntExact(blockMaxValues.length()) - 1;
+
+        // in current block
+        if (low <= high && targetRowId <= blockMaxValues.get(low))
+            return low;
+
+        while (low <= high)
+        {
+            int mid = low + ((high - low) >> 1) ;
+
+            long midVal = blockMaxValues.get(mid);
+
+            if (midVal < targetRowId)
+            {
+                low = mid + 1;
+            }
+            else if (midVal > targetRowId)
+            {
+                high = mid - 1;
+            }
+            else
+            {
+                // target found, but we need to check for duplicates
+                if (mid > 0 && blockMaxValues.get(mid - 1L) == targetRowId)
                 {
                     // there are duplicates, pivot left
                     high = mid - 1;

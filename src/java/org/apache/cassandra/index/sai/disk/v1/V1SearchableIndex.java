@@ -145,7 +145,7 @@ public class V1SearchableIndex extends SearchableIndex
         {
             if (segment.intersects(keyRange))
             {
-                iterators.addAll(segment.search(expression, context));
+                iterators.add(segment.search(expression, context));
             }
         }
 

@@ -299,6 +299,15 @@ public class TermsReader implements Closeable
         }
 
         @Override
+        public long advance(long targetRowId) throws IOException
+        {
+            long next = wrapped.advance(targetRowId);
+            if (next == PostingList.END_OF_STREAM)
+                return next;
+            return next + offset;
+        }
+
+        @Override
         public PrimaryKey mapRowId(long rowId) throws IOException
         {
             return wrapped.mapRowId(rowId);

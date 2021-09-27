@@ -129,7 +129,7 @@ public class V2SearchableIndex extends SearchableIndex
     public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
         if (intersects(keyRange))
-            return index.search(expression, context);
+            return Collections.singletonList(index.search(expression, context));
 
         return Collections.emptyList();
     }

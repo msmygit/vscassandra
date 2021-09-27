@@ -164,11 +164,11 @@ public class KDTreeIndexSearcherTest extends NdiRandomizedTest
                                                   final NumberType<T> rawType, final NumberType<?> encodedType,
                                                   final Function<Short, T> rawValueProducer) throws Exception
     {
-        try (RangeIterator results = makeIterator(indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.EQ;
             lower = upper = new Bound(rawType.decompose(rawValueProducer.apply(EQ_TEST_LOWER_BOUND_INCLUSIVE)), encodedType, true);
-        }}, SSTableQueryContext.forTest())))
+        }}, SSTableQueryContext.forTest()))
         {
             assertEquals(results.getMinimum(), results.getCurrent());
             assertTrue(results.hasNext());
@@ -176,11 +176,11 @@ public class KDTreeIndexSearcherTest extends NdiRandomizedTest
             assertEquals(0L, results.next().partitionKey().getToken().getLongValue());
         }
 
-        try (RangeIterator results = makeIterator(indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.EQ;
             lower = upper = new Bound(rawType.decompose(rawValueProducer.apply(EQ_TEST_UPPER_BOUND_EXCLUSIVE)), encodedType, true);
-        }}, SSTableQueryContext.forTest())))
+        }}, SSTableQueryContext.forTest()))
         {
             assertFalse(results.hasNext());
             indexSearcher.close();
@@ -200,13 +200,13 @@ public class KDTreeIndexSearcherTest extends NdiRandomizedTest
                                                      final NumberType<T> rawType, final NumberType<?> encodedType,
                                                      final Function<Short, T> rawValueProducer, List<Long> expectedTokenList) throws Exception
     {
-        try (RangeIterator results = makeIterator(indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
 
             lower = new Bound(rawType.decompose(rawValueProducer.apply((short)2)), encodedType, false);
             upper = new Bound(rawType.decompose(rawValueProducer.apply((short)7)), encodedType, true);
-        }}, SSTableQueryContext.forTest())))
+        }}, SSTableQueryContext.forTest()))
         {
             assertEquals(results.getMinimum(), results.getCurrent());
             assertTrue(results.hasNext());
@@ -215,20 +215,20 @@ public class KDTreeIndexSearcherTest extends NdiRandomizedTest
             assertEquals(expectedTokenList, actualTokenList);
         }
 
-        try (RangeIterator results = makeIterator(indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
             lower = new Bound(rawType.decompose(rawValueProducer.apply(RANGE_TEST_UPPER_BOUND_EXCLUSIVE)), encodedType, true);
-        }}, SSTableQueryContext.forTest())))
+        }}, SSTableQueryContext.forTest()))
         {
             assertFalse(results.hasNext());
         }
 
-        try (RangeIterator results = makeIterator(indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
             upper = new Bound(rawType.decompose(rawValueProducer.apply(RANGE_TEST_LOWER_BOUND_INCLUSIVE)), encodedType, false);
-        }}, SSTableQueryContext.forTest())))
+        }}, SSTableQueryContext.forTest()))
         {
             assertFalse(results.hasNext());
             indexSearcher.close();

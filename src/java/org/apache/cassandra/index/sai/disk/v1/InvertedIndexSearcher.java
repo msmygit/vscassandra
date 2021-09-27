@@ -87,7 +87,7 @@ public class InvertedIndexSearcher extends IndexSearcher
 
     @Override
     @SuppressWarnings("resource")
-    public List<RangeIterator> search(Expression exp, SSTableQueryContext context) throws IOException
+    public RangeIterator search(Expression exp, SSTableQueryContext context) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -99,7 +99,7 @@ public class InvertedIndexSearcher extends IndexSearcher
         QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
 
         PostingList postingList = reader.exactMatch(term, listener, context);
-        return toIterators(postingList == null ? Collections.EMPTY_LIST : Collections.singletonList(postingList.peekable()), context);
+        return toIterator(postingList, context);
     }
 
     @Override

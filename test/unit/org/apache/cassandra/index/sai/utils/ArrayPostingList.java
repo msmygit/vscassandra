@@ -76,6 +76,23 @@ public class ArrayPostingList implements OrdinalPostingList
     }
 
     @Override
+    public long advance(long targetRowId) throws IOException
+    {
+        for (int i = idx; i < postings.length; ++i)
+        {
+            final int segmentRowId = getPostingAt(i);
+
+            idx++;
+
+            if (segmentRowId >= targetRowId)
+            {
+                return segmentRowId;
+            }
+        }
+        return PostingList.END_OF_STREAM;
+    }
+
+    @Override
     public PrimaryKey mapRowId(long rowId) throws IOException
     {
         return V2PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(rowId);

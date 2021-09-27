@@ -135,7 +135,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         // Next test that an intersection only returns the query values
         List<Long> expected = Lists.list(8L, 9L);
         int expectedCount = 0;
-        PostingList intersection = intersect(reader1.intersect(buildQuery(8, 9), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        PostingList intersection = reader1.intersect(buildQuery(8, 9), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
             assertEquals(expected.get(expectedCount++), id);
@@ -157,7 +157,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         final int queryMin = 8;
         final int queryMax = 9;
 
-        intersection = intersect(reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
 
         for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
         {
@@ -223,13 +223,13 @@ public class BKDReaderTest extends NdiRandomizedTest
             }
         }
 
-        try (PostingList intersection = intersect(reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
+        try (PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()))
         {
             assertNull(intersection);
         }
 
-        try (PostingList collectAllIntersection = intersect(reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
-             PostingList filteringIntersection = intersect(reader.intersect(ALL_MATCH_WITH_FILTERING, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest())))
+        try (PostingList collectAllIntersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
+             PostingList filteringIntersection = reader.intersect(ALL_MATCH_WITH_FILTERING, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()))
         {
             assertEquals(numRows, collectAllIntersection.size());
             assertEquals(numRows, filteringIntersection.size());
@@ -248,7 +248,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         final int queryMin = 42;
         final int queryMax = 87;
 
-        final PostingList intersection = intersect(reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        final PostingList intersection = reader.intersect(buildQuery(queryMin, queryMax), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
 
         assertThat(intersection, is(instanceOf(MergePostingList.class)));
         long expectedRowID = queryMin;
@@ -288,10 +288,10 @@ public class BKDReaderTest extends NdiRandomizedTest
 
         final BKDReader reader = finishAndOpenReaderOneDim(2, buffer);
 
-        PostingList intersection = intersect(reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        PostingList intersection = reader.intersect(NONE_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
         assertNull(intersection);
 
-        intersection = intersect(reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        intersection = reader.intersect(ALL_MATCH, (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
         assertEquals(numRows, intersection.size());
         assertEquals(100, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(100)));
         assertEquals(200, intersection.advance(PrimaryKeyMap.IDENTITY.primaryKeyFromRowId(200)));
@@ -327,7 +327,7 @@ public class BKDReaderTest extends NdiRandomizedTest
 
         final BKDReader reader = finishAndOpenReaderOneDim(50, buffer);
 
-        final PostingList intersection = intersect(reader.intersect(buildQuery(1017, 1096), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+        final PostingList intersection = reader.intersect(buildQuery(1017, 1096), (QueryEventListener.BKDIndexEventListener)NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
         assertNull(intersection);
     }
 

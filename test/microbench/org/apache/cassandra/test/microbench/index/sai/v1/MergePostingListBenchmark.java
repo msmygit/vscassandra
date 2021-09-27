@@ -79,6 +79,7 @@ public class MergePostingListBenchmark
     public void mergePostings()
     {
         final PriorityQueue<PostingList.PeekablePostingList> lists = new PriorityQueue<>(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+//        final List<PostingList.PeekablePostingList> lists = new ArrayList<>();
         for (int[] postings : splitPostingLists)
         {
             lists.add(new ArrayPostingList(postings).peekable());

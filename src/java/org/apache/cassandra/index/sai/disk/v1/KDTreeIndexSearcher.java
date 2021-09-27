@@ -80,7 +80,7 @@ public class KDTreeIndexSearcher extends IndexSearcher
 
     @Override
     @SuppressWarnings("resource")
-    public List<RangeIterator> search(Expression exp, SSTableQueryContext context) throws IOException
+    public RangeIterator search(Expression exp, SSTableQueryContext context) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -90,8 +90,8 @@ public class KDTreeIndexSearcher extends IndexSearcher
             final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
             QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
 
-            List<PostingList.PeekablePostingList> postingLists = bkdReader.intersect(query, listener, context);
-            return toIterators(postingLists, context);
+            PostingList postingList = bkdReader.intersect(query, listener, context);
+            return toIterator(postingList, context);
         }
         else
         {

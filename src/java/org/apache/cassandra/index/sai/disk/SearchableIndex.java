@@ -59,6 +59,6 @@ public abstract class SearchableIndex implements Closeable
     public abstract PrimaryKey maxKey();
 
     public abstract List<RangeIterator> search(Expression expression,
-                                               AbstractBounds<PartitionPosition> keyRange,
-                                               SSTableQueryContext context) throws IOException;
+                                         AbstractBounds<PartitionPosition> keyRange,
+                                         SSTableQueryContext context) throws IOException;
 }

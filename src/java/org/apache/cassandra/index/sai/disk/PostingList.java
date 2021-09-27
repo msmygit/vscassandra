@@ -59,6 +59,8 @@ public interface PostingList extends Closeable
      */
     long advance(PrimaryKey nextPrimaryKey) throws IOException;
 
+    long advance(long targetRowId) throws IOException;
+
     PrimaryKey mapRowId(long rowId) throws IOException;
 
     /**
@@ -110,6 +112,19 @@ public interface PostingList extends Closeable
             return next;
         }
 
+        public long advanceWithoutConsuming(long targetRowId) throws IOException
+        {
+            if (peek() == END_OF_STREAM)
+                return END_OF_STREAM;
+
+            if (peek() >= targetRowId)
+                return peek();
+
+            peeked = true;
+            next = wrapped.advance(targetRowId);
+            return next;
+        }
+
         @Override
         public long nextPosting() throws IOException
         {
@@ -139,6 +154,19 @@ public interface PostingList extends Closeable
             peeked = false;
 
             return wrapped.advance(primaryKey);
+        }
+
+        @Override
+        public long advance(long targetRowId) throws IOException
+        {
+            if (peeked && next >= targetRowId)
+            {
+                peeked = false;
+                return next;
+            }
+
+            peeked = false;
+            return wrapped.advance(targetRowId);
         }
 
         @Override

@@ -223,7 +223,7 @@ public class KDTreeSegmentMergerTest extends SAITester
 
             for (int term : expected.keySet())
             {
-                PostingList postingList = intersect(reader.intersect(buildQuery(term, term), NO_OP_BKD_LISTENER, SSTableQueryContext.forTest()));
+                PostingList postingList = reader.intersect(buildQuery(term, term), NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
 
                 while (true)
                 {

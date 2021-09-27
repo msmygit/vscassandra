@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +39,7 @@ import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.FilteringPostingList;
+import org.apache.cassandra.index.sai.disk.MergePostingListV2;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
@@ -333,7 +335,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
     }
 
     @SuppressWarnings("resource")
-    public List<PostingList.PeekablePostingList> intersect(IntersectVisitor visitor, QueryEventListener.BKDIndexEventListener listener, SSTableQueryContext context)
+    public PostingList intersect(IntersectVisitor visitor, QueryEventListener.BKDIndexEventListener listener, SSTableQueryContext context)
     {
         Relation relation = visitor.compare(minPackedValue, maxPackedValue);
 
@@ -383,7 +385,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             this.context = context;
         }
 
-        public List<PostingList.PeekablePostingList> execute()
+        public PostingList execute()
         {
             try
             {
@@ -393,22 +395,22 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 
                 FileUtils.closeQuietly(bkdInput);
 
-                final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+//                final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+//
+//                listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
+//                listener.postingListsHit(postingLists.size());
+//
+//                if (postingLists.isEmpty())
+//                {
+//                    FileUtils.closeQuietly(postingsInput, postingsSummaryInput);
+//                    return null;
+//                }
+//
+//                if (logger.isTraceEnabled())
+//                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
+//                                 indexFile.path(), elapsedMicros, postingLists.size());
 
-                listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
-                listener.postingListsHit(postingLists.size());
-
-                if (postingLists.isEmpty())
-                {
-                    FileUtils.closeQuietly(postingsInput, postingsSummaryInput);
-                    return null;
-                }
-
-                if (logger.isTraceEnabled())
-                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
-                                 indexFile.path(), elapsedMicros, postingLists.size());
-
-                return postingLists;
+                return mergePostings(postingLists);
             }
             catch (Throwable t)
             {
@@ -428,6 +430,27 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         protected void closeOnException()
         {
             FileUtils.closeQuietly(bkdInput, postingsInput, postingsSummaryInput);
+        }
+
+        protected PostingList mergePostings(List<PostingList.PeekablePostingList> postingLists)
+        {
+            final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+
+            listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
+            listener.postingListsHit(postingLists.size());
+
+            if (postingLists.isEmpty())
+            {
+                FileUtils.closeQuietly(postingsInput, postingsSummaryInput);
+                return null;
+            }
+            else
+            {
+                if (logger.isTraceEnabled())
+                    logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
+                                 indexFile.path(), elapsedMicros, postingLists.size());
+                return MergePostingListV2.merge(postingLists, () -> FileUtils.close(postingsInput, postingsSummaryInput));
+            }
         }
 
         public void collectPostingLists(List<PostingList.PeekablePostingList> postingLists) throws IOException

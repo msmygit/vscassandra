@@ -77,6 +77,12 @@ class RAMPostingSlices
             }
 
             @Override
+            public long advance(long targetRowId)
+            {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
             public PrimaryKey mapRowId(long rowId)
             {
                 throw new UnsupportedOperationException();
