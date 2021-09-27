@@ -48,7 +48,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
         {
             final BlockIndexMeta meta = (BlockIndexMeta)indexMetadata;
 
-            try (final IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext.getIndexName()))
+            try (final IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext))
             {
                 try
                 {
@@ -64,7 +64,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
         @Override
         public IndexOnDiskMetadata deserialize(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
-            try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext.getIndexName()))
+            try (IndexInput input = indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext))
             {
                 try
                 {

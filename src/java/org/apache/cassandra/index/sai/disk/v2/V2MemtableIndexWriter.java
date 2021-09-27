@@ -96,7 +96,7 @@ public class V2MemtableIndexWriter implements PerIndexWriter
                 logger.debug(indexContext.logMessage("No indexed rows to flush from SSTable {}."), indexDescriptor.descriptor);
                 // Write a completion marker even though we haven't written anything to the index
                 // so we won't try to build the index again for the SSTable
-                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
                 return;
             }
 
@@ -109,7 +109,7 @@ public class V2MemtableIndexWriter implements PerIndexWriter
             {
                 long cellCount = flush(minKey, maxKey, indexContext.getValidator(), terms, rowMapping.maxSegmentRowId);
 
-                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+                indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
 
                 indexContext.getIndexMetrics().memtableIndexFlushCount.inc();
 
@@ -138,7 +138,7 @@ public class V2MemtableIndexWriter implements PerIndexWriter
                        MemtableTermsIterator terms,
                        long maxSegmentRowId) throws IOException
     {
-        BlockIndexWriter writer = new BlockIndexWriter(indexContext.getIndexName(), indexDescriptor, false);
+        BlockIndexWriter writer = new BlockIndexWriter(indexDescriptor, indexContext, false);
         writer.addAll(terms);
         BlockIndexMeta meta = writer.finish();
 

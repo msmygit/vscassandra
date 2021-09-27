@@ -352,14 +352,14 @@ public class IndexDescriptor
     }
 
 
-    public IndexInput openPerIndexInput(IndexComponent component, String index, boolean temp)
+    public IndexInput openPerIndexInput(IndexComponent component, IndexContext indexContext, boolean temporary)
     {
-        final File file = temp ? tmpFileFor(component, index) : fileFor(component, index);
+        final File file = temporary ? tmpFileFor(component, indexContext) : fileFor(component, indexContext);
         if (logger.isTraceEnabled())
-            logger.trace(logMessage("Opening blocking index input for file {} ({}) temp {}"),
+            logger.trace(logMessage("Opening blocking index input for file {} ({}) temporary {}"),
                          file,
                          FBUtilities.prettyPrintMemory(file.length()),
-                         temp);
+                         temporary);
 
         return IndexFileUtils.instance.openBlockingInput(file);
     }

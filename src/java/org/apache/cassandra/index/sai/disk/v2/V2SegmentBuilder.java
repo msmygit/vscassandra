@@ -112,18 +112,18 @@ public class V2SegmentBuilder
         return ramIndexer.rowCount == 0;
     }
 
-    public BlockIndexMeta flush(IndexDescriptor indexDescriptor, IndexContext columnContext) throws IOException
+    public BlockIndexMeta flush(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
     {
         assert !flushed;
         flushed = true;
 
         if (getRowCount() == 0)
         {
-            logger.warn(columnContext.logMessage("No rows to index during flush of SSTable {}."), indexDescriptor.descriptor);
+            logger.warn(indexContext.logMessage("No rows to index during flush of SSTable {}."), indexDescriptor.descriptor);
             return null;
         }
 
-        BlockIndexWriter writer = new BlockIndexWriter(columnContext.getIndexName(), indexDescriptor, true);
+        BlockIndexWriter writer = new BlockIndexWriter(indexDescriptor, indexContext, true);
         writer.addAll(ramIndexer.getTermsWithPostings());
         return writer.finish();
     }

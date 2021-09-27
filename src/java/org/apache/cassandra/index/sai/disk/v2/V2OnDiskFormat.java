@@ -78,9 +78,9 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     }
 
     @Override
-    public PerIndexFiles perIndexFiles(IndexDescriptor indexDescriptor,
-                                       IndexContext indexContext,
-                                       boolean temporary)
+    public PerIndexFiles newPerIndexFiles(IndexDescriptor indexDescriptor,
+                                          IndexContext indexContext,
+                                          boolean temporary)
     {
         return new V2PerIndexFiles(indexDescriptor, indexContext, temporary);
     }

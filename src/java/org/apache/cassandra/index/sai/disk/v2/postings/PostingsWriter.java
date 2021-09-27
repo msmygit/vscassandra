@@ -101,22 +101,22 @@ public class PostingsWriter implements Closeable
     private long totalPostings;
     private int postingsWritten;
 
-    @VisibleForTesting
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
-    {
-        this(indexDescriptor, index, BLOCK_SIZE, segmented);
-    }
+//    @VisibleForTesting
+//    public PostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+//    {
+//        this(indexDescriptor, index, BLOCK_SIZE, segmented);
+//    }
 
     public PostingsWriter(IndexOutput dataOutput) throws IOException
     {
         this(dataOutput, BLOCK_SIZE);
     }
 
-    public PostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
-    {
-        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index), blockSize);
-        //this(indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index), true, segmented), blockSize);
-    }
+//    public PostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
+//    {
+//        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index), blockSize);
+//        //this(indexDescriptor.openOutput(IndexComponent.create(IndexComponent.Type.POSTING_LISTS, index), true, segmented), blockSize);
+//    }
 
     private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
     {

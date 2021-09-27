@@ -253,15 +253,16 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
+        IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
+
         V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
 
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(indexName, indexDescriptor, false);
+        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(indexDescriptor, indexContext, false);
 
         TermsIterator terms = new MemtableTermsIterator(null,
                                                         null,
                                                         list.iterator());
 
-        IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
 
         V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, false);
 
@@ -633,7 +634,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         bkdReader.close();
 
         IndexDescriptor comps = newIndexDescriptor();
-        BlockIndexWriter prefixBytesWriter = new BlockIndexWriter(indexName, comps, false);
+        BlockIndexWriter prefixBytesWriter = new BlockIndexWriter(comps, createIndexContext(indexName, UTF8Type.instance), false);
 
         TermsIterator terms = new MemtableTermsIterator(null,
                                                         null,

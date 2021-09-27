@@ -28,7 +28,7 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.FileValidator;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.store.IndexOutput;
 
-import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter.createIndexContext;
+import static org.apache.cassandra.index.sai.SAITester.createIndexContext;
 
 public class FileValidatorTest extends NdiRandomizedTest
 {
@@ -37,9 +37,9 @@ public class FileValidatorTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        String index = "test";
+        IndexContext indexContext = createIndexContext("column", "test", UTF8Type.instance);
 
-        IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, index);
+        IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext);
         byte[] buffer = new byte[1];
         for (int x = 0; x < 10_000; x++)
         {
@@ -48,7 +48,6 @@ public class FileValidatorTest extends NdiRandomizedTest
         }
         out.close();
 
-        IndexContext indexContext = createIndexContext("column", index, UTF8Type.instance);
         V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext);
 
         FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);
@@ -65,9 +64,9 @@ public class FileValidatorTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        String index = "test";
+        IndexContext indexContext = createIndexContext("column", "test", UTF8Type.instance);
 
-        IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, index);
+        IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext);
         byte[] buffer = new byte[1];
         for (int x = 0; x < 500; x++)
         {
@@ -76,7 +75,6 @@ public class FileValidatorTest extends NdiRandomizedTest
         }
         out.close();
 
-        IndexContext indexContext = createIndexContext("column", index, UTF8Type.instance);
         V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext);
 
         FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, perIndexFiles);

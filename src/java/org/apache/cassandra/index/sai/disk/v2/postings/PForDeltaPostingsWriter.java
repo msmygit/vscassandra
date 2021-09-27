@@ -103,21 +103,21 @@ public class PForDeltaPostingsWriter implements Closeable
     private long totalPostings;
     private int postingsWritten;
 
-    @VisibleForTesting
-    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
-    {
-        this(indexDescriptor, index, BLOCK_SIZE, segmented);
-    }
+//    @VisibleForTesting
+//    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, boolean segmented) throws IOException
+//    {
+//        this(indexDescriptor, index, BLOCK_SIZE, segmented);
+//    }
 
     public PForDeltaPostingsWriter(IndexOutput dataOutput) throws IOException
     {
         this(dataOutput, BLOCK_SIZE);
     }
 
-    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
-    {
-        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index), blockSize);
-    }
+//    public PForDeltaPostingsWriter(IndexDescriptor indexDescriptor, String index, int blockSize, boolean segmented) throws IOException
+//    {
+//        this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, index), blockSize);
+//    }
 
     private PForDeltaPostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
     {

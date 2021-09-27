@@ -282,7 +282,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             compactSegments();
 
             writeSegmentsMetadata();
-            indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext.getIndexName());
+            indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
         }
         finally
         {
@@ -352,8 +352,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
         MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators);
 
-        BlockIndexWriter writer = new BlockIndexWriter(indexContext.getIndexName(),
-                                                       indexDescriptor,
+        BlockIndexWriter writer = new BlockIndexWriter(indexDescriptor,
+                                                       indexContext,
                                                        false);
 
         // TODO: write row id -> point id map

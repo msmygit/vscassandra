@@ -117,7 +117,7 @@ public class BlockIndexWriter
     final boolean temporary;
     private final PostingsWriter postingsWriter;
     final IndexDescriptor indexDescriptor;
-    final String indexName;
+    final IndexContext indexContext;
 
     // leaf id to postings file pointer
     private final TreeMap<Integer,Long> leafToPostingsFP = new TreeMap();
@@ -175,18 +175,18 @@ public class BlockIndexWriter
         }
     }
 
-    public BlockIndexWriter(String indexName,
-                            IndexDescriptor indexDescriptor,
+    public BlockIndexWriter(IndexDescriptor indexDescriptor,
+                            IndexContext indexContext,
                             boolean temporary) throws IOException
     {
-        this.indexName = indexName;
+        this.indexContext = indexContext;
         this.indexDescriptor = indexDescriptor;
         this.temporary = temporary;
-        this.valuesOut = indexDescriptor.openPerIndexOutput(TERMS_DATA, indexName, true, temporary);
-        this.indexOut = indexDescriptor.openPerIndexOutput(TERMS_INDEX, indexName, true, temporary);
-        this.leafPostingsOut = indexDescriptor.openPerIndexOutput(POSTING_LISTS, indexName, true, temporary);
-        this.orderMapOut = indexDescriptor.openPerIndexOutput(IndexComponent.ORDER_MAP, indexName, true, temporary);
-        this.compressedValuesOut = indexDescriptor.openPerIndexOutput(IndexComponent.COMPRESSED_TERMS_DATA, indexName, true, temporary);
+        this.valuesOut = indexDescriptor.openPerIndexOutput(TERMS_DATA, indexContext, true, temporary);
+        this.indexOut = indexDescriptor.openPerIndexOutput(TERMS_INDEX, indexContext, true, temporary);
+        this.leafPostingsOut = indexDescriptor.openPerIndexOutput(POSTING_LISTS, indexContext, true, temporary);
+        this.orderMapOut = indexDescriptor.openPerIndexOutput(IndexComponent.ORDER_MAP, indexContext, true, temporary);
+        this.compressedValuesOut = indexDescriptor.openPerIndexOutput(IndexComponent.COMPRESSED_TERMS_DATA, indexContext, true, temporary);
         this.postingsWriter = new PostingsWriter(leafPostingsOut);
     }
 
@@ -235,22 +235,9 @@ public class BlockIndexWriter
         public RowPoint current();
     }
 
-    public static IndexContext createIndexContext(String columnName, String indexName, AbstractType<?> validator)
-    {
-        return new IndexContext("test_ks",
-                                "test_cf",
-                                UTF8Type.instance,
-                                new ClusteringComparator(),
-                                ColumnMetadata.regularColumn("sai", "internal", columnName, validator),
-                                IndexMetadata.fromSchemaMetadata(indexName, IndexMetadata.Kind.CUSTOM, null),
-                                IndexWriterConfig.emptyConfig(),
-                                null);
-    }
-
     // iterator row id order
     public RowPointIterator rowPointIterator() throws IOException
     {
-        IndexContext indexContext = createIndexContext("column", indexName, UTF8Type.instance);
         final V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, temporary);
 
         final DirectReaders.Reader orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
@@ -360,7 +347,6 @@ public class BlockIndexWriter
         flushLastBuffers();
 
         // TODO: column doesn't matter here however it might be good to set the correct column
-        final IndexContext indexContext = createIndexContext("column", indexName, UTF8Type.instance);
         final V2PerIndexFiles perIndexFiles = new V2PerIndexFiles(indexDescriptor, indexContext, temporary);
 
         final long valuesOutLastBytesFP = valuesOut.getFilePointer();
@@ -593,7 +579,7 @@ public class BlockIndexWriter
         // close leaf postings now because MultiLevelPostingsWriter reads leaf postings
         this.leafPostingsOut.close();
 
-        final SharedIndexInput leafPostingsInput = new SharedIndexInput(this.indexDescriptor.openPerIndexInput(POSTING_LISTS, indexName, temporary));
+        final SharedIndexInput leafPostingsInput = new SharedIndexInput(this.indexDescriptor.openPerIndexInput(POSTING_LISTS, indexContext, temporary));
 
         final MultiLevelPostingsWriter multiLevelPostingsWriter = new MultiLevelPostingsWriter(leafPostingsInput,
                                                                                          IndexWriterConfig.defaultConfig("indexName"),
@@ -603,7 +589,7 @@ public class BlockIndexWriter
                                                                                          this.multiBlockLeafRanges,
                                                                                          leafToNodeID);
 
-        final IndexOutput bigPostingsOut = this.indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexName, true, temporary);
+        final IndexOutput bigPostingsOut = this.indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, true, temporary);
 
         final TreeMultimap<Integer, Long> nodeIDToMultilevelPostingsFP = multiLevelPostingsWriter.finish(bigPostingsOut);
 
@@ -634,7 +620,7 @@ public class BlockIndexWriter
         List<byte[]> bytesList = new ArrayList<>();
 
         // gather 1kb chunks as samples
-        try (IndexInput bytesInput = indexDescriptor.openPerIndexInput(TERMS_DATA, indexName, temporary))
+        try (IndexInput bytesInput = indexDescriptor.openPerIndexInput(TERMS_DATA, indexContext, temporary))
         {
             for (int x = 0; x < numSampleBlocks; x++)
             {
@@ -724,7 +710,7 @@ public class BlockIndexWriter
 
         // TODO: when there are duplicate row ids it means
         //       this isn't a single value per row index and so cannot have a row id -> point id map
-        final IndexOutput rowPointOut = indexDescriptor.openPerIndexOutput(IndexComponent.ROW_ID_POINT_ID_MAP, indexName);
+        final IndexOutput rowPointOut = indexDescriptor.openPerIndexOutput(IndexComponent.ROW_ID_POINT_ID_MAP, indexContext);
         final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
         // write the row id -> point id map
         final RowPointIterator rowPointIterator = this.rowPointIterator();
