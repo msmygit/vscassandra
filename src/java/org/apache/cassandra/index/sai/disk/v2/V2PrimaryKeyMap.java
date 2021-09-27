@@ -84,7 +84,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
     private LoadingCache<Long, PrimaryKey> keyCache = Caffeine.newBuilder()
-                                                              .maximumSize(10000)
+                                                              .maximumSize(100)
                                                               .build(rowId -> fetchKey(rowId));
 
     private V2PrimaryKeyMap(String offsetsPath,
