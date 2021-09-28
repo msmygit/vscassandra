@@ -37,14 +37,16 @@ import static com.google.common.base.Preconditions.checkArgument;
 @NotThreadSafe
 public class MergePostingList implements PostingList
 {
+    final PrimaryKeyMap primaryKeyMap;
     final PriorityQueue<PeekablePostingList> postingLists;
     final List<PeekablePostingList> temp;
     final Closeable onClose;
     final long size;
     private long lastRowId = -1;
 
-    private MergePostingList(PriorityQueue<PeekablePostingList> postingLists, Closeable onClose)
+    private MergePostingList(PriorityQueue<PeekablePostingList> postingLists, PrimaryKeyMap primaryKeyMap, Closeable onClose)
     {
+        this.primaryKeyMap = primaryKeyMap;
         this.temp = new ArrayList<>(postingLists.size());
         this.onClose = onClose;
         this.postingLists = postingLists;
@@ -56,15 +58,15 @@ public class MergePostingList implements PostingList
         this.size = size;
     }
 
-    public static PostingList merge(PriorityQueue<PeekablePostingList> postings, Closeable onClose)
+    public static PostingList merge(PriorityQueue<PeekablePostingList> postings, PrimaryKeyMap primaryKeyMap, Closeable onClose)
     {
         checkArgument(!postings.isEmpty());
-        return postings.size() > 1 ? new MergePostingList(postings, onClose) : postings.poll();
+        return postings.size() > 1 ? new MergePostingList(postings, primaryKeyMap, onClose) : postings.poll();
     }
 
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings)
     {
-        return merge(postings, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+        return merge(postings, PrimaryKeyMap.IDENTITY, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }
 
     @SuppressWarnings("resource")
@@ -116,13 +118,24 @@ public class MergePostingList implements PostingList
     @Override
     public long advance(long targetRowId) throws IOException
     {
-        throw new UnsupportedOperationException();
+        temp.clear();
+
+        while (!postingLists.isEmpty())
+        {
+            PeekablePostingList peekable = postingLists.poll();
+            peekable.advanceWithoutConsuming(targetRowId);
+            if (peekable.peek() != PostingList.END_OF_STREAM)
+                temp.add(peekable);
+        }
+        postingLists.addAll(temp);
+
+        return nextPosting();
     }
 
     @Override
-    public PrimaryKey mapRowId(long rowId)
+    public PrimaryKey mapRowId(long rowId) throws IOException
     {
-        throw new UnsupportedOperationException();
+        return primaryKeyMap.primaryKeyFromRowId(rowId);
     }
 
     @Override

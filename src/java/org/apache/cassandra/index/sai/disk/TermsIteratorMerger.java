@@ -87,7 +87,7 @@ public class TermsIteratorMerger implements TermsIterator
 
             postingLists.add(postings.peekable());
         }
-        return new MonitoringPostingList(MergePostingList.merge(postingLists, () -> postingLists.forEach(postingList -> FileUtils.closeQuietly(postingList))));
+        return new MonitoringPostingList(MergePostingList.merge(postingLists, PrimaryKeyMap.IDENTITY, () -> postingLists.forEach(postingList -> FileUtils.closeQuietly(postingList))));
     }
 
     @Override

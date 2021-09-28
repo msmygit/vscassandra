@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -37,6 +38,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 @NotThreadSafe
 public class MergePostingListV2 implements PostingList
 {
+    private static final Comparator<PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
+
     final PrimaryKeyMap primaryKeyMap;
     final List<PeekablePostingList> postingLists;
     final List<PeekablePostingList> candidates;
@@ -55,6 +58,7 @@ public class MergePostingListV2 implements PostingList
         {
             size += postingList.size();
         }
+        this.postingLists.sort(COMPARATOR);
         this.size = size;
     }
 
@@ -73,62 +77,107 @@ public class MergePostingListV2 implements PostingList
     @Override
     public long nextPosting() throws IOException
     {
-        candidates.clear();
-        Iterator<PeekablePostingList> iterator = postingLists.iterator();
-        long candidate = -1;
-        while(iterator.hasNext())
+        while (!postingLists.isEmpty())
         {
-            PeekablePostingList postingList = iterator.next();
-            while (postingList.peek() == lastRowId)
-                postingList.nextPosting();
-            long rowId = postingList.peek();
-            if (rowId == END_OF_STREAM)
+            PeekablePostingList head = postingLists.get(0);
+            long next = head.nextPosting();
+
+            if (next == END_OF_STREAM)
             {
-                iterator.remove();
-                continue;
+                // skip current posting list
+                postingLists.remove(0);
             }
-            if (candidate == -1)
+            else if (next > lastRowId)
             {
-                candidate = postingList.peek();
-                candidates.add(postingList);
+                lastRowId = next;
+//                postingLists.remove();
+//                postingLists.add(head);
+                postingLists.sort(COMPARATOR);
+                return next;
             }
-            else
+            else if (next == lastRowId)
             {
-                if (candidate == postingList.peek())
-                    candidates.add(postingList);
-                else if (candidate > postingList.peek())
-                {
-                    candidates.clear();
-                    candidate = postingList.peek();
-                    candidates.add(postingList);
-                }
+                postingLists.sort(COMPARATOR);
+//                postingLists.add(head);
             }
         }
-        if (candidates.isEmpty())
-            return END_OF_STREAM;
 
-        for (PeekablePostingList postingList : candidates)
-            postingList.nextPosting();
+        return PostingList.END_OF_STREAM;
 
-        lastRowId = candidate;
 
-        return candidate;
+
+
+
+
+
+//        candidates.clear();
+//        Iterator<PeekablePostingList> iterator = postingLists.iterator();
+//        long candidate = -1;
+//        while(iterator.hasNext())
+//        {
+//            PeekablePostingList postingList = iterator.next();
+//            while (postingList.peek() == lastRowId)
+//                postingList.nextPosting();
+//            long rowId = postingList.peek();
+//            if (rowId == END_OF_STREAM)
+//            {
+//                iterator.remove();
+//                continue;
+//            }
+//            if (candidate == -1)
+//            {
+//                candidate = postingList.peek();
+//                candidates.add(postingList);
+//            }
+//            else
+//            {
+//                if (candidate == postingList.peek())
+//                    candidates.add(postingList);
+//                else if (candidate > postingList.peek())
+//                {
+//                    candidates.clear();
+//                    candidate = postingList.peek();
+//                    candidates.add(postingList);
+//                }
+//            }
+//        }
+//        if (candidates.isEmpty())
+//            return END_OF_STREAM;
+//
+//        for (PeekablePostingList postingList : candidates)
+//            postingList.nextPosting();
+//
+//        lastRowId = candidate;
+//
+//        return candidate;
     }
 
     @SuppressWarnings("resource")
     @Override
     public long advance(PrimaryKey key) throws IOException
     {
-        for (PeekablePostingList postingList : postingLists)
+        Iterator<PeekablePostingList> iterator = postingLists.iterator();
+        while (iterator.hasNext())
+        {
+            PeekablePostingList postingList = iterator.next();
             postingList.advanceWithoutConsuming(key);
+            if (postingList.peek() == END_OF_STREAM)
+                iterator.remove();
+        }
         return nextPosting();
     }
 
     @Override
     public long advance(long targetRowId) throws IOException
     {
-        for (PeekablePostingList postingList : postingLists)
+        Iterator<PeekablePostingList> iterator = postingLists.iterator();
+        while (iterator.hasNext())
+        {
+            PeekablePostingList postingList = iterator.next();
             postingList.advanceWithoutConsuming(targetRowId);
+            if (postingList.peek() == END_OF_STREAM)
+                iterator.remove();
+        }
         return nextPosting();
     }
 

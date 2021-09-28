@@ -184,7 +184,7 @@ public class BKDReaderTest extends NdiRandomizedTest
         PriorityQueue<PostingList.PeekablePostingList> queue = new PriorityQueue<>(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
         queue.addAll(postings);
 
-        return MergePostingList.merge(queue, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+        return MergePostingList.merge(queue, PrimaryKeyMap.IDENTITY, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }
 
     private BKDReader createReader(int numRows) throws IOException

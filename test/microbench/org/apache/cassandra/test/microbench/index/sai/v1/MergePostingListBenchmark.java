@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -41,6 +42,8 @@ import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -49,10 +52,14 @@ import org.openjdk.jmh.infra.Blackhole;
 
 @Fork(1)
 @Warmup(iterations = 3)
-@Measurement(iterations = 5)
+@Measurement(iterations = 5, timeUnit = TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Thread)
 public class MergePostingListBenchmark
 {
+    @Param({ "10", "100", "500", "1000"})
+    public int numberOfPostingLists;
+
     List<int[]> splitPostingLists = new ArrayList<>();
     PostingList merge;
 
@@ -67,7 +74,7 @@ public class MergePostingListBenchmark
         // split postings into multiple lists
         final Map<Integer, List<Integer>> splitPostings = Arrays.stream(postings)
                                                                 .boxed()
-                                                                .collect(Collectors.groupingBy(it -> it % 1000));
+                                                                .collect(Collectors.groupingBy(it -> it % numberOfPostingLists));
 
         for (List<Integer> split : splitPostings.values())
         {
@@ -88,7 +95,7 @@ public class MergePostingListBenchmark
     }
 
     @Benchmark
-    @BenchmarkMode({ Mode.All })
+    @BenchmarkMode({ Mode.AverageTime })
     public void nextPostingIteration(Blackhole bh) throws IOException
     {
         long id;

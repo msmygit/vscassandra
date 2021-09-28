@@ -39,6 +39,7 @@ import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.FilteringPostingList;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.MergePostingListV2;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -68,6 +69,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
+    private static final Comparator<PostingList.PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
     private static final int DEFAULT_POSTING_LIST_SIZE = 100;
 
     private final IndexContext indexContext;
@@ -451,7 +453,9 @@ public class BKDReader extends TraversingBKDReader implements Closeable
                 if (logger.isTraceEnabled())
                     logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
                                  indexFile.path(), elapsedMicros, postingLists.size());
-                return MergePostingListV2.merge(postingLists, primaryKeyMap, () -> FileUtils.close(postingsInput, postingsSummaryInput));
+                PriorityQueue<PostingList.PeekablePostingList> postings = new PriorityQueue<>(postingLists.size(), COMPARATOR);
+                postings.addAll(postingLists);
+                return MergePostingList.merge(postings, primaryKeyMap, () -> FileUtils.close(postingsInput, postingsSummaryInput));
             }
         }
 

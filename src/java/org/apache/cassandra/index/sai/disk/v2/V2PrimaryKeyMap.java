@@ -83,9 +83,9 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     private final RandomAccessReader primaryKeys;
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
-    private LoadingCache<Long, PrimaryKey> keyCache = Caffeine.newBuilder()
-                                                              .maximumSize(100)
-                                                              .build(rowId -> fetchKey(rowId));
+//    private LoadingCache<Long, PrimaryKey> keyCache = Caffeine.newBuilder()
+//                                                              .maximumSize(100)
+//                                                              .build(rowId -> fetchKey(rowId));
 
     private V2PrimaryKeyMap(String offsetsPath,
                             LongArray primaryKeyOffsets,
@@ -109,7 +109,8 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
-        return keyCache.get(sstableRowId);
+        return fetchKey(sstableRowId);
+//        return keyCache.get(sstableRowId);
 //        long startOffset = primaryKeyOffsets.get(sstableRowId);
 //        primaryKeys.seek(startOffset);
 //        return keyFactory.createKey(primaryKeys, sstableRowId);
