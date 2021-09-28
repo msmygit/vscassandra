@@ -109,7 +109,6 @@ public class BlockIndexReader implements Closeable
         this.orderMapInput = fileProvider.openOrderMapInput(temporary);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
         SharedIndexInput multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
-//        SharedIndexInput bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
 
         orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
 
@@ -684,7 +683,6 @@ public class BlockIndexReader implements Closeable
 
         final long leafFP = leafFilePointers.get(leaf);
         readBlock(leafFP, context);
-        //this.readCompressedBlock(leaf, context);
 
         int idx = 0;
         int startIdx = -1;
@@ -1000,8 +998,6 @@ public class BlockIndexReader implements Closeable
 
         context.arraysFilePointer = context.bytesInput.getFilePointer();
 
-        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
-
         context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
         context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
 
@@ -1009,6 +1005,7 @@ public class BlockIndexReader implements Closeable
 
         context.leafBytesStartFP = context.leafBytesFP = context.bytesInput.getFilePointer();
 
+        // TODO: alloc here probably not required?
         context.seekingInput = new SeekingRandomAccessInput(context.bytesInput);
 
         context.leafIndex = 0;
@@ -1044,8 +1041,6 @@ public class BlockIndexReader implements Closeable
             len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
             prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
 
-            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
-
             if (x == 0)
             {
                 if (context.firstTerm == null)
@@ -1073,7 +1068,6 @@ public class BlockIndexReader implements Closeable
 //                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
                 context.lastLen = len;
-                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
                 if (x < seekIndex)
                     context.leafBytesFP += context.bytesLength;
 

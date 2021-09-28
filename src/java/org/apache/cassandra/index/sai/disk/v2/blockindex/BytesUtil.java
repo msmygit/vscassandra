@@ -123,4 +123,21 @@ public class BytesUtil
     {
         return FutureArrays.mismatch(priorTerm.bytes, priorTerm.offset, priorTerm.offset + priorTerm.length, currentTerm.bytes, currentTerm.offset, currentTerm.offset + currentTerm.length);
     }
+
+    public static String toString(byte[] a, int offset, int len) {
+        if (a == null)
+            return "null";
+        int iMax = offset + len - 1;
+        if (iMax == -1)
+            return "[]";
+
+        StringBuilder b = new StringBuilder();
+        b.append('[');
+        for (int i = offset; ; i++) {
+            b.append(a[i]);
+            if (i == iMax)
+                return b.append(']').toString();
+            b.append(", ");
+        }
+    }
 }
