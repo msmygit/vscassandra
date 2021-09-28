@@ -37,14 +37,16 @@ import static com.google.common.base.Preconditions.checkArgument;
 @NotThreadSafe
 public class MergePostingListV2 implements PostingList
 {
+    final PrimaryKeyMap primaryKeyMap;
     final List<PeekablePostingList> postingLists;
     final List<PeekablePostingList> candidates;
     final Closeable onClose;
     final long size;
     private long lastRowId = -1;
 
-    private MergePostingListV2(List<PeekablePostingList> postingLists, Closeable onClose)
+    private MergePostingListV2(List<PeekablePostingList> postingLists, PrimaryKeyMap primaryKeyMap, Closeable onClose)
     {
+        this.primaryKeyMap = primaryKeyMap;
         this.candidates = new ArrayList<>(postingLists.size());
         this.onClose = onClose;
         this.postingLists = postingLists;
@@ -56,15 +58,15 @@ public class MergePostingListV2 implements PostingList
         this.size = size;
     }
 
-    public static PostingList merge(List<PeekablePostingList> postings, Closeable onClose)
+    public static PostingList merge(List<PeekablePostingList> postings, PrimaryKeyMap primaryKeyMap, Closeable onClose)
     {
         checkArgument(!postings.isEmpty());
-        return postings.size() > 1 ? new MergePostingListV2(postings, onClose) : postings.get(0);
+        return postings.size() > 1 ? new MergePostingListV2(postings, primaryKeyMap, onClose) : postings.get(0);
     }
 
     public static PostingList merge(List<PeekablePostingList> postings)
     {
-        return merge(postings, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+        return merge(postings, PrimaryKeyMap.IDENTITY, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }
 
     @SuppressWarnings("resource")
@@ -131,9 +133,9 @@ public class MergePostingListV2 implements PostingList
     }
 
     @Override
-    public PrimaryKey mapRowId(long rowId)
+    public PrimaryKey mapRowId(long rowId) throws IOException
     {
-        throw new UnsupportedOperationException();
+        return primaryKeyMap.primaryKeyFromRowId(rowId);
     }
 
     @Override

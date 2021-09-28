@@ -367,6 +367,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
     {
         private final Stopwatch queryExecutionTimer = Stopwatch.createStarted();
         final SSTableQueryContext context;
+        final PrimaryKeyMap primaryKeyMap;
 
         final IndexInput bkdInput;
         final IndexInput postingsInput;
@@ -383,6 +384,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             this.index = index;
             this.listener = listener;
             this.context = context;
+            this.primaryKeyMap = primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context);
         }
 
         public PostingList execute()
@@ -449,7 +451,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
                 if (logger.isTraceEnabled())
                     logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
                                  indexFile.path(), elapsedMicros, postingLists.size());
-                return MergePostingListV2.merge(postingLists, () -> FileUtils.close(postingsInput, postingsSummaryInput));
+                return MergePostingListV2.merge(postingLists, primaryKeyMap, () -> FileUtils.close(postingsInput, postingsSummaryInput));
             }
         }
 
@@ -485,7 +487,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             return new PostingsReader(postingsInput,
                                       summary,
                                       listener.postingListEventListener(),
-                                      primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context));
+                                      primaryKeyMap);
         }
     }
 
@@ -794,7 +796,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             PostingsReader postingsReader = new PostingsReader(postingsInput,
                                                                header,
                                                                listener.postingListEventListener(),
-                                                               primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(context));
+                                                               primaryKeyMap);
             return new FilteringPostingList(filter, postingsReader);
         }
     }
