@@ -724,6 +724,7 @@ public class BlockIndexReader implements Closeable
         return postingLists;
     }
 
+    // TODO: unused
     public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
     {
         PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));

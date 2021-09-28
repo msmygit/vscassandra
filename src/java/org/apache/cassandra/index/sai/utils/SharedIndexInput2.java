@@ -24,19 +24,21 @@ import org.apache.cassandra.utils.concurrent.Ref;
 import org.apache.cassandra.utils.concurrent.SharedCloseable;
 import org.apache.lucene.store.IndexInput;
 
-public class SharedIndexInput extends IndexInput implements SharedCloseable
+public class SharedIndexInput2 extends IndexInput implements SharedCloseable
 {
     private final Ref<?> ref;
     private final IndexInput input;
+    private long filePointer;
 
-    public SharedIndexInput(IndexInput input)
+    public SharedIndexInput2(IndexInput input)
     {
         super(input.toString());
+        filePointer = input.getFilePointer();
         ref = new Ref<>(null, new SharedTidy().add(input));
         this.input = input;
     }
 
-    public SharedIndexInput(SharedIndexInput copy)
+    public SharedIndexInput2(SharedIndexInput2 copy)
     {
         super(copy.input.toString());
         this.ref = copy.ref.ref();
@@ -44,9 +46,9 @@ public class SharedIndexInput extends IndexInput implements SharedCloseable
     }
 
     @Override
-    public SharedIndexInput sharedCopy()
+    public SharedIndexInput2 sharedCopy()
     {
-        return new SharedIndexInput(this);
+        return new SharedIndexInput2(this);
     }
 
     @Override
@@ -70,13 +72,13 @@ public class SharedIndexInput extends IndexInput implements SharedCloseable
     @Override
     public long getFilePointer()
     {
-        return input.getFilePointer();
+        return filePointer;
     }
 
     @Override
-    public void seek(long l) throws IOException
+    public void seek(long filePointer) throws IOException
     {
-        input.seek(l);
+        this.filePointer = filePointer;
     }
 
     @Override
@@ -94,12 +96,18 @@ public class SharedIndexInput extends IndexInput implements SharedCloseable
     @Override
     public byte readByte() throws IOException
     {
-        return input.readByte();
+        input.seek(filePointer);
+        byte b = input.readByte();
+        filePointer++;
+        return b;
     }
 
     @Override
     public void readBytes(byte[] bytes, int offset, int length) throws IOException
     {
+        input.seek(filePointer);
+        System.out.println("readBytes offset="+offset+" length="+length+" file length="+input.length());
         input.readBytes(bytes, offset, length);
+        filePointer += length;
     }
 }

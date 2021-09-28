@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v2;
+package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -58,6 +58,11 @@ import org.apache.cassandra.index.sai.disk.v1.BKDTreeRamBuffer;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
@@ -332,7 +337,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         V2PrimaryKeyMap.V2PrimaryKeyMapFactory primaryKeyMapFactory = new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
 
-        BlockIndexMeta blockIndexMeta = (BlockIndexMeta)V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
+        BlockIndexMeta blockIndexMeta = (BlockIndexMeta) V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
         BlockIndexReader reader = new BlockIndexReader(indexDescriptor, indexName, blockIndexMeta, perIndexFiles, primaryKeyMapFactory);
 
         BlockIndexReader.IndexIterator iterator = reader.iterator();
