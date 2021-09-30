@@ -340,36 +340,37 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             return;
 
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
-        for (final BlockIndexMeta meta : segments)
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
         {
-            BlockIndexReader reader = new BlockIndexReader(fileProvider, true, meta);
-            iterators.add(reader.iterator());
-        }
-
-        MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators);
-
-        BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
-
-        // TODO: write row id -> point id map
-        // TODO: write point id -> row id map?
-        while (true)
-        {
-            BlockIndexReader.IndexState state = mergeIndexIterators.next();
-            if (state == null)
+            for (final BlockIndexMeta meta : segments)
             {
-                break;
+                BlockIndexReader reader = new BlockIndexReader(fileProvider, true, meta);
+                iterators.add(reader.iterator());
             }
-            writer.add(BytesUtil.fixedLength(state.term), state.rowid);
+
+            MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators);
+
+            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
+
+            // TODO: write row id -> point id map
+            // TODO: write point id -> row id map?
+            while (true)
+            {
+                BlockIndexReader.IndexState state = mergeIndexIterators.next();
+                if (state == null)
+                {
+                    break;
+                }
+                writer.add(BytesUtil.fixedLength(state.term), state.rowid);
+            }
+
+            BlockIndexMeta meta = writer.finish();
+
+            V2IndexOnDiskMetadata.serializer.serialize(meta, indexDescriptor, indexContext);
+
+            // TODO: put in file provider
+            indexDescriptor.deleteTemporaryComponents(indexContext);
         }
-
-        BlockIndexMeta meta = writer.finish();
-
-        V2IndexOnDiskMetadata.serializer.serialize(meta, indexDescriptor, indexContext);
-
-        // TODO: put in finally block
-        indexDescriptor.deleteTemporaryComponents(indexContext);
     }
 
     private V2SegmentBuilder newSegmentBuilder()

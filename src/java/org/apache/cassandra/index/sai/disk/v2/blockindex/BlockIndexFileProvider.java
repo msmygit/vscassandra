@@ -61,4 +61,6 @@ public interface BlockIndexFileProvider extends AutoCloseable
     FileHandle getIndexFileHandle(boolean temporary);
 
     HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap(boolean temporary) throws IOException;
+
+    void close();
 }

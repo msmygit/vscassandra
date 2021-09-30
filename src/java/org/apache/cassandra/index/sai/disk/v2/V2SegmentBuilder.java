@@ -115,10 +115,12 @@ public class V2SegmentBuilder
             return null;
         }
 
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, columnContext);
-        BlockIndexWriter writer = new BlockIndexWriter(fileProvider, true);
-        writer.addAll(ramIndexer.getTermsWithPostings());
-        return writer.finish();
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, columnContext))
+        {
+            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, true);
+            writer.addAll(ramIndexer.getTermsWithPostings());
+            return writer.finish();
+        }
     }
 
     public long totalBytesAllocated()
