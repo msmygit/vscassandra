@@ -102,12 +102,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     }
 
     @Override
-    public IndexInput openComponentInput(IndexComponent indexComponent)
-    {
-        return indexDescriptor.openPerIndexInput(indexComponent, indexContext);
-    }
-
-    @Override
     public SharedIndexInput openLeafPostingsInput(boolean temporary)
     {
         return new SharedIndexInput(openInput(POSTING_LISTS, temporary));
@@ -152,7 +146,23 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     @Override
     public HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap(boolean temporary) throws IOException
     {
-        return new HashMap<>();
+        final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
+
+        for (IndexComponent indexComponent : components)
+            map.put(indexComponent, FileValidator.generate(indexComponent, openInput(indexComponent, temporary)));
+
+        return map;
+    }
+
+    @Override
+    public void validate(Map<IndexComponent, FileValidator.FileInfo> fileInfoMap, boolean temporary) throws IOException
+    {
+        for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
+        {
+            FileValidator.FileInfo fileInfo = FileValidator.generate(entry.getKey(), openInput(entry.getKey(), temporary));
+            if (!fileInfo.equals(entry.getValue()))
+                throw new IOException("CRC check on component "+entry.getKey()+" failed.");
+        }
     }
 
     @Override

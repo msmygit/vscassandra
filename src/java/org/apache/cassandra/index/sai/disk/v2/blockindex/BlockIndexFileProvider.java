@@ -44,8 +44,6 @@ public interface BlockIndexFileProvider extends AutoCloseable
 
     IndexOutputWriter openPointIdMapOutput(boolean temporary) throws IOException;
 
-    IndexInput openComponentInput(IndexComponent indexComponent);
-
     SharedIndexInput openValuesInput(boolean temporary);
 
     SharedIndexInput openOrderMapInput(boolean temporary);
@@ -61,6 +59,8 @@ public interface BlockIndexFileProvider extends AutoCloseable
     FileHandle getIndexFileHandle(boolean temporary);
 
     HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap(boolean temporary) throws IOException;
+
+    void validate(Map<IndexComponent, FileValidator.FileInfo> fileInfoMap, boolean temporary) throws IOException;
 
     void close();
 }

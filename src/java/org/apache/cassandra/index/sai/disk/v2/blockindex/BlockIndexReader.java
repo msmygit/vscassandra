@@ -111,15 +111,7 @@ public class BlockIndexReader implements Closeable
         this.temporary = temporary;
         this.meta = meta;
 
-        HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes);
-        for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
-        {
-            FileValidator.FileInfo fileInfo = FileValidator.generate(entry.getKey(), fileProvider.openComponentInput(entry.getKey()));
-            if (!fileInfo.equals(entry.getValue()))
-            {
-                throw new IOException("CRC check on component "+entry.getKey()+" failed.");
-            }
-        }
+        this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes), temporary);
 
         SharedIndexInput bytesInput = fileProvider.openValuesInput(temporary);
         this.indexFile = fileProvider.getIndexFileHandle(temporary);
