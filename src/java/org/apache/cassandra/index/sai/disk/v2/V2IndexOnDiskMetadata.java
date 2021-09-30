@@ -45,7 +45,7 @@ public class V2IndexOnDiskMetadata implements IndexOnDiskMetadata
         this.segment = segment;
     }
 
-    private static class Serializer implements IndexMetadataSerializer
+    public static class Serializer implements IndexMetadataSerializer
     {
         @Override
         public void serialize(IndexOnDiskMetadata indexMetadata, IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
