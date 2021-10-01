@@ -256,10 +256,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         TermsIterator terms = new MemtableTermsIterator(null,
                                                         null,
                                                         list.iterator());
-
-
-
-
         int pointCount = 0;
         while (terms.hasNext())
         {
@@ -384,6 +380,37 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     }
 
     @Test
+    public void testSeekTo() throws Exception
+    {
+        List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
+        list.add(add("aaa", new long[]{ 100 })); // 0
+        list.add(add("aaabbb", new long[]{ 0, 1 })); // 0
+        list.add(add("aaabbb", new long[]{ 2, 3, 4 })); // 1
+
+        list.add(add("cccc", new long[]{ 15 })); // 2
+        list.add(add("gggaaaddd", new long[]{ 200, 201, 203 })); // 3
+        list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
+        list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
+
+        BlockIndexReader blockIndexReader = create("index_test1", list);
+
+        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
+
+        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+        assertEquals(new BytesRef("cccc"), pair.left);
+        assertEquals(6, pair.right.intValue());
+
+        Pair<BytesRef, Long> pair2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
+        assertEquals(new BytesRef("gggzzzz"), pair2.left);
+        assertEquals(10, pair2.right.intValue());
+
+        System.out.println("term="+pair2.left.utf8ToString()+" pointId="+pair2.right);
+
+        context.close();
+        blockIndexReader.close();
+    }
+
+    @Test
     public void testSameTerms() throws Exception
     {
         List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
@@ -397,6 +424,14 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
         BlockIndexReader blockIndexReader = create("index_test1", list);
+
+        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
+
+        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+
+        System.out.println("term="+pair.left.utf8ToString()+" pointId="+pair.right);
+
+        context.close();
 
 //        BlockIndexWriter.RowPointIterator rowPointIterator = blockIndexReader.rowPointIterator();
 //        while (true)

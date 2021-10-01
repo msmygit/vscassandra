@@ -23,12 +23,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -46,17 +42,11 @@ import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.LongArrayList;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdDictDecompress;
-import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.ByteArrayIndexInput;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.FilteringPostingList;
-import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -97,7 +87,7 @@ public class BlockIndexReader implements Closeable
     private final DirectReaders.Reader orderMapReader;
     final RangeSet<Integer> multiBlockLeafRanges;
     final FixedBitSet leafValuesSame;
-    final Multimap<Integer,Long> multiNodeIDToPostingsFP = TreeMultimap.create();
+    final Multimap<Integer, Long> multiNodeIDToPostingsFP = TreeMultimap.create();
     final ZstdDictDecompress zstdDictDecompress;
     final IntLongHashMap leafIDToPostingsFP = new IntLongHashMap();
     final BlockIndexFileProvider fileProvider;
@@ -211,7 +201,7 @@ public class BlockIndexReader implements Closeable
             int nodeID = bytesInput.readVInt(); // TODO: en/decoding the node ID isn't necessary since it's in order
             int leafOrdinal = bytesInput.readVInt();
 
-            assert nodeID == x : "nodeid="+nodeID+" x="+x;
+            assert nodeID == x : "nodeid=" + nodeID + " x=" + x;
 
             nodeIDToLeaf.put(nodeID, leafOrdinal);
         }
@@ -496,61 +486,6 @@ public class BlockIndexReader implements Closeable
 
         final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
 
-        final int leafDiff = traverseTreeResult.maxLeaf - traverseTreeResult.minLeaf;
-
-        double leafRatio = leafDiff / meta.numLeaves;
-
-        System.out.println("leafRatio="+leafRatio);
-
-        // if the leaf diff is 50% of the index then filter instead of
-        // creating a posting list
-//        if (leafRatio > 0.50d)
-//        {
-//            OrdinalPostingList matchAll = new OrdinalPostingList()
-//            {
-//                int i = 0;
-//
-//                @Override
-//                public long getOrdinal()
-//                {
-//                    return i;
-//                }
-//
-//                @Override
-//                public long nextPosting() throws IOException
-//                {
-//                    return i++;
-//                }
-//
-//                @Override
-//                public long size()
-//                {
-//                    return meta.numRows;
-//                }
-//
-//                @Override
-//                public long advance(PrimaryKey nextPrimaryKey) throws IOException
-//                {
-//                    return 0;
-//                }
-//
-//                @Override
-//                public PrimaryKey mapRowId(long rowId) throws IOException
-//                {
-//                    return null;
-//                }
-//            };
-//            FilteringPostingList.Filter filter = new FilteringPostingList.Filter()
-//            {
-//                @Override
-//                public boolean matches(int ordinal, long rowID)
-//                {
-//                    return false;
-//                }
-//            };
-//            return new FilteringPostingList(int cardinality, filter, matchAll);
-//        }
-
         context.bytesInput = fileProvider.openValuesInput(false);
         context.bytesCompressedInput = fileProvider.openCompressedValuesInput(false);
         context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(false);
@@ -704,13 +639,6 @@ public class BlockIndexReader implements Closeable
         return postingLists;
     }
 
-    public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
-    {
-        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-        postingsQueue.addAll(postingLists);
-        return MergePostingList.merge(postingsQueue);
-    }
-
     public static class TraverseTreeResult
     {
         final SortedSet<Integer> nodeIDs;
@@ -732,7 +660,7 @@ public class BlockIndexReader implements Closeable
         int max = pair.right;
         if (pair.right == -1)
         {
-            max = (int)meta.numLeaves;
+            max = (int) meta.numLeaves;
         }
         if (pair.left == -1)
         {
@@ -835,7 +763,7 @@ public class BlockIndexReader implements Closeable
 
     public BinaryTreeIndex binaryTreeIndex()
     {
-        return new BinaryTreeIndex((int)meta.numLeaves);
+        return new BinaryTreeIndex((int) meta.numLeaves);
     }
 
     // using the given min and max leaf id's, traverse the binary tree, return node id's with postings
@@ -849,7 +777,7 @@ public class BlockIndexReader implements Closeable
         BinaryTreeIndex index = binaryTreeIndex();
 
         collectPostingLists(0,
-                             nodeIDToLeaf.size() - 1,
+                            nodeIDToLeaf.size() - 1,
                             index,
                             visitor,
                             resultNodeIDs);
@@ -927,9 +855,9 @@ public class BlockIndexReader implements Closeable
     }
 
     // do a start range query, then an end range query and return the min and max leaf id's
-    public Pair<Integer,Integer> traverseForMinMaxLeafOrdinals(ByteComparable start, ByteComparable end) throws IOException
+    public Pair<Integer, Integer> traverseForMinMaxLeafOrdinals(ByteComparable start, ByteComparable end) throws IOException
     {
-        int minLeafOrdinal = 0, maxLeafOrdinal = (int)this.meta.numLeaves - 1;
+        int minLeafOrdinal = 0, maxLeafOrdinal = (int) this.meta.numLeaves - 1;
 
         if (start != null)
         {
@@ -951,13 +879,14 @@ public class BlockIndexReader implements Closeable
                 }
                 else
                 {
-                    minLeafOrdinal = (int)this.meta.numLeaves;
+                    minLeafOrdinal = (int) this.meta.numLeaves;
                 }
             }
         }
 
         if (end != null)
         {
+            // TODO: could reuse the result of instantiateRebufferer?
             try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
                                                                   meta.indexFP,
                                                                   end,
@@ -1009,42 +938,65 @@ public class BlockIndexReader implements Closeable
             long filePointer = this.leafFilePointers.get(leaf);
             readBlock(filePointer, context);
             context.currentLeafFP = leafFP;
-            context.leaf = (int)leaf;
+            context.leaf = (int) leaf;
             context.leafIndex = 0;
         }
-        context.leaf = (int)leaf;
+        context.leaf = (int) leaf;
         context.leafIndex = leafIdx;
         return seekInBlock(leafIdx, context, incLeafIndex);
     }
 
-    public BytesRef seekTo(BytesRef target,
-                           BlockIndexReaderContext context) throws IOException
+    public BlockIndexReaderContext initContext()
+    {
+        BlockIndexReaderContext context = new BlockIndexReaderContext();
+        context.bytesInput = fileProvider.openValuesInput(temporary);
+        context.bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
+        context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(temporary);
+        context.multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
+        return context;
+    }
+
+    public Pair<BytesRef, Long> seekTo(final BytesRef target,
+                                       final BlockIndexReaderContext context) throws IOException
     {
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
                                                               meta.indexFP,
                                                               BytesUtil.fixedLength(target),
                                                               null,
-                                                              false,
+                                                              true,
                                                               true))
         {
-            Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
-            Pair<ByteSource, Long> pair = iterator.next();
-            int leafOrdinal = pair.right.intValue();
+            final Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
+            final Pair<ByteSource, Long> pair = iterator.next();
+            int leafId = (int) (pair.right.longValue() >> 32);
 
-            if (leafOrdinal != context.leaf)
+            // the term may be in a previous block
+            if (leafId > 0)
             {
-                readBlock(leafOrdinal, context);
+                leafId--;
             }
 
-            for (int x = 0; x < context.leafSize; x++)
+            while (leafId < meta.numLeaves)
             {
-                BytesRef term = seekInBlock(x, context, true);
-                if (target.compareTo(term) <= 0)
+                if (leafId != context.leaf)
                 {
-                    return term;
+                    final long leafFP = leafFilePointers.get(leafId);
+                    readBlock(leafFP, context);
+                    context.leaf = leafId;
+                    context.leafIndex = 0;
                 }
-            }
 
+                for (context.leafIndex = 0; context.leafIndex < context.leafSize; context.leafIndex++)
+                {
+                    BytesRef term = seekInBlock(context.leafIndex, context, false);
+                    if (target.compareTo(term) <= 0)
+                    {
+                        final long pointId = leafId * LEAF_SIZE + context.leafIndex;
+                        return Pair.create(term, pointId);
+                    }
+                }
+                leafId++;
+            }
             return null;
         }
     }
