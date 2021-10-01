@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.ByteArrayAccessor;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.util.BytesRef;
@@ -29,6 +31,11 @@ public class BytesUtil
     public static ByteComparable fixedLength(BytesRef bytes)
     {
         return ByteComparable.fixedLength(bytes.bytes, bytes.offset, bytes.length);
+    }
+
+    public static ByteComparable asByteComparable(BytesRef bytes, AbstractType<?> type)
+    {
+        return v -> type.asComparableBytes(ByteArrayAccessor.instance, bytes.bytes, v);
     }
 
     public static ByteComparable nudge(ByteComparable value, int nudgeAt)

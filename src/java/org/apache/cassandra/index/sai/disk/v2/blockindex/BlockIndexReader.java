@@ -42,6 +42,7 @@ import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.LongArrayList;
 import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdDictDecompress;
+import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.ByteArrayIndexInput;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
@@ -79,7 +80,6 @@ public class BlockIndexReader implements Closeable
     final IntArrayList leafLengths = new IntArrayList();
     final IntIntHashMap nodeIDToLeaf = new IntIntHashMap();
     final IntLongHashMap leafToOrderMapFP = new IntLongHashMap();
-    final BytesRefBuilder builder = new BytesRefBuilder(); // TODO: move the reader context, change name
     final BlockIndexMeta meta;
     final IntLongHashMap nodeIDToPostingsFP = new IntLongHashMap();
     final IndexInput orderMapInput;
@@ -244,6 +244,9 @@ public class BlockIndexReader implements Closeable
         int leaf;
         int leafIndex;
         long currentLeafFP = -1;
+        boolean readBlock = false;
+        BytesRefBuilder builder = new BytesRefBuilder();
+
 
         private IndexInput compBytesInput = null;
         private byte[] compBytes = new byte[10];
@@ -931,6 +934,9 @@ public class BlockIndexReader implements Closeable
         final long leaf = pointID / LEAF_SIZE;
         final int leafIdx = (int) (pointID % LEAF_SIZE);
 
+        if (context.readBlock && context.leaf == pointID && context.leafIndex == leafIdx)
+            return context.builder.get();
+
         final long leafFP = leafFilePointers.get(leaf);
 
         if (context.currentLeafFP != leafFP)
@@ -942,7 +948,7 @@ public class BlockIndexReader implements Closeable
             context.leafIndex = 0;
         }
         context.leaf = (int) leaf;
-        context.leafIndex = leafIdx;
+//        context.leafIndex = leafIdx;
         return seekInBlock(leafIdx, context, incLeafIndex);
     }
 
@@ -974,11 +980,12 @@ public class BlockIndexReader implements Closeable
             if (leafId > 0)
             {
                 leafId--;
+                context.readBlock = false;
             }
 
             while (leafId < meta.numLeaves)
             {
-                if (leafId != context.leaf)
+                if (leafId != context.leaf || !context.readBlock)
                 {
                     final long leafFP = leafFilePointers.get(leafId);
                     readBlock(leafFP, context);
@@ -1025,6 +1032,8 @@ public class BlockIndexReader implements Closeable
         context.seekingInput = new SeekingRandomAccessInput(context.bytesInput);
 
         context.leafIndex = 0;
+
+        context.readBlock = true;
     }
 
     private void readCompressedBlock(int leafID, BlockIndexReaderContext context) throws IOException
@@ -1184,19 +1193,22 @@ public class BlockIndexReader implements Closeable
                 }
                 context.firstTermLen = len;
 
+                context.leafBytesFP = context.leafBytesStartFP;
                 context.bytesInput.seek(context.leafBytesStartFP);
                 context.bytesInput.readBytes(context.firstTerm, 0, len);
                 context.lastPrefix = len;
+                context.lastLen = len;
                 //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 context.bytesLength = 0;
-                context.leafBytesFP += len;
+//                context.leafBytesFP += len;
             }
 
             if (len > 0 && x > 0)
             {
                 context.bytesLength = len - prefix;
-                context.lastLen = len;
                 context.lastPrefix = prefix;
+                context.leafBytesFP += context.lastLen;
+                context.lastLen = len;
                 //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
             }
             else
@@ -1213,7 +1225,7 @@ public class BlockIndexReader implements Closeable
 
         if (!(len == 0 && prefix == 0))
         {
-            builder.clear();
+            context.builder.clear();
 
             if (context.bytesLength > 0)
             {
@@ -1228,14 +1240,15 @@ public class BlockIndexReader implements Closeable
                 context.bytesInput.seek(context.leafBytesFP);
                 context.bytesInput.readBytes(context.bytes, 0, context.bytesLength);
 
-                context.leafBytesFP += context.bytesLength;
+//                context.leafBytesFP += context.bytesLength;
             }
-            builder.append(context.firstTerm, 0, context.lastPrefix);
+            if (context.lastPrefix > 0 && context.firstTerm != null)
+                context.builder.append(context.firstTerm, 0, context.lastPrefix);
             if (context.bytesLength > 0 )
             {
-                builder.append(context.bytes, 0, context.bytesLength);
+                context.builder.append(context.bytes, 0, context.bytesLength);
             }
         }
-        return builder.get();
+        return context.builder.get();
     }
 }

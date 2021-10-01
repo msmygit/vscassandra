@@ -23,6 +23,7 @@ import java.io.IOException;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 
+//TODO Need to make this more flexible and support per-index and per-sstable serializers
 public interface IndexOnDiskMetadata
 {
     public interface IndexMetadataSerializer

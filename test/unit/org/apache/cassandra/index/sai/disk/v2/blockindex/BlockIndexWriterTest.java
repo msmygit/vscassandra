@@ -23,7 +23,10 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
@@ -55,6 +58,7 @@ import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.PerIndexFileProvider;
+import org.apache.cassandra.index.sai.disk.v2.PerSSTableFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
@@ -66,7 +70,9 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.hadoop.hdfs.web.JsonUtil;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
@@ -243,7 +249,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         }
     }
 
-    public BlockIndexReader create(String indexName, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
+    private BlockIndexReader createPerIndexReader(String indexName, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
@@ -256,7 +262,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         TermsIterator terms = new MemtableTermsIterator(null,
                                                         null,
                                                         list.iterator());
-        int pointCount = 0;
         while (terms.hasNext())
         {
             ByteComparable term = terms.next();
@@ -269,8 +274,59 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
                     break;
                 }
                 blockIndexWriter.add(term, rowID);
-                pointCount++;
             }
+        }
+
+        BlockIndexMeta meta = blockIndexWriter.finish();
+
+        return new BlockIndexReader(fileProvider, false, meta);
+    }
+
+    private BlockIndexReader createPerSSTableReader2(List<Pair<ByteComparable, LongArrayList>> list) throws Exception
+    {
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+
+        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
+
+        TermsIterator terms = new MemtableTermsIterator(null,
+                                                        null,
+                                                        list.iterator());
+        while (terms.hasNext())
+        {
+            ByteComparable term = terms.next();
+            PostingList postings = terms.postings();
+            while (true)
+            {
+                long rowID = postings.nextPosting();
+                if (rowID == PostingList.END_OF_STREAM)
+                {
+                    break;
+                }
+                blockIndexWriter.add(term, rowID);
+            }
+        }
+
+        BlockIndexMeta meta = blockIndexWriter.finish();
+
+        return new BlockIndexReader(fileProvider, false, meta);
+    }
+
+    private BlockIndexReader createPerSSTableReader(List<Pair<ByteComparable, Long>> list) throws Exception
+    {
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+
+        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
+
+        Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
+
+        while (terms.hasNext())
+        {
+            Pair<ByteComparable, Long> entry = terms.next();
+            blockIndexWriter.add(entry.left, entry.right);
         }
 
         BlockIndexMeta meta = blockIndexWriter.finish();
@@ -287,7 +343,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     }
 
     @Test
-    public void testSSTableWriter() throws Exception
+    public void testPerIndexWriter() throws Exception
     {
         NamedMemoryLimiter memoryLimiter = new NamedMemoryLimiter(1, "SSTable-attached Index Segment Builder");
 
@@ -317,20 +373,22 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         writer.flush();
 
-        //BlockIndexReader.open(indexDescriptor, indexName);
-
         BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
 
         BlockIndexMeta blockIndexMeta = (BlockIndexMeta) V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
         BlockIndexReader reader = new BlockIndexReader(fileProvider, false, blockIndexMeta);
 
         BlockIndexReader.IndexIterator iterator = reader.iterator();
-        while (true)
-        {
-            IndexState state = iterator.next();
-            if (state == null) break;
-            System.out.println("  results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-        }
+
+        IndexState state = iterator.next();
+        assertNotNull(state);
+        assertEquals("a", stringFromTerm(state.term));
+        assertEquals(0, state.rowid);
+        state = iterator.next();
+        assertNotNull(state);
+        assertEquals("b", stringFromTerm(state.term));
+        assertEquals(1, state.rowid);
+        assertNull(iterator.next());
     }
 
     @Test
@@ -380,7 +438,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     }
 
     @Test
-    public void testSeekTo() throws Exception
+    public void testPerIndexSeekTo() throws Exception
     {
         List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
         list.add(add("aaa", new long[]{ 100 })); // 0
@@ -392,22 +450,124 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = create("index_test1", list);
+        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
 
         BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
 
         Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
-        assertEquals(new BytesRef("cccc"), pair.left);
+        assertEquals("cccc", stringFromTerm(pair.left));
         assertEquals(6, pair.right.intValue());
 
         Pair<BytesRef, Long> pair2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
-        assertEquals(new BytesRef("gggzzzz"), pair2.left);
+        assertEquals("gggzzzz", stringFromTerm(pair2.left));
         assertEquals(10, pair2.right.intValue());
-
-        System.out.println("term="+pair2.left.utf8ToString()+" pointId="+pair2.right);
 
         context.close();
         blockIndexReader.close();
+    }
+
+    @Test
+    public void perSSTableSeekTo() throws Exception
+    {
+        List<Pair<ByteComparable, Long>> list = new ArrayList();
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v), 0L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("b"), v), 1L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("c"), v), 2L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("d"), v), 3L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("e"), v), 4L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("f"), v), 5L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("g"), v), 6L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("h"), v), 7L));
+
+        BlockIndexReader reader = createPerSSTableReader(list);
+
+        BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
+
+        assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
+        assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
+        assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
+        assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
+        assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
+        assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
+        assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
+//        assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7); // This one fails
+        assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
+        assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
+        assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
+        assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
+        assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
+        assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
+        assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
+
+
+
+        assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+        assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
+        assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
+        assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
+        assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
+        assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
+        assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
+        assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
+        assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
+        assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
+        assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
+        assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
+        assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
+        assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
+        assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
+        assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+    }
+
+    private void assertPair(Pair<BytesRef, Long> pair, String key, long rowId)
+    {
+        assertEquals(key, stringFromTerm(pair.left));
+        assertEquals(Long.valueOf(rowId), pair.right);
+
+    }
+
+    @Test
+    public void randomPerSSTableSeekTo() throws Throwable
+    {
+        int numberOfStrings = randomIntBetween(100, 2000);
+
+        List<String> strings = new ArrayList<>();
+        Map<Long, String> rowIdToStringMap = new HashMap<>();
+        List<Pair<ByteComparable, Long>> data = new ArrayList();
+
+        for (long index = 0; index < numberOfStrings; index++)
+            strings.add(randomSimpleString(2, 20));
+
+        strings.sort(String::compareTo);
+
+        for (long index = 0; index < numberOfStrings; index++)
+        {
+            String string = strings.get((int)index);
+            rowIdToStringMap.put(index, string);
+            data.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(string), v), index));
+        }
+
+        BlockIndexReader reader = createPerSSTableReader(data);
+
+        BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
+
+        for (int index = 0; index < randomIntBetween(500, 1500); index++)
+        {
+            long rowId = nextLong(0, numberOfStrings);
+
+            if (randomBoolean())
+            {
+                Pair<BytesRef, Long> pair = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
+
+                assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(pair.left));
+                assertEquals(Long.valueOf(rowId), pair.right);
+
+            }
+            else
+            {
+                assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(reader.seekTo(rowId, context, true)));
+            }
+        }
     }
 
     @Test
@@ -423,7 +583,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = create("index_test1", list);
+        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
 
         BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
 
@@ -450,7 +610,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("qqqqqaaaaa", new long[]{ 400, 405, 409 })); //
         list.add(add("zzzzzzzzzz", new long[] {20, 21, 24, 29, 30})); //
 
-        BlockIndexReader blockIndexReader2 = create("index_test12", list);
+        BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
 
 
 
@@ -691,6 +851,15 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 //        assertEquals(kdtreePostingList, results2);
     }
 
+    //TODO Rig a generic method for this in TypeUtil or the like to
+    // compose a type from a BytesRef
+    private String stringFromTerm(BytesRef term)
+    {
+        ByteSource byteSource = ByteSource.fixedLength(term.bytes, 0, term.length);
+        ByteBuffer byteBuffer = UTF8Type.instance.fromComparableBytes(ByteSource.peekable(byteSource), ByteComparable.Version.OSS41);
+        return UTF8Type.instance.compose(byteBuffer);
+    }
+
     private BKDReader.IntersectVisitor buildQuery(int queryMin, int queryMax)
     {
         return new BKDReader.IntersectVisitor()
@@ -837,6 +1006,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     {
         LongArrayList list = new LongArrayList();
         list.add(array, 0, array.length);
-        return Pair.create(ByteComparable.fixedLength(UTF8Type.instance.decompose(term)), list);
+        return Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v), list);
     }
 }

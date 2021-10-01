@@ -51,7 +51,7 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
 
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
-    protected final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    private final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
 
     public PerIndexFileProvider(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
