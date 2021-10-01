@@ -747,7 +747,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     @Test
     public void randomTest() throws Exception
     {
-        for (int x = 0; x < 1; x++)
+        for (int x = 0; x < 2; x++)
         {
             doRandomTest();
         }
@@ -866,7 +866,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             {
                 int x = NumericUtils.sortableBytesToInt(packedValue, 0);
                 boolean bb = x >= queryMin && x <= queryMax;
-                if (bb) System.out.println("visit value="+x+" bb="+bb);
                 return bb;
             }
 

@@ -91,8 +91,6 @@ public class BlockIndexWriter
     //       write the leaf file pointer to the first occurence of the min value
     private final LongArrayList leafBytesFPs = new LongArrayList();
     private final LongArrayList realLeafBytesFPs = new LongArrayList();
-    private final LongArrayList realLeafCompressedBytesFPs = new LongArrayList();
-    private final IntArrayList realLeafCompressedLengths = new IntArrayList();
     private final IntArrayList realLeafBytesLengths = new IntArrayList();
     private final BlockIndexFileProvider fileProvider;
     private final boolean temporary;
@@ -341,8 +339,6 @@ public class BlockIndexWriter
     public BlockIndexMeta finish() throws IOException
     {
         flushLastBuffers();
-
-        final long valuesOutLastBytesFP = valuesOut.getFilePointer();
 
         // write the block min values index
         IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter());
@@ -601,105 +597,7 @@ public class BlockIndexWriter
         orderMapOut.close();
         valuesOut.close();
 
-        // get samples from bytes for the zstd dictionary
-        long totalDict = 110 * 1024;
-
-        byte[] zstdDictionary = new byte[(int)totalDict];
-
-        long totalSamples = totalDict * 100;
-        long numSampleBlocks = totalSamples / 1024;
-        long sampleChunkSize = valuesOutLastBytesFP / numSampleBlocks;
-
-        List<byte[]> bytesList = new ArrayList<>();
-
-        // gather 1kb chunks as samples
-        try (IndexInput bytesInput = fileProvider.openValuesInput(temporary))
-        {
-            for (int x = 0; x < numSampleBlocks; x++)
-            {
-                bytesInput.seek(x * sampleChunkSize);
-                // if the file is less then the sample size of 1024, use the file size
-                byte[] samplesBytes = new byte[Math.min(1024, (int)bytesInput.length())];
-                bytesInput.readBytes(samplesBytes, 0, samplesBytes.length);
-                bytesList.add(samplesBytes);
-            }
-        }
-
-        final int zstdDictionaryLen = (int) Zstd.trainFromBuffer(bytesList.toArray(new byte[0][]), zstdDictionary);
-        final long zstdDictionaryFP;
-
-        System.out.println("ZSTD dictionary zstdDictionaryLen=" + zstdDictionaryLen + " zstdSamplesArray.len=" + bytesList.size());
-
-        if (zstdDictionaryLen == -1)
-        {
-            zstdDictionaryFP = -1;
-        }
-        else
-        {
-            zstdDictionaryFP = this.compressedValuesOut.getFilePointer();
-            this.compressedValuesOut.writeVInt(zstdDictionaryLen);
-            this.compressedValuesOut.copyBytes(new ByteArrayDataInput(zstdDictionary, 0, zstdDictionaryLen), zstdDictionaryLen);
-        }
-
         assert realLeafBytesFPs.size() == realLeafBytesLengths.size();
-
-        final long compressedLeafFPs_FP;
-
-        if (zstdDictionaryFP != -1)
-        {
-            try (ZstdDictCompress dictCompress = new ZstdDictCompress(zstdDictionary, 0, zstdDictionaryLen, 1);
-                 IndexInput bytesInput = this.fileProvider.openValuesInput(temporary))
-            {
-                byte[] rawBytes = new byte[10];
-                byte[] compressedBytes = new byte[10];
-
-                for (int x = 0; x < realLeafBytesFPs.size(); x++)
-                {
-                    long bytesFP = realLeafBytesFPs.get(x);
-
-                    // don't compress > 1
-                    if (x > 0 && realLeafBytesFPs.get(x - 1) == bytesFP)
-                    {
-                        realLeafCompressedBytesFPs.add(realLeafCompressedBytesFPs.get(x - 1));
-                        realLeafCompressedLengths.add(realLeafCompressedLengths.get(x - 1));
-                    }
-                    else
-                    {
-                        int bytesLen = realLeafBytesLengths.get(x);
-
-                        rawBytes = ArrayUtil.grow(rawBytes, bytesLen);
-                        bytesInput.seek(bytesFP);
-                        bytesInput.readBytes(rawBytes, 0, bytesLen);
-
-                        long maxCompressedSize = Zstd.compressBound(bytesLen);
-                        compressedBytes = ArrayUtil.grow(compressedBytes, (int) maxCompressedSize);
-
-                        Zstd.compressFastDict(compressedBytes, 0, rawBytes, 0, bytesLen, dictCompress);
-                        long compressedFP = this.compressedValuesOut.getFilePointer();
-                        this.compressedValuesOut.writeBytes(compressedBytes, 0, compressedBytes.length);
-                        realLeafCompressedBytesFPs.add(compressedFP);
-                        realLeafCompressedLengths.add(compressedBytes.length);
-                    }
-                }
-            }
-
-            compressedLeafFPs_FP = compressedValuesOut.getFilePointer();
-            compressedValuesOut.writeVInt(realLeafCompressedBytesFPs.size());
-            for (int x = 0; x < realLeafCompressedBytesFPs.size(); x++)
-            {
-                compressedValuesOut.writeVLong(realLeafCompressedBytesFPs.get(x));
-                compressedValuesOut.writeVInt(realLeafCompressedLengths.get(x));
-                compressedValuesOut.writeVInt(realLeafBytesLengths.get(x));
-            }
-
-            assert realLeafBytesFPs.size() == realLeafCompressedBytesFPs.size();
-
-            this.compressedValuesOut.close();
-        }
-        else
-        {
-            compressedLeafFPs_FP = -1;
-        }
 
         // TODO: when there are duplicate row ids it means
         //       this isn't a single value per row index and so cannot have a row id -> point id map
@@ -707,7 +605,6 @@ public class BlockIndexWriter
         final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
         // write the row id -> point id map
         final RowPointIterator rowPointIterator = this.rowPointIterator();
-        long i = 0;
         long lastRowID = -1;
         while (true)
         {
@@ -722,7 +619,6 @@ public class BlockIndexWriter
                 for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
                 {
                     rowPointWriter.add(-1);
-                    i++;
                 }
             }
 
@@ -733,7 +629,6 @@ public class BlockIndexWriter
 
             rowPointWriter.add(rowPoint.pointID);
             lastRowID = rowPoint.rowID;
-            i++;
         }
         final long rowPointMap_FP = rowPointWriter.finish();
         rowPointIterator.close();
@@ -758,11 +653,9 @@ public class BlockIndexWriter
                                   nodeIDToLeafOrdinalFP,
                                   multiBlockLeafRangesFP,
                                   nodeIDToMultilevelPostingsFP_FP,
-                                  zstdDictionaryFP,
                                   leafValuesSameFP,
                                   leafValuesSamePostingsFP,
                                   nodeIDPostingsFP_FP,
-                                  compressedLeafFPs_FP,
                                   numRows,
                                   minRowID,
                                   maxRowID,

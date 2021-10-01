@@ -103,7 +103,6 @@ public class MultiLevelPostingsWriter
                          .filter(i -> nodeToChildLeaves.get(i).size() >= config.getBkdPostingsMinLeaves())
                          .collect(Collectors.toList());
 
-        //final long startFP = out.getFilePointer();
         final Stopwatch flushTime = Stopwatch.createStarted();
         final TreeMultimap<Integer, Long> nodeIDToPostingsFP = TreeMultimap.create();
         for (final int nodeID : internalNodeIDs)
@@ -141,9 +140,6 @@ public class MultiLevelPostingsWriter
 
             final Range<Integer> multiBlockMin = multiBlockLeafRanges.rangeContaining(minLeaf);
             final Range<Integer> multiBlockMax = multiBlockLeafRanges.rangeContaining(maxLeaf);
-
-//            System.out.println("minLeaf=" + minLeaf + " multiBlockMin=" + multiBlockMin);
-//            System.out.println("maxLeaf=" + maxLeaf + " multiBlockMax=" + multiBlockMax);
 
             if (multiBlockMin != null)
             {
@@ -225,7 +221,6 @@ public class MultiLevelPostingsWriter
         }
         flushTime.stop();
 
-        final long indexFilePointer = out.getFilePointer();
         postingsWriter.complete();
         return nodeIDToPostingsFP;
     }

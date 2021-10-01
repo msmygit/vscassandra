@@ -40,11 +40,7 @@ import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.LongArrayList;
-import com.github.luben.zstd.Zstd;
-import com.github.luben.zstd.ZstdDictDecompress;
-import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v1.ByteArrayIndexInput;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.FilteringPostingList;
@@ -88,7 +84,6 @@ public class BlockIndexReader implements Closeable
     final RangeSet<Integer> multiBlockLeafRanges;
     final FixedBitSet leafValuesSame;
     final Multimap<Integer, Long> multiNodeIDToPostingsFP = TreeMultimap.create();
-    final ZstdDictDecompress zstdDictDecompress;
     final IntLongHashMap leafIDToPostingsFP = new IntLongHashMap();
     final BlockIndexFileProvider fileProvider;
     final boolean temporary;
@@ -143,34 +138,6 @@ public class BlockIndexReader implements Closeable
         else
         {
             this.leafValuesSame = null;
-        }
-        if (meta.zstdDictionaryFP != -1)
-        {
-            bytesCompressedInput.seek(meta.zstdDictionaryFP);
-            int len = bytesCompressedInput.readVInt();
-            byte[] dictBytes = new byte[len];
-            bytesCompressedInput.readBytes(dictBytes, 0, dictBytes.length);
-            zstdDictDecompress = new ZstdDictDecompress(dictBytes);
-        }
-        else
-        {
-            zstdDictDecompress = null;
-        }
-
-        if (meta.compressedLeafFPs_FP != -1)
-        {
-            bytesCompressedInput.seek(meta.compressedLeafFPs_FP);
-            int numCompEntries = bytesCompressedInput.readVInt();
-            assert meta.numLeaves == numCompEntries;
-            for (int x = 0; x < meta.numLeaves; x++)
-            {
-                final long leafFP = bytesCompressedInput.readVLong();
-                final int len = bytesCompressedInput.readVInt();
-                final int origLen = bytesCompressedInput.readVInt();
-                compressedLeafFPs.add(leafFP);
-                compressedLeafLengths.add(len);
-                leafLengths.add(origLen);
-            }
         }
 
         leafLevelPostingsInput.seek(meta.nodeIDPostingsFP_FP);
@@ -247,8 +214,6 @@ public class BlockIndexReader implements Closeable
         boolean readBlock = false;
         BytesRefBuilder builder = new BytesRefBuilder();
 
-
-        private IndexInput compBytesInput = null;
         private byte[] compBytes = new byte[10];
         private byte[] uncompBytes = new byte[10];
         SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput;
@@ -256,14 +221,14 @@ public class BlockIndexReader implements Closeable
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(seekingInput, compBytesInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
+            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
         }
     }
 
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(indexFile, orderMapInput, zstdDictDecompress);
+        FileUtils.close(indexFile, orderMapInput);
     }
 
     static class NodeIDLeafFP
@@ -352,7 +317,7 @@ public class BlockIndexReader implements Closeable
     public class IndexIteratorImpl implements IndexIterator
     {
         private long pointId = 0;
-        final BlockIndexReaderContext context = new BlockIndexReaderContext();
+        final BlockIndexReaderContext context;
         private long currentPostingLeaf = -1;
         private long[] postings = null;
         private PostingsReader postingsReader = null;
@@ -361,10 +326,7 @@ public class BlockIndexReader implements Closeable
 
         public IndexIteratorImpl()
         {
-            context.bytesInput = fileProvider.openValuesInput(false);
-            context.bytesCompressedInput = fileProvider.openCompressedValuesInput(false);
-            context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(false);
-            context.multiPostingsInput = fileProvider.openMultiPostingsInput(false);
+            context = initContext();
         }
 
         @Override
@@ -485,14 +447,9 @@ public class BlockIndexReader implements Closeable
     public List<PostingList.PeekablePostingList> traverse(final ByteComparable start,
                                                           final ByteComparable end) throws IOException
     {
-        final BlockIndexReaderContext context = new BlockIndexReaderContext();
+        final BlockIndexReaderContext context = initContext();
 
         final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
-
-        context.bytesInput = fileProvider.openValuesInput(false);
-        context.bytesCompressedInput = fileProvider.openCompressedValuesInput(false);
-        context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(false);
-        context.multiPostingsInput = fileProvider.openMultiPostingsInput(false);
 
         // if there's only 1 leaf in the index, filter on it
         if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
@@ -954,6 +911,7 @@ public class BlockIndexReader implements Closeable
 
     public BlockIndexReaderContext initContext()
     {
+        // TODO: use initContext everywhere and lazily init the input streams
         BlockIndexReaderContext context = new BlockIndexReaderContext();
         context.bytesInput = fileProvider.openValuesInput(temporary);
         context.bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
@@ -1043,121 +1001,6 @@ public class BlockIndexReader implements Closeable
 
         context.readBlock = true;
     }
-
-    private void readCompressedBlock(int leafID, BlockIndexReaderContext context) throws IOException
-    {
-        long filePointer = this.leafFilePointers.get(leafID);
-        long compressedFP = this.compressedLeafFPs.get(leafID);
-
-        context.bytesCompressedInput.seek(compressedFP);
-
-        int compLen = compressedLeafLengths.get(leafID);
-        int originalSize = leafLengths.get(leafID);
-
-        context.compBytes = ArrayUtil.grow(context.compBytes, compLen);
-        context.uncompBytes = ArrayUtil.grow(context.uncompBytes, originalSize);
-
-        context.bytesCompressedInput.readBytes(context.compBytes, 0, compLen);
-
-        long uncompLen = Zstd.decompressFastDict(context.uncompBytes, 0, context.compBytes, 0, compLen, this.zstdDictDecompress);
-
-        if (uncompLen < 0)
-        {
-            throw new IllegalStateException("uncompLen="+uncompLen);
-        }
-
-        context.compBytesInput = new ByteArrayIndexInput("", context.uncompBytes);
-
-        context.currentLeafFP = filePointer;
-        context.leafSize = context.compBytesInput.readInt();
-        context.lengthsBytesLen = context.compBytesInput.readInt();
-        context.prefixBytesLen = context.compBytesInput.readInt();
-        context.lengthsBits = context.compBytesInput.readByte();
-        context.prefixBits = context.compBytesInput.readByte();
-
-        context.arraysFilePointer = context.compBytesInput.getFilePointer();
-
-        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
-
-        context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
-        context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
-
-        context.compBytesInput.seek(context.arraysFilePointer + context.lengthsBytesLen + context.prefixBytesLen);
-
-        context.seekingInput = new SeekingRandomAccessInput(context.compBytesInput);
-
-        context.leafIndex = 0;
-    }
-
-    // TODO: seekInBlock has alloc changes 
-//    public BytesRef seekInBlockCompressed(int seekIndex,
-//                                          BlockIndexReaderContext context) throws IOException
-//    {
-//        if (seekIndex >= context.leafSize)
-//        {
-//            throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+context.leafSize);
-//        }
-//
-//        int len = 0;
-//        int prefix = 0;
-//
-//        // TODO: this part can go back from the current
-//        //       position rather than start from the beginning each time
-//
-//        int start = 0;
-//
-//        // start from where we left off
-//        if (seekIndex >= context.leafIndex)
-//        {
-//            start = context.leafIndex;
-//        }
-//
-//        for (int x = start; x <= seekIndex; x++)
-//        {
-//            len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
-//            prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
-//
-//            if (x == 0)
-//            {
-//                context.firstTerm = new byte[len];
-//                context.compBytesInput.seek(context.leafBytesStartFP);
-//                context.compBytesInput.readBytes(context.firstTerm, 0, len);
-//                context.lastPrefix = len;
-//                context.bytesLength = 0;
-//                context.leafBytesFP += len;
-//            }
-//
-//            if (len > 0 && x > 0)
-//            {
-//                context.bytesLength = len - prefix;
-//                context.lastLen = len;
-//                context.lastPrefix = prefix;
-//            }
-//            else
-//            {
-//                context.bytesLength = 0;
-//            }
-//        }
-//
-//        context.leafIndex = seekIndex + 1;
-//
-//        if (!(len == 0 && prefix == 0))
-//        {
-//            builder.clear();
-//
-//            // TODO: fix this allocation by reading directly into builder
-//            final byte[] bytes = new byte[context.bytesLength];
-//            context.compBytesInput.seek(context.leafBytesFP);
-//            context.compBytesInput.readBytes(bytes, 0, context.bytesLength);
-//
-//            context.leafBytesFP += context.bytesLength;
-//
-//            builder.append(context.firstTerm, 0, context.lastPrefix);
-//            builder.append(bytes, 0, bytes.length);
-//        }
-//
-//        return builder.get();
-//    }
 
     public BytesRef seekInBlock(int seekIndex,
                                 BlockIndexReaderContext context,

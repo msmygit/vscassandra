@@ -340,7 +340,6 @@ public class BKDReaderTest extends NdiRandomizedTest
             {
                 int x = NumericUtils.sortableBytesToInt(packedValue, 0);
                 boolean bb = x >= queryMin && x <= queryMax;
-                if (bb) System.out.println("visit value="+x+" bb="+bb);
                 return bb;
             }
 

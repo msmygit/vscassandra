@@ -37,11 +37,9 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
     public long nodeIDToLeafOrdinalFP;
     public long multiBlockLeafRangesFP;
     public long nodeIDToMultilevelPostingsFP_FP;
-    public long zstdDictionaryFP;
     public long leafValuesSameFP;
     public long leafValuesSamePostingsFP;
     public long nodeIDPostingsFP_FP;
-    public long compressedLeafFPs_FP;
     public long numRows;
     public long minRowID;
     public long maxRowID;
@@ -88,11 +86,9 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
                           long nodeIDToLeafOrdinalFP,
                           long multiBlockLeafRangesFP,
                           long nodeIDToMultilevelPostingsFP_FP,
-                          long zstdDictionaryFP,
                           long leafValuesSameFP,
                           long leafValuesSamePostingsFP,
                           long nodeIDPostingsFP_FP,
-                          long compressedLeafFPs_FP,
                           long numRows,
                           long minRowID,
                           long maxRowID,
@@ -109,11 +105,9 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
         this.nodeIDToLeafOrdinalFP = nodeIDToLeafOrdinalFP;
         this.multiBlockLeafRangesFP = multiBlockLeafRangesFP;
         this.nodeIDToMultilevelPostingsFP_FP = nodeIDToMultilevelPostingsFP_FP;
-        this.zstdDictionaryFP = zstdDictionaryFP;
         this.leafValuesSameFP = leafValuesSameFP;
         this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
         this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
-        this.compressedLeafFPs_FP = compressedLeafFPs_FP;
         this.numRows = numRows;
         this.minRowID = minRowID;
         this.maxRowID = maxRowID;
