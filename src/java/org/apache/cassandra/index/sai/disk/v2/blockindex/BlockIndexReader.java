@@ -965,6 +965,7 @@ public class BlockIndexReader implements Closeable
     public Pair<BytesRef, Long> seekTo(final BytesRef target,
                                        final BlockIndexReaderContext context) throws IOException
     {
+        // TODO: do min/max term checking here to avoid extra IO
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
                                                               meta.indexFP,
                                                               BytesUtil.fixedLength(target),
@@ -973,14 +974,21 @@ public class BlockIndexReader implements Closeable
                                                               true))
         {
             final Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
-            final Pair<ByteSource, Long> pair = iterator.next();
-            int leafId = (int) (pair.right.longValue() >> 32);
-
-            // the term may be in a previous block
-            if (leafId > 0)
+            int leafId = -1;
+            if (iterator.hasNext())
             {
-                leafId--;
-                context.readBlock = false;
+                final Pair<ByteSource, Long> pair = iterator.next();
+                leafId = (int) (pair.right.longValue() >> 32);
+                // the term may be in a previous block
+                if (leafId > 0)
+                {
+                    leafId--;
+                    context.readBlock = false;
+                }
+            }
+            else
+            {
+                leafId = (int)meta.numLeaves - 1;
             }
 
             while (leafId < meta.numLeaves)
@@ -995,7 +1003,7 @@ public class BlockIndexReader implements Closeable
 
                 for (context.leafIndex = 0; context.leafIndex < context.leafSize; context.leafIndex++)
                 {
-                    BytesRef term = seekInBlock(context.leafIndex, context, false);
+                    final BytesRef term = seekInBlock(context.leafIndex, context, false);
                     if (target.compareTo(term) <= 0)
                     {
                         final long pointId = leafId * LEAF_SIZE + context.leafIndex;

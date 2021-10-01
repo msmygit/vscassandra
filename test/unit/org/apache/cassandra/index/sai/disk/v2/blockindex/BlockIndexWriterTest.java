@@ -490,7 +490,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
         assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
         assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-//        assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7); // This one fails
+        assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7);
         assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
         assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
         assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
@@ -498,8 +498,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
         assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
         assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
-
-
 
         assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
         assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
@@ -523,7 +521,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     {
         assertEquals(key, stringFromTerm(pair.left));
         assertEquals(Long.valueOf(rowId), pair.right);
-
     }
 
     @Test
