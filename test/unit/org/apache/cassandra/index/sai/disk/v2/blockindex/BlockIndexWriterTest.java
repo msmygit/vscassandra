@@ -24,9 +24,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
@@ -35,6 +37,7 @@ import org.junit.Test;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
+import com.carrotsearch.randomizedtesting.annotations.Seed;
 import com.sun.jna.Pointer;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
@@ -86,6 +89,8 @@ import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
+//@Seed(value = "3A64D2D8C02FD322:C75D376B778B2264")
+//@Seed(value = "62A3A1AD9A3E879B:9F9A441E2D9A76DD")
 public class BlockIndexWriterTest extends NdiRandomizedTest
 {
     @Test
@@ -526,14 +531,31 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     @Test
     public void randomPerSSTableSeekTo() throws Throwable
     {
+        int numberOfIterations = randomIntBetween(10, 100);
+        for (int iteration = 0; iteration < numberOfIterations; iteration++)
+        {
+            System.out.println("iteration = " + iteration);
+            doRandomPerTableSeekTo(iteration);
+        }
+    }
+
+    private void doRandomPerTableSeekTo(int iteration) throws Throwable
+    {
         int numberOfStrings = randomIntBetween(100, 2000);
 
         List<String> strings = new ArrayList<>();
+        Set<String> duplicates = new HashSet<>();
         Map<Long, String> rowIdToStringMap = new HashMap<>();
         List<Pair<ByteComparable, Long>> data = new ArrayList();
 
         for (long index = 0; index < numberOfStrings; index++)
-            strings.add(randomSimpleString(2, 20));
+        {
+            String string = randomSimpleString(2, 20);
+            while (duplicates.contains(string))
+                string = randomSimpleString(2, 20);
+            duplicates.add(string);
+            strings.add(string);
+        }
 
         strings.sort(String::compareTo);
 
@@ -544,25 +566,28 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             data.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(string), v), index));
         }
 
-        BlockIndexReader reader = createPerSSTableReader(data);
-
-        BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
-
-        for (int index = 0; index < randomIntBetween(500, 1500); index++)
+        try (BlockIndexReader reader = createPerSSTableReader(data))
         {
-            long rowId = nextLong(0, numberOfStrings);
+            BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
 
-            if (randomBoolean())
+            for (int index = 0; index < randomIntBetween(500, 1500); index++)
             {
-                Pair<BytesRef, Long> pair = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
+                System.out.println("index = " + index);
+                if (iteration == 7 && index == 392)
+                    System.out.println();
+                long rowId = nextLong(0, numberOfStrings);
 
-                assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(pair.left));
-                assertEquals(Long.valueOf(rowId), pair.right);
+                if (randomBoolean())
+                {
+                    Pair<BytesRef, Long> pair = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
 
-            }
-            else
-            {
-                assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(reader.seekTo(rowId, context, true)));
+                    assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(pair.left));
+                    assertEquals(Long.valueOf(rowId), pair.right);
+                }
+                else
+                {
+                    assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(reader.seekTo(rowId, context, true)));
+                }
             }
         }
     }

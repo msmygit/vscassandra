@@ -210,6 +210,7 @@ public class BlockIndexReader implements Closeable
         int bytesLen = -1;
         int leaf;
         int leafIndex;
+        int lastLeafIndex;
         long currentLeafFP = -1;
         boolean readBlock = false;
         BytesRefBuilder builder = new BytesRefBuilder();
@@ -891,7 +892,7 @@ public class BlockIndexReader implements Closeable
         final long leaf = pointID / LEAF_SIZE;
         final int leafIdx = (int) (pointID % LEAF_SIZE);
 
-        if (context.readBlock && context.leaf == pointID && context.leafIndex == leafIdx)
+        if (context.readBlock && context.leaf == leaf && context.lastLeafIndex == leafIdx)
             return context.builder.get();
 
         final long leafFP = leafFilePointers.get(leaf);
@@ -905,7 +906,6 @@ public class BlockIndexReader implements Closeable
             context.leafIndex = 0;
         }
         context.leaf = (int) leaf;
-//        context.leafIndex = leafIdx;
         return seekInBlock(leafIdx, context, incLeafIndex);
     }
 
@@ -957,6 +957,7 @@ public class BlockIndexReader implements Closeable
                     readBlock(leafFP, context);
                     context.leaf = leafId;
                     context.leafIndex = 0;
+                    context.readBlock = true;
                 }
 
                 for (context.leafIndex = 0; context.leafIndex < context.leafSize; context.leafIndex++)
@@ -964,7 +965,7 @@ public class BlockIndexReader implements Closeable
                     final BytesRef term = seekInBlock(context.leafIndex, context, false);
                     if (target.compareTo(term) <= 0)
                     {
-                        final long pointId = leafId * LEAF_SIZE + context.leafIndex;
+                        final long pointId = leafId * LEAF_SIZE + context.leafIndex++;
                         return Pair.create(term, pointId);
                     }
                 }
@@ -1051,16 +1052,18 @@ public class BlockIndexReader implements Closeable
                 context.lastLen = len;
                 //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 context.bytesLength = 0;
-//                context.leafBytesFP += len;
+                context.leafBytesFP += len;
             }
-
-            if (len > 0 && x > 0)
+            else if (len > 0)
             {
                 context.bytesLength = len - prefix;
+//                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
-                context.leafBytesFP += context.lastLen;
                 context.lastLen = len;
                 //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
+                if (x < seekIndex)
+                    context.leafBytesFP += context.bytesLength;
+
             }
             else
             {
@@ -1090,8 +1093,7 @@ public class BlockIndexReader implements Closeable
                 }
                 context.bytesInput.seek(context.leafBytesFP);
                 context.bytesInput.readBytes(context.bytes, 0, context.bytesLength);
-
-//                context.leafBytesFP += context.bytesLength;
+                context.leafBytesFP += context.bytesLength;
             }
             if (context.lastPrefix > 0 && context.firstTerm != null)
                 context.builder.append(context.firstTerm, 0, context.lastPrefix);
@@ -1100,6 +1102,7 @@ public class BlockIndexReader implements Closeable
                 context.builder.append(context.bytes, 0, context.bytesLength);
             }
         }
+        context.lastLeafIndex = seekIndex;
         return context.builder.get();
     }
 }

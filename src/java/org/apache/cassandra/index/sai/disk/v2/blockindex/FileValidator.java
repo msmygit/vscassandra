@@ -61,11 +61,12 @@ public class FileValidator
     }
 
     public static long generateCRC(final IndexInput input,
-                                   final byte[] buffer) throws IOException
+                                   final byte[] buffer,
+                                   final int length) throws IOException
     {
-        input.readBytes(buffer, 0, buffer.length);
+        input.readBytes(buffer, 0, length);
         CRC32 crc = new CRC32();
-        crc.update(buffer);
+        crc.update(buffer, 0, length);
         return crc.getValue();
     }
 
@@ -76,13 +77,14 @@ public class FileValidator
         int bufferLen = fileLength < 1024 ? (int)fileLength / 3 : 1024;
         byte[] buffer = new byte[bufferLen];
 
-        final long headerCRC = generateCRC(indexInput, buffer);
+        final long headerCRC = generateCRC(indexInput, buffer, bufferLen);
 
         indexInput.seek(fileLength / 2);
-        final long middleCRC = generateCRC(indexInput, buffer);
+        int midLength = fileLength - fileLength / 2 < bufferLen ? (int)(fileLength - fileLength / 2) : bufferLen;
+        final long middleCRC = generateCRC(indexInput, buffer, midLength);
 
         indexInput.seek(fileLength - bufferLen);
-        final long footerCRC = generateCRC(indexInput, buffer);
+        final long footerCRC = generateCRC(indexInput, buffer, bufferLen);
         return new FileInfo(headerCRC, middleCRC, footerCRC);
     }
 }
