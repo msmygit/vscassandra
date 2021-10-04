@@ -308,7 +308,17 @@ public class IndexDescriptor
                               .forEach(this::deleteComponent);
     }
 
-    public void deleteTemporaryComponents(IndexContext indexContext)
+    public void deletePerSSTableTemporaryComponents()
+    {
+        version.onDiskFormat()
+               .perSSTableComponents()
+               .stream()
+               .map(c -> tmpFileFor(c))
+               .filter(File::exists)
+               .forEach(this::deleteComponent);
+    }
+
+    public void deletePerIndexTemporaryComponents(IndexContext indexContext)
     {
         version.onDiskFormat()
                .perIndexComponents(indexContext)

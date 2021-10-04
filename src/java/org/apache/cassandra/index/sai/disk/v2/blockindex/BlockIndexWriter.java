@@ -631,8 +631,8 @@ public class BlockIndexWriter
         final byte[] fileInfoMapBytes = SerializationUtils.serialize(fileInfoMap);
 //        perIndexFiles.close();
 
-        System.out.println("minTerm="+Arrays.toString(minTerm.bytes));
-        System.out.println("maxTerm="+Arrays.toString(realLastTerm.toBytesRef().bytes));
+//        System.out.println("minTerm="+Arrays.toString(minTerm.bytes));
+//        System.out.println("maxTerm="+Arrays.toString(realLastTerm.toBytesRef().bytes));
 
         return new BlockIndexMeta(orderMapFP,
                                   indexFP,
