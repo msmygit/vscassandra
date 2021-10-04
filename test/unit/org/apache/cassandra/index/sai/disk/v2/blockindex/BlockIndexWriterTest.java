@@ -726,23 +726,9 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     }
 
     @Test
-    public void testPointer() throws Exception
-    {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(10);
-        Pointer pointer = com.sun.jna.Native.getDirectBufferPointer(buffer);
-
-        Field field = Pointer.class.getDeclaredField("peer");
-        field.setAccessible(true);
-
-        Long pointerLong = field.getLong(pointer);
-
-//        System.out.println("pointerLong="+pointerLong);
-    }
-
-    @Test
     public void randomTest() throws Exception
     {
-        for (int x = 0; x < 2; x++)
+        for (int x = 0; x < 20; x++)
         {
             doRandomTest();
         }
@@ -830,17 +816,12 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         BlockIndexMeta meta = prefixBytesWriter.finish();
 
-//        BlockIndexReader reader = new BlockIndexReader(comps,
-//                                                       indexName,
-//                                                       meta);
-//
-//        PostingList postings = reader.traverse(start, end);
-//        IntArrayList results2 = collect(postings);
-//
-//        System.out.println("kdtreePostingList=" + kdtreePostingList);
-//        System.out.println("results2=" + results2);
-//
-//        assertEquals(kdtreePostingList, results2);
+        BlockIndexReader reader = new BlockIndexReader(fileProvider, false, meta);
+
+        PostingList postings = BlockIndexReader.toOnePostingList(reader.traverse(start, end));
+        IntArrayList results2 = collect(postings);
+
+        assertEquals(kdtreePostingList, results2);
     }
 
     //TODO Rig a generic method for this in TypeUtil or the like to
