@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
@@ -27,6 +28,7 @@ import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
+import org.assertj.core.internal.bytebuddy.implementation.bytecode.Throw;
 
 public class BlockIndexMeta implements IndexOnDiskMetadata
 {
@@ -48,35 +50,42 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
     public BytesRef fileInfoMapBytes;
     public long rowPointMap_FP;
 
-    public BlockIndexMeta(IndexInput input) throws Exception
+    public BlockIndexMeta(IndexInput input) throws IOException
     {
-        Map<String, Field> map = Arrays.stream(BlockIndexMeta.class.getDeclaredFields()).collect(
-        Collectors.toMap(Field::getName, (field) -> field));
-
-        int size = input.readVInt();
-        for (int x = 0; x < size; x++)
+        try
         {
-            String fieldName = input.readString();
+            Map<String, Field> map = Arrays.stream(BlockIndexMeta.class.getDeclaredFields()).collect(
+            Collectors.toMap(Field::getName, (field) -> field));
 
-            Field field = map.get(fieldName);
-            if (field == null)
+            int size = input.readVInt();
+            for (int x = 0; x < size; x++)
             {
-                throw new Exception("field " + fieldName + " not found.");
-            }
-            if (field.getType().isAssignableFrom(BytesRef.class))
-            {
-                int len = input.readVInt();
-                byte[] bytes = new byte[len];
-                input.readBytes(bytes, 0, len);
-                field.set(this, new BytesRef(bytes));
-            }
-            else
-            {
-                long value = input.readZLong();
-                field.setLong(this, value);
+                String fieldName = input.readString();
+
+                Field field = map.get(fieldName);
+                if (field == null)
+                {
+                    throw new Exception("field " + fieldName + " not found.");
+                }
+                if (field.getType().isAssignableFrom(BytesRef.class))
+                {
+                    int len = input.readVInt();
+                    byte[] bytes = new byte[len];
+                    input.readBytes(bytes, 0, len);
+                    field.set(this, new BytesRef(bytes));
+                }
+                else
+                {
+                    long value = input.readZLong();
+                    field.setLong(this, value);
+                }
             }
         }
-        System.out.println("BlockIndexMeta load minTerm="+Arrays.toString(minTerm.bytes));
+        catch (Exception e)
+        {
+            throw new IOException(e);
+        }
+//        System.out.println("BlockIndexMeta load minTerm="+Arrays.toString(minTerm.bytes));
     }
 
     public BlockIndexMeta(long orderMapFP,
@@ -118,26 +127,33 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
         this.rowPointMap_FP = rowPointMap_FP;
     }
 
-    public void write(final IndexOutput out) throws Exception
+    public void write(final IndexOutput out) throws IOException
     {
-        final Field[] fields = BlockIndexMeta.class.getDeclaredFields();
-        out.writeVInt(fields.length);
-        for (Field field : BlockIndexMeta.class.getDeclaredFields())
+        try
         {
-            final Class type = field.getType();
-            if (type.isAssignableFrom(long.class))
+            final Field[] fields = BlockIndexMeta.class.getDeclaredFields();
+            out.writeVInt(fields.length);
+            for (Field field : BlockIndexMeta.class.getDeclaredFields())
             {
-                long value = field.getLong(this);
-                out.writeString(field.getName());
-                out.writeZLong(value);
+                final Class type = field.getType();
+                if (type.isAssignableFrom(long.class))
+                {
+                    long value = field.getLong(this);
+                    out.writeString(field.getName());
+                    out.writeZLong(value);
+                }
+                else if (type.isAssignableFrom(BytesRef.class))
+                {
+                    BytesRef value = (BytesRef)field.get(this);
+                    out.writeString(field.getName());
+                    out.writeVInt(value.length);
+                    out.writeBytes(value.bytes, value.offset, value.length);
+                }
             }
-            else if (type.isAssignableFrom(BytesRef.class))
-            {
-                BytesRef value = (BytesRef)field.get(this);
-                out.writeString(field.getName());
-                out.writeVInt(value.length);
-                out.writeBytes(value.bytes, value.offset, value.length);
-            }
+        }
+        catch (Throwable e)
+        {
+            throw new IOException(e);
         }
     }
 }

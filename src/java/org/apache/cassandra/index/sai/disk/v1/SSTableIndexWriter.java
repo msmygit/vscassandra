@@ -345,7 +345,7 @@ public class SSTableIndexWriter implements PerIndexWriter
         }
         finally
         {
-            indexDescriptor.deleteTemporaryComponents(indexContext);
+            indexDescriptor.deletePerIndexTemporaryComponents(indexContext);
         }
     }
 

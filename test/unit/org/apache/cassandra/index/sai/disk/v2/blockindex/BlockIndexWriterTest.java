@@ -455,42 +455,42 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("g"), v), 6L));
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("h"), v), 7L));
 
-        BlockIndexReader reader = createPerSSTableReader(list);
+        try (BlockIndexReader reader = createPerSSTableReader(list);
+             BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
+        {
+            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
+            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
+            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
+            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
+            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
+            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
+            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
+            assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7);
+            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
+            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
+            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
+            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
+            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
+            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
+            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
 
-        BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
-
-        assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
-        assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-        assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-        assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-        assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-        assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-        assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-        assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7);
-        assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-        assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-        assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-        assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-        assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-        assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-        assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
-
-        assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
-        assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
-        assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
-        assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
-        assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
-        assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
-        assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
-        assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
-        assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
-        assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
-        assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
-        assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
-        assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
-        assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
-        assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
-        assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+            assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+            assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
+            assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
+            assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
+            assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
+            assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
+            assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
+            assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
+            assertEquals("h", stringFromTerm(reader.seekTo(7, context, true)));
+            assertEquals("g", stringFromTerm(reader.seekTo(6, context, true)));
+            assertEquals("f", stringFromTerm(reader.seekTo(5, context, true)));
+            assertEquals("e", stringFromTerm(reader.seekTo(4, context, true)));
+            assertEquals("d", stringFromTerm(reader.seekTo(3, context, true)));
+            assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
+            assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
+            assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+        }
     }
 
     private void assertPair(Pair<BytesRef, Long> pair, String key, long rowId)
@@ -585,6 +585,8 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         context.close();
 
+        blockIndexReader.close();
+
 //        BlockIndexWriter.RowPointIterator rowPointIterator = blockIndexReader.rowPointIterator();
 //        while (true)
 //        {
@@ -604,7 +606,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
 
-
+        blockIndexReader2.close();
 
 //        BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
 //        BlockIndexReader.IndexIterator iterator2 = blockIndexReader2.iterator();

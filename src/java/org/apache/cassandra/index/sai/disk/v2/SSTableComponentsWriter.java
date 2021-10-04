@@ -28,22 +28,17 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.db.tries.Trie;
-import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
-import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
-import org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter;
-import org.apache.cassandra.index.sai.disk.v1.TrieTermsDictionaryReader;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.MergeIndexIterators;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.compress.BufferType;
-import org.apache.cassandra.io.tries.IncrementalDeepTrieWriterPageAware;
-import org.apache.cassandra.io.tries.IncrementalTrieWriter;
-import org.apache.cassandra.io.util.FileHandle;
-import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.store.IndexOutput;
 
@@ -53,29 +48,16 @@ import org.apache.lucene.store.IndexOutput;
 public class SSTableComponentsWriter implements PerSSTableWriter
 {
     Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
-    int MAX_RECURSIVE_KEY_LENGTH = 128;
 
     private final IndexDescriptor indexDescriptor;
-    private final MetadataWriter metadataWriter;
-    private final IndexOutputWriter primaryKeys;
-    private final NumericValuesWriter primaryKeyOffsets;
-    private final List<Long> roots;
-
     private MemtableTrie<Long> rowMapping;
-
+    private final List<BlockIndexMeta> metadatas;
 
     public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         this.indexDescriptor = indexDescriptor;
-        this.primaryKeys = indexDescriptor.openPerSSTableOutput(IndexComponent.PRIMARY_KEYS);
-        SAICodecUtils.writeHeader(this.primaryKeys);
-        this.metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
-        this.primaryKeyOffsets = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.PRIMARY_KEY_OFFSETS, null),
-                                                         indexDescriptor.openPerSSTableOutput(IndexComponent.PRIMARY_KEY_OFFSETS),
-                                                         metadataWriter,
-                                                         true);
         this.rowMapping = new MemtableTrie<>(BufferType.OFF_HEAP);
-        this.roots = new ArrayList<>();
+        this.metadatas = new ArrayList<>();
     }
 
     @Override
@@ -87,18 +69,13 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     @Override
     public void nextRow(PrimaryKey key) throws IOException
     {
-        long offset = primaryKeys.getFilePointer();
-        PrimaryKey.serializer.serialize(primaryKeys.asSequentialWriter(), 0, key);
-        primaryKeyOffsets.add(offset);
         addKeyToMapping(key);
     }
 
     public void complete() throws IOException
     {
         flush();
-        compactPrimaryKeyMap();
-        SAICodecUtils.writeFooter(primaryKeys);
-        FileUtils.close(primaryKeys, primaryKeyOffsets, metadataWriter);
+        compactSegments();
         indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 
@@ -112,10 +89,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     {
         try
         {
-//            if (key.size() <= MAX_RECURSIVE_KEY_LENGTH)
-//                rowMapping.putRecursive(v -> key.asComparableBytes(v), key.sstableRowId(), (existing, neww) -> neww);
-//            else
-                rowMapping.apply(Trie.singleton(v -> key.asComparableBytes(v), key.sstableRowId()), (existing, neww) -> neww);
+            rowMapping.apply(Trie.singleton(v -> key.asComparableBytes(v), key.sstableRowId()), (existing, neww) -> neww);
             // If the trie is full then we need to flush it and start a new one
             if (rowMapping.reachedAllocatedSizeThreshold())
                 flush();
@@ -128,48 +102,50 @@ public class SSTableComponentsWriter implements PerSSTableWriter
 
     private void flush() throws IOException
     {
-        try (IndexOutputWriter writer = indexDescriptor.openPerSSTableOutput(IndexComponent.PRIMARY_KEY_MAP, true, true);
-             IncrementalTrieWriter<Long> trieWriter = new IncrementalDeepTrieWriterPageAware<>(TrieTermsDictionaryReader.trieSerializer,
-                                                                                               writer.asSequentialWriter()))
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))
         {
-
+            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, true);
             Iterator<Map.Entry<ByteComparable, Long>> iterator = rowMapping.entryIterator();
 
             while (iterator.hasNext())
             {
                 Map.Entry<ByteComparable, Long> entry = iterator.next();
-                trieWriter.add(entry.getKey(), entry.getValue());
+                writer.add(entry.getKey(), entry.getValue());
             }
-
-            roots.add(trieWriter.complete());
+            metadatas.add(writer.finish());
         }
-
-        rowMapping = new MemtableTrie<>(BufferType.OFF_HEAP);
     }
 
-    private void compactPrimaryKeyMap() throws IOException
+    private void compactSegments() throws IOException
     {
-        try (FileHandle mapFileHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.PRIMARY_KEY_MAP, true);
-             IndexOutputWriter output = indexDescriptor.openPerSSTableOutput(IndexComponent.PRIMARY_KEY_MAP, true, false);
-             IncrementalTrieWriter<Long> writer = new IncrementalDeepTrieWriterPageAware<>(TrieTermsDictionaryReader.trieSerializer, output.asSequentialWriter()))
+        List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
+        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+        for (BlockIndexMeta metadata : metadatas)
         {
-            SAICodecUtils.writeHeader(output);
+            BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
+            iterators.add(reader.iterator());
+        }
+        try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
+        {
+            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
 
-            for (long root : roots)
+            while (true)
             {
-                Iterator<Pair<ByteComparable, Long>> iterator = new TrieTermsDictionaryReader(mapFileHandle.instantiateRebufferer(), root).iterator();
-                while (iterator.hasNext())
+                BlockIndexReader.IndexState state = mergeIndexIterators.next();
+                if (state == null)
                 {
-                    Pair<ByteComparable, Long> entry = iterator.next();
-                    writer.add(entry.left, entry.right);
+                    break;
                 }
+                writer.add(BytesUtil.fixedLength(state.term), state.rowid);
+            }
+            BlockIndexMeta meta = writer.finish();
+
+            try (final IndexOutput out = fileProvider.openMetadataOutput())
+            {
+                meta.write(out);
             }
 
-            try (IndexOutput metadata = metadataWriter.builder(indexDescriptor.version.fileNameFormatter().format(IndexComponent.PRIMARY_KEY_MAP, null)))
-            {
-                metadata.writeLong(writer.complete());
-            }
-            SAICodecUtils.writeFooter(output);
+            indexDescriptor.deletePerSSTableTemporaryComponents();
         }
     }
 }

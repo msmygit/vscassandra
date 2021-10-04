@@ -18,6 +18,7 @@
 package org.apache.cassandra.index.sai.utils;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -43,6 +44,7 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 /**
  * The primary key of a row, composed by the partition key and the clustering key.
@@ -118,9 +120,9 @@ public class PrimaryKey implements Comparable<PrimaryKey>
                                   -1);
         }
 
-        public PrimaryKey createKey(DataInputPlus input, long sstableRowId) throws IOException
+        public PrimaryKey createKey(ByteSource.Peekable peekable, long sstableRowId) throws IOException
         {
-            return serializer.deserialize(input, 0, partitioner, comparator, sstableRowId);
+            return createKeyFromPeekable(peekable, sstableRowId);
 
         }
 
@@ -142,6 +144,32 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         public PrimaryKey createKey(Token token, long sstableRowId, Supplier<DecoratedKey> decoratedKeySupplier)
         {
             return new PrimaryKey(token, sstableRowId, decoratedKeySupplier);
+        }
+
+        private PrimaryKey createKeyFromPeekable(ByteSource.Peekable peekable, long sstableRowId)
+        {
+            Token token = partitioner.getTokenFactory().fromComparableBytes(ByteSourceInverse.nextComponentSource(peekable), ByteComparable.Version.OSS41);
+            byte[] keyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable));
+            DecoratedKey key =  new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
+
+            if ((comparator.size() == 0) || peekable.peek() == ByteSource.TERMINATOR)
+                return new PrimaryKey(key, Clustering.EMPTY, comparator, sstableRowId);
+
+            ByteBuffer[] values = new ByteBuffer[comparator.size()];
+
+            byte[] clusteringKeyBytes;
+            int index = 0;
+
+            while ((clusteringKeyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable))) != null)
+            {
+                values[index++] = ByteBuffer.wrap(clusteringKeyBytes);
+                if (peekable.peek() == ByteSource.TERMINATOR)
+                    break;
+            }
+
+            Clustering clustering = Clustering.make(values);
+
+            return new PrimaryKey(key, clustering, comparator, sstableRowId);
         }
     }
 

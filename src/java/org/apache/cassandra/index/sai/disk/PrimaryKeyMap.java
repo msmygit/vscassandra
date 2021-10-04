@@ -35,7 +35,7 @@ public interface PrimaryKeyMap extends Closeable
     {
         PrimaryKeyMap.Factory IDENTITY = (context) -> PrimaryKeyMap.IDENTITY;
 
-        PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context);
+        PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException;
 
         default void close() throws IOException
         {
