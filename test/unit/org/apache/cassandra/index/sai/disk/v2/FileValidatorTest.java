@@ -22,6 +22,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
@@ -29,7 +30,6 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.FileValidator;
 import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.lucene.store.IndexOutput;
 
-import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter.createIndexContext;
 
 public class FileValidatorTest extends NdiRandomizedTest
 {
@@ -38,7 +38,7 @@ public class FileValidatorTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        IndexContext indexContext = createIndexContext("column", "test", UTF8Type.instance);
+        IndexContext indexContext = SAITester.createIndexContext("column", "test", UTF8Type.instance);
 
         IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext);
         byte[] buffer = new byte[1];
@@ -65,7 +65,7 @@ public class FileValidatorTest extends NdiRandomizedTest
     {
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        IndexContext indexContext = createIndexContext("column", "test", UTF8Type.instance);
+        IndexContext indexContext = SAITester.createIndexContext("column", "test", UTF8Type.instance);
 
         IndexOutput out = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext);
         byte[] buffer = new byte[1];

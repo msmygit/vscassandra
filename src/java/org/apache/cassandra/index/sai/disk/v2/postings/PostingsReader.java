@@ -68,7 +68,7 @@ public class PostingsReader implements OrdinalPostingList
     @VisibleForTesting
     public PostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
-        this(sharedInput, new BlocksSummary(sharedInput.sharedCopy(), summaryOffset), listener);
+        this(sharedInput, new BlocksSummary(sharedInput, summaryOffset), listener);
     }
 
     @VisibleForTesting

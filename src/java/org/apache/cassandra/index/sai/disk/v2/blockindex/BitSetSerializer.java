@@ -34,22 +34,24 @@ import org.apache.lucene.util.FixedBitSet;
 
 public class BitSetSerializer
 {
-    public static FixedBitSet deserialize(long fp, IndexInput input) throws IOException
+    public static FixedBitSet deserialize(long fp, SharedIndexInput input) throws IOException
     {
         final int size = input.readVInt();
         final FixedBitSet bitSet = new FixedBitSet(size);
-        final SharedIndexInput sharedInput = new SharedIndexInput(input);
-        final PostingsReader postingsReader = new PostingsReader(sharedInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
-        while (true)
+//        final SharedIndexInput sharedInput = new SharedIndexInput(input);
+        try (final PostingsReader postingsReader = new PostingsReader(input.sharedCopy(), fp, QueryEventListener.PostingListEventListener.NO_OP))
         {
-            final long val = postingsReader.nextPosting();
-            if (val == PostingList.END_OF_STREAM)
+            while (true)
             {
-                 break;
+                final long val = postingsReader.nextPosting();
+                if (val == PostingList.END_OF_STREAM)
+                {
+                    break;
+                }
+                bitSet.set((int) val);
             }
-            bitSet.set((int)val);
+            return bitSet;
         }
-        return bitSet;
     }
 
     public static long serialize(BitSet bitSet, IndexOutput out) throws IOException

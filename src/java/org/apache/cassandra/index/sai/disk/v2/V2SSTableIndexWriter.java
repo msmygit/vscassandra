@@ -348,28 +348,29 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 iterators.add(reader.iterator());
             }
 
-            MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators);
-
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
-
-            // TODO: write row id -> point id map
-            // TODO: write point id -> row id map?
-            while (true)
+            try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
             {
-                BlockIndexReader.IndexState state = mergeIndexIterators.next();
-                if (state == null)
+
+                BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
+
+                // TODO: write row id -> point id map
+                // TODO: write point id -> row id map?
+                while (true)
                 {
-                    break;
+                    BlockIndexReader.IndexState state = mergeIndexIterators.next();
+                    if (state == null)
+                    {
+                        break;
+                    }
+                    writer.add(BytesUtil.fixedLength(state.term), state.rowid);
                 }
-                writer.add(BytesUtil.fixedLength(state.term), state.rowid);
+                BlockIndexMeta meta = writer.finish();
+
+                V2IndexOnDiskMetadata.serializer.serialize(meta, indexDescriptor, indexContext);
+
+                // TODO: put in file provider
+                indexDescriptor.deleteTemporaryComponents(indexContext);
             }
-
-            BlockIndexMeta meta = writer.finish();
-
-            V2IndexOnDiskMetadata.serializer.serialize(meta, indexDescriptor, indexContext);
-
-            // TODO: put in file provider
-            indexDescriptor.deleteTemporaryComponents(indexContext);
         }
     }
 

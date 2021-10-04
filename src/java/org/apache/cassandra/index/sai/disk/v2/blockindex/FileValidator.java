@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.util.zip.CRC32;
 
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
 public class FileValidator
@@ -74,7 +75,7 @@ public class FileValidator
     {
         final long fileLength = indexInput.length();
 
-        int bufferLen = fileLength < 1024 ? (int)fileLength / 3 : 1024;
+        int bufferLen = fileLength < 1024 ? Math.max(1,(int)fileLength / 3) : 1024;
         byte[] buffer = new byte[bufferLen];
 
         final long headerCRC = generateCRC(indexInput, buffer, bufferLen);
@@ -85,6 +86,7 @@ public class FileValidator
 
         indexInput.seek(fileLength - bufferLen);
         final long footerCRC = generateCRC(indexInput, buffer, bufferLen);
+        FileUtils.closeQuietly(indexInput);
         return new FileInfo(headerCRC, middleCRC, footerCRC);
     }
 }

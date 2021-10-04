@@ -171,7 +171,7 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
 
     private IndexInput openInput(IndexComponent indexComponent, boolean temporary)
     {
-        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary).sharedCopy());
+        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary));
     }
 
     private FileHandle getFileHandle(IndexComponent indexComponent, boolean temporary)

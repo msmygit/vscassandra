@@ -219,18 +219,6 @@ public class BlockIndexWriter
         public RowPoint current();
     }
 
-    public static IndexContext createIndexContext(String columnName, String indexName, AbstractType<?> validator)
-    {
-        return new IndexContext("test_ks",
-                                "test_cf",
-                                UTF8Type.instance,
-                                new ClusteringComparator(),
-                                ColumnMetadata.regularColumn("sai", "internal", columnName, validator),
-                                IndexMetadata.fromSchemaMetadata(indexName, IndexMetadata.Kind.CUSTOM, null),
-                                IndexWriterConfig.emptyConfig(),
-                                null);
-    }
-
     // iterator row id order
     public RowPointIterator rowPointIterator() throws IOException
     {

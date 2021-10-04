@@ -47,6 +47,7 @@ import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsWriter;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
@@ -199,7 +200,7 @@ public class MultiLevelPostingsWriter
                 if (nodeIDPostingsFP.containsKey(leafNodeID))
                 {
                     final long postingsFP = nodeIDPostingsFP.get(leafNodeID);
-                    final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
+//                    final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
                     final PostingsReader reader = new PostingsReader(leafPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(reader.peekable());
                 }
@@ -209,13 +210,15 @@ public class MultiLevelPostingsWriter
 
             if (postingLists.size() > 0)
             {
-                final PostingList mergedPostingList = MergePostingList.merge(postingLists);
-                long regularPostingsFP = postingsWriter.write(mergedPostingList);
-                // During compaction we could end up with an empty postings due to deletions.
-                // The writer will return a fp of -1 if no postings were written.
-                if (regularPostingsFP >= 0)
+                try (final PostingList mergedPostingList = MergePostingList.merge(postingLists))
                 {
-                    nodeIDToPostingsFP.put(nodeID, regularPostingsFP * -1);
+                    long regularPostingsFP = postingsWriter.write(mergedPostingList);
+                    // During compaction we could end up with an empty postings due to deletions.
+                    // The writer will return a fp of -1 if no postings were written.
+                    if (regularPostingsFP >= 0)
+                    {
+                        nodeIDToPostingsFP.put(nodeID, regularPostingsFP * -1);
+                    }
                 }
             }
         }

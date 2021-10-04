@@ -91,6 +91,8 @@ import static org.hamcrest.Matchers.is;
 
 //@Seed(value = "3A64D2D8C02FD322:C75D376B778B2264")
 //@Seed(value = "62A3A1AD9A3E879B:9F9A441E2D9A76DD")
+//@Seed(value = "F87B6805568FCE9C:4CA80945456C4B57")
+@Seed(value = "8B4C74C2A762013B:3F9F1582B48184F0")
 public class BlockIndexWriterTest extends NdiRandomizedTest
 {
     @Test
@@ -184,14 +186,14 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         set.add(Range.open(50, 60));
 
         boolean contains = set.contains(10);
-        System.out.println("contains="+contains);
+//        System.out.println("contains="+contains);
 
         boolean encloses = set.encloses(Range.open(0, 10));
-        System.out.println("encloses="+encloses);
+//        System.out.println("encloses="+encloses);
 
         boolean encloses2 = set.encloses(Range.open(4, 15));
 
-        System.out.println("encloses2="+encloses2);
+//        System.out.println("encloses2="+encloses2);
     }
 
     public static class ArrayIndexIterator implements BlockIndexReader.IndexIterator
@@ -250,7 +252,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             IndexState state = blockReaders.next();
             if (state == null) break;
 
-            System.out.println("merge state="+state);
+//            System.out.println("merge state="+state);
         }
     }
 
@@ -261,37 +263,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
 
         BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
-
-        TermsIterator terms = new MemtableTermsIterator(null,
-                                                        null,
-                                                        list.iterator());
-        while (terms.hasNext())
-        {
-            ByteComparable term = terms.next();
-            PostingList postings = terms.postings();
-            while (true)
-            {
-                long rowID = postings.nextPosting();
-                if (rowID == PostingList.END_OF_STREAM)
-                {
-                    break;
-                }
-                blockIndexWriter.add(term, rowID);
-            }
-        }
-
-        BlockIndexMeta meta = blockIndexWriter.finish();
-
-        return new BlockIndexReader(fileProvider, false, meta);
-    }
-
-    private BlockIndexReader createPerSSTableReader2(List<Pair<ByteComparable, LongArrayList>> list) throws Exception
-    {
-        IndexDescriptor indexDescriptor = newIndexDescriptor();
-
-        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
 
         BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
 
@@ -437,7 +408,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         {
             IndexState state = merged.next();
             if (state == null) break;
-            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
+//            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
 
         }
     }
@@ -534,7 +505,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         int numberOfIterations = randomIntBetween(10, 100);
         for (int iteration = 0; iteration < numberOfIterations; iteration++)
         {
-            System.out.println("iteration = " + iteration);
+//            System.out.println("iteration = " + iteration);
             doRandomPerTableSeekTo(iteration);
         }
     }
@@ -566,15 +537,14 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             data.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(string), v), index));
         }
 
-        try (BlockIndexReader reader = createPerSSTableReader(data))
+        try (BlockIndexReader reader = createPerSSTableReader(data);
+             BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
-            BlockIndexReader.BlockIndexReaderContext context = reader.initContext();
-
             for (int index = 0; index < randomIntBetween(500, 1500); index++)
             {
-                System.out.println("index = " + index);
-                if (iteration == 7 && index == 392)
-                    System.out.println();
+//                System.out.println("index = " + index);
+//                if (iteration == 7 && index == 392)
+//                    System.out.println();
                 long rowId = nextLong(0, numberOfStrings);
 
                 if (randomBoolean())
@@ -611,7 +581,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
 
-        System.out.println("term="+pair.left.utf8ToString()+" pointId="+pair.right);
+//        System.out.println("term="+pair.left.utf8ToString()+" pointId="+pair.right);
 
         context.close();
 
@@ -766,7 +736,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         Long pointerLong = field.getLong(pointer);
 
-        System.out.println("pointerLong="+pointerLong);
+//        System.out.println("pointerLong="+pointerLong);
     }
 
     @Test
@@ -802,7 +772,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
                 buffer.addPackedValue(rowID, new BytesRef(scratch));
                 rowID += nextInt(1, 100);
             }
-            System.out.println("term=" + x + " postings=" + postings);
+//            System.out.println("term=" + x + " postings=" + postings);
             list.add(Pair.create(ByteComparable.fixedLength(scratch), postings));
         }
 
@@ -819,7 +789,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         String indexName = "index_yay";
         IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
 
-        System.out.println("queryMin=" + queryMin + " queryMax=" + queryMax + " totalRows=" + totalRows + " maxRowID=" + maxRowID);
+//        System.out.println("queryMin=" + queryMin + " queryMax=" + queryMax + " totalRows=" + totalRows + " maxRowID=" + maxRowID);
 
         IndexDescriptor indexDescriptor = newIndexDescriptor();
 

@@ -96,7 +96,9 @@ public class BlockIndexReader implements Closeable
         this.temporary = temporary;
         this.meta = meta;
 
-        this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes), temporary);
+        // Can't validate temporary file because the file could contain multiple segments
+        if (!temporary)
+            this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes), temporary);
 
         SharedIndexInput bytesInput = fileProvider.openValuesInput(temporary);
         this.indexFile = fileProvider.getIndexFileHandle(temporary);
@@ -104,7 +106,7 @@ public class BlockIndexReader implements Closeable
         this.orderMapInput = fileProvider.openOrderMapInput(temporary);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
         SharedIndexInput multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
-        SharedIndexInput bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
+//        SharedIndexInput bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
 
         orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
 
@@ -181,6 +183,7 @@ public class BlockIndexReader implements Closeable
             long fp = orderMapInput.readVLong();
             leafToOrderMapFP.put(leaf, fp);
         }
+        FileUtils.closeQuietly(bytesInput, leafLevelPostingsInput, multiPostingsInput);
     }
 
     // TODO: return accurate heap used or move heap using data structures to disk
@@ -229,7 +232,7 @@ public class BlockIndexReader implements Closeable
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(indexFile, orderMapInput);
+        FileUtils.close(indexFile, orderMapInput, fileProvider);
     }
 
     static class NodeIDLeafFP
