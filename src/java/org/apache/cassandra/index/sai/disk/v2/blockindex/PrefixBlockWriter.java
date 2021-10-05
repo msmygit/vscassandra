@@ -50,7 +50,7 @@ public class PrefixBlockWriter
 
         // write the upper bytes
         // write the lower block FPs
-        final int upperCount = upperTermsWriter.count();
+        int upperCount = upperTermsWriter.count();
 
         assert upperCount <= INDEX_INTERVAL;
 
@@ -70,6 +70,10 @@ public class PrefixBlockWriter
         final long fp = output.getFilePointer();
 
         byte lastBlockCount = (byte)(count % INDEX_INTERVAL);
+        if (lastBlockCount == 0)
+        {
+            upperCount++;
+        }
 
         System.out.println("write lastBlockCount="+lastBlockCount+" upperCount="+upperCount);
 

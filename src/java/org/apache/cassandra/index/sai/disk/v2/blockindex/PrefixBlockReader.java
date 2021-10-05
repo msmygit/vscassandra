@@ -91,8 +91,6 @@ public class PrefixBlockReader
         {
             upperTerm = upperTermsReader.next();
 
-            //System.out.println("upperTerm="+upperTerm.utf8ToString()+" currentLowerTermsFP="+currentLowerTermsFP+" lowerTermsInput.length="+lowerTermsInput.length());
-
             lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
 
             long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);

@@ -97,6 +97,7 @@ public class PrefixBytesReader implements Closeable
         System.out.println("next fp="+currentFP+" prefixLength="+prefixLength+" suffixLength="+suffixLength);
         System.out.println("next suffixLength="+suffixLength+" currentFP="+currentFP+" input.length="+input.length());
 
+        // TODO: with SharedIndexInput2, tracking the file pointer may not be necessary
         input.seek(this.currentFP);
         input.readBytes(bytesRef.bytes, prefixLength, suffixLength);
         this.currentFP += suffixLength;
