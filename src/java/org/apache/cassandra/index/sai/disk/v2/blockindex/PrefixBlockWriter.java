@@ -30,7 +30,7 @@ import org.apache.lucene.util.BytesRef;
 
 public class PrefixBlockWriter
 {
-    public static final int INDEX_INTERVAL = 4;
+    public static final int INDEX_INTERVAL = 32;
     final PrefixBytesWriter upperTermsWriter, lowerTermsWriter;
     final RAMIndexOutput lowerTermsBuffer = new RAMIndexOutput("");
     final RAMIndexOutput upperTermsBuffer = new RAMIndexOutput("");
@@ -71,7 +71,7 @@ public class PrefixBlockWriter
 
         byte lastBlockCount = (byte)(count % INDEX_INTERVAL);
 
-        System.out.println("write lastBlockCount="+lastBlockCount);
+        System.out.println("write lastBlockCount="+lastBlockCount+" upperCount="+upperCount);
 
         output.writeByte((byte)upperCount);
         output.writeByte(lastBlockCount);
@@ -96,7 +96,7 @@ public class PrefixBlockWriter
         {
             upperTermsWriter.add(term);
 
-            // flush the lower terms if there are any
+            // if there are lower terms flush
             if (lowerTermsWriter.count() > 0)
             {
                 final int size = (int)lowerTermsWriter.finish(lowerTermsBuffer);

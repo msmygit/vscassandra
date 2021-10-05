@@ -19,19 +19,20 @@
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.Test;
 
+import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 
-import static org.junit.Assert.assertEquals;
-
-public class PrefixBlockTest
+public class PrefixBlockTest extends NdiRandomizedTest
 {
     @Test
     public void test() throws Exception
@@ -75,6 +76,64 @@ public class PrefixBlockTest
             System.out.println("  term="+term.utf8ToString());
         }
         input.close();
+
+        assertEquals(terms, list2);
+    }
+
+    @Test
+    public void testRando() throws Exception
+    {
+        for (int x = 0; x < 100; x++)
+        {
+            doRando();
+        }
+    }
+
+    public void doRando() throws Exception
+    {
+        ByteBuffersDirectory dir = new ByteBuffersDirectory();
+
+        int count = nextInt(1, 1024);
+
+        List<BytesRef> terms = new ArrayList();
+
+        for (int x = 0; x < count; x++)
+        {
+            byte[] bytes = new byte[ThreadLocalRandom.current().nextInt(1, 10)];
+            nextBytes(bytes);
+            terms.add(new BytesRef(bytes));
+        }
+
+        Collections.sort(terms);
+
+        IndexOutput out = dir.createOutput("test", IOContext.DEFAULT);
+        PrefixBlockWriter writer = new PrefixBlockWriter();
+        for (BytesRef term : terms)
+        {
+            writer.add(term);
+        }
+
+        long fp = writer.finish(out);
+        out.close();
+
+        final SharedIndexInput input = new SharedIndexInput(dir.openInput("test", IOContext.DEFAULT));
+
+        List<BytesRef> list2 = new ArrayList<>();
+
+        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+        while (true)
+        {
+            BytesRef term = reader.next(null);
+            if (term == null)
+            {
+                break;
+            }
+            list2.add(BytesRef.deepCopyOf(term));
+            System.out.println("  term.length="+term.length);
+        }
+        input.close();
+
+        System.out.println("terms.size="+terms.size()+" list2.size="+list2.size());
 
         assertEquals(terms, list2);
     }

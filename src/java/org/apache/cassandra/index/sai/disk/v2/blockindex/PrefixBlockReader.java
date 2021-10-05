@@ -80,24 +80,23 @@ public class PrefixBlockReader
         final int upperIdx = idx / INDEX_INTERVAL;
         final int lowerIdx = idx % INDEX_INTERVAL;
 
-        System.out.println("next upperIdx="+upperIdx+" lowerIdx="+lowerIdx);
+        System.out.println("next upperIdx="+upperIdx+" upperCount="+upperCount+" lowerIdx="+lowerIdx+" lastBlockCount="+lastBlockCount);
+
+        if (upperIdx == upperCount - 1 && lowerIdx == lastBlockCount)
+        {
+            return null;
+        }
 
         if (idx % INDEX_INTERVAL == 0)
         {
             upperTerm = upperTermsReader.next();
 
-            System.out.println("upperTerm="+upperTerm.utf8ToString()+" currentLowerTermsFP="+currentLowerTermsFP+" lowerTermsInput.length="+lowerTermsInput.length());
+            //System.out.println("upperTerm="+upperTerm.utf8ToString()+" currentLowerTermsFP="+currentLowerTermsFP+" lowerTermsInput.length="+lowerTermsInput.length());
 
             lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
 
             long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
-            System.out.println("lowerBlockSize="+lowerBlockSize);
             currentLowerTermsFP += lowerBlockSize;
-        }
-
-        if (upperIdx == upperCount - 1 && lowerIdx == lastBlockCount)
-        {
-           return null;
         }
 
         idx++;

@@ -41,9 +41,14 @@ public class PrefixBytesWriter
     {
         if (lastTerm.length() > 0)
         {
-            final int prefix = BytesUtil.bytesDifference(lastTerm.get(), bytes);
+            int prefix = BytesUtil.bytesDifference(lastTerm.get(), bytes);
+            if (prefix < 0)
+            {
+                prefix = 0;
+            }
             int len = bytes.length - prefix;
             suffixBuffer.writeBytes(bytes.bytes, prefix, len);
+
             System.out.println("writeBytes=" + BytesUtil.toString(bytes.bytes, prefix, len));
             prefixLengths.add(prefix);
             suffixLengths.add(len);
@@ -76,11 +81,11 @@ public class PrefixBytesWriter
 
         final long fp = output.getFilePointer();
 
-        // TODO: write unsigned short, becomes the largest sub block size
-
-        assert count <= 128;
+        assert count <= 127;
 
         output.writeByte((byte)count);
+
+        // TODO: maybe use unsigned short
         output.writeShort((short)prefixLengthsBuffer.getFilePointer());
         output.writeShort((short)suffixLengthsBuffer.getFilePointer());
 
