@@ -31,9 +31,13 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -42,11 +46,15 @@ import org.apache.cassandra.utils.Throwables;
 
 public class V2SearchableIndex extends SearchableIndex
 {
-    private PerIndexFiles indexFiles;
+    private BlockIndexFileProvider fileProvider;
 
-    private final SegmentMetadata metadata;
-    private final IndexSearcher index;
+    private final BlockIndexMeta metadata;
+    private final BlockIndexReader reader;
 
+    private final ByteBuffer minTerm;
+    private final ByteBuffer maxTerm;
+    private final PrimaryKey minKey;
+    private final PrimaryKey maxKey;
     private final Token minToken;
     private final Token maxToken;
 
@@ -57,21 +65,26 @@ public class V2SearchableIndex extends SearchableIndex
     {
         try
         {
-            this.indexFiles = sstableContext.perIndexFiles(indexContext);
+            this.fileProvider = new PerIndexFileProvider(sstableContext.indexDescriptor, indexContext);
 
-            this.metadata = ((V2IndexOnDiskMetadata)sstableContext.indexDescriptor.newIndexMetadataSerializer()
-                                                                                  .deserialize(sstableContext.indexDescriptor, indexContext)).segment;
+            this.metadata = new BlockIndexMeta(fileProvider.openMetadataInput());
 
-            this.index = IndexSearcher.open(sstableContext.primaryKeyMapFactory, indexFiles, metadata, sstableContext.indexDescriptor, indexContext);
+            this.reader = new BlockIndexReader(fileProvider, false, metadata);
 
-            this.minToken = metadata.minKey.partitionKey().getToken();
-            this.maxToken = metadata.maxKey.partitionKey().getToken();
+            PrimaryKeyMap primaryKeyMap = sstableContext.primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(null);
+
+            this.minTerm = ByteBuffer.wrap(metadata.minTerm.bytes, metadata.minTerm.offset, metadata.minTerm.length);
+            this.maxTerm = ByteBuffer.wrap(metadata.maxTerm.bytes, metadata.maxTerm.offset, metadata.maxTerm.length);
+            this.minKey = primaryKeyMap.primaryKeyFromRowId(metadata.minRowID);
+            this.maxKey = primaryKeyMap.primaryKeyFromRowId(metadata.maxRowID);
+            this.minToken = minKey.partitionKey().getToken();
+            this.maxToken = maxKey.partitionKey().getToken();
             this.minKeyBound = minToken.minKeyBound();
             this.maxKeyBound = maxToken.maxKeyBound();
         }
         catch (Throwable t)
         {
-            FileUtils.closeQuietly(indexFiles);
+            FileUtils.closeQuietly(fileProvider);
             FileUtils.closeQuietly(sstableContext);
             throw Throwables.unchecked(t);
         }
@@ -80,7 +93,8 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public long indexFileCacheSize()
     {
-        return index.indexFileCacheSize();
+        //TODO Need to work this one out
+        return 0;
     }
 
     @Override
@@ -92,44 +106,47 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public long minSSTableRowId()
     {
-        return metadata.minSSTableRowId;
+        return metadata.minRowID;
     }
 
     @Override
     public long maxSSTableRowId()
     {
-        return metadata.maxSSTableRowId;
+        return metadata.maxRowID;
     }
 
     @Override
     public ByteBuffer minTerm()
     {
-        return metadata.minTerm;
+        return minTerm;
     }
 
     @Override
     public ByteBuffer maxTerm()
     {
-        return metadata.maxTerm;
+        return maxTerm;
     }
 
     @Override
     public PrimaryKey minKey()
     {
-        return metadata.minKey;
+        return minKey;
     }
 
     @Override
     public PrimaryKey maxKey()
     {
-        return metadata.maxKey;
+        return maxKey;
     }
 
     @Override
     public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
         if (intersects(keyRange))
-            return Collections.singletonList(index.search(expression, context));
+        {
+            return Collections.emptyList();
+//            return Collections.singletonList(index.search(expression, context));
+        }
 
         return Collections.emptyList();
     }
@@ -137,7 +154,7 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public void close() throws IOException
     {
-        FileUtils.closeQuietly(indexFiles, index);
+        FileUtils.closeQuietly(fileProvider, reader);
     }
 
     /**
