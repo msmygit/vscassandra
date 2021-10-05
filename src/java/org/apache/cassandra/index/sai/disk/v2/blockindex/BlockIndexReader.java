@@ -23,8 +23,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -40,6 +42,7 @@ import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.LongArrayList;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
@@ -257,6 +260,13 @@ public class BlockIndexReader implements Closeable
                    ", filePointer=" + filePointer +
                    '}';
         }
+    }
+
+    public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
+    {
+        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        postingsQueue.addAll(postingLists);
+        return MergePostingList.merge(postingsQueue);
     }
 
     public List<PostingList.PeekablePostingList> traverse(ByteComparable start,
