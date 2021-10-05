@@ -74,8 +74,11 @@ public class SSTableComponentsWriter implements PerSSTableWriter
 
     public void complete() throws IOException
     {
-        flush();
-        compactSegments();
+        if (rowMapping.valuesCount() > 0)
+        {
+            flush();
+            compactSegments();
+        }
         indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 

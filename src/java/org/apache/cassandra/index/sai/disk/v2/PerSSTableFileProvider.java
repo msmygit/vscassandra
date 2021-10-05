@@ -155,22 +155,22 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     }
 
     @Override
-    public HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap(boolean temporary) throws IOException
+    public HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap() throws IOException
     {
         final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
 
         for (IndexComponent indexComponent : components)
-            map.put(indexComponent, FileValidator.generate(indexComponent, openInput(indexComponent, temporary)));
+            map.put(indexComponent, FileValidator.generate(openInput(indexComponent, false)));
 
         return map;
     }
 
     @Override
-    public void validate(Map<IndexComponent, FileValidator.FileInfo> fileInfoMap, boolean temporary) throws IOException
+    public void validate(Map<IndexComponent, FileValidator.FileInfo> fileInfoMap) throws IOException
     {
 //        for (Map.Entry<IndexComponent,FileValidator.FileInfo> entry : fileInfoMap.entrySet())
 //        {
-//            FileValidator.FileInfo fileInfo = FileValidator.generate(entry.getKey(), openInput(entry.getKey(), temporary));
+//            FileValidator.FileInfo fileInfo = FileValidator.generate(openInput(entry.getKey(), false));
 //            if (!fileInfo.equals(entry.getValue()))
 //                throw new IOException("CRC check on component "+entry.getKey()+" failed.");
 //        }

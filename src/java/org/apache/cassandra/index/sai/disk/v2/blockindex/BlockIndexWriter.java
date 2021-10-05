@@ -328,6 +328,10 @@ public class BlockIndexWriter
     {
         flushLastBuffers();
 
+        // If nothing has been written then return early with an empty BlockIndexMeta
+        if (numRows == 0)
+            return new BlockIndexMeta();
+
         // write the block min values index
         IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter());
         int distinctCount = 0;
@@ -623,16 +627,11 @@ public class BlockIndexWriter
         rowPointOut.close();
 
         // all files are written, create the CRC check
-        final HashMap<IndexComponent, FileValidator.FileInfo> fileInfoMap = this.fileProvider.fileInfoMap(temporary);
-
-//        FileValidator.generate(Lists.newArrayList(components),
-//                                                                                                   perIndexFiles);
-
-        final byte[] fileInfoMapBytes = SerializationUtils.serialize(fileInfoMap);
-//        perIndexFiles.close();
-
-//        System.out.println("minTerm="+Arrays.toString(minTerm.bytes));
-//        System.out.println("maxTerm="+Arrays.toString(realLastTerm.toBytesRef().bytes));
+        byte[] fileInfoMapBytes;
+        if (temporary)
+            fileInfoMapBytes = new byte[] {};
+        else
+            fileInfoMapBytes = SerializationUtils.serialize(this.fileProvider.fileInfoMap());
 
         return new BlockIndexMeta(orderMapFP,
                                   indexFP,

@@ -50,6 +50,9 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
     public BytesRef fileInfoMapBytes;
     public long rowPointMap_FP;
 
+    public BlockIndexMeta()
+    {}
+
     public BlockIndexMeta(IndexInput input) throws IOException
     {
         try

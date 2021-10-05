@@ -51,11 +51,11 @@ public class FileValidatorTest extends NdiRandomizedTest
 
         BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
 
-        FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, fileProvider.openValuesInput(false));
+        FileValidator.FileInfo fileInfo = FileValidator.generate(fileProvider.openValuesInput(false));
 
         System.out.println("fileInfo=" + fileInfo);
 
-        FileValidator.FileInfo fileInfo2 = FileValidator.generate(IndexComponent.TERMS_DATA, fileProvider.openValuesInput(false));
+        FileValidator.FileInfo fileInfo2 = FileValidator.generate(fileProvider.openValuesInput(false));
 
         assertEquals(fileInfo, fileInfo2);
     }
@@ -78,11 +78,11 @@ public class FileValidatorTest extends NdiRandomizedTest
 
         BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
 
-        FileValidator.FileInfo fileInfo = FileValidator.generate(IndexComponent.TERMS_DATA, fileProvider.openValuesInput(false));
+        FileValidator.FileInfo fileInfo = FileValidator.generate(fileProvider.openValuesInput(false));
 
         System.out.println("fileInfo=" + fileInfo);
 
-        FileValidator.FileInfo fileInfo2 = FileValidator.generate(IndexComponent.TERMS_DATA, fileProvider.openValuesInput(false));
+        FileValidator.FileInfo fileInfo2 = FileValidator.generate(fileProvider.openValuesInput(false));
 
         assertEquals(fileInfo, fileInfo2);
     }

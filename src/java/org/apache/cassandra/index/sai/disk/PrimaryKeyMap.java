@@ -70,4 +70,25 @@ public interface PrimaryKeyMap extends Closeable
             return key.sstableRowId();
         }
     };
+
+    PrimaryKeyMap EMPTY = new PrimaryKeyMap()
+    {
+        @Override
+        public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
+        {
+            return null;
+        }
+
+        @Override
+        public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
+        {
+            return -1;
+        }
+
+        @Override
+        public long size()
+        {
+            return 0;
+        }
+    };
 }

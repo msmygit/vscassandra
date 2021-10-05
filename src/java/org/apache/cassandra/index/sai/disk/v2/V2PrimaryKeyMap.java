@@ -44,17 +44,27 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor) throws IOException
         {
             fileProvider = new PerSSTableFileProvider(indexDescriptor);
-            metadata = new BlockIndexMeta(fileProvider.openMetadataInput());
-            size = metadata.numRows;
             this.keyFactory = indexDescriptor.primaryKeyFactory;
+            if (indexDescriptor.isSSTableEmpty())
+            {
+                metadata = null;
+                size = 0;
+            }
+            else
+            {
+                metadata = new BlockIndexMeta(fileProvider.openMetadataInput());
+                size = metadata.numRows;
+            }
         }
 
         @Override
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
-            return new V2PrimaryKeyMap(new BlockIndexReader(fileProvider, false, metadata),
-                                       keyFactory,
-                                       size);
+            //TODO We need a test for this condition with an empty SSTable (not sure it's possible)
+            return (size == 0) ? EMPTY
+                               : new V2PrimaryKeyMap(new BlockIndexReader(fileProvider, false, metadata),
+                                                     keyFactory,
+                                                     size);
         }
 
         @Override

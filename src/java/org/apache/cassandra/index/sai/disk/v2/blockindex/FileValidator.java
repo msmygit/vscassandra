@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.zip.CRC32;
 
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
@@ -71,7 +70,7 @@ public class FileValidator
         return crc.getValue();
     }
 
-    public static FileInfo generate(IndexComponent indexComponent, IndexInput indexInput) throws IOException
+    public static FileInfo generate(IndexInput indexInput) throws IOException
     {
         final long fileLength = indexInput.length();
 

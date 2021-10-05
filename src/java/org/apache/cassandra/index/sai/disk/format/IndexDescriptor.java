@@ -201,6 +201,11 @@ public class IndexDescriptor
         return version.onDiskFormat().isPerIndexBuildComplete(this, indexContext);
     }
 
+    public boolean isSSTableEmpty()
+    {
+        return isPerSSTableBuildComplete() && numberOfComponents() == 1;
+    }
+
     public boolean isIndexEmpty(IndexContext indexContext)
     {
         return isPerIndexBuildComplete(indexContext) && numberOfComponents(indexContext) == 1;
@@ -521,6 +526,11 @@ public class IndexDescriptor
     private int numberOfComponents(IndexContext indexContext)
     {
         return perIndexComponents.containsKey(indexContext.getIndexName()) ? perIndexComponents.get(indexContext.getIndexName()).size() : 0;
+    }
+
+    private int numberOfComponents()
+    {
+        return perSSTableComponents.size();
     }
 
     private File tmpFileFor(IndexComponent component)

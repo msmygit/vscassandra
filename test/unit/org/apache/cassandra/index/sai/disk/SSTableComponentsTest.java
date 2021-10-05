@@ -74,8 +74,6 @@ public class SSTableComponentsTest extends SAITester
     {
         assumeTrue(Version.LATEST == Version.BA);
 
-        setMemtableTrieAllocatedSizeThreshold(1);
-
         PerSSTableWriter writer = indexDescriptor.newPerSSTableWriter();
         writer.complete();
 
@@ -93,6 +91,7 @@ public class SSTableComponentsTest extends SAITester
 
         PrimaryKey.PrimaryKeyFactory factory = indexDescriptor.primaryKeyFactory;
         PerSSTableWriter writer = indexDescriptor.newPerSSTableWriter();
+
 
         int numRows = CQLTester.getRandom().nextIntBetween(2000, 10000);
         int width = CQLTester.getRandom().nextIntBetween(3, 8);

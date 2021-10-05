@@ -98,7 +98,7 @@ public class BlockIndexReader implements Closeable
 
         // Can't validate temporary file because the file could contain multiple segments
         if (!temporary)
-            this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes), temporary);
+            this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes));
 
         SharedIndexInput bytesInput = fileProvider.openValuesInput(temporary);
         this.indexFile = fileProvider.getIndexFileHandle(temporary);
