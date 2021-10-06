@@ -23,7 +23,6 @@ import java.io.IOException;
 
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
-import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput2;
 import org.apache.cassandra.io.util.FileUtils;
@@ -63,8 +62,6 @@ public class PrefixBytesReader implements Closeable
         input.seek(fp);
 
         count = input.readByte();
-
-        System.out.println("PrefixBytesReader count="+count);
 
         final short prefixLengthsSize = input.readShort();
         final short suffixLengthsSize = input.readShort();
@@ -113,15 +110,10 @@ public class PrefixBytesReader implements Closeable
 
         bytesRef.bytes = ArrayUtil.grow(bytesRef.bytes, suffixLength + prefixLength);
 
-        System.out.println("next fp="+currentFP+" prefixLength="+prefixLength+" suffixLength="+suffixLength);
-        System.out.println("next suffixLength="+suffixLength+" currentFP="+currentFP+" input.length="+input.length());
-
         // TODO: with SharedIndexInput2, tracking the file pointer may not be necessary
         input.seek(this.currentFP);
         input.readBytes(bytesRef.bytes, prefixLength, suffixLength);
         this.currentFP += suffixLength;
-
-        System.out.println("next bytes=" + BytesUtil.toString(bytesRef.bytes, 0 , prefixLength + suffixLength));
 
         bytesRef.length = prefixLength + suffixLength;
         idx++;

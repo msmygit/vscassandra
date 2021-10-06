@@ -64,7 +64,6 @@ public class PrefixBlockWriter
             lowerBlockSizes.add(size);
         }
 
-        System.out.println("lowerBlockSizes=" + Arrays.toString(lowerBlockSizes.toArray()));
         SimpleFoR.write(lowerBlockSizes.toArray(), lowerBlockSizesBuffer);
 
         final long fp = output.getFilePointer();
@@ -75,21 +74,16 @@ public class PrefixBlockWriter
             upperCount++;
         }
 
-        System.out.println("write lastBlockCount="+lastBlockCount+" upperCount="+upperCount);
-
         output.writeByte((byte)upperCount);
         output.writeByte(lastBlockCount);
         output.writeShort((short)upperTermsBuffer.getFilePointer()); // upper terms size to skip over
         output.writeShort((short)lowerBlockSizesBuffer.getFilePointer());
 
         upperTermsBuffer.writeTo(output);
-        System.out.println("lowerBlockSizeDeltasBuffer fp="+output.getFilePointer());
         lowerBlockSizesBuffer.writeTo(output);
-        System.out.println("lowerTermsBuffer fp="+output.getFilePointer());
         lowerTermsBuffer.writeTo(output);
 
         long totalBytes = output.getFilePointer() - startFP;
-        System.out.println("totalBytes="+totalBytes);
 
         return fp;
     }

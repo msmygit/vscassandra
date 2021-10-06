@@ -22,13 +22,10 @@ import java.io.IOException;
 import java.util.BitSet;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.FixedBitSet;
 
@@ -38,7 +35,6 @@ public class BitSetSerializer
     {
         final int size = input.readVInt();
         final FixedBitSet bitSet = new FixedBitSet(size);
-//        final SharedIndexInput sharedInput = new SharedIndexInput(input);
         try (final PostingsReader postingsReader = new PostingsReader(input.sharedCopy(), fp, QueryEventListener.PostingListEventListener.NO_OP))
         {
             while (true)

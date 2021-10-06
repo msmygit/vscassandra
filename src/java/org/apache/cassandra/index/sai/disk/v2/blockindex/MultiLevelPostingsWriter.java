@@ -18,7 +18,6 @@
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -34,29 +33,22 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.carrotsearch.hppc.IntLongHashMap;
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsWriter;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
-import org.apache.cassandra.io.util.FileUtils;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class MultiLevelPostingsWriter
 {
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
     private final Multimap<Integer, Integer> nodeToChildLeaves = HashMultimap.create();
 
     final TreeSet<Integer> leafNodeIDs = new TreeSet<>();
@@ -86,15 +78,10 @@ public class MultiLevelPostingsWriter
     }
 
     @SuppressWarnings("resource")
-    // TODO: possibly writing lower level leaf nodes twice?
     public final TreeMultimap<Integer, Long> finish(IndexOutput out) throws IOException
     {
         traverse(new BinaryTreeIndex(numLeaves),
                  new IntArrayList());
-
-//        checkState(postings.size() == leafFPToNodeID.size(),
-//                   "Expected equal number of postings lists (%s) and leaf offsets (%s).",
-//                   postings.size(), leafFPToNodeID.size());
 
         final PForDeltaPostingsWriter postingsWriter = new PForDeltaPostingsWriter(out);
 
@@ -200,7 +187,6 @@ public class MultiLevelPostingsWriter
                 if (nodeIDPostingsFP.containsKey(leafNodeID))
                 {
                     final long postingsFP = nodeIDPostingsFP.get(leafNodeID);
-//                    final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
                     final PostingsReader reader = new PostingsReader(leafPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(reader.peekable());
                 }

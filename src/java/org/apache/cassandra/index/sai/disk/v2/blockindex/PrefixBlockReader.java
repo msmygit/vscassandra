@@ -60,8 +60,6 @@ public class PrefixBlockReader implements Closeable
 
         final long fp2 = input.getFilePointer();
 
-        System.out.println("PrefixBlockReader fp="+fp+" upperCount="+upperCount+" lastBlockCount="+lastBlockCount+" upperTermsSize="+upperTermsSize+" lowerBlockSizeDeltasSize="+lowerBlockSizeDeltasSize);
-
         upperTermsInput = new SharedIndexInput2(input.sharedCopy());
         upperTermsReader = new PrefixBytesReader(input.getFilePointer(), upperTermsInput);
 
@@ -87,8 +85,6 @@ public class PrefixBlockReader implements Closeable
     {
         final int upperIdx = idx / INDEX_INTERVAL;
         final int lowerIdx = idx % INDEX_INTERVAL;
-
-        System.out.println("next upperIdx="+upperIdx+" upperCount="+upperCount+" lowerIdx="+lowerIdx+" lastBlockCount="+lastBlockCount);
 
         if (upperIdx == upperCount - 1 && lowerIdx == lastBlockCount)
         {

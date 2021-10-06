@@ -84,7 +84,7 @@ public class PrefixBlockTest extends NdiRandomizedTest
     @Test
     public void testRando() throws Exception
     {
-        for (int x = 0; x < 100; x++)
+        for (int x = 0; x < 1; x++)
         {
             doRando();
         }
@@ -100,7 +100,7 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         for (int x = 0; x < count; x++)
         {
-            byte[] bytes = new byte[ThreadLocalRandom.current().nextInt(1, 10)];
+            byte[] bytes = new byte[nextInt(1, 10)];
             nextBytes(bytes);
             terms.add(new BytesRef(bytes));
         }
@@ -137,61 +137,6 @@ public class PrefixBlockTest extends NdiRandomizedTest
         System.out.println("terms.size="+terms.size()+" list2.size="+list2.size());
 
         assertEquals(terms, list2);
-    }
-
-    @Test
-    public void testSeekUpper() throws Exception
-    {
-        ByteBuffersDirectory dir = new ByteBuffersDirectory();
-
-        List<BytesRef> terms = new ArrayList();
-        terms.add(new BytesRef("aaaaaa"));
-        terms.add(new BytesRef("aaaabb"));
-        terms.add(new BytesRef("aaaabc"));
-        terms.add(new BytesRef("aaaabg"));
-
-        terms.add(new BytesRef("aaaabggg"));
-        terms.add(new BytesRef("aaggbbbb"));
-        terms.add(new BytesRef("aaggmmmmbggg"));
-        terms.add(new BytesRef("ttttjjjjjjj"));
-
-        terms.add(new BytesRef("tttzzzzzjjjjjjj"));
-
-        IndexOutput out = dir.createOutput("test", IOContext.DEFAULT);
-        PrefixBlockWriter writer = new PrefixBlockWriter();
-        for (BytesRef term : terms)
-        {
-            writer.add(term);
-        }
-
-        long fp = writer.finish(out);
-        out.close();
-
-        final SharedIndexInput input = new SharedIndexInput(dir.openInput("test", IOContext.DEFAULT));
-
-        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
-        BytesRef result = reader.seekUpper(new BytesRef("aaaabb"));
-        int upperOrdinal = reader.getUpperOrdinal() - 2;
-        assertEquals(0, upperOrdinal);
-
-        BytesRef result2 = reader.seekUpper(new BytesRef("aaaabc"));
-        int upperOrdinal2 = reader.getUpperOrdinal() - 2;
-        assertEquals(0, upperOrdinal2);
-
-        BytesRef result3 = reader.seekUpper(new BytesRef("aaggbbba"));
-        int upperOrdinal3 = reader.getUpperOrdinal() - 2;
-        assertEquals(1, upperOrdinal3);
-
-        BytesRef result4 = reader.seekUpper(new BytesRef("tttzzzzzjjjjjjz"));
-
-        System.out.println("upperTermsReader.count="+reader.upperTermsReader.count());
-
-        int upperOrdinal4 = reader.getUpperOrdinal() - 2;
-        assertEquals(2, upperOrdinal4);
-
-        System.out.println("result3="+result.utf8ToString()+" upperOrdinal3="+upperOrdinal3);
-
-        input.close();
     }
 
     @Test
@@ -269,7 +214,7 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         while (true)
         {
-            idx += nextInt(1, 10);
+            idx += nextInt(1, 1024);
 
             if (idx >= terms.size())
             {

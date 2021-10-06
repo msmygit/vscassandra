@@ -48,20 +48,15 @@ public class PrefixBytesWriter
             }
             int len = bytes.length - prefix;
             suffixBuffer.writeBytes(bytes.bytes, prefix, len);
-
-            System.out.println("writeBytes=" + BytesUtil.toString(bytes.bytes, prefix, len));
             prefixLengths.add(prefix);
             suffixLengths.add(len);
         }
         else
         {
             suffixBuffer.writeBytes(bytes.bytes, 0, bytes.length);
-            System.out.println("writeBytes=" + BytesUtil.toString(bytes.bytes, 0, bytes.length));
             prefixLengths.add(0);
             suffixLengths.add(bytes.length);
         }
-
-        System.out.println("add prefixLength="+prefixLengths.get(prefixLengths.size()-1)+" suffixLength="+suffixLengths.get(suffixLengths.size()-1));
 
         lastTerm.copyBytes(bytes);
         count++;
@@ -93,7 +88,6 @@ public class PrefixBytesWriter
         suffixLengthsBuffer.writeTo(output);
 
         final long suffixBytesFP = output.getFilePointer();
-        System.out.println("finish suffixBytesFP="+suffixBytesFP);
         suffixBuffer.writeTo(output);
 
         long size = output.getFilePointer() - fp;
