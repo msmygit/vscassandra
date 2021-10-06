@@ -99,17 +99,17 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         
         currentKey = key;
 
-        PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey.getToken(), sstableRowId);
-
-        try
-        {
-            sstableComponentsWriter.startPartition(primaryKey, position);
-        }
-        catch (Throwable t)
-        {
-            logger.error(indexDescriptor.logMessage("Failed to record a partition start during an index build"), t);
-            abort(t, true);
-        }
+//        PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey.getToken(), sstableRowId);
+//
+//        try
+//        {
+//            sstableComponentsWriter.startPartition(primaryKey, position);
+//        }
+//        catch (Throwable t)
+//        {
+//            logger.error(indexDescriptor.logMessage("Failed to record a partition start during an index build"), t);
+//            abort(t, true);
+//        }
     }
 
     @Override

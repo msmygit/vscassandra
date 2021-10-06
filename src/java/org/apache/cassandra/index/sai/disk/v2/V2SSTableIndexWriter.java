@@ -366,7 +366,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 }
                 BlockIndexMeta meta = writer.finish();
 
-                V2IndexOnDiskMetadata.serializer.serialize(meta, indexDescriptor, indexContext);
+                meta.write(fileProvider.openMetadataOutput());
 
                 // TODO: put in file provider
                 indexDescriptor.deletePerIndexTemporaryComponents(indexContext);
