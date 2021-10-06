@@ -47,6 +47,7 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
+import org.apache.lucene.store.IndexOutput;
 
 /**
  * Column index writer that accumulates (on-heap) indexed data from a compacted SSTable as it's being flushed to disk.
@@ -281,7 +282,6 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
             compactSegments();
 
-            writeSegmentsMetadata();
             indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
         }
         finally
@@ -316,24 +316,6 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         indexDescriptor.deleteColumnIndex(indexContext);
     }
 
-    protected void writeSegmentsMetadata() throws IOException
-    {
-        if (segments.isEmpty())
-            return;
-
-        assert segments.size() == 1 : "A post-compacted index should only contain a single segment";
-
-        try
-        {
-            indexDescriptor.newIndexMetadataSerializer().serialize(segments.get(0), indexDescriptor, indexContext);
-        }
-        catch (IOException e)
-        {
-            abort(e);
-            throw e;
-        }
-    }
-
     private void compactSegments() throws IOException
     {
         if (segments.isEmpty())
@@ -364,9 +346,12 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                     }
                     writer.add(BytesUtil.fixedLength(state.term), state.rowid);
                 }
-                BlockIndexMeta meta = writer.finish();
+                BlockIndexMeta metadata = writer.finish();
 
-                meta.write(fileProvider.openMetadataOutput());
+                try (final IndexOutput out = fileProvider.openMetadataOutput())
+                {
+                    metadata.write(out);
+                }
 
                 // TODO: put in file provider
                 indexDescriptor.deletePerIndexTemporaryComponents(indexContext);
