@@ -23,14 +23,20 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
@@ -41,8 +47,11 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
 public class V2SearchableIndex extends SearchableIndex
 {
@@ -61,8 +70,13 @@ public class V2SearchableIndex extends SearchableIndex
     private final Token.KeyBound minKeyBound;
     private final Token.KeyBound maxKeyBound;
 
+    private final IndexContext indexContext;
+
+    private final PrimaryKeyMap.Factory primaryKeyMapFactory;
+
     public V2SearchableIndex(SSTableContext sstableContext, IndexContext indexContext)
     {
+        this.indexContext = indexContext;
         try
         {
             this.fileProvider = new PerIndexFileProvider(sstableContext.indexDescriptor, indexContext);
@@ -71,10 +85,13 @@ public class V2SearchableIndex extends SearchableIndex
 
             this.reader = new BlockIndexReader(fileProvider, false, metadata);
 
+            this. primaryKeyMapFactory = sstableContext.primaryKeyMapFactory;
             PrimaryKeyMap primaryKeyMap = sstableContext.primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(null);
 
-            this.minTerm = ByteBuffer.wrap(metadata.minTerm.bytes, metadata.minTerm.offset, metadata.minTerm.length);
-            this.maxTerm = ByteBuffer.wrap(metadata.maxTerm.bytes, metadata.maxTerm.offset, metadata.maxTerm.length);
+            ByteSource byteSource = ByteSource.fixedLength(metadata.minTerm.bytes, metadata.minTerm.offset, metadata.minTerm.length);
+            this.minTerm = indexContext.getValidator().fromComparableBytes(ByteSource.peekable(byteSource), ByteComparable.Version.OSS41);
+            byteSource = ByteSource.fixedLength(metadata.maxTerm.bytes, metadata.maxTerm.offset, metadata.maxTerm.length);
+            this.maxTerm = indexContext.getValidator().fromComparableBytes(ByteSource.peekable(byteSource), ByteComparable.Version.OSS41);
             this.minKey = primaryKeyMap.primaryKeyFromRowId(metadata.minRowID);
             this.maxKey = primaryKeyMap.primaryKeyFromRowId(metadata.maxRowID);
             this.minToken = minKey.partitionKey().getToken();
@@ -144,8 +161,20 @@ public class V2SearchableIndex extends SearchableIndex
     {
         if (intersects(keyRange))
         {
-            return Collections.emptyList();
-//            return Collections.singletonList(index.search(expression, context));
+            ByteComparable lower = expression.lower == null ? null
+                                                            : v -> indexContext.getValidator().asComparableBytes(expression.lower.value.encoded, v);
+            ByteComparable upper = expression.upper == null ? null
+                                                            : v -> indexContext.getValidator().asComparableBytes(expression.upper.value.encoded, v);
+            List<PostingList.PeekablePostingList> postingLists = reader.traverse(lower, upper);
+
+            if (postingLists.isEmpty())
+                return Collections.emptyList();
+
+            PostingList postingList = MergePostingList.merge(postingLists);
+
+            RangeIterator rangeIterator = toIterator(postingList, context);
+
+            return Collections.singletonList(rangeIterator);
         }
 
         return Collections.emptyList();
@@ -155,6 +184,19 @@ public class V2SearchableIndex extends SearchableIndex
     public void close() throws IOException
     {
         FileUtils.closeQuietly(fileProvider, reader);
+    }
+
+    RangeIterator toIterator(PostingList postingList, SSTableQueryContext queryContext) throws IOException
+    {
+        if (postingList == null)
+            return RangeIterator.empty();
+
+        IndexSearcherContext searcherContext = new IndexSearcherContext(minKey,
+                                                                        maxKey,
+                                                                        queryContext,
+                                                                        postingList.peekable());
+
+        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext), searcherContext);
     }
 
     /**

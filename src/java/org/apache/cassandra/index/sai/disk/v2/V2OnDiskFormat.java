@@ -53,8 +53,23 @@ public class V2OnDiskFormat extends V1OnDiskFormat
 
     public static final EnumSet<IndexComponent> PER_SSTABLE_COMPONENTS = EnumSet.of(IndexComponent.GROUP_COMPLETION_MARKER,
                                                                                     IndexComponent.GROUP_META,
-                                                                                    IndexComponent.PRIMARY_KEYS,
-                                                                                    IndexComponent.PRIMARY_KEY_OFFSETS);
+                                                                                    IndexComponent.TERMS_DATA,
+                                                                                    IndexComponent.TERMS_INDEX,
+                                                                                    IndexComponent.COMPRESSED_TERMS_DATA,
+                                                                                    IndexComponent.KD_TREE_POSTING_LISTS,
+                                                                                    IndexComponent.POSTING_LISTS,
+                                                                                    IndexComponent.ORDER_MAP,
+                                                                                    IndexComponent.ROW_ID_POINT_ID_MAP);
+
+    public static final EnumSet<IndexComponent> PER_INDEX_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
+                                                                                  IndexComponent.META,
+                                                                                  IndexComponent.TERMS_DATA,
+                                                                                  IndexComponent.TERMS_INDEX,
+                                                                                  IndexComponent.COMPRESSED_TERMS_DATA,
+                                                                                  IndexComponent.KD_TREE_POSTING_LISTS,
+                                                                                  IndexComponent.POSTING_LISTS,
+                                                                                  IndexComponent.ORDER_MAP,
+                                                                                  IndexComponent.ROW_ID_POINT_ID_MAP);
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
 
@@ -80,6 +95,24 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     public Set<IndexComponent> perSSTableComponents()
     {
         return PER_SSTABLE_COMPONENTS;
+    }
+
+    @Override
+    public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
+    {
+        return PER_INDEX_COMPONENTS;
+    }
+
+    @Override
+    public void validatePerIndexComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, IndexContext indexContext, boolean checksum) throws IOException
+    {
+
+    }
+
+    @Override
+    public void validatePerSSTableComponent(IndexDescriptor indexDescriptor, IndexComponent indexComponent, boolean checksum) throws IOException
+    {
+
     }
 
     @Override
@@ -112,7 +145,7 @@ public class V2OnDiskFormat extends V1OnDiskFormat
             NamedMemoryLimiter limiter = SEGMENT_BUILD_MEMORY_LIMITER;
             logger.info(index.getIndexContext().logMessage("Starting a compaction index build. Global segment memory usage: {}"), prettyPrintMemory(limiter.currentBytesUsed()));
 
-            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
+            return new V2SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
         }
 
         return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);

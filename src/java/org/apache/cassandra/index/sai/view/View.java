@@ -51,7 +51,8 @@ public class View implements Iterable<SSTableIndex>
     private final AbstractType<?> keyValidator;
     private final IntervalTree<PrimaryKey, SSTableIndex, Interval<PrimaryKey, SSTableIndex>> keyIntervalTree;
 
-    public View(IndexContext context, Collection<SSTableIndex> indexes) {
+    public View(IndexContext context, Collection<SSTableIndex> indexes)
+    {
         this.view = new HashMap<>();
         this.keyValidator = context.keyValidator();
 

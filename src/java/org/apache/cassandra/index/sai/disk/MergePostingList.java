@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -63,6 +64,13 @@ public class MergePostingList implements PostingList
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings)
     {
         return merge(postings, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+    }
+
+    public static PostingList merge(List<PeekablePostingList> postings)
+    {
+        PriorityQueue postingQueue = new PriorityQueue(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        postingQueue.addAll(postings);
+        return merge(postingQueue, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }
 
     @SuppressWarnings("resource")
