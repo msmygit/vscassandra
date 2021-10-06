@@ -147,7 +147,8 @@ public class PrefixBlockReader implements Closeable
             final BytesRef lowerTerm = lowerTermsReader.next();
             if (lowerTerm == null)
             {
-                return null;
+                this.upperTerm = upperTermsReader.next();
+                return seek(target);
             }
             if (lowerTerm != null && target.compareTo(lowerTerm) <= 0)
             {

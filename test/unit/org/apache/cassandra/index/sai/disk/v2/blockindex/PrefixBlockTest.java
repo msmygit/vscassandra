@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk.v2.blockindex;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.Test;
@@ -230,6 +231,57 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         BytesRef result1 = reader.seek(new BytesRef("ttttjjjjjjj"));
         System.out.println("result1="+result1.utf8ToString());
+
+        reader.close();
+        input.close();
+    }
+
+    @Test
+    public void testSeekRandom() throws Exception
+    {
+        ByteBuffersDirectory dir = new ByteBuffersDirectory();
+
+        List<BytesRef> terms = new ArrayList();
+        int val = 0;
+        for (int x = 0; x < 1024; x++)
+        {
+            val += nextInt(1, 10);
+            terms.add(new BytesRef(String.format("%08d", val)));
+        }
+
+        TreeSet<BytesRef> termsSet = new TreeSet<>(terms);
+
+        IndexOutput out = dir.createOutput("test", IOContext.DEFAULT);
+        PrefixBlockWriter writer = new PrefixBlockWriter();
+        for (BytesRef term : terms)
+        {
+            writer.add(term);
+        }
+
+        long fp = writer.finish(out);
+        out.close();
+
+        final SharedIndexInput input = new SharedIndexInput(dir.openInput("test", IOContext.DEFAULT));
+
+        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+
+        int idx = 0;
+
+        while (true)
+        {
+            idx += nextInt(1, 10);
+
+            if (idx >= terms.size())
+            {
+                break;
+            }
+            BytesRef target = terms.get(idx);
+
+            BytesRef actual = termsSet.ceiling(target);
+            BytesRef result0 = reader.seek(target);
+
+            assertEquals("idx="+idx+" terms.size="+terms.size()+" actual="+actual.utf8ToString()+" result0="+result0, actual, result0);
+        }
 
         reader.close();
         input.close();
