@@ -96,7 +96,7 @@ public class PrefixBlockReader implements Closeable
             upperTerm = upperTermsReader.next();
 
             // TODO: reuse lowerTermsReader
-            lowerTermsReader = new PrefixBytesReader(lowerTermsStartFP, lowerTermsInput);
+            lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
 
             final long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
             currentLowerTermsFP += lowerBlockSize;
@@ -118,6 +118,8 @@ public class PrefixBlockReader implements Closeable
     public void initLowerTerms(int upperIdx) throws IOException
     {
         currentLowerTermsFP = lowerTermsStartFP;
+        // iterate over the bytes lengths of each lower terms block
+        // to arrive at a file pointer
         for (int x = 0; x < upperIdx; x++)
         {
             currentLowerTermsFP += getLowerTermsSizeBytes(x);
@@ -132,6 +134,7 @@ public class PrefixBlockReader implements Closeable
 
     public BytesRef seek(BytesRef target) throws IOException
     {
+        // TODO: optimize if the target is already in the current sub-block
         final BytesRef upperTerm = seekUpper(target);
 
         final int upperIdx = getUpperOrdinal() - 2;

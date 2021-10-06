@@ -165,6 +165,7 @@ public class V2SearchableIndex extends SearchableIndex
                                                             : v -> indexContext.getValidator().asComparableBytes(expression.lower.value.encoded, v);
             ByteComparable upper = expression.upper == null ? null
                                                             : v -> indexContext.getValidator().asComparableBytes(expression.upper.value.encoded, v);
+
             List<PostingList.PeekablePostingList> postingLists = reader.traverse(lower, upper);
 
             if (postingLists.isEmpty())

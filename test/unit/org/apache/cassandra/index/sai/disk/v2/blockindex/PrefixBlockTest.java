@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeSet;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.Test;
 
@@ -74,7 +73,6 @@ public class PrefixBlockTest extends NdiRandomizedTest
                 break;
             }
             list2.add(BytesRef.deepCopyOf(term));
-            System.out.println("  term="+term.utf8ToString());
         }
         input.close();
 
@@ -130,11 +128,8 @@ public class PrefixBlockTest extends NdiRandomizedTest
                 break;
             }
             list2.add(BytesRef.deepCopyOf(term));
-            System.out.println("  term.length="+term.length);
         }
         input.close();
-
-        System.out.println("terms.size="+terms.size()+" list2.size="+list2.size());
 
         assertEquals(terms, list2);
     }
@@ -172,10 +167,10 @@ public class PrefixBlockTest extends NdiRandomizedTest
         PrefixBlockReader reader = new PrefixBlockReader(fp, input);
 
         BytesRef result0 = reader.seek(new BytesRef("aaggbbbb"));
-        System.out.println("result0="+result0.utf8ToString());
+        assertEquals(new BytesRef("aaggbbbb"), result0);
 
         BytesRef result1 = reader.seek(new BytesRef("ttttjjjjjjj"));
-        System.out.println("result1="+result1.utf8ToString());
+        assertEquals(new BytesRef("ttttjjjjjjj"), result1);
 
         reader.close();
         input.close();
