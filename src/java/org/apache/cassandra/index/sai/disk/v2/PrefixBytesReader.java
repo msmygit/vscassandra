@@ -45,6 +45,11 @@ public class PrefixBytesReader implements Closeable
 
     private final BytesRef bytesRef = new BytesRef();
 
+    public int count()
+    {
+        return count;
+    }
+
     @Override
     public void close() throws IOException
     {
@@ -82,10 +87,24 @@ public class PrefixBytesReader implements Closeable
         this.currentFP = suffixBytesFP;
     }
 
+    public int getOrdinal()
+    {
+        return idx;
+    }
+
+    public BytesRef current()
+    {
+        return bytesRef;
+    }
+
     public BytesRef next() throws IOException
     {
         if (idx >= count)
         {
+            if (idx == count)
+            {
+                idx++;
+            }
             return null;
         }
 

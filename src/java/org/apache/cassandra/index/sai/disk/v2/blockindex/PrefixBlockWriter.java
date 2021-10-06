@@ -30,7 +30,7 @@ import org.apache.lucene.util.BytesRef;
 
 public class PrefixBlockWriter
 {
-    public static final int INDEX_INTERVAL = 32;
+    public static final int INDEX_INTERVAL = 4;
     final PrefixBytesWriter upperTermsWriter, lowerTermsWriter;
     final RAMIndexOutput lowerTermsBuffer = new RAMIndexOutput("");
     final RAMIndexOutput upperTermsBuffer = new RAMIndexOutput("");

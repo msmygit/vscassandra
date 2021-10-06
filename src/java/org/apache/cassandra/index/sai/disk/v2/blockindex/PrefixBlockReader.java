@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
@@ -26,11 +27,12 @@ import org.apache.cassandra.index.sai.disk.v2.PrefixBytesReader;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput2;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.util.BytesRef;
 
 import static org.apache.cassandra.index.sai.disk.v2.blockindex.PrefixBlockWriter.INDEX_INTERVAL;
 
-public class PrefixBlockReader
+public class PrefixBlockReader implements Closeable
 {
     final SeekingRandomAccessInput seekInput;
     final DirectReaders.Reader reader;
@@ -40,9 +42,9 @@ public class PrefixBlockReader
     final SharedIndexInput2 upperTermsInput, lowerTermsInput;
     final byte upperCount;
     final byte lastBlockCount;
+    PrefixBytesReader lowerTermsReader;
     private int idx;
     private BytesRef upperTerm;
-    private PrefixBytesReader lowerTermsReader;
     private long currentFP = -1;
     private final long lowerTermsStartFP;
     private long currentLowerTermsFP;
@@ -69,13 +71,19 @@ public class PrefixBlockReader
         final int bits = input.readByte();
 
         lowerBlockSizeDeltasFP = input.getFilePointer();
-        seekInput = new SeekingRandomAccessInput(input);
+        seekInput = new SeekingRandomAccessInput(input.sharedCopy());
         reader = DirectReaders.getReaderForBitsPerValue((byte)bits);
 
         lowerTermsStartFP = currentLowerTermsFP = fp2 + lowerBlockSizeDeltasSize + upperTermsSize;
     }
 
-    public BytesRef next(final BytesRef target) throws IOException
+    @Override
+    public void close() throws IOException
+    {
+        FileUtils.close(upperTermsInput, lowerTermsInput, seekInput);
+    }
+
+    public BytesRef next() throws IOException
     {
         final int upperIdx = idx / INDEX_INTERVAL;
         final int lowerIdx = idx % INDEX_INTERVAL;
@@ -91,13 +99,78 @@ public class PrefixBlockReader
         {
             upperTerm = upperTermsReader.next();
 
-            lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
+            // TODO: reuse lowerTermsReader
+            lowerTermsReader = new PrefixBytesReader(lowerTermsStartFP, lowerTermsInput);
 
-            long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
+            final long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
             currentLowerTermsFP += lowerBlockSize;
         }
-
         idx++;
         return lowerTermsReader.next();
+    }
+
+    public int getUpperOrdinal()
+    {
+        return upperTermsReader.getOrdinal();
+    }
+
+    public BytesRef getCurrentUpperTerm()
+    {
+         return upperTermsReader.current();
+    }
+
+    public void initLowerTerms(int upperIdx) throws IOException
+    {
+        currentLowerTermsFP = lowerTermsStartFP;
+        for (int x = 0; x < upperIdx; x++)
+        {
+            currentLowerTermsFP += getLowerTermsSizeBytes(x);
+        }
+        lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
+    }
+
+    public int getLowerTermsSizeBytes(int upperIdx)
+    {
+        return LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
+    }
+
+    public BytesRef seek(BytesRef target) throws IOException
+    {
+        final BytesRef upperTerm = seekUpper(target);
+
+        final int upperIdx = getUpperOrdinal() - 2;
+
+        initLowerTerms(upperIdx);
+
+        while (true)
+        {
+            final BytesRef lowerTerm = lowerTermsReader.next();
+            if (lowerTerm == null)
+            {
+                return null;
+            }
+            if (lowerTerm != null && target.compareTo(lowerTerm) <= 0)
+            {
+                return lowerTerm;
+            }
+        }
+    }
+
+    public BytesRef seekUpper(BytesRef target) throws IOException
+    {
+        if (upperTerm != null && target.compareTo(upperTerm) <= 0)
+        {
+            return upperTerm;
+        }
+        final BytesRef next = upperTermsReader.next();
+        if (next != null)
+        {
+            upperTerm = next;
+        }
+        else
+        {
+            return upperTerm;
+        }
+        return seekUpper(target);
     }
 }
