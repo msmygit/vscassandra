@@ -154,50 +154,6 @@ public class MemtableIndexWriter implements PerIndexWriter
                 metadata.write(out);
             }
         }
-//
-//
-//
-//
-//        SegmentMetadata.ComponentMetadataMap indexMetas;
-//
-//        if (TypeUtil.isLiteral(termComparator))
-//        {
-//            try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
-//            {
-//                indexMetas = writer.writeAll(terms);
-//                numRows = writer.getPostingsCount();
-//            }
-//        }
-//        else
-//        {
-//            try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-//                                                                    indexContext,
-//                                                                    TypeUtil.fixedSizeOf(termComparator),
-//                                                                    maxSegmentRowId,
-//                                                                    // Due to stale entries in IndexMemtable, we may have more indexed rows than num of rowIds.
-//                                                                    Integer.MAX_VALUE,
-//                                                                    indexContext.getIndexWriterConfig(),
-//                                                                    false))
-//            {
-//                indexMetas = writer.writeAll(ImmutableOneDimPointValues.fromTermEnum(terms, termComparator));
-//                numRows = writer.getPointCount();
-//            }
-//        }
-
-
-//        // During index memtable flush, the data is sorted based on terms.
-//        SegmentMetadata metadata = new SegmentMetadata(0,
-//                                                       numRows,
-//                                                       terms.getMinSSTableRowId(),
-//                                                       terms.getMaxSSTableRowId(),
-//                                                       indexDescriptor.primaryKeyFactory.createKey(minKey),
-//                                                       indexDescriptor.primaryKeyFactory.createKey(maxKey),
-//                                                       terms.getMinTerm(),
-//                                                       terms.getMaxTerm(),
-//                                                       indexMetas);
-//
-//        writeMetadata(metadata);
-
         return numRows;
     }
 }
