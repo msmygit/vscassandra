@@ -29,7 +29,9 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,8 +56,10 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
+import org.apache.cassandra.index.sai.utils.ColumnIndexRangeIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -183,32 +187,77 @@ public class QueryController
      *
      * @return range iterator builder based on given expressions and operation type.
      */
+//    public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
+//    {
+//        final Multimap<SSTableReader.UniqueIdentifier, ColumnIndexRangeIterator.ExpressionSSTablePostings> sstablePostingsMap = HashMultimap.create();
+//
+//        RangeIterator.Builder builder = op == Operation.OperationType.OR
+//                                        ? RangeUnionIterator.builder()
+//                                        : RangeIntersectionIterator.selectiveBuilder();
+//
+//        Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
+//
+//        final RangeIterator.Builder columnRangeBuilder = op == Operation.OperationType.OR
+//                                                         ? RangeUnionIterator.builder()
+//                                                         : RangeIntersectionIterator.selectiveBuilder();
+//
+//        try
+//        {
+//            for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
+//            {
+//                ColumnIndexRangeIterator columnIndexRangeIterator = ColumnIndexRangeIterator.build(e.getKey(),
+//                                                                                                   e.getValue(),
+//                                                                                                   mergeRange,
+//                                                                                                   queryContext,
+//                                                                                                   sstablePostingsMap);
+//                columnRangeBuilder.add(columnIndexRangeIterator);
+//
+//                @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
+//                RangeIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext);
+//
+//                builder.add(index);
+//            }
+//        }
+//        catch (Throwable t)
+//        {
+//            // all sstable indexes in view have been referenced, need to clean up when exception is thrown
+//            FileUtils.closeQuietly(builder.ranges());
+//            view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
+//            throw t;
+//        }
+//        return builder;
+//    }
+
     public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
     {
-        RangeIterator.Builder builder = op == Operation.OperationType.OR
-                                        ? RangeUnionIterator.builder()
-                                        : RangeIntersectionIterator.selectiveBuilder();
+        final Multimap<SSTableReader.UniqueIdentifier, ColumnIndexRangeIterator.ExpressionSSTablePostings> sstablePostingsMap = HashMultimap.create();
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
+
+        final RangeIterator.Builder columnRangeBuilder = op == Operation.OperationType.OR
+                                                         ? RangeUnionIterator.builder()
+                                                         : RangeIntersectionIterator.selectiveBuilder();
 
         try
         {
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
             {
-                @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-                RangeIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext);
-
-                builder.add(index);
+                ColumnIndexRangeIterator columnIndexRangeIterator = ColumnIndexRangeIterator.build(e.getKey(),
+                                                                                                   e.getValue(),
+                                                                                                   mergeRange,
+                                                                                                   queryContext,
+                                                                                                   sstablePostingsMap);
+                columnRangeBuilder.add(columnIndexRangeIterator);
             }
         }
         catch (Throwable t)
         {
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
-            FileUtils.closeQuietly(builder.ranges());
+            FileUtils.closeQuietly(columnRangeBuilder.ranges());
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw t;
         }
-        return builder;
+        return columnRangeBuilder;
     }
 
     private ClusteringIndexFilter makeFilter(PrimaryKey key)

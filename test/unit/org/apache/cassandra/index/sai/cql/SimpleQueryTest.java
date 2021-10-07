@@ -28,11 +28,12 @@ public class SimpleQueryTest extends SAITester
     @Test
     public void test() throws Throwable
     {
-        createTable("CREATE TABLE %s (id int primary key, value int)");
+        createTable("CREATE TABLE %s (id int primary key, value int, value2 int)");
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
-        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 1);
+        createIndex("CREATE CUSTOM INDEX ON %s(value2) USING 'StorageAttachedIndex'");
+        execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 1, 1, 1);
         flush();
-        UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1");
+        UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
         System.out.println(result.size());
     }
 }

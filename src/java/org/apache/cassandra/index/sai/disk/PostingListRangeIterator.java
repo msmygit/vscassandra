@@ -52,7 +52,7 @@ public class PostingListRangeIterator extends RangeIterator
     private final PrimaryKeyMap primaryKeyMap;
     private final SSTableQueryContext queryContext;
 
-    private final PostingList postingList;
+    public final PostingList postingList;
 
     private boolean needsSkipping = false;
     private PrimaryKey skipToToken = null;
