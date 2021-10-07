@@ -291,9 +291,14 @@ public class BlockIndexReader implements Closeable
         return traverse(realStart, realEnd);
     }
 
+    public IndexIterator iterator(long segmentRowIdOffset)
+    {
+        return new IndexIteratorImpl(segmentRowIdOffset);
+    }
+
     public IndexIterator iterator()
     {
-        return new IndexIteratorImpl();
+        return iterator(0);
     }
 
     public static class IndexState
@@ -330,6 +335,7 @@ public class BlockIndexReader implements Closeable
 
     public class IndexIteratorImpl implements IndexIterator
     {
+        private final long segmentRowIdOffset;
         private long pointId = 0;
         final BlockIndexReaderContext context;
         private long currentPostingLeaf = -1;
@@ -338,9 +344,10 @@ public class BlockIndexReader implements Closeable
         private long orderMapFP = -1;
         final IndexState indexState = new IndexState();
 
-        public IndexIteratorImpl()
+        public IndexIteratorImpl(long segmentRowIdOffset)
         {
             context = initContext();
+            this.segmentRowIdOffset = segmentRowIdOffset;
         }
 
         @Override
@@ -364,7 +371,7 @@ public class BlockIndexReader implements Closeable
                 return null;
             }
             indexState.term = BlockIndexReader.this.seekTo(pointId++, context, false);
-            indexState.rowid = posting();
+            indexState.rowid = posting() + segmentRowIdOffset;
             return indexState;
         }
 
@@ -443,7 +450,7 @@ public class BlockIndexReader implements Closeable
 
             if (orderMapFP != -1)
             {
-                return postings[context.leafIndex];
+                return postings[context.lastLeafIndex];
             }
             else
             {
@@ -890,7 +897,7 @@ public class BlockIndexReader implements Closeable
                 }
                 else
                 {
-                    System.out.println("traverseForMinMaxLeafOrdinals no max term ");
+//                    System.out.println("traverseForMinMaxLeafOrdinals no max term ");
                 }
             }
         }

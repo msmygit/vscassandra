@@ -48,16 +48,16 @@ public abstract class IndexingTypeSupport extends SAITester
     {
         return Arrays.asList(new Object[][]
         {
-//            { dataset, true, Scenario.MEMTABLE_QUERY },
-//            { dataset, true, Scenario.SSTABLE_QUERY},
+            { dataset, true, Scenario.MEMTABLE_QUERY },
+            { dataset, true, Scenario.SSTABLE_QUERY},
             { dataset, true, Scenario.COMPACTED_QUERY},
-//            { dataset, true, Scenario.MIXED_QUERY},
-//            { dataset, true, Scenario.POST_BUILD_QUERY},
-//            { dataset, false, Scenario.MEMTABLE_QUERY },
-//            { dataset, false, Scenario.SSTABLE_QUERY},
-//            { dataset, false, Scenario.COMPACTED_QUERY},
-//            { dataset, false, Scenario.MIXED_QUERY},
-//            { dataset, false, Scenario.POST_BUILD_QUERY}
+            { dataset, true, Scenario.MIXED_QUERY},
+            { dataset, true, Scenario.POST_BUILD_QUERY},
+            { dataset, false, Scenario.MEMTABLE_QUERY },
+            { dataset, false, Scenario.SSTABLE_QUERY},
+            { dataset, false, Scenario.COMPACTED_QUERY},
+            { dataset, false, Scenario.MIXED_QUERY},
+            { dataset, false, Scenario.POST_BUILD_QUERY}
         });
     }
 

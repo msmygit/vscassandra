@@ -30,10 +30,13 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.RAMStringIndexer;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.io.BytesRefUtil;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
+import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -71,7 +74,7 @@ public class V2SegmentBuilder
     // segment metadata
     private long minSSTableRowId = -1;
     private long maxSSTableRowId = -1;
-    private long segmentRowIdOffset = 0;
+    long segmentRowIdOffset = 0;
     int rowCount = 0;
     int maxSegmentRowId = -1;
     // in token order
@@ -90,11 +93,19 @@ public class V2SegmentBuilder
         this.ramIndexer = new RAMStringIndexer(termComparator);
     }
 
-    public long add(ByteBuffer term, int segmentRowId)
+    public long add(ByteBuffer term, long sstableRowId)
     {
+
         final ByteSource byteSource = termComparator.asComparableBytes(term.duplicate(), ByteComparable.Version.OSS41);
         stringBuffer.clear();
         gatherBytes(byteSource, stringBuffer);
+        if (rowCount == 0)
+        {
+            // use first global rowId in the segment as segment rowId offset
+            segmentRowIdOffset = sstableRowId;
+        }
+        int segmentRowId = RowMapping.castToSegmentRowId(sstableRowId, segmentRowIdOffset);
+
         rowCount++;
         return ramIndexer.add(stringBuffer.get(), segmentRowId);
     }

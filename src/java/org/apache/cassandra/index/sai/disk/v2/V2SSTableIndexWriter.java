@@ -67,6 +67,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
     protected final IndexDescriptor indexDescriptor;
     protected final IndexContext indexContext;
     protected final List<BlockIndexMeta> segments = new ArrayList<>();
+    protected final List<Long> offsets = new ArrayList<>();
 
     private final int nowInSec = FBUtilities.nowInSeconds();
     private final AbstractAnalyzer analyzer;
@@ -164,7 +165,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         if (!TypeUtil.isLiteral(type))
         {
             // TODO: fix int cast by encoding the row id delta
-            limiter.increment(currentBuilder.add(term, (int)key.sstableRowId()));
+            limiter.increment(currentBuilder.add(term, key.sstableRowId()));
         }
         else
         {
@@ -175,7 +176,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 {
                     ByteBuffer tokenTerm = analyzer.next();
                     // TODO: fix cast
-                    limiter.increment(currentBuilder.add(tokenTerm, (int)key.sstableRowId()));
+                    limiter.increment(currentBuilder.add(tokenTerm, key.sstableRowId()));
                 }
             }
             finally
@@ -213,12 +214,14 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             long bytesAllocated = currentBuilder.totalBytesAllocated();
 
             BlockIndexMeta segmentMetadata = currentBuilder.flush(indexDescriptor, indexContext);
+            long segmentRowIdOffset = currentBuilder.segmentRowIdOffset;
 
             long flushMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
 
             if (segmentMetadata != null)
             {
                 segments.add(segmentMetadata);
+                offsets.add(segmentRowIdOffset);
 
                 //TODO Need to look at some of these metrics
                 double rowCount = segmentMetadata.numRows;
@@ -324,10 +327,14 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
         try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
         {
-            for (final BlockIndexMeta meta : segments)
+            Iterator<BlockIndexMeta> metadataIterator = segments.iterator();
+            Iterator<Long> offsetIterator = offsets.iterator();
+            while (metadataIterator.hasNext())
             {
-                BlockIndexReader reader = new BlockIndexReader(fileProvider, true, meta);
-                iterators.add(reader.iterator());
+                BlockIndexMeta metadata = metadataIterator.next();
+                long offset = offsetIterator.next();
+                BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
+                iterators.add(reader.iterator(offset));
             }
 
             try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))

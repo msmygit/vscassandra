@@ -23,6 +23,8 @@ import org.junit.Test;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.index.sai.SAITester;
 
+import static org.junit.Assert.assertEquals;
+
 public class SimpleQueryTest extends SAITester
 {
     @Test
@@ -32,7 +34,9 @@ public class SimpleQueryTest extends SAITester
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
         execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 1);
         flush();
-        UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1");
-        System.out.println(result.size());
+        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 10, 10);
+        flush();
+        compact();
+        assertEquals(2, execute("SELECT * FROM %s WHERE value >= 1").size());
     }
 }
