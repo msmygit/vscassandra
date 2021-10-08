@@ -478,7 +478,7 @@ public final class SystemKeyspace
 
     public static void finishStartup()
     {
-        Schema.instance.saveSystemKeyspace();
+        SchemaManager.instance.saveSystemKeyspace();
     }
 
     public static void persistLocalMetadata()

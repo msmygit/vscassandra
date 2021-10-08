@@ -44,7 +44,7 @@ import org.apache.cassandra.db.ReadQuery;
 import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.OperationExecutionException;
-import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.pager.AggregationQueryPager;
 import org.apache.cassandra.service.pager.QueryPager;
@@ -391,7 +391,7 @@ public class PagingQueryTest extends CQLTester
     private String generateData(int genPartitions, int genClusterings, int genClusterings2) throws Throwable
     {
         String table = String.format("table_%d_%d_%d", genPartitions, genClusterings, genClusterings2);
-        if (Schema.instance.getTableMetadata(KEYSPACE, table) != null)
+        if (SchemaManager.instance.getTableMetadata(KEYSPACE, table) != null)
             return table;
 
         QueryProcessor.executeInternal(String.format("CREATE TABLE %s.%s (k INT, c INT, c2 INT, v INT, PRIMARY KEY (k, c, c2))", KEYSPACE, table));
