@@ -97,7 +97,7 @@ public class ConjunctionPostingList implements PostingList
                 }
             }
 
-            System.out.println("lead2.advance(targetRowID)="+targetRowID+" next2="+next2);
+            // System.out.println("lead2.advance(targetRowID)="+targetRowID+" next2="+next2);
 
             if (next2 != targetRowID)
             {
@@ -152,7 +152,7 @@ public class ConjunctionPostingList implements PostingList
             }
 
             // success - all iterators are on the same targetRowID
-            System.out.println("success - all iterators are on the same targetRowID="+targetRowID);
+            // System.out.println("success - all iterators are on the same targetRowID="+targetRowID);
             hits++;
             return targetRowID;
         }
