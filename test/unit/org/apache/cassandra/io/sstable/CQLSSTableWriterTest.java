@@ -48,7 +48,7 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.dht.*;
 import org.apache.cassandra.exceptions.*;
-import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.StorageService;
@@ -719,7 +719,7 @@ public class CQLSSTableWriterTest
 
             public TableMetadataRef getTableMetadata(String cfName)
             {
-                return Schema.instance.getTableMetadataRef(keyspace, cfName);
+                return SchemaManager.instance.getTableMetadataRef(keyspace, cfName);
             }
         }, new OutputHandler.SystemOutput(false, false));
 
