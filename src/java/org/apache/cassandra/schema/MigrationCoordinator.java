@@ -265,8 +265,8 @@ public class MigrationCoordinator
             logger.debug("Not pulling schema for version {}, because schema versions match: " +
                          "local={}, remote={}",
                          version,
-                         Schema.schemaVersionToString(Schema.instance.getVersion()),
-                         Schema.schemaVersionToString(version));
+                         SharedSchema.schemaVersionToString(Schema.instance.getVersion()),
+                         SharedSchema.schemaVersionToString(version));
             return false;
         }
         return true;
@@ -328,8 +328,8 @@ public class MigrationCoordinator
             logger.debug("Immediately submitting migration task for {}, " +
                          "schema versions: local={}, remote={}",
                          endpoint,
-                         Schema.schemaVersionToString(Schema.instance.getVersion()),
-                         Schema.schemaVersionToString(version));
+                         SharedSchema.schemaVersionToString(Schema.instance.getVersion()),
+                         SharedSchema.schemaVersionToString(version));
             return true;
         }
         return false;
