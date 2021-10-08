@@ -48,14 +48,16 @@ public class PostingListRangeIterator extends RangeIterator
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final Stopwatch timeToExhaust = Stopwatch.createStarted();
-    private final IndexContext indexContext;
-    private final PrimaryKeyMap primaryKeyMap;
-    private final SSTableQueryContext queryContext;
+    public final IndexContext indexContext;
+    public final PrimaryKeyMap primaryKeyMap;
+    public final SSTableQueryContext queryContext;
 
     public final PostingList postingList;
 
     private boolean needsSkipping = false;
     private PrimaryKey skipToToken = null;
+
+    public final IndexSearcherContext context;
 
 
     /**
@@ -67,6 +69,8 @@ public class PostingListRangeIterator extends RangeIterator
                                     IndexSearcherContext context)
     {
         super(context.minimumKey, context.maximumKey, context.count());
+
+        this.context = context;
 
         this.postingList = context.postingList;
         this.indexContext = indexContext;

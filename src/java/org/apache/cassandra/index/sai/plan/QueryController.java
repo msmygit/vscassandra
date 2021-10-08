@@ -18,12 +18,15 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -55,11 +58,17 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.ColumnIndexRangeIterator;
+import org.apache.cassandra.index.sai.utils.ConjunctionPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -227,10 +236,9 @@ public class QueryController
 //        }
 //        return builder;
 //    }
-
     public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
     {
-        final Multimap<SSTableReader.UniqueIdentifier, ColumnIndexRangeIterator.ExpressionSSTablePostings> sstablePostingsMap = HashMultimap.create();
+        final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map = new HashMap();
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
@@ -246,9 +254,12 @@ public class QueryController
                                                                                                    e.getValue(),
                                                                                                    mergeRange,
                                                                                                    queryContext,
-                                                                                                   sstablePostingsMap);
+                                                                                                   map);
                 columnRangeBuilder.add(columnIndexRangeIterator);
             }
+
+            RangeIterator.Builder perSSTableRangeIterators = getIndexesPostings(op, expressions, map);
+            return perSSTableRangeIterators;
         }
         catch (Throwable t)
         {
@@ -257,7 +268,137 @@ public class QueryController
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw t;
         }
-        return columnRangeBuilder;
+        //return columnRangeBuilder;
+    }
+
+    public RangeIterator.Builder getIndexesPostings(Operation.OperationType op,
+                                                    Collection<Expression> expressions,
+                                                    final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map)
+    {
+        final RangeIterator.Builder builder = RangeUnionIterator.builder();
+
+        final List<RangeIterator> memoryRangeIterators = new ArrayList<>();
+        for (final Expression expression : expressions)
+        {
+            final RangeIterator memtableIterator = expression.context.searchMemtable(expression, mergeRange);
+            memoryRangeIterators.add(memtableIterator);
+        }
+
+        final RangeIterator primaryMemoryRangeIterator;
+
+        if (op == Operation.OperationType.AND)
+        {
+            RangeIntersectionIterator.Builder andBuilder = RangeIntersectionIterator.builder();
+            for (RangeIterator it : memoryRangeIterators)
+            {
+                andBuilder.add(it);
+            }
+            primaryMemoryRangeIterator = andBuilder.build();
+        }
+        else
+        {
+            assert op == Operation.OperationType.OR;
+
+            RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
+            orBuilder.add(memoryRangeIterators);
+            primaryMemoryRangeIterator = orBuilder.build();
+        }
+
+        builder.add(primaryMemoryRangeIterator);
+
+        final List<PostingList> toClose = new ArrayList<>();
+
+        try
+        {
+            for (Map.Entry<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> entry : map.entrySet())
+            {
+                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+
+                final Map<Expression, ColumnIndexRangeIterator.SSTablePostings> expMap = entry.getValue();
+
+                IndexContext indexContext = null;
+                PrimaryKeyMap primaryKeyMap = null;
+                IndexSearcherContext context = null;
+
+                PrimaryKey maxKey = null;
+                PrimaryKey minKey = null;
+
+                for (ColumnIndexRangeIterator.SSTablePostings postings : expMap.values())
+                {
+                    final PriorityQueue<PostingList.PeekablePostingList> expPostings = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+
+                    for (PostingListRangeIterator iterator : postings.sstablePostingsRangeIterators)
+                    {
+                        expPostings.add(iterator.postingList.peekable());
+
+                        if (minKey == null)
+                        {
+                            minKey = iterator.getMinimum();
+                        }
+                        else
+                        {
+                            minKey = iterator.getMinimum().compareTo(minKey) < 0 ? iterator.getMinimum() : minKey;
+                        }
+
+                        if (maxKey == null)
+                        {
+                            maxKey = iterator.getMaximum();
+                        }
+                        else
+                        {
+                            maxKey = iterator.getMaximum().compareTo(maxKey) > 0 ? iterator.getMaximum() : maxKey;
+                        }
+
+                        if (indexContext == null)
+                        {
+                            indexContext = iterator.indexContext;
+                            primaryKeyMap = iterator.primaryKeyMap;
+                            context = iterator.context;
+                        }
+                    }
+
+                    postingLists.add(MergePostingList.merge(expPostings).peekable());
+                }
+
+                if (postingLists.size() == 0)
+                {
+                    continue;
+                }
+
+                final PostingList sstablePostings;
+
+                if (op == Operation.OperationType.OR)
+                {
+                    sstablePostings = MergePostingList.merge(postingLists);
+                }
+                else
+                {
+                    assert op == Operation.OperationType.AND;
+
+                    sstablePostings = new ConjunctionPostingList(new ArrayList(postingLists), null);
+                }
+
+                PostingList.PeekablePostingList sstablePostingsPeekable = sstablePostings.peekable();
+
+                if (sstablePostingsPeekable.peek() != PostingList.END_OF_STREAM)
+                {
+                    IndexSearcherContext context2 = new IndexSearcherContext(minKey,
+                                                                             maxKey,
+                                                                             context.context,
+                                                                             sstablePostingsPeekable);
+
+                    builder.add(new PostingListRangeIterator(indexContext, primaryKeyMap, context2));
+                }
+            }
+            return builder;
+        }
+        catch (Throwable t)
+        {
+            // all sstable indexes in view have been referenced, need to clean up when exception is thrown
+            FileUtils.closeQuietly(toClose);
+            //view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
+            throw new RuntimeException(t);
+        }
     }
 
     private ClusteringIndexFilter makeFilter(PrimaryKey key)

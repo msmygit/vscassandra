@@ -25,11 +25,11 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
 public class IndexSearcherContext
 {
-    final SSTableQueryContext context;
-    final PostingList.PeekablePostingList postingList;
+    public final SSTableQueryContext context;
+    public final PostingList.PeekablePostingList postingList;
 
-    PrimaryKey minimumKey;
-    PrimaryKey maximumKey;
+    public PrimaryKey minimumKey;
+    public PrimaryKey maximumKey;
     long maxPartitionOffset;
 
     public IndexSearcherContext(PrimaryKey minimumKey,

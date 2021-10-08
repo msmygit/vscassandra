@@ -43,6 +43,12 @@ public class ArrayPostingList implements OrdinalPostingList
     }
 
     @Override
+    public long currentPosting()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public long nextPosting()
     {
         if (idx >= postings.length)

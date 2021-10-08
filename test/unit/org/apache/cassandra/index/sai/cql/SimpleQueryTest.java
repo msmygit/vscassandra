@@ -34,8 +34,11 @@ public class SimpleQueryTest extends SAITester
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
         createIndex("CREATE CUSTOM INDEX ON %s(value2) USING 'StorageAttachedIndex'");
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 1, 1, 1);
+        execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 2, 2, 2);
         flush();
         UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
-        System.out.println(result.size());
+        assertEquals(1, result.size());
+        UntypedResultSet result2 = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
+        assertEquals(1, result2.size());
     }
 }

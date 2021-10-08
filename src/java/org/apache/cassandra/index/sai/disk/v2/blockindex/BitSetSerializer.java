@@ -91,6 +91,12 @@ public class BitSetSerializer
         }
 
         @Override
+        public long currentPosting()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public long advance(long targetRowId) throws IOException
         {
             throw new UnsupportedOperationException();

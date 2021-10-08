@@ -42,6 +42,8 @@ public interface PostingList extends Closeable
      */
     long nextPosting() throws IOException;
 
+    long currentPosting();
+
     long size();
 
     /**
@@ -57,8 +59,6 @@ public interface PostingList extends Closeable
      * @return first segment row ID which is >= the target row ID or {@link PostingList#END_OF_STREAM} if one does not exist
      */
     long advance(long targetRowId) throws IOException;
-
-//    PrimaryKey mapRowId(long rowId) throws IOException;
 
     /**
      * @return peekable wrapper of current posting list
@@ -107,6 +107,12 @@ public interface PostingList extends Closeable
             peeked = true;
             next = wrapped.advance(targetRowId);
             return next;
+        }
+
+        @Override
+        public long currentPosting()
+        {
+            return wrapped.currentPosting();
         }
 
         @Override

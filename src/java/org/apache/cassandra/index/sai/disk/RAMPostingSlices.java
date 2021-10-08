@@ -64,6 +64,12 @@ class RAMPostingSlices
             }
 
             @Override
+            public long currentPosting()
+            {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
             public long size()
             {
                 return sizes[termID];

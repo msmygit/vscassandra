@@ -46,6 +46,12 @@ public class FilteringPostingList implements PostingList
     }
 
     @Override
+    public long currentPosting()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void close() throws IOException
     {
         delegate.close();

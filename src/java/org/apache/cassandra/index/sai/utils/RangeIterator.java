@@ -35,7 +35,7 @@ import org.apache.cassandra.io.util.FileUtils;
  */
 public abstract class RangeIterator extends AbstractIterator<PrimaryKey> implements Closeable
 {
-    private static final Builder.EmptyRangeIterator EMPTY = new Builder.EmptyRangeIterator();
+    public static final Builder.EmptyRangeIterator EMPTY = new Builder.EmptyRangeIterator();
 
     private final PrimaryKey min, max;
     private final long count;

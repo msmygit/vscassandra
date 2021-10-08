@@ -95,6 +95,12 @@ public class MemtableTermsIterator implements TermsIterator
             }
 
             @Override
+            public long currentPosting()
+            {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
             public long size()
             {
                 return list.size();

@@ -18,9 +18,12 @@
 package org.apache.cassandra.index.sai.utils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,16 +59,14 @@ public class ColumnIndexRangeIterator extends RangeIterator
         this.context = queryContext;
     }
 
-    public static class ExpressionSSTablePostings
+    public static class SSTablePostings
     {
-        public final Expression expression;
-        public final PostingList postingList;
+        public final List<PostingListRangeIterator> sstablePostingsRangeIterators;
         public final SSTableIndex ssTableIndex;
 
-        public ExpressionSSTablePostings(Expression expression, PostingList postingList, SSTableIndex ssTableIndex)
+        public SSTablePostings(List<PostingListRangeIterator> sstablePostingsRangeIterators, SSTableIndex ssTableIndex)
         {
-            this.expression = expression;
-            this.postingList = postingList;
+            this.sstablePostingsRangeIterators = sstablePostingsRangeIterators;
             this.ssTableIndex = ssTableIndex;
         }
     }
@@ -75,7 +76,7 @@ public class ColumnIndexRangeIterator extends RangeIterator
                                                  Set<SSTableIndex> perSSTableIndexes,
                                                  AbstractBounds<PartitionPosition> keyRange,
                                                  QueryContext queryContext,
-                                                 final Multimap<SSTableReader.UniqueIdentifier, ExpressionSSTablePostings> map)
+                                                 final Map<SSTableReader.UniqueIdentifier, Map<Expression,SSTablePostings>> map)
     {
         final List<RangeIterator> columnIndexRangeIterators = new ArrayList<>(1 + perSSTableIndexes.size());;
 
@@ -98,21 +99,21 @@ public class ColumnIndexRangeIterator extends RangeIterator
                 List<PostingListRangeIterator> sstablePostingsRangeIterators = new ArrayList<>();
                 for (RangeIterator rangeIterator : sstableRangeIterators)
                 {
-                    sstablePostingsRangeIterators.add((PostingListRangeIterator)rangeIterator);
+                    if (rangeIterator instanceof PostingListRangeIterator)
+                    {
+                        sstablePostingsRangeIterators.add((PostingListRangeIterator) rangeIterator);
+                    }
+                    else
+                    {
+                        assert rangeIterator == RangeIterator.empty();
+                    }
                 }
 
                 if (sstableRangeIterators == null || sstableRangeIterators.isEmpty())
                     continue;
 
-                List<PostingList.PeekablePostingList> postings = new ArrayList<>(sstablePostingsRangeIterators.size());
-                for (PostingListRangeIterator it : sstablePostingsRangeIterators)
-                {
-                    postings.add(it.postingList.peekable());
-                }
-
-                PostingList sstablePostings = MergePostingList.merge(postings);
-
-                map.put(index.getSSTable().instanceId, new ExpressionSSTablePostings(expression, sstablePostings, index));
+                Map<Expression,SSTablePostings> expressionMultimap = map.computeIfAbsent(index.getSSTable().instanceId, (id) -> new HashMap());
+                expressionMultimap.put(expression, new SSTablePostings(sstablePostingsRangeIterators, index));
 
                 columnIndexRangeIterators.addAll(sstablePostingsRangeIterators);
             }

@@ -65,6 +65,8 @@ public class PostingsReader implements OrdinalPostingList
     private DirectReaders.Reader currentFORValues;
     private long postingsDecoded = 0;
 
+    private long currentPosting = 0;
+
     @VisibleForTesting
     public PostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
@@ -87,6 +89,12 @@ public class PostingsReader implements OrdinalPostingList
         this.summary = summary;
 
         reBuffer();
+    }
+
+    @Override
+    public long currentPosting()
+    {
+        return currentPosting;
     }
 
     @Override
@@ -224,13 +232,13 @@ public class PostingsReader implements OrdinalPostingList
         if (postingsBlockIdx == block + 1)
         {
             // we're in the same block, just iterate through
-            return slowAdvance(targetRowId);
+            return currentPosting = slowAdvance(targetRowId);
         }
         assert block > 0;
         // Even if there was an exact match, block might contain duplicates.
         // We iterate to the target token from the beginning.
         lastPosInBlock(block - 1);
-        return slowAdvance(targetRowId);
+        return currentPosting = slowAdvance(targetRowId);
     }
 
     private long slowAdvance(long targetRowId) throws IOException
@@ -307,6 +315,8 @@ public class PostingsReader implements OrdinalPostingList
             advanceOnePosition(next);
         }
 //        System.out.println(this.getClass().getSimpleName()+ "@" + this.hashCode() + ".nextPosting = " + next);
+
+        this.currentPosting = next;
 
         return next;
     }
