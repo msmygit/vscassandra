@@ -64,7 +64,8 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         List<BytesRef> list2 = new ArrayList<>();
 
-        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+        PrefixBlockReader reader = new PrefixBlockReader(input);
+        reader.reset(fp);
         while (true)
         {
             BytesRef term = reader.next();
@@ -77,6 +78,7 @@ public class PrefixBlockTest extends NdiRandomizedTest
         input.close();
 
         assertEquals(terms, list2);
+        reader.close();
     }
 
     @Test
@@ -119,7 +121,8 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         List<BytesRef> list2 = new ArrayList<>();
 
-        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+        PrefixBlockReader reader = new PrefixBlockReader(input);
+        reader.reset(fp);
         while (true)
         {
             BytesRef term = reader.next();
@@ -164,7 +167,8 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         final SharedIndexInput input = new SharedIndexInput(dir.openInput("test", IOContext.DEFAULT));
 
-        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+        PrefixBlockReader reader = new PrefixBlockReader(input);
+        reader.reset(fp);
 
         BytesRef result0 = reader.seek(new BytesRef("aaggbbbb"));
         assertEquals(new BytesRef("aaggbbbb"), result0);
@@ -203,7 +207,8 @@ public class PrefixBlockTest extends NdiRandomizedTest
 
         final SharedIndexInput input = new SharedIndexInput(dir.openInput("test", IOContext.DEFAULT));
 
-        PrefixBlockReader reader = new PrefixBlockReader(fp, input);
+        PrefixBlockReader reader = new PrefixBlockReader(input);
+        reader.reset(fp);
 
         int idx = 0;
 

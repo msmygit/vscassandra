@@ -104,6 +104,7 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
                           long numRows,
                           long minRowID,
                           long maxRowID,
+                          long numUniqueTerms,
                           BytesRef minTerm,
                           BytesRef maxTerm,
                           long leafIDPostingsFP_FP,

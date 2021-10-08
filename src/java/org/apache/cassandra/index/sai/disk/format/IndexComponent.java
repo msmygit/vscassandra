@@ -45,7 +45,6 @@ public enum IndexComponent
      * V1 V2
      */
     TERMS_DATA("TermsData"),
-    COMPRESSED_TERMS_DATA("CompressedTermsData"),
     TERMS_INDEX("TermsIndex"),
     ORDER_MAP("OrderMap"),
     /**

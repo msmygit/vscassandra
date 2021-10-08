@@ -70,11 +70,11 @@ public class PrefixBytesWriter
     // return total size written
     public long finish(IndexOutput output) throws IOException
     {
+        final long fp = output.getFilePointer();
+
         // write the lengths to the buffers
         SimpleFoR.write(prefixLengths.toIntArray(), prefixLengthsBuffer);
         SimpleFoR.write(suffixLengths.toIntArray(), suffixLengthsBuffer);
-
-        final long fp = output.getFilePointer();
 
         assert count <= 127;
 
@@ -86,13 +86,9 @@ public class PrefixBytesWriter
 
         prefixLengthsBuffer.writeTo(output);
         suffixLengthsBuffer.writeTo(output);
-
-        final long suffixBytesFP = output.getFilePointer();
         suffixBuffer.writeTo(output);
 
-        long size = output.getFilePointer() - fp;
-
-        return size;
+        return output.getFilePointer() - fp;
     }
 
     public void reset()

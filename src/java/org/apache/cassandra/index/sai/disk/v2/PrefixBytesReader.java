@@ -32,17 +32,14 @@ import org.apache.lucene.util.BytesRef;
 public class PrefixBytesReader implements Closeable
 {
     final SharedIndexInput2 input;
-    final DirectReaders.Reader prefixLengthsReader, suffixLengthsReader;
-    final long prefixLengthsFP, suffixLengthsFP;
-    private int idx = 0;
-
-    private final byte count;
-
     final SeekingRandomAccessInput lengthsSeeker;
-
-    private long currentFP = -1;
-
     private final BytesRef bytesRef = new BytesRef();
+
+    DirectReaders.Reader prefixLengthsReader, suffixLengthsReader;
+    long prefixLengthsFP, suffixLengthsFP;
+    private int idx = 0;
+    private byte count;
+    private long currentFP = -1;
 
     public int count()
     {
@@ -55,29 +52,31 @@ public class PrefixBytesReader implements Closeable
         FileUtils.closeQuietly(lengthsSeeker, input);
     }
 
-    public PrefixBytesReader(long fp, SharedIndexInput2 input) throws IOException
+    public PrefixBytesReader(SharedIndexInput2 input) throws IOException
     {
         this.input = input;
+        this.lengthsSeeker = new SeekingRandomAccessInput(input.sharedCopy());
+    }
 
+    public void reset(long fp) throws IOException
+    {
         input.seek(fp);
 
-        count = input.readByte();
+        this.count = input.readByte();
 
         final short prefixLengthsSize = input.readShort();
         final short suffixLengthsSize = input.readShort();
 
         final long rawFP = input.getFilePointer();
 
-        lengthsSeeker = new SeekingRandomAccessInput(input.sharedCopy());
-
         final byte prefixLengthsBits = input.readByte();
-        prefixLengthsFP = input.getFilePointer();
+        this.prefixLengthsFP = input.getFilePointer();
         this.prefixLengthsReader = DirectReaders.getReaderForBitsPerValue(prefixLengthsBits);
 
         // seek to the suffix lengths
         input.seek(rawFP + prefixLengthsSize);
         final byte suffixLengthsBits = input.readByte();
-        suffixLengthsFP = input.getFilePointer();
+        this.suffixLengthsFP = input.getFilePointer();
         this.suffixLengthsReader = DirectReaders.getReaderForBitsPerValue(suffixLengthsBits);
 
         final long suffixBytesFP = rawFP + prefixLengthsSize + suffixLengthsSize;

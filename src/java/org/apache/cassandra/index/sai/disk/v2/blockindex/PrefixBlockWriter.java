@@ -44,10 +44,19 @@ public class PrefixBlockWriter
         lowerTermsWriter = new PrefixBytesWriter();
     }
 
+    public void reset()
+    {
+        lowerTermsBuffer.reset();
+        upperTermsBuffer.reset();
+        upperTermsWriter.reset();
+        lowerTermsWriter.reset();
+        lowerBlockSizesBuffer.reset();
+        lowerBlockSizes.clear();
+        count = 0;
+    }
+
     public long finish(IndexOutput output) throws IOException
     {
-        final long startFP = output.getFilePointer();
-
         // write the upper bytes
         // write the lower block FPs
         int upperCount = upperTermsWriter.count();
@@ -82,8 +91,6 @@ public class PrefixBlockWriter
         upperTermsBuffer.writeTo(output);
         lowerBlockSizesBuffer.writeTo(output);
         lowerTermsBuffer.writeTo(output);
-
-        long totalBytes = output.getFilePointer() - startFP;
 
         return fp;
     }

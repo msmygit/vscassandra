@@ -106,7 +106,6 @@ public class SharedIndexInput2 extends IndexInput implements SharedCloseable
     public void readBytes(byte[] bytes, int offset, int length) throws IOException
     {
         input.seek(filePointer);
-        System.out.println("readBytes offset="+offset+" length="+length+" file length="+input.length());
         input.readBytes(bytes, offset, length);
         filePointer += length;
     }

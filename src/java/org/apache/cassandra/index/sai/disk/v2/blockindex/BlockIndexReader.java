@@ -41,11 +41,9 @@ import org.apache.commons.lang3.SerializationUtils;
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntLongHashMap;
-import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
-import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.FilteringPostingList;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
@@ -60,7 +58,6 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.FixedBitSet;
@@ -72,11 +69,10 @@ import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter
 
 public class BlockIndexReader implements Closeable
 {
+    final BlockValuesSerializer serializer = new SinglePrefixBytesBlockSerializer();
     final FileHandle indexFile;
     final PackedLongValues leafFilePointers;
-    final LongArrayList compressedLeafFPs = new LongArrayList();
-    final IntArrayList compressedLeafLengths = new IntArrayList();
-    final IntArrayList leafLengths = new IntArrayList();
+    final IntArrayList leafLengths = new IntArrayList(); // TODO: unused?
     final IntIntHashMap nodeIDToLeaf = new IntIntHashMap();
     final IntLongHashMap leafToOrderMapFP = new IntLongHashMap();
     final BlockIndexMeta meta;
@@ -202,10 +198,10 @@ public class BlockIndexReader implements Closeable
         byte lengthsBits;
         byte prefixBits;
         long arraysFilePointer;
-        private SeekingRandomAccessInput seekingInput;
+        SeekingRandomAccessInput seekingInput;
         int leafSize;
-        private long leafBytesFP; // current file pointer in the bytes part of the leaf
-        private long leafBytesStartFP; // file pointer where the overall bytes start for a leaf
+        long leafBytesFP; // current file pointer in the bytes part of the leaf
+        long leafBytesStartFP; // file pointer where the overall bytes start for a leaf
         int bytesLength = 0;
         int lastLen = 0;
         int lastPrefix = 0;
@@ -220,14 +216,12 @@ public class BlockIndexReader implements Closeable
         boolean readBlock = false;
         BytesRefBuilder builder = new BytesRefBuilder();
 
-        private byte[] compBytes = new byte[10];
-        private byte[] uncompBytes = new byte[10];
-        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput;
+        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesInput;
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
+            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesInput);
         }
     }
 
@@ -656,7 +650,7 @@ public class BlockIndexReader implements Closeable
             }
         }
 
-        TreeSet<Integer> nodeIDs = traverseIndex(min, max);
+        TreeSet<Integer> nodeIDs = traverseBinaryTree(min, max);
         return new TraverseTreeResult(nodeIDs, min, max);
     }
 
@@ -740,7 +734,7 @@ public class BlockIndexReader implements Closeable
 
     // using the given min and max leaf id's, traverse the binary tree, return node id's with postings
     // atm the that's only leaf node id's
-    public TreeSet<Integer> traverseIndex(int minLeaf, int maxLeaf) throws IOException
+    public TreeSet<Integer> traverseBinaryTree(int minLeaf, int maxLeaf) throws IOException
     {
         BinaryTreeIndex.BinaryTreeRangeVisitor visitor = new BinaryTreeIndex.BinaryTreeRangeVisitor(new BinaryTreeIndex.BinaryTreeRangeVisitor.Bound(minLeaf, true),
                                                                                                     new BinaryTreeIndex.BinaryTreeRangeVisitor.Bound(maxLeaf, false));
@@ -748,20 +742,20 @@ public class BlockIndexReader implements Closeable
 
         BinaryTreeIndex index = binaryTreeIndex();
 
-        collectPostingLists(0,
+        collectBinaryTreeNodeIDs(0,
                             nodeIDToLeaf.size() - 1,
-                            index,
-                            visitor,
-                            resultNodeIDs);
+                                 index,
+                                 visitor,
+                                 resultNodeIDs);
 
         return resultNodeIDs;
     }
 
-    protected void collectPostingLists(int cellMinLeafOrdinal,
-                                       int cellMaxLeafOrdinal,
-                                       BinaryTreeIndex index,
-                                       BinaryTreeIndex.BinaryTreeVisitor visitor,
-                                       Set<Integer> resultNodeIDs) throws IOException
+    protected void collectBinaryTreeNodeIDs(int cellMinLeafOrdinal,
+                                            int cellMaxLeafOrdinal,
+                                            BinaryTreeIndex index,
+                                            BinaryTreeIndex.BinaryTreeVisitor visitor,
+                                            Set<Integer> resultNodeIDs) throws IOException
     {
         final int nodeID = index.getNodeID();
         final PointValues.Relation r = visitor.compare(cellMinLeafOrdinal, cellMaxLeafOrdinal);
@@ -818,11 +812,11 @@ public class BlockIndexReader implements Closeable
         int splitLeafOrdinal = nodeIDToLeaf.get(nodeID);
 
         index.pushLeft();
-        collectPostingLists(cellMinPacked, splitLeafOrdinal, index, visitor, resultNodeIDs);
+        collectBinaryTreeNodeIDs(cellMinPacked, splitLeafOrdinal, index, visitor, resultNodeIDs);
         index.pop();
 
         index.pushRight();
-        collectPostingLists(splitLeafOrdinal, cellMaxPacked, index, visitor, resultNodeIDs);
+        collectBinaryTreeNodeIDs(splitLeafOrdinal, cellMaxPacked, index, visitor, resultNodeIDs);
         index.pop();
     }
 
@@ -888,7 +882,7 @@ public class BlockIndexReader implements Closeable
                 }
                 else
                 {
-                    System.out.println("traverseForMinMaxLeafOrdinals no max term ");
+                    // no max term
                 }
             }
         }
@@ -913,7 +907,6 @@ public class BlockIndexReader implements Closeable
             long filePointer = this.leafFilePointers.get(leaf);
             readBlock(filePointer, context);
             context.currentLeafFP = leafFP;
-            context.leaf = (int) leaf;
             context.leafIndex = 0;
         }
         context.leaf = (int) leaf;
@@ -925,7 +918,6 @@ public class BlockIndexReader implements Closeable
         // TODO: use initContext everywhere and lazily init the input streams
         BlockIndexReaderContext context = new BlockIndexReaderContext();
         context.bytesInput = fileProvider.openValuesInput(temporary);
-        context.bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
         context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(temporary);
         context.multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
         return context;
@@ -988,128 +980,14 @@ public class BlockIndexReader implements Closeable
 
     private void readBlock(long filePointer, BlockIndexReaderContext context) throws IOException
     {
-        context.bytesInput.seek(filePointer);
-        context.currentLeafFP = filePointer;
-        context.leafSize = context.bytesInput.readInt();
-        context.lengthsBytesLen = context.bytesInput.readInt();
-        context.prefixBytesLen = context.bytesInput.readInt();
-        context.lengthsBits = context.bytesInput.readByte();
-        context.prefixBits = context.bytesInput.readByte();
-
-        context.arraysFilePointer = context.bytesInput.getFilePointer();
-
-        context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
-        context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
-
-        context.bytesInput.seek(context.arraysFilePointer + context.lengthsBytesLen + context.prefixBytesLen);
-
-        context.leafBytesStartFP = context.leafBytesFP = context.bytesInput.getFilePointer();
-
-        // TODO: alloc here probably not required?
-        context.seekingInput = new SeekingRandomAccessInput(context.bytesInput);
-
-        context.leafIndex = 0;
-
-        context.readBlock = true;
+        //serializer.readBlock(filePointer, context);
     }
 
     public BytesRef seekInBlock(int seekIndex,
                                 BlockIndexReaderContext context,
                                 boolean incLeafIndex) throws IOException
     {
-        if (seekIndex >= context.leafSize)
-        {
-            throw new IllegalArgumentException("seekIndex="+seekIndex+" must be less than the leaf size="+context.leafSize);
-        }
-
-        int len = 0;
-        int prefix = 0;
-
-        // TODO: this part can go back from the current
-        //       position rather than start from the beginning each time
-
-        int start = 0;
-
-        // start from where we left off
-        if (seekIndex >= context.leafIndex)
-        {
-            start = context.leafIndex;
-        }
-
-        for (int x = start; x <= seekIndex; x++)
-        {
-            len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
-            prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
-
-            if (x == 0)
-            {
-                if (context.firstTerm == null)
-                {
-                    context.firstTerm = new byte[len];
-                }
-                else
-                {
-                    context.firstTerm = ArrayUtil.grow(context.firstTerm, len);
-                }
-                context.firstTermLen = len;
-
-                context.leafBytesFP = context.leafBytesStartFP;
-                context.bytesInput.seek(context.leafBytesStartFP);
-                context.bytesInput.readBytes(context.firstTerm, 0, len);
-                context.lastPrefix = len;
-                context.lastLen = len;
-                //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
-                context.bytesLength = 0;
-                context.leafBytesFP += len;
-            }
-            else if (len > 0)
-            {
-                context.bytesLength = len - prefix;
-//                context.leafBytesFP += context.lastLen - context.lastPrefix;
-                context.lastPrefix = prefix;
-                context.lastLen = len;
-                if (x < seekIndex)
-                    context.leafBytesFP += context.bytesLength;
-
-            }
-            else
-            {
-                context.bytesLength = 0;
-            }
-        }
-
-        // TODO: don't do this with an IndexIterator
-        if (incLeafIndex)
-        {
-            context.leafIndex = seekIndex + 1;
-        }
-
-        if (!(len == 0 && prefix == 0))
-        {
-            context.builder.clear();
-
-            if (context.bytesLength > 0)
-            {
-                if (context.bytes == null)
-                {
-                    context.bytes = new byte[context.bytesLength];
-                }
-                else
-                {
-                    context.bytes = ArrayUtil.grow(context.bytes, context.bytesLength);
-                }
-                context.bytesInput.seek(context.leafBytesFP);
-                context.bytesInput.readBytes(context.bytes, 0, context.bytesLength);
-                context.leafBytesFP += context.bytesLength;
-            }
-            if (context.lastPrefix > 0 && context.firstTerm != null)
-                context.builder.append(context.firstTerm, 0, context.lastPrefix);
-            if (context.bytesLength > 0 )
-            {
-                context.builder.append(context.bytes, 0, context.bytesLength);
-            }
-        }
-        context.lastLeafIndex = seekIndex;
-        return context.builder.get();
+        //return serializer.seekInBlock(seekIndex, context, incLeafIndex);
+        return null;
     }
 }

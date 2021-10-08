@@ -18,15 +18,18 @@
 
 package org.apache.cassandra.index.sai.disk.v2;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput2;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
+
+import static org.junit.Assert.assertEquals;
 
 public class PrefixBytesTest
 {
@@ -37,18 +40,28 @@ public class PrefixBytesTest
 
         IndexOutput out = dir.createOutput("test", IOContext.DEFAULT);
         PrefixBytesWriter writer = new PrefixBytesWriter();
-        writer.add(new BytesRef("aaaaaa"));
-        writer.add(new BytesRef("aaaabb"));
-        writer.add(new BytesRef("aaaabc"));
-        writer.add(new BytesRef("aaaabg"));
-        writer.add(new BytesRef("aaaabggg"));
 
-        long fp = writer.finish(out);
+        List<BytesRef> terms = new ArrayList();
+        terms.add(new BytesRef("aaaaaa"));
+        terms.add(new BytesRef("aaaabb"));
+        terms.add(new BytesRef("aaaabc"));
+        terms.add(new BytesRef("aaaabg"));
+        terms.add(new BytesRef("aaaabggg"));
+
+        for (BytesRef term : terms)
+        {
+            writer.add(term);
+        }
+
+        writer.finish(out);
         out.close();
 
         SharedIndexInput2 input = new SharedIndexInput2(dir.openInput("test", IOContext.DEFAULT));
 
-        PrefixBytesReader reader = new PrefixBytesReader(fp, input);
+        PrefixBytesReader reader = new PrefixBytesReader(input);
+        reader.reset(0);
+
+        List<BytesRef> terms2 = new ArrayList<>();
 
         while (true)
         {
@@ -57,8 +70,9 @@ public class PrefixBytesTest
             {
                 break;
             }
-            System.out.println("term="+term.utf8ToString());
+            terms2.add(BytesRef.deepCopyOf(term));
         }
+        assertEquals(terms, terms2);
         input.close();
     }
 }

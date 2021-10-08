@@ -38,8 +38,6 @@ public interface BlockIndexFileProvider extends AutoCloseable
 
     IndexOutputWriter openOrderMapOutput(boolean temporary) throws IOException;
 
-    IndexOutputWriter openCompressedValuesOutput(boolean temporary) throws IOException;
-
     IndexOutputWriter openMultiPostingsOutput(boolean temporary) throws IOException;
 
     IndexOutputWriter openPointIdMapOutput(boolean temporary) throws IOException;
@@ -55,8 +53,6 @@ public interface BlockIndexFileProvider extends AutoCloseable
     SharedIndexInput openIndexInput(boolean temporary);
 
     SharedIndexInput openMultiPostingsInput(boolean temporary);
-
-    SharedIndexInput openCompressedValuesInput(boolean temporary);
 
     SharedIndexInput openMetadataInput();
 

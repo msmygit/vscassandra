@@ -32,26 +32,34 @@ import org.apache.lucene.util.BytesRef;
 
 import static org.apache.cassandra.index.sai.disk.v2.blockindex.PrefixBlockWriter.INDEX_INTERVAL;
 
-public class PrefixBlockReader implements Closeable
+public class PrefixBlockReader implements BlockValuesDeserializer, Closeable
 {
     final SeekingRandomAccessInput seekInput;
-    final DirectReaders.Reader reader;
-    final long lowerBlockSizeDeltasFP;
-    final PrefixBytesReader upperTermsReader;
     final SharedIndexInput input;
     final SharedIndexInput2 upperTermsInput, lowerTermsInput;
-    final byte upperCount;
-    final byte lastBlockCount;
+
+    byte upperCount;
+    byte lastBlockCount;
+    PrefixBytesReader upperTermsReader;
     PrefixBytesReader lowerTermsReader;
     private int idx;
     private BytesRef upperTerm;
     private long currentFP = -1;
-    private final long lowerTermsStartFP;
+    private long lowerTermsStartFP;
     private long currentLowerTermsFP;
+    DirectReaders.Reader reader;
+    long lowerBlockSizeDeltasFP;
 
-    public PrefixBlockReader(final long fp, final SharedIndexInput input) throws IOException
+    public PrefixBlockReader(final SharedIndexInput input) throws IOException
     {
         this.input = input;
+        upperTermsInput = new SharedIndexInput2(input.sharedCopy());
+        lowerTermsInput = new SharedIndexInput2(input.sharedCopy());
+        seekInput = new SeekingRandomAccessInput(input.sharedCopy());
+    }
+
+    public void reset(final long fp) throws IOException
+    {
         input.seek(fp);
         upperCount = input.readByte();
         lastBlockCount = input.readByte();
@@ -60,19 +68,24 @@ public class PrefixBlockReader implements Closeable
 
         final long fp2 = input.getFilePointer();
 
-        upperTermsInput = new SharedIndexInput2(input.sharedCopy());
-        upperTermsReader = new PrefixBytesReader(input.getFilePointer(), upperTermsInput);
-
-        lowerTermsInput = new SharedIndexInput2(input.sharedCopy());
+        upperTermsReader = new PrefixBytesReader(upperTermsInput);
+        upperTermsReader.reset(fp2);
 
         input.seek(fp2 + upperTermsSize); // seek to the lowerBlockSizeDeltas
+
         final int bits = input.readByte();
 
         lowerBlockSizeDeltasFP = input.getFilePointer();
-        seekInput = new SeekingRandomAccessInput(input.sharedCopy());
+
         reader = DirectReaders.getReaderForBitsPerValue((byte)bits);
 
         lowerTermsStartFP = currentLowerTermsFP = fp2 + lowerBlockSizeDeltasSize + upperTermsSize;
+    }
+
+    @Override
+    public int ordinal() throws IOException
+    {
+        return idx;
     }
 
     @Override
@@ -96,7 +109,8 @@ public class PrefixBlockReader implements Closeable
             upperTerm = upperTermsReader.next();
 
             // TODO: reuse lowerTermsReader
-            lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
+            lowerTermsReader = new PrefixBytesReader(lowerTermsInput);
+            lowerTermsReader.reset(currentLowerTermsFP);
 
             final long lowerBlockSize = LeafOrderMap.getValue(seekInput, lowerBlockSizeDeltasFP, upperIdx, reader);
             currentLowerTermsFP += lowerBlockSize;
@@ -124,7 +138,8 @@ public class PrefixBlockReader implements Closeable
         {
             currentLowerTermsFP += getLowerTermsSizeBytes(x);
         }
-        lowerTermsReader = new PrefixBytesReader(currentLowerTermsFP, lowerTermsInput);
+        lowerTermsReader = new PrefixBytesReader(lowerTermsInput);
+        lowerTermsReader.reset(currentLowerTermsFP);
     }
 
     public int getLowerTermsSizeBytes(int upperIdx)

@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -37,22 +36,13 @@ import org.apache.commons.lang.SerializationUtils;
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntLongHashMap;
 import com.carrotsearch.hppc.cursors.IntLongCursor;
-import com.github.luben.zstd.Zstd;
-import com.github.luben.zstd.ZstdDictCompress;
 import org.agrona.collections.LongArrayList;
-import org.apache.cassandra.db.ClusteringComparator;
-import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.db.marshal.UTF8Type;
-import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.disk.v1.BlockPackedWriter;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
-import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -61,16 +51,13 @@ import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.cassandra.io.tries.IncrementalDeepTrieWriterPageAware;
 import org.apache.cassandra.io.tries.IncrementalTrieWriter;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.schema.ColumnMetadata;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.store.GrowableByteArrayDataOutput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter.BLOCK_SIZE;
@@ -96,7 +83,7 @@ public class BlockIndexWriter
     private final boolean temporary;
 
     final List<BytesRef> blockMinValues = new ArrayList();
-    final IndexOutput valuesOut, compressedValuesOut;
+    final IndexOutput valuesOut;
     final IndexOutputWriter indexOut;
     final IndexOutput leafPostingsOut, orderMapOut;
 
@@ -114,13 +101,13 @@ public class BlockIndexWriter
     final BytesRefBuilder lastAddedTerm = new BytesRefBuilder();
 
     private BlockBuffer currentBuffer = new BlockBuffer(), previousBuffer = new BlockBuffer();
-    private int termOrdinal = 0; // number of unique terms
+    private int uniqueTermOrdinal = 0; // number of unique terms
+    // TODO: write termOrdinal/numUniqueTerms to meta data
     private int leaf;
 
     public static class BlockBuffer
     {
-        final int[] lengths = new int[LEAF_SIZE];
-        final int[] prefixes = new int[LEAF_SIZE];
+        final BytesRefArray bytes = new BytesRefArray(Counter.newCounter(false));
         final long[] postings = new long[LEAF_SIZE];
         boolean allLeafValuesSame = true;
         int leaf = -1;
@@ -128,9 +115,12 @@ public class BlockIndexWriter
 
         BytesRef minValue;
 
-        private final GrowableByteArrayDataOutput scratchOut = new GrowableByteArrayDataOutput(8 * 1024);
-        private final GrowableByteArrayDataOutput prefixScratchOut = new GrowableByteArrayDataOutput(8 * 1024);
-        private final GrowableByteArrayDataOutput lengthsScratchOut = new GrowableByteArrayDataOutput(8 * 1024);
+        public void add(final BytesRef term, long rowid)
+        {
+            bytes.append(term);
+            postings[leafOrdinal] = rowid;
+            leafOrdinal++;
+        }
 
         final RowIDLeafOrdinal[] rowIDLeafOrdinals = new RowIDLeafOrdinal[LEAF_SIZE];
         {
@@ -147,9 +137,7 @@ public class BlockIndexWriter
 
         public void reset()
         {
-            scratchOut.reset();
-            prefixScratchOut.reset();
-            lengthsScratchOut.reset();
+            bytes.clear();
             leafOrdinal = 0;
             leaf = -1;
             allLeafValuesSame = true;
@@ -170,7 +158,6 @@ public class BlockIndexWriter
         this.indexOut = fileProvider.openIndexOutput(temporary);
         this.leafPostingsOut = fileProvider.openLeafPostingsOutput(temporary);
         this.orderMapOut = fileProvider.openOrderMapOutput(temporary);
-        this.compressedValuesOut = fileProvider.openCompressedValuesOutput(temporary);
         this.postingsWriter = new PostingsWriter(leafPostingsOut);
     }
 
@@ -646,6 +633,7 @@ public class BlockIndexWriter
                                   numRows,
                                   minRowID,
                                   maxRowID,
+                                  uniqueTermOrdinal, // num unique terms
                                   minTerm,
                                   BytesRef.deepCopyOf(realLastTerm.toBytesRef()), // last term
                                   leafIDPostingsFP_FP,
@@ -687,7 +675,7 @@ public class BlockIndexWriter
         if (lastAddedTerm.length() > 0 && !termBuilder.get().equals(lastAddedTerm.get()))
         {
             newTerm = true;
-            termOrdinal++;
+            uniqueTermOrdinal++;
         }
 
         lastAddedTerm.clear();
@@ -700,8 +688,8 @@ public class BlockIndexWriter
             assert currentBuffer.isEmpty();
 
             lastTermBuilder.append(termBuilder);
-            currentBuffer.prefixes[currentBuffer.leafOrdinal] = 0;
-            currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
+//            currentBuffer.prefixes[currentBuffer.leafOrdinal] = 0;
+//            currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
             final BytesRef minValue = BytesRef.deepCopyOf(termBuilder.get());
             blockMinValues.add(minValue);
 
@@ -710,26 +698,25 @@ public class BlockIndexWriter
         }
         else
         {
-            //System.out.println("prefix=" + lastTermBuilder.get().utf8ToString() + " term=" + termBuilder.get().utf8ToString());
-            int prefix = BytesUtil.bytesDifference(lastTermBuilder.get(), termBuilder.get());
-            if (prefix == -1) prefix = length;
-            currentBuffer.prefixes[currentBuffer.leafOrdinal] = prefix;
-            currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
-        }
-        // System.out.println("term=" + termBuilder.get().utf8ToString() + " prefix=" + currentBuffer.prefixes[currentBuffer.leafOrdinal] + " length=" + currentBuffer.lengths[currentBuffer.leafOrdinal]);
-
-        int prefix = currentBuffer.prefixes[currentBuffer.leafOrdinal];
-        int len = termBuilder.get().length - currentBuffer.prefixes[currentBuffer.leafOrdinal];
-
-        if (currentBuffer.leafOrdinal == 0)
-        {
-            currentBuffer.prefixes[currentBuffer.leafOrdinal] = termBuilder.get().length;
+//            int prefix = BytesUtil.bytesDifference(lastTermBuilder.get(), termBuilder.get());
+//            if (prefix == -1) prefix = length;
+//            currentBuffer.prefixes[currentBuffer.leafOrdinal] = prefix;
+//            currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
         }
 
-        //System.out.println("write leafIndex=" + leafOrdinal + " prefix=" + prefix + " len=" + len);
-        currentBuffer.scratchOut.writeBytes(termBuilder.get().bytes, prefix, len);
-        currentBuffer.postings[currentBuffer.leafOrdinal] = rowID;
-        currentBuffer.leafOrdinal++;
+//        int prefix = currentBuffer.prefixes[currentBuffer.leafOrdinal];
+//        int len = termBuilder.get().length - currentBuffer.prefixes[currentBuffer.leafOrdinal];
+//
+//        if (currentBuffer.leafOrdinal == 0)
+//        {
+//            currentBuffer.prefixes[currentBuffer.leafOrdinal] = termBuilder.get().length;
+//        }
+
+        currentBuffer.add(termBuilder.get(), rowID);
+
+        //currentBuffer.scratchOut.writeBytes(termBuilder.get().bytes, prefix, len);
+        //currentBuffer.postings[currentBuffer.leafOrdinal] = rowID;
+        //currentBuffer.leafOrdinal++;
 
         if (currentBuffer.leafOrdinal == LEAF_SIZE)
         {
@@ -808,8 +795,6 @@ public class BlockIndexWriter
 
         assert minValue.equals(buffer.minValue);
 
-        // System.out.println("   writeLeaf leaf=" + buffer.leaf + " minValue=" + NumericUtils.sortableBytesToInt(buffer.minValue.bytes, 0));
-
         this.leafBytesFPs.add((long) buffer.leaf);
 
         if (buffer.allLeafValuesSame)
@@ -833,24 +818,15 @@ public class BlockIndexWriter
         }
 
         long filePointer = valuesOut.getFilePointer();
-        final int maxLength = Arrays.stream(buffer.lengths).max().getAsInt();
-        LeafOrderMap.write(buffer.lengths, buffer.leafOrdinal, maxLength, buffer.lengthsScratchOut);
-        final int maxPrefix = Arrays.stream(buffer.prefixes).max().getAsInt();
-        LeafOrderMap.write(buffer.prefixes, buffer.leafOrdinal, maxPrefix, buffer.prefixScratchOut);
 
-        valuesOut.writeInt(buffer.leafOrdinal); // value count
-        valuesOut.writeInt(buffer.lengthsScratchOut.getPosition());
-        valuesOut.writeInt(buffer.prefixScratchOut.getPosition());
-        valuesOut.writeByte((byte) DirectWriter.unsignedBitsRequired(maxLength));
-        valuesOut.writeByte((byte) DirectWriter.unsignedBitsRequired(maxPrefix));
-        valuesOut.writeBytes(buffer.lengthsScratchOut.getBytes(), 0, buffer.lengthsScratchOut.getPosition());
-        valuesOut.writeBytes(buffer.prefixScratchOut.getBytes(), 0, buffer.prefixScratchOut.getPosition());
-        valuesOut.writeBytes(buffer.scratchOut.getBytes(), 0, buffer.scratchOut.getPosition());
+        blockSerializer.write(buffer, valuesOut);
 
         long bytesLength = valuesOut.getFilePointer() - filePointer;
         this.realLeafBytesLengths.add((int)bytesLength);
         this.realLeafBytesFPs.add(filePointer);
     }
+
+    final BlockValuesSerializer blockSerializer = new SinglePrefixBytesBlockSerializer();
 
     // writes postings and the order map only if the row ids are not in ascending order
     protected void writePostingsAndOrderMap(BlockBuffer buffer) throws IOException

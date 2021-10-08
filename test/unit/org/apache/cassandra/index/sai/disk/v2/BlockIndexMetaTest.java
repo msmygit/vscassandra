@@ -51,6 +51,7 @@ public class BlockIndexMetaTest
                                                      1010,
                                                      1011,
                                                      1012,
+                                                     1023,
                                                      new BytesRef("ccc"),
                                                      new BytesRef("ddd"),
                                                      1015,

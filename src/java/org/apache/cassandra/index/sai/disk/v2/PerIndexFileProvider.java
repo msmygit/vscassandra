@@ -37,7 +37,6 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
-import static org.apache.cassandra.index.sai.disk.format.IndexComponent.COMPRESSED_TERMS_DATA;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.KD_TREE_POSTING_LISTS;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.META;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ORDER_MAP;
@@ -82,12 +81,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     public IndexOutputWriter openOrderMapOutput(boolean temporary) throws IOException
     {
         return indexDescriptor.openPerIndexOutput(ORDER_MAP, indexContext, true, temporary);
-    }
-
-    @Override
-    public IndexOutputWriter openCompressedValuesOutput(boolean temporary) throws IOException
-    {
-        return indexDescriptor.openPerIndexOutput(COMPRESSED_TERMS_DATA, indexContext, true, temporary);
     }
 
     @Override
@@ -136,12 +129,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     public SharedIndexInput openMultiPostingsInput(boolean temporary)
     {
         return new SharedIndexInput(openInput(KD_TREE_POSTING_LISTS, temporary));
-    }
-
-    @Override
-    public SharedIndexInput openCompressedValuesInput(boolean temporary)
-    {
-        return new SharedIndexInput(openInput(COMPRESSED_TERMS_DATA, temporary));
     }
 
     @Override
