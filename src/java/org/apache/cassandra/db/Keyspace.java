@@ -38,12 +38,13 @@ import java.util.stream.Stream;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.RateLimiter;
+import org.apache.cassandra.locator.LocalStrategy;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.lifecycle.SSTableSet;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.repair.CassandraKeyspaceRepairManager;
@@ -116,9 +117,14 @@ public class Keyspace
         initialized = true;
     }
 
+    public static boolean isInitialized()
+    {
+        return initialized;
+    }
+
     public static Keyspace open(String keyspaceName)
     {
-        assert initialized || SchemaConstants.isLocalSystemKeyspace(keyspaceName);
+        assert initialized || SchemaConstants.isLocalSystemKeyspace(keyspaceName) : "Initialized: " + initialized;
         return open(keyspaceName, Schema.instance, true);
     }
 
@@ -131,44 +137,7 @@ public class Keyspace
     @VisibleForTesting
     static Keyspace open(String keyspaceName, SchemaProvider schema, boolean loadSSTables)
     {
-        Keyspace keyspaceInstance = schema.getKeyspaceInstance(keyspaceName);
-
-        if (keyspaceInstance == null)
-        {
-            // Instantiate the Keyspace while holding the Schema lock. This both ensures we only do it once per
-            // keyspace, and also ensures that Keyspace construction sees a consistent view of the schema.
-            synchronized (schema)
-            {
-                keyspaceInstance = schema.getKeyspaceInstance(keyspaceName);
-                if (keyspaceInstance == null)
-                {
-                    // open and store the keyspace
-                    keyspaceInstance = new Keyspace(keyspaceName, schema, loadSSTables);
-                    schema.storeKeyspaceInstance(keyspaceInstance);
-                }
-            }
-        }
-        return keyspaceInstance;
-    }
-
-    public static Keyspace clear(String keyspaceName)
-    {
-        return clear(keyspaceName, Schema.instance);
-    }
-
-    public static Keyspace clear(String keyspaceName, Schema schema)
-    {
-        synchronized (schema)
-        {
-            Keyspace t = schema.removeKeyspaceInstance(keyspaceName);
-            if (t != null)
-            {
-                for (ColumnFamilyStore cfs : t.getColumnFamilyStores())
-                    t.unloadCf(cfs);
-                t.metric.release();
-            }
-            return t;
-        }
+        return schema.getOrCreateKeyspaceInstance(keyspaceName, () -> new Keyspace(keyspaceName, schema, loadSSTables));
     }
 
     public static ColumnFamilyStore openAndGetStore(TableMetadataRef tableRef)
@@ -356,6 +325,13 @@ public class Keyspace
 
         this.repairManager = new CassandraKeyspaceRepairManager(this);
         this.writeHandler = new CassandraKeyspaceWriteHandler(this);
+
+        // If keyspace has been added, we need to recalculate pending ranges to make sure
+        // we send mutations to the correct set of bootstrapping nodes. Refer CASSANDRA-15433.
+        if (metadata.params.replication.klass != LocalStrategy.class)
+        {
+            PendingRangeCalculatorService.calculatePendingRanges(getReplicationStrategy(), keyspaceName);
+        }
     }
 
     private Keyspace(KeyspaceMetadata metadata)
@@ -394,14 +370,14 @@ public class Keyspace
     // best invoked on the compaction manager.
     public void dropCf(TableId tableId)
     {
-        assert columnFamilyStores.containsKey(tableId);
         ColumnFamilyStore cfs = columnFamilyStores.remove(tableId);
         if (cfs == null)
             return;
 
-        CompactionManager.instance.interruptCompactionForCFs(cfs.concatWithIndexes(), (sstable) -> true, true);
+        cfs.onTableDropped();
+
         // wait for any outstanding reads/writes that might affect the CFS
-        cfs.keyspace.writeOrder.awaitNewBarrier();
+        writeOrder.awaitNewBarrier();
         cfs.readOrdering.awaitNewBarrier();
 
         unloadCf(cfs);
@@ -412,6 +388,16 @@ public class Keyspace
     {
         cfs.unloadCf();
         cfs.invalidate();
+    }
+
+    /**
+     * Unloads all column family stores and releases metrics.
+     */
+    public void unload()
+    {
+        for (ColumnFamilyStore cfs : getColumnFamilyStores())
+            unloadCf(cfs);
+        metric.release();
     }
 
     /**
