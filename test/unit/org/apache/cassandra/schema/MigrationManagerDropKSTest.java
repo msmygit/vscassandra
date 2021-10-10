@@ -74,7 +74,7 @@ public class MigrationManagerDropKSTest
         cfs.forceBlockingFlush(UNIT_TESTS);
         assertTrue(!cfs.getDirectories().sstableLister(Directories.OnTxnErr.THROW).list().isEmpty());
 
-        MigrationManager.announceKeyspaceDrop(ks.name);
+        SchemaTestUtil.announceKeyspaceDrop(ks.name);
 
         assertNull(SchemaManager.instance.getKeyspaceMetadata(ks.name));
 
