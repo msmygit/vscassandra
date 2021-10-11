@@ -144,7 +144,7 @@ public class CompactionsTest
         Keyspace keyspace = Keyspace.open(KEYSPACE1);
         ColumnFamilyStore store = keyspace.getColumnFamilyStore(CF_STANDARD1);
         store.clearUnsafe();
-        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).build(), true);
+        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).build());
 
         // disable compaction while flushing
         store.disableAutoCompaction();
@@ -186,7 +186,7 @@ public class CompactionsTest
         ColumnFamilyStore store = keyspace.getColumnFamilyStore(CF_STANDARD1);
         store.clearUnsafe();
 
-        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).compaction(CompactionParams.stcs(compactionOptions)).build(), true);
+        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).compaction(CompactionParams.stcs(compactionOptions)).build());
 
         // disable compaction while flushing
         store.disableAutoCompaction();
@@ -229,7 +229,7 @@ public class CompactionsTest
 
         // now let's enable the magic property
         compactionOptions.put("unchecked_tombstone_compaction", "true");
-        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).compaction(CompactionParams.stcs(compactionOptions)).build(), true);
+        SchemaTestUtil.announceTableUpdate(store.metadata().unbuild().gcGraceSeconds(1).compaction(CompactionParams.stcs(compactionOptions)).build());
 
         //submit background task again and wait for it to complete
         FBUtilities.waitOnFuture(CompactionManager.instance.submitBackground(store));
