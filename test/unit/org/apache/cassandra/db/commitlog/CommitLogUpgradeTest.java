@@ -36,6 +36,8 @@ import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -125,7 +127,10 @@ public class CommitLogUpgradeTest
         {
             TableId tableId = TableId.fromString(cfidString);
             if (Schema.instance.getTableMetadata(tableId) == null)
-                Schema.instance.load(KeyspaceMetadata.create(KEYSPACE, KeyspaceParams.simple(1), Tables.of(metadata.unbuild().id(tableId).build())));
+                SchemaTestUtil.addOrUpdateKeyspace(KeyspaceMetadata.create(KEYSPACE,
+                                                                           KeyspaceParams.simple(1),
+                                                                           Tables.of(metadata.unbuild().id(tableId).build())),
+                                                   true);
         }
 
         Hasher hasher = new Hasher();
