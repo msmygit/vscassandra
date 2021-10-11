@@ -848,9 +848,10 @@ public class ViewSchemaTest extends ViewAbstractTest
 
         String view = createView(createView);
 
-        ColumnFamilyStore mv = Keyspace.open(keyspace()).getColumnFamilyStore(view);
+        Keyspace keyspace = Keyspace.open(keyspace());
+        ColumnFamilyStore mv = keyspace.getColumnFamilyStore(view);
 
-        assertTrue(SchemaCQLHelper.getTableMetadataAsCQL(mv.metadata(), true, true, true)
+        assertTrue(SchemaCQLHelper.getTableMetadataAsCQL(mv.metadata(), keyspace.getMetadata(), true, true, true)
                                   .startsWith(String.format(viewSnapshotSchema,
                                                             keyspace(),
                                                             view,

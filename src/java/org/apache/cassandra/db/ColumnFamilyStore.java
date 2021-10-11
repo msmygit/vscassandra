@@ -1963,8 +1963,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
             try (PrintStream out = new PrintStream(new FileOutputStreamPlus(schemaFile)))
             {
-                SchemaCQLHelper.reCreateStatementsForSchemaCql(metadata(),
-                                                               keyspace.getMetadata().types)
+                SchemaCQLHelper.reCreateStatementsForSchemaCql(metadata(), keyspace.getMetadata())
                                .forEach(out::println);
             }
         }
