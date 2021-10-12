@@ -147,7 +147,7 @@ public class SchemaKeyspaceTest
     @Test
     public void testConversionsInverses() throws Exception
     {
-        for (String keyspaceName : SchemaManager.instance.getNonSystemKeyspaces())
+        for (String keyspaceName : SchemaManager.instance.getNonSystemKeyspaces().names())
         {
             for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
             {
