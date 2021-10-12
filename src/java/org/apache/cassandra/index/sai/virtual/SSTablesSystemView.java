@@ -85,7 +85,7 @@ public class SSTablesSystemView extends AbstractVirtualTable
     {
         SimpleDataSet dataset = new SimpleDataSet(metadata());
 
-        for (String ks : Schema.instance.getUserKeyspaces())
+        for (String ks : Schema.instance.getUserKeyspaces().names())
         {
             Keyspace keyspace = Schema.instance.getKeyspaceInstance(ks);
             if (keyspace == null)
