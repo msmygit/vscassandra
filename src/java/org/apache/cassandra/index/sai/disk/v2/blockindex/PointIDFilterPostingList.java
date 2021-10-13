@@ -21,17 +21,17 @@ package org.apache.cassandra.index.sai.disk.v2.blockindex;
 import java.io.IOException;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.lucene.util.packed.BlockPackedReader;
+import org.apache.lucene.util.LongValues;
 
 public class PointIDFilterPostingList implements PostingList
 {
     final long minPointID;
     final long maxPointID;
-    final BlockPackedReader rowIDPointIDMap;
+    final LongValues rowIDPointIDMap;
     final long numRows;
     private long currentRowID = 0;
 
-    public PointIDFilterPostingList(long minPointID, long maxPointID, long numRows, BlockPackedReader rowIDPointIDMap)
+    public PointIDFilterPostingList(long minPointID, long maxPointID, long numRows, LongValues rowIDPointIDMap)
     {
         this.minPointID = minPointID;
         this.maxPointID = maxPointID;
@@ -69,7 +69,6 @@ public class PointIDFilterPostingList implements PostingList
             if (pointID == -1 || (pointID < minPointID || pointID > maxPointID))
             {
                 // skip to the next valid or matching row
-                //advance(targetRowId + 1);
                 targetRowId++;
             }
             else
