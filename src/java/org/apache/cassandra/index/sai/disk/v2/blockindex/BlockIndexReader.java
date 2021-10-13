@@ -85,7 +85,7 @@ public class BlockIndexReader implements Closeable
     final SeekingRandomAccessInput orderMapRandoInput;
     private final DirectReaders.Reader orderMapReader;
     final RangeSet<Integer> multiBlockLeafRanges;
-    final FixedBitSet leafValuesSame;
+    final FixedBitSet leafValuesSame; // TODO: use sparse bitset?
     final Multimap<Integer, Long> multiNodeIDToPostingsFP = TreeMultimap.create();
     final IntLongHashMap leafIDToPostingsFP = new IntLongHashMap();
     final BlockIndexFileProvider fileProvider;
