@@ -58,8 +58,8 @@ public class PointIDFilterPostingListTest extends NdiRandomizedTest
 
         IntArrayList matchingRowIds = new IntArrayList();
 
-        long min = 60;
-        long max = 1000;
+        long min = nextInt(0, array.length);
+        long max = nextInt((int)min + 1, array.length);
 
         for (int rowid = 0; rowid < array.length; rowid++)
         {
@@ -76,12 +76,19 @@ public class PointIDFilterPostingListTest extends NdiRandomizedTest
         BlockPackedReader reader = new BlockPackedReader(input, PackedInts.VERSION_CURRENT, 128, count, true);
         PointIDFilterPostingList postings2 = new PointIDFilterPostingList(min, max, count, reader);
 
-        long adv1 = postings.advance(1007);
-        long adv2 = postings2.advance(1007);
+        int currentrowid = 0;
+        while (true)
+        {
+            int nextrowid = nextInt(currentrowid, (int)count);
+            long adv1 = postings.advance(nextrowid);
+            long adv2 = postings2.advance(nextrowid);
 
-        assertEquals(adv1, adv2);
+            assertEquals(adv1, adv2);
 
-        //assertArrayEquals(toArray(postings), toArray(postings2));
+            currentrowid = (int)adv1 + 1;
+
+            if (adv1 == PostingList.END_OF_STREAM) break;
+        }
 
         input.close();
     }
