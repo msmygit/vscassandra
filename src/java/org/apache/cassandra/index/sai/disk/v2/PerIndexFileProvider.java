@@ -53,6 +53,7 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
     private final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    private final Map<IndexComponent, FileHandle> tempFiles = new EnumMap<>(IndexComponent.class);
 
     public PerIndexFileProvider(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
@@ -162,7 +163,12 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
         final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
 
         for (IndexComponent indexComponent : components)
-            map.put(indexComponent, FileValidator.generate(openInput(indexComponent, false)));
+        {
+            try (IndexInput input = openInput(indexComponent, false))
+            {
+                map.put(indexComponent, FileValidator.generate(input));
+            }
+        }
 
         return map;
     }
@@ -181,17 +187,20 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     @Override
     public void close()
     {
+        FileUtils.closeQuietly(tempFiles.values());
         FileUtils.closeQuietly(files.values());
     }
 
     private IndexInput openInput(IndexComponent indexComponent, boolean temporary)
     {
-        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary).sharedCopy());
+        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary));
     }
 
     private FileHandle getFileHandle(IndexComponent indexComponent, boolean temporary)
     {
-        return files.computeIfAbsent(indexComponent,
-                                     (c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, temporary)));
+        return temporary ? tempFiles.computeIfAbsent(indexComponent,
+                                                     c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, true))
+                         : files.computeIfAbsent(indexComponent,
+                                                 c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, false));
     }
 }

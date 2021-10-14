@@ -33,6 +33,7 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 
 /**
  * Abstract reader for individual segments of an on-disk index.
@@ -63,8 +64,9 @@ public abstract class IndexSearcher implements Closeable
 
     public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory, PerIndexFiles indexFiles, SegmentMetadata segmentMetadata, IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
     {
-        return indexContext.isLiteral() ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
-                                         : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
+        return TypeUtil.instance.isLiteral(indexContext.getValidator())
+               ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
+               : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
 
     /**

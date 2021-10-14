@@ -80,6 +80,18 @@ public class V2OnDiskFormat extends V1OnDiskFormat
         {
             return true;
         }
+
+        @Override
+        public boolean usesNonStandardEncoding()
+        {
+            return false;
+        }
+
+        @Override
+        public boolean supportsRounding()
+        {
+            return false;
+        }
     };
 
     protected V2OnDiskFormat()

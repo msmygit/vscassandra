@@ -39,6 +39,7 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.MergeIndexIterators;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.compress.BufferType;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.store.IndexOutput;
 
@@ -63,7 +64,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     @Override
     public void startPartition(PrimaryKey primaryKey, long position) throws IOException
     {
-        addKeyToMapping(primaryKey);
+//        addKeyToMapping(primaryKey);
     }
 
     @Override
@@ -122,33 +123,41 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     private void compactSegments() throws IOException
     {
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
-        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
-        for (BlockIndexMeta metadata : metadatas)
+        List<BlockIndexReader> readers = new ArrayList<>();
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))
         {
-            BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
-            iterators.add(reader.iterator());
-        }
-        try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
-        {
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
-
-            while (true)
+            for (BlockIndexMeta metadata : metadatas)
             {
-                BlockIndexReader.IndexState state = mergeIndexIterators.next();
-                if (state == null)
+                BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
+                readers.add(reader);
+                iterators.add(reader.iterator());
+            }
+            try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
+            {
+                BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
+
+                while (true)
                 {
-                    break;
+                    BlockIndexReader.IndexState state = mergeIndexIterators.next();
+                    if (state == null)
+                    {
+                        break;
+                    }
+                    writer.add(BytesUtil.fixedLength(state.term), state.rowid);
                 }
-                writer.add(BytesUtil.fixedLength(state.term), state.rowid);
-            }
-            BlockIndexMeta meta = writer.finish();
+                BlockIndexMeta meta = writer.finish();
 
-            try (final IndexOutput out = fileProvider.openMetadataOutput())
+                try (final IndexOutput out = fileProvider.openMetadataOutput())
+                {
+                    meta.write(out);
+                }
+
+                indexDescriptor.deletePerSSTableTemporaryComponents();
+            }
+            finally
             {
-                meta.write(out);
+                FileUtils.closeQuietly(readers);
             }
-
-            indexDescriptor.deletePerSSTableTemporaryComponents();
         }
     }
 }

@@ -20,9 +20,8 @@ package org.apache.cassandra.index.sai.utils;
 import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 
-public class ArrayPostingListTest extends NdiRandomizedTest
+public class ArrayPostingListTest extends SaiRandomizedTest
 {
     @Test
     public void testArrayPostingList() throws Exception

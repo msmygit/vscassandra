@@ -37,6 +37,8 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.util.BytesRefBuilder;
@@ -61,42 +63,41 @@ public class V2SegmentBuilder
     /** Minimum flush size, dynamically updated as segment builds are started and completed/aborted. */
     private static volatile long minimumFlushBytes;
 
-    final AbstractType<?> termComparator;
+    private final IndexDescriptor indexDescriptor;
+    private final IndexContext indexContext;
+    private final AbstractType<?> termComparator;
 
     private final NamedMemoryLimiter limiter;
     long totalBytesAllocated;
-
-    private final long lastValidSegmentRowID;
 
     private boolean flushed = false;
     private boolean active = true;
 
     // segment metadata
-    private long minSSTableRowId = -1;
-    private long maxSSTableRowId = -1;
     long segmentRowIdOffset = 0;
     int rowCount = 0;
-    int maxSegmentRowId = -1;
-    // in token order
-    //private PrimaryKey minKey, maxKey;
 
     final RAMStringIndexer ramIndexer;
     final BytesRefBuilder stringBuffer = new BytesRefBuilder();
 
-    public V2SegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
+    public V2SegmentBuilder(IndexDescriptor indexDescriptor, IndexContext indexContext, NamedMemoryLimiter limiter)
     {
-        this.termComparator = termComparator;
+        this.indexDescriptor = indexDescriptor;
+        this.indexContext = indexContext;
+        this.termComparator = indexContext.getValidator();
         this.limiter = limiter;
-        this.lastValidSegmentRowID = testLastValidSegmentRowId >= 0 ? testLastValidSegmentRowId : LAST_VALID_SEGMENT_ROW_ID;
 
         minimumFlushBytes = limiter.limitBytes() / ACTIVE_BUILDER_COUNT.getAndIncrement();
+
+        logger.debug("Creating segment builder with minimum flush bytes = {}. Active builder count = {}", minimumFlushBytes, ACTIVE_BUILDER_COUNT.get() - 1);
+
         this.ramIndexer = new RAMStringIndexer(termComparator);
     }
 
     public long add(ByteBuffer term, long sstableRowId)
     {
 
-        final ByteSource byteSource = termComparator.asComparableBytes(term.duplicate(), ByteComparable.Version.OSS41);
+        final ByteSource byteSource = TypeUtil.instance.asComparableBytes(term.duplicate(), termComparator, ByteComparable.Version.OSS41, false);
         stringBuffer.clear();
         gatherBytes(byteSource, stringBuffer);
         if (rowCount == 0)
@@ -107,7 +108,10 @@ public class V2SegmentBuilder
         int segmentRowId = RowMapping.castToSegmentRowId(sstableRowId, segmentRowIdOffset);
 
         rowCount++;
-        return ramIndexer.add(stringBuffer.get(), segmentRowId);
+
+        long bytesAllocated = ramIndexer.add(stringBuffer.get(), segmentRowId);
+        totalBytesAllocated += bytesAllocated;
+        return bytesAllocated;
     }
 
     public boolean isEmpty()
@@ -120,7 +124,7 @@ public class V2SegmentBuilder
         assert !flushed;
         flushed = true;
 
-        if (getRowCount() == 0)
+        if (rowCount == 0)
         {
             logger.warn(columnContext.logMessage("No rows to index during flush of SSTable {}."), indexDescriptor.descriptor);
             return null;
@@ -134,19 +138,23 @@ public class V2SegmentBuilder
         }
     }
 
-    public long totalBytesAllocated()
+    public boolean shouldFlush(long sstableRowId)
     {
-        return totalBytesAllocated;
-    }
+        // If we've hit the minimum flush size and we've breached the global limit, flush a new segment:
+        boolean reachMemoryLimit = limiter.usageExceedsLimit() && hasReachedMinimumFlushSize();
 
-    public boolean hasReachedMinimumFlushSize()
-    {
-        return totalBytesAllocated >= minimumFlushBytes;
-    }
+        if (reachMemoryLimit)
+        {
+            logger.debug(indexContext.logMessage("Global limit of {} and minimum flush size of {} exceeded. " +
+                                                 "Current builder usage is {} for {} cells. Global Usage is {}. Flushing..."),
+                         FBUtilities.prettyPrintMemory(limiter.limitBytes()),
+                         FBUtilities.prettyPrintMemory(minimumFlushBytes),
+                         FBUtilities.prettyPrintMemory(totalBytesAllocated),
+                         rowCount,
+                         FBUtilities.prettyPrintMemory(limiter.currentBytesUsed()));
+        }
 
-    public long getMinimumFlushBytes()
-    {
-        return minimumFlushBytes;
+        return reachMemoryLimit || exceedsSegmentLimit(sstableRowId);
     }
 
     /**
@@ -156,46 +164,41 @@ public class V2SegmentBuilder
      * 2.) It releases the builder's memory against its limiter.
      * 3.) It defensively marks the builder inactive to make sure nothing bad happens if we try to close it twice.
      *
-     * @param columnContext
-     *
      * @return the number of bytes currently used by the memory limiter
      */
-    public long release(IndexContext columnContext)
+    public void release(String messageHeader)
     {
         if (active)
         {
             minimumFlushBytes = limiter.limitBytes() / ACTIVE_BUILDER_COUNT.decrementAndGet();
-            long used = limiter.decrement(totalBytesAllocated);
+            long usageAfterRelease = limiter.decrement(totalBytesAllocated);
             active = false;
-            return used;
+            logger.debug(indexContext.logMessage("{} for SSTable {} released {}. Global segment memory usage now at {}."),
+                         messageHeader,
+                         indexDescriptor.descriptor,
+                         FBUtilities.prettyPrintMemory(totalBytesAllocated),
+                         FBUtilities.prettyPrintMemory(usageAfterRelease));
         }
 
-        logger.warn(columnContext.logMessage("Attempted to release storage attached index segment builder memory after builder marked inactive."));
-        return limiter.currentBytesUsed();
+        logger.warn(indexContext.logMessage("Attempted to release storage attached index segment builder memory after builder marked inactive."));
     }
 
-    public int getRowCount()
+    private boolean hasReachedMinimumFlushSize()
     {
-        return rowCount;
+        return totalBytesAllocated >= minimumFlushBytes;
     }
 
     /**
      * @return true if next SSTable row ID exceeds max segment row ID
      */
-    public boolean exceedsSegmentLimit(long ssTableRowId)
+    private boolean exceedsSegmentLimit(long ssTableRowId)
     {
-        if (getRowCount() == 0)
+        if (rowCount == 0)
             return false;
 
         // To handle the case where there are many non-indexable rows. eg. rowId-1 and rowId-3B are indexable,
         // the rest are non-indexable. We should flush them as 2 separate segments, because rowId-3B is going
         // to cause error in on-disk index structure with 2B limitation.
-        return ssTableRowId - segmentRowIdOffset > lastValidSegmentRowID;
-    }
-
-    @VisibleForTesting
-    public static void updateLastValidSegmentRowId(long lastValidSegmentRowID)
-    {
-        testLastValidSegmentRowId = lastValidSegmentRowID;
+        return ssTableRowId - segmentRowIdOffset > LAST_VALID_SEGMENT_ROW_ID;
     }
 }

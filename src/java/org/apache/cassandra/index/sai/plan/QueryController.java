@@ -401,6 +401,11 @@ public class QueryController
         }
     }
 
+    public IndexFeatureSet getIndexFeatureSet()
+    {
+        return indexFeatureSet;
+    }
+
     private ClusteringIndexFilter makeFilter(PrimaryKey key)
     {
         if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())

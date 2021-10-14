@@ -40,8 +40,6 @@ import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -129,7 +127,7 @@ public class Operation
                     while (analyzer.hasNext())
                     {
                         final ByteBuffer token = analyzer.next();
-                        perColumn.add(new Expression(indexContext).add(e.operator(), token.duplicate()));
+                        perColumn.add(new Expression(indexContext, controller.getIndexFeatureSet()).add(e.operator(), token.duplicate()));
                     }
                 }
                 else
@@ -140,14 +138,14 @@ public class Operation
                     Expression range;
                     if (perColumn.size() == 0 || op != OperationType.AND)
                     {
-                        perColumn.add((range = new Expression(indexContext)));
+                        perColumn.add((range = new Expression(indexContext, controller.getIndexFeatureSet())));
                     }
                     else
                     {
                         range = Iterables.getLast(perColumn);
                     }
 
-                    if (!TypeUtil.isLiteral(indexContext.getValidator()))
+                    if (!TypeUtil.instance.isLiteral(indexContext.getValidator()))
                     {
                         range.add(e.operator(), e.getIndexValue().duplicate());
                     }

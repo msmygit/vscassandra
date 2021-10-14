@@ -20,13 +20,13 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
-public class SimpleFoRTest extends NdiRandomizedTest
+public class SimpleFoRTest extends SaiRandomizedTest
 {
     @Test
     public void test() throws Exception

@@ -139,7 +139,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
-        if (TypeUtil.isLiteral(termComparator))
+        if (TypeUtil.instance.isLiteral(termComparator))
         {
             try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
             {
@@ -151,7 +151,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         {
             try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
                                                                     indexContext,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
+                                                                    TypeUtil.instance.fixedSizeOf(termComparator),
                                                                     maxSegmentRowId,
                                                                     // Due to stale entries in IndexMemtable, we may have more indexed rows than num of rowIds.
                                                                     Integer.MAX_VALUE,

@@ -27,21 +27,21 @@ import org.apache.lucene.util.mutable.MutableValueInt;
 /**
  * Encodes postings as variable integers into slices
  */
-class RAMPostingSlices
+public class RAMPostingSlices
 {
-    static final int DEFAULT_TERM_DICT_SIZE = 1024;
+    public static final int DEFAULT_TERM_DICT_SIZE = 1024;
 
     private final ByteBlockPool postingsPool;
     private int[] postingStarts = new int[DEFAULT_TERM_DICT_SIZE];
     private int[] postingUptos = new int[DEFAULT_TERM_DICT_SIZE];
     private int[] sizes = new int[DEFAULT_TERM_DICT_SIZE];
 
-    RAMPostingSlices(Counter memoryUsage)
+    public RAMPostingSlices(Counter memoryUsage)
     {
         postingsPool = new ByteBlockPool(new ByteBlockPool.DirectTrackingAllocator(memoryUsage));
     }
 
-    PostingList postingList(int termID, final ByteSliceReader reader, long maxSegmentRowID)
+    public PostingList postingList(int termID, final ByteSliceReader reader, long maxSegmentRowID)
     {
         initReader(reader, termID);
 
@@ -89,7 +89,7 @@ class RAMPostingSlices
         reader.init(postingsPool, postingStarts[termID], upto);
     }
 
-    void createNewSlice(int termID)
+    public void createNewSlice(int termID)
     {
         if (termID >= postingStarts.length - 1)
         {
@@ -109,7 +109,7 @@ class RAMPostingSlices
         postingUptos[termID] = upto + postingsPool.byteOffset;
     }
 
-    void writeVInt(int termID, int i)
+    public void writeVInt(int termID, int i)
     {
         while ((i & ~0x7F) != 0)
         {

@@ -137,11 +137,11 @@ public class OperationTest extends IndexingSchemaLoader
                                                                                               new SimpleExpression(age, Operator.NEQ, Int32Type.instance.decompose(6)),
                                                                                               new SimpleExpression(age, Operator.LTE, Int32Type.instance.decompose(10)))));
 
-        Expression expected = new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Expression expected = new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
         {{
             operation = Op.RANGE;
-            lower = new Bound(Int32Type.instance.decompose(1), Int32Type.instance, false);
-            upper = new Bound(Int32Type.instance.decompose(10), Int32Type.instance, true);
+            lower = new Bound(Int32Type.instance.decompose(1), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+            upper = new Bound(Int32Type.instance.decompose(10), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
 
             exclusions.add(Int32Type.instance.decompose(5));
             exclusions.add(Int32Type.instance.decompose(6));
@@ -156,17 +156,17 @@ public class OperationTest extends IndexingSchemaLoader
                                                                   new SimpleExpression(age, Operator.GTE, Int32Type.instance.decompose(7)))));
         Assert.assertEquals(2, expressions.size());
 
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.NOT_EQ;
-                                    lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true);
+                                    lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                                     upper = lower;
                             }}, expressions.get(Expression.Op.NOT_EQ));
 
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.RANGE;
-                                    lower = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, true);
+                                    lower = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                             }}, expressions.get(Expression.Op.RANGE));
 
         // age != 5 OR age < 7
@@ -175,15 +175,15 @@ public class OperationTest extends IndexingSchemaLoader
                                                                   new SimpleExpression(age, Operator.LT, Int32Type.instance.decompose(7)))));
 
         Assert.assertEquals(2, expressions.size());
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.RANGE;
-                                    upper = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, false);
+                                    upper = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                             }}, expressions.get(Expression.Op.RANGE));
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.NOT_EQ;
-                                    lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true);
+                                    lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                                     upper = lower;
                             }}, expressions.get(Expression.Op.NOT_EQ));
 
@@ -193,11 +193,11 @@ public class OperationTest extends IndexingSchemaLoader
                                                                   new SimpleExpression(age, Operator.LT, Int32Type.instance.decompose(7)))));
 
         Assert.assertEquals(1, expressions.size());
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.RANGE;
-                                    lower = new Bound(Int32Type.instance.decompose(1), Int32Type.instance, false);
-                                    upper = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, false);
+                                    lower = new Bound(Int32Type.instance.decompose(1), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+                                    upper = new Bound(Int32Type.instance.decompose(7), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                             }}, expressions.get(Expression.Op.RANGE));
 
         // first_name = 'a' OR first_name != 'b'
@@ -206,16 +206,16 @@ public class OperationTest extends IndexingSchemaLoader
                                                                   new SimpleExpression(firstName, Operator.NEQ, UTF8Type.instance.decompose("b")))));
 
         Assert.assertEquals(2, expressions.size());
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("first_name", UTF8Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("first_name", UTF8Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.NOT_EQ;
-                                    lower = new Bound(UTF8Type.instance.decompose("b"), UTF8Type.instance, true);
+                                    lower = new Bound(UTF8Type.instance.decompose("b"), UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                                     upper = lower;
                             }}, expressions.get(Expression.Op.NOT_EQ));
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("first_name", UTF8Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("first_name", UTF8Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                             {{
                                     operation = Op.EQ;
-                                    lower = upper = new Bound(UTF8Type.instance.decompose("a"), UTF8Type.instance, true);
+                                    lower = upper = new Bound(UTF8Type.instance.decompose("a"), UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                             }}, expressions.get(Expression.Op.EQ));
 
         // comment = 'soft eng' and comment != 'likes do'
@@ -225,17 +225,17 @@ public class OperationTest extends IndexingSchemaLoader
 
         List<Expression> expectedExpressions = new ArrayList<Expression>(2)
         {{
-                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance))
+                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                 {{
                         operation = Op.MATCH;
-                        lower = new Bound(UTF8Type.instance.decompose("soft eng"), UTF8Type.instance, true);
+                        lower = new Bound(UTF8Type.instance.decompose("soft eng"), UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                         upper = lower;
                 }});
 
-                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance))
+                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                 {{
                         operation = Op.NOT_EQ;
-                        lower = new Bound(UTF8Type.instance.decompose("likes do"), UTF8Type.instance, true);
+                        lower = new Bound(UTF8Type.instance.decompose("likes do"), UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                         upper = lower;
                 }});
         }};
@@ -249,10 +249,10 @@ public class OperationTest extends IndexingSchemaLoader
 
         expectedExpressions = new ArrayList<Expression>(2)
         {{
-                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance))
+                add(new Expression(SAITester.createIndexContext("comment", UTF8Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                 {{
                         operation = Op.NOT_EQ;
-                        lower = new Bound(UTF8Type.instance.decompose("likes do"), UTF8Type.instance, true);
+                        lower = new Bound(UTF8Type.instance.decompose("likes do"), UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                         upper = lower;
                 }});
         }};
@@ -267,17 +267,17 @@ public class OperationTest extends IndexingSchemaLoader
 
         expectedExpressions = new ArrayList<Expression>(2)
         {{
-                add(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+                add(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                 {{
                         operation = Op.NOT_EQ;
-                        lower = new Bound(Int32Type.instance.decompose(27), Int32Type.instance, true);
+                        lower = new Bound(Int32Type.instance.decompose(27), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                         upper = lower;
                 }});
 
-                add(new Expression(SAITester.createIndexContext("age", Int32Type.instance))
+                add(new Expression(SAITester.createIndexContext("age", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
                 {{
                         operation = Op.NOT_EQ;
-                        lower = new Bound(Int32Type.instance.decompose(25), Int32Type.instance, true);
+                        lower = new Bound(Int32Type.instance.decompose(25), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                         upper = lower;
                 }});
         }};
@@ -455,10 +455,10 @@ public class OperationTest extends IndexingSchemaLoader
 
         Assert.assertEquals(2, expressions.size());
 
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
         {{
                 operation = Op.NOT_EQ;
-                lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true);
+                lower = new Bound(Int32Type.instance.decompose(5), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                 upper = lower;
         }}, expressions.get(Expression.Op.NOT_EQ));
 
@@ -469,10 +469,10 @@ public class OperationTest extends IndexingSchemaLoader
 
         Assert.assertEquals(2, expressions.size());
 
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
         {{
             operation = Op.RANGE;
-            lower = new Bound(Int32Type.instance.decompose(0), Int32Type.instance, false);
+            lower = new Bound(Int32Type.instance.decompose(0), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
             exclusions.add(Int32Type.instance.decompose(5));
         }}, expressions.get(Expression.Op.RANGE));
 
@@ -484,11 +484,11 @@ public class OperationTest extends IndexingSchemaLoader
 
         Assert.assertEquals(2, expressions.size());
 
-        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance))
+        Assert.assertEquals(new Expression(SAITester.createIndexContext("height", Int32Type.instance), Version.LATEST.onDiskFormat().indexFeatureSet())
         {{
                 operation = Op.RANGE;
-                lower = new Bound(Int32Type.instance.decompose(0), Int32Type.instance, true);
-                upper = new Bound(Int32Type.instance.decompose(10), Int32Type.instance, false);
+                lower = new Bound(Int32Type.instance.decompose(0), Int32Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+                upper = new Bound(Int32Type.instance.decompose(10), Int32Type.instance, false, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                 exclusions.add(Int32Type.instance.decompose(5));
         }}, expressions.get(Expression.Op.RANGE));
     }

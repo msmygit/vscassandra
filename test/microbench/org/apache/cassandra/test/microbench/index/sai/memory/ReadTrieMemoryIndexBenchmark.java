@@ -28,6 +28,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.memory.TrieMemoryIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -92,16 +93,26 @@ public class ReadTrieMemoryIndexBenchmark extends AbstractTrieMemoryIndexBenchma
 
         for (int i = 0; i < NUMBER_OF_SEARCHES; i++)
         {
-            stringEqualityExpressions[i] = new Expression(stringContext).add(Operator.EQ, stringTerms[random.nextInt(numberOfTerms)]);
-            integerEqualityExpressions[i] = new Expression(integerContext).add(Operator.EQ, integerTerms[random.nextInt(numberOfTerms)]);
+            stringEqualityExpressions[i] = new Expression(stringContext,
+                                                          Version.LATEST.onDiskFormat().indexFeatureSet())
+                                           .add(Operator.EQ, stringTerms[random.nextInt(numberOfTerms)]);
+            integerEqualityExpressions[i] = new Expression(integerContext,
+                                                           Version.LATEST.onDiskFormat().indexFeatureSet())
+                                            .add(Operator.EQ, integerTerms[random.nextInt(numberOfTerms)]);
 
             int lowerValue = random.nextInt(numberOfTerms - 10);
 
-            integerRangeExpressions[i] = new Expression(integerContext)
+            integerRangeExpressions[i] = new Expression(integerContext, Version.LATEST.onDiskFormat().indexFeatureSet())
             {{
                 operation = Op.RANGE;
-                lower = new Bound(Int32Type.instance.decompose(lowerValue), Int32Type.instance, true);
-                upper = new Bound(Int32Type.instance.decompose(lowerValue + 10), Int32Type.instance, true);
+                lower = new Bound(Int32Type.instance.decompose(lowerValue),
+                                  Int32Type.instance,
+                                  true,
+                                  Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+                upper = new Bound(Int32Type.instance.decompose(lowerValue + 10),
+                                  Int32Type.instance,
+                                  true,
+                                  Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
             }};
         }
     }

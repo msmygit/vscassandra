@@ -124,7 +124,7 @@ public class TrieMemoryIndexTest
             assertEquals(1, pair.right.size());
 
             final int rowId = i;
-            final ByteComparable expectedByteComparable = TypeUtil.isLiteral(type)
+            final ByteComparable expectedByteComparable = TypeUtil.instance.isLiteral(type)
                                                           ? ByteComparable.fixedLength(decompose.apply(rowId))
                                                           : version -> type.asComparableBytes(decompose.apply(rowId), version);
             final ByteComparable actualByteComparable = pair.left;

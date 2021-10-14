@@ -56,11 +56,11 @@ public class NumericTypeSortingTest extends RandomizedTest
             BigDecimal i1 = data[i];
             assertTrue(i0 + " <= " + i1, i0.compareTo(i1) <= 0);
 
-            ByteBuffer b0 = TypeUtil.encode(DecimalType.instance.decompose(i0), DecimalType.instance);
+            ByteBuffer b0 = TypeUtil.instance.encode(DecimalType.instance.decompose(i0), DecimalType.instance, true);
 
-            ByteBuffer b1 = TypeUtil.encode(DecimalType.instance.decompose(i1), DecimalType.instance);
+            ByteBuffer b1 = TypeUtil.instance.encode(DecimalType.instance.decompose(i1), DecimalType.instance, true);
 
-            assertTrue(i0 + " <= " + i1, TypeUtil.compare(b0, b1, DecimalType.instance) <= 0);
+            assertTrue(i0 + " <= " + i1, TypeUtil.instance.compare(b0, b1, DecimalType.instance) <= 0);
         }
     }
 
@@ -86,11 +86,11 @@ public class NumericTypeSortingTest extends RandomizedTest
             BigInteger i1 = data[i];
             assertTrue(i0 + " <= " + i1, i0.compareTo(i1) <= 0);
 
-            ByteBuffer b0 = TypeUtil.encode(IntegerType.instance.decompose(i0), IntegerType.instance);
+            ByteBuffer b0 = TypeUtil.instance.encode(IntegerType.instance.decompose(i0), IntegerType.instance, true);
 
-            ByteBuffer b1 = TypeUtil.encode(IntegerType.instance.decompose(i1), IntegerType.instance);
+            ByteBuffer b1 = TypeUtil.instance.encode(IntegerType.instance.decompose(i1), IntegerType.instance, true);
 
-            assertTrue(i0 + " <= " + i1, TypeUtil.compare(b0, b1, IntegerType.instance) <= 0);
+            assertTrue(i0 + " <= " + i1, TypeUtil.instance.compare(b0, b1, IntegerType.instance) <= 0);
         }
     }
 }

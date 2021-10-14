@@ -33,11 +33,10 @@ import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 
-public class MergePostingListTest extends NdiRandomizedTest
+public class MergePostingListTest extends SaiRandomizedTest
 {
     @Test
     public void shouldMergeInterleavedPostingLists() throws IOException

@@ -59,6 +59,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Expression;
@@ -403,12 +404,12 @@ public class NativeIndexDDLTest extends SAITester
         SecondaryIndexManager sim = getCurrentColumnFamilyStore().indexManager;
         StorageAttachedIndex index = (StorageAttachedIndex) sim.getIndexByName(indexNameCk1);
         IndexContext context = index.getIndexContext();
-        assertTrue(context.isLiteral());
+        assertTrue(TypeUtil.instance.isLiteral(context.getValidator()));
         assertTrue(context.getValidator() instanceof ReversedType);
 
         index = (StorageAttachedIndex) sim.getIndexByName(indexNameCk2);
         context = index.getIndexContext();
-        assertFalse(context.isLiteral());
+        assertFalse(TypeUtil.instance.isLiteral(context.getValidator()));
         assertTrue(context.getValidator() instanceof ReversedType);
     }
 

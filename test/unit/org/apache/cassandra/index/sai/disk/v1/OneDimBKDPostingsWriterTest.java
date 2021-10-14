@@ -29,13 +29,12 @@ import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.packed.PackedInts;
@@ -43,7 +42,7 @@ import org.apache.lucene.util.packed.PackedLongValues;
 
 import static org.apache.cassandra.index.sai.metrics.QueryEventListeners.NO_OP_POSTINGS_LISTENER;
 
-public class OneDimBKDPostingsWriterTest extends NdiRandomizedTest
+public class OneDimBKDPostingsWriterTest extends SaiRandomizedTest
 {
     private IndexDescriptor indexDescriptor;
     private String index;

@@ -51,14 +51,13 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.rows.Cell;
-import org.apache.cassandra.db.rows.ComplexColumnData;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
@@ -101,6 +100,7 @@ public class IndexContext
 
     private final IndexViewManager viewManager;
     private final IndexMetrics indexMetrics;
+    //TODO The next 2 items are really version specific so need to move into versioning
     private final ColumnQueryMetrics columnQueryMetrics;
     private final IndexWriterConfig indexWriterConfig;
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
@@ -119,12 +119,13 @@ public class IndexContext
         this.config = metadata;
         this.viewManager = new IndexViewManager(this);
         this.indexMetrics = new IndexMetrics(this, tableMeta);
-        this.validator = TypeUtil.cellValueType(target);
+        this.validator = TypeUtil.instance.cellValueType(target);
 
         String fullIndexName = String.format("%s.%s.%s", this.keyspace, this.table, this.config.name);
         this.indexWriterConfig = IndexWriterConfig.fromOptions(fullIndexName, validator, config.options);
-        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(getIndexName(), tableMeta)
-                                              : new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
+        //TODO This needs versioning
+        this.columnQueryMetrics = TypeUtil.instance.isLiteral(validator) ? new ColumnQueryMetrics.TrieIndexMetrics(getIndexName(), tableMeta)
+                                                                         : new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
 
         this.analyzerFactory = AbstractAnalyzer.fromOptions(getValidator(), config.options);
 
@@ -176,7 +177,7 @@ public class IndexContext
         this.partitionKeyType = table.partitionKeyType;
         this.clusteringComparator = table.comparator;
         this.target = TargetParser.parse(table, column.name.toString());
-        this.validator = target == null ? null : TypeUtil.cellValueType(target);
+        this.validator = target == null ? null : TypeUtil.instance.cellValueType(target);
         this.config = null;
         this.viewManager = null;
         this.indexMetrics = null;
@@ -330,12 +331,12 @@ public class IndexContext
 
     public boolean isNonFrozenCollection()
     {
-        return TypeUtil.isNonFrozenCollection(target.left.type);
+        return TypeUtil.instance.isNonFrozenCollection(target.left.type);
     }
 
     public boolean isFrozen()
     {
-        return TypeUtil.isFrozen(target.left.type);
+        return TypeUtil.instance.isFrozen(target.left.type);
     }
 
     public String getColumnName()
@@ -435,7 +436,7 @@ public class IndexContext
         if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
 
         // RANGE only applicable to non-literal indexes
-        return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
+        return (operator != null) && !(TypeUtil.instance.isLiteral(validator) && operator == Expression.Op.RANGE);
     }
 
     public ByteBuffer getValueOf(DecoratedKey key, Row row, int nowInSecs)
@@ -480,7 +481,7 @@ public class IndexContext
                 if (!row.isStatic())
                     return null;
             case REGULAR:
-                return TypeUtil.collectionIterator(validator, (ComplexColumnData)row.getComplexColumnData(target.left), target, nowInSecs);
+                return TypeUtil.instance.collectionIterator(validator, row.getComplexColumnData(target.left), target, nowInSecs);
 
             default:
                 return null;
@@ -494,11 +495,6 @@ public class IndexContext
                           .add("columnName", getColumnName())
                           .add("indexName", getIndexName())
                           .toString();
-    }
-
-    public boolean isLiteral()
-    {
-        return TypeUtil.isLiteral(getValidator());
     }
 
     public boolean equals(Object obj)

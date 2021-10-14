@@ -146,7 +146,7 @@ public class SSTableComponentsTest extends SAITester
     private DecoratedKey makeKey(TableMetadata table, String...partitionKeys)
     {
         ByteBuffer key;
-        if (TypeUtil.isComposite(table.partitionKeyType))
+        if (TypeUtil.instance.isComposite(table.partitionKeyType))
             key = ((CompositeType)table.partitionKeyType).decompose(partitionKeys);
         else
             key = table.partitionKeyType.fromString(partitionKeys[0]);

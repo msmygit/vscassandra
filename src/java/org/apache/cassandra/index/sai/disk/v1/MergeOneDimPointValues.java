@@ -20,8 +20,6 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.IOException;
 import java.util.List;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.lucene.util.PriorityQueue;
@@ -49,8 +47,8 @@ public class MergeOneDimPointValues extends MutableOneDimPointValues
     public MergeOneDimPointValues(List<BKDReader.IteratorState> iterators, AbstractType termComparator) throws IOException
     {
         queue = new MergeQueue(iterators.size());
-        this.scratch = new byte[TypeUtil.fixedSizeOf(termComparator)];
-        this.tempScratch = new byte[TypeUtil.fixedSizeOf(termComparator)];
+        this.scratch = new byte[TypeUtil.instance.fixedSizeOf(termComparator)];
+        this.tempScratch = new byte[TypeUtil.instance.fixedSizeOf(termComparator)];
         for (BKDReader.IteratorState iterator : iterators)
         {
             if (iterator.hasNext())
