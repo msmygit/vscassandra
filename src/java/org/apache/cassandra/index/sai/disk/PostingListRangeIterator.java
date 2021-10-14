@@ -31,6 +31,7 @@ import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 
 /**
@@ -120,7 +121,7 @@ public class PostingListRangeIterator extends RangeIterator
             logger.trace(indexContext.logMessage("PostinListRangeIterator exhausted after {} ms"), exhaustedInMills);
         }
 
-        postingList.close();
+        FileUtils.closeQuietly(postingList, primaryKeyMap);
     }
 
     private boolean exhausted()

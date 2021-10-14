@@ -72,9 +72,9 @@ class BKDQueries
     // TODO: probably move this to TypeUtil
     private static byte[] toComparableBytes(int numDim, int bytesPerDim, ByteBuffer value, AbstractType<?> type)
     {
-        byte[] buffer = new byte[TypeUtil.fixedSizeOf(type)];
+        byte[] buffer = new byte[TypeUtil.instance.fixedSizeOf(type)];
         assert buffer.length == bytesPerDim * numDim;
-        TypeUtil.toComparableBytes(value, type, buffer);
+        TypeUtil.instance.toComparableBytes(value, type, buffer);
         return buffer;
     }
 

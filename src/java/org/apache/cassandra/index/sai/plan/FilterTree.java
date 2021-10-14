@@ -97,7 +97,7 @@ public class FilterTree
             {
                 Expression filter = filterIterator.previous();
 
-                if (TypeUtil.isNonFrozenCollection(column.type))
+                if (TypeUtil.instance.isNonFrozenCollection(column.type))
                 {
                     Iterator<ByteBuffer> valueIterator = filter.context.getValuesOf(row, now);
                     result = op.apply(result, collectionMatch(valueIterator, filter));

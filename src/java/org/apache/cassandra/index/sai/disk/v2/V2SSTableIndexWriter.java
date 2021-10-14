@@ -45,6 +45,7 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.MergeIndexIterators;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
 import org.apache.lucene.store.IndexOutput;
@@ -60,9 +61,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
     public static final int MAX_STRING_TERM_SIZE = Integer.getInteger("cassandra.sai.max_string_term_size_kb", 1) * 1024;
     public static final int MAX_FROZEN_TERM_SIZE = Integer.getInteger("cassandra.sai.max_frozen_term_size_kb", 5) * 1024;
-    public static final String TERM_OVERSIZE_MESSAGE =
-            "Can't add term of column {} to index for key: {}, term size {} " +
-                    "max allowed size {}, use analyzed = true (if not yet set) for that column.";
+    public static final String TERM_OVERSIZE_MESSAGE = "Can't add term of column {} to index for key: {}, term size {} " +
+                                                       "max allowed size {}, use analyzed = true (if not yet set) for that column.";
 
     protected final IndexDescriptor indexDescriptor;
     protected final IndexContext indexContext;
@@ -79,7 +79,6 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
     // segment writer
     private V2SegmentBuilder currentBuilder;
-    private long maxSSTableRowId;
 
     public V2SSTableIndexWriter(IndexDescriptor indexDescriptor,
                                 IndexContext indexContext,
@@ -108,7 +107,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 while (valueIterator.hasNext())
                 {
                     ByteBuffer value = valueIterator.next();
-                    addTerm(value.duplicate(), key, indexContext.getValidator());
+                    addTerm(TypeUtil.instance.encode(value.duplicate(), indexContext.getValidator(), false), key, indexContext.getValidator());
                 }
             }
         }
@@ -116,9 +115,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         {
             ByteBuffer value = indexContext.getValueOf(key.partitionKey(), row, nowInSec);
             if (value != null)
-                addTerm(value.duplicate(), key, indexContext.getValidator());
+                addTerm(TypeUtil.instance.encode(value.duplicate(), indexContext.getValidator(), false), key, indexContext.getValidator());
         }
-        maxSSTableRowId = key.sstableRowId();
     }
 
     /**
@@ -154,7 +152,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         {
             currentBuilder = newSegmentBuilder();
         }
-        else if (shouldFlush(key.sstableRowId()))
+        else if (currentBuilder.shouldFlush(key.sstableRowId()))
         {
             flushSegment();
             currentBuilder = newSegmentBuilder();
@@ -162,7 +160,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
         if (term.remaining() == 0) return;
 
-        if (!TypeUtil.isLiteral(type))
+        if (!TypeUtil.instance.isLiteral(type))
         {
             // TODO: fix int cast by encoding the row id delta
             limiter.increment(currentBuilder.add(term, key.sstableRowId()));
@@ -186,33 +184,12 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         }
     }
 
-    private boolean shouldFlush(long sstableRowId)
-    {
-        // If we've hit the minimum flush size and we've breached the global limit, flush a new segment:
-        boolean reachMemoryLimit = limiter.usageExceedsLimit() && currentBuilder.hasReachedMinimumFlushSize();
-
-        if (reachMemoryLimit)
-        {
-            logger.debug(indexContext.logMessage("Global limit of {} and minimum flush size of {} exceeded. " +
-                                                 "Current builder usage is {} for {} cells. Global Usage is {}. Flushing..."),
-                         FBUtilities.prettyPrintMemory(limiter.limitBytes()),
-                         FBUtilities.prettyPrintMemory(currentBuilder.getMinimumFlushBytes()),
-                         FBUtilities.prettyPrintMemory(currentBuilder.totalBytesAllocated()),
-                         currentBuilder.getRowCount(),
-                         FBUtilities.prettyPrintMemory(limiter.currentBytesUsed()));
-        }
-
-        return reachMemoryLimit || currentBuilder.exceedsSegmentLimit(sstableRowId);
-    }
-
     private void flushSegment() throws IOException
     {
         long start = System.nanoTime();
 
         try
         {
-            long bytesAllocated = currentBuilder.totalBytesAllocated();
-
             BlockIndexMeta segmentMetadata = currentBuilder.flush(indexDescriptor, indexContext);
             long segmentRowIdOffset = currentBuilder.segmentRowIdOffset;
 
@@ -240,11 +217,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             // flush. Note that any failure that occurs before this (even in term addition) will
             // actuate this column writer's abort logic from the parent SSTable-level writer, and
             // that abort logic will release the current builder's memory against the limiter.
-            long globalBytesUsed = currentBuilder.release(indexContext);
+            currentBuilder.release("Flushing index segment");
             currentBuilder = null;
-            logger.debug(indexContext.logMessage("Flushing index segment for SSTable {} released {}. Global segment memory usage now at {}."),
-                         indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
-
         }
         catch (Throwable t)
         {
@@ -277,10 +251,8 @@ public class V2SSTableIndexWriter implements PerIndexWriter
             // Even an empty segment may carry some fixed memory, so remove it:
             if (currentBuilder != null)
             {
-                long bytesAllocated = currentBuilder.totalBytesAllocated();
-                long globalBytesUsed = currentBuilder.release(indexContext);
-                logger.debug(indexContext.logMessage("Flushing final segment for SSTable {} released {}. Global segment memory usage now at {}."),
-                             indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
+                currentBuilder.release("Flushing final segment");
+                currentBuilder = null;
             }
 
             compactSegments();
@@ -310,10 +282,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         {
             // If an exception is thrown out of any writer operation prior to successful segment
             // flush, we will end up here, and we need to free up builder memory tracked by the limiter:
-            long allocated = currentBuilder.totalBytesAllocated();
-            long globalBytesUsed = currentBuilder.release(indexContext);
-            logger.debug(indexContext.logMessage("Aborting index writer for SSTable {} released {}. Global segment memory usage now at {}."),
-                         indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(allocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
+            currentBuilder.release("Aborting index writer");
         }
 
         indexDescriptor.deleteColumnIndex(indexContext);
@@ -324,6 +293,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
         if (segments.isEmpty())
             return;
 
+        List<BlockIndexReader> readers = new ArrayList<>();
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
         try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
         {
@@ -334,6 +304,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 BlockIndexMeta metadata = metadataIterator.next();
                 long offset = offsetIterator.next();
                 BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
+                readers.add(reader);
                 iterators.add(reader.iterator(offset));
             }
 
@@ -351,6 +322,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                     {
                         break;
                     }
+                    //TODO Probably ought to be using type here
                     writer.add(BytesUtil.fixedLength(state.term), state.rowid);
                 }
                 BlockIndexMeta metadata = writer.finish();
@@ -363,11 +335,15 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 // TODO: put in file provider
                 indexDescriptor.deletePerIndexTemporaryComponents(indexContext);
             }
+            finally
+            {
+                FileUtils.closeQuietly(readers);
+            }
         }
     }
 
     private V2SegmentBuilder newSegmentBuilder()
     {
-          return new V2SegmentBuilder(indexContext.getValidator(), limiter);
+          return new V2SegmentBuilder(indexDescriptor, indexContext, limiter);
     }
 }

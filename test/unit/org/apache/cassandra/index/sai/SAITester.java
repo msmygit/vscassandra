@@ -45,6 +45,8 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.Sets;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.rules.TestRule;
 
 import com.datastax.driver.core.QueryTrace;
 import com.datastax.driver.core.ResultSet;
@@ -61,11 +63,12 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.utils.ResourceLeakDetector;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
@@ -179,6 +182,9 @@ public class SAITester extends CQLTester
         public abstract void corrupt(File file) throws IOException;
     }
 
+    @Rule
+    public TestRule testRules = new ResourceLeakDetector();
+
     @After
     public void removeAllInjections()
     {
@@ -194,8 +200,8 @@ public class SAITester extends CQLTester
                                 ColumnMetadata.regularColumn("sai", "internal", name, validator),
                                 IndexMetadata.fromSchemaMetadata(name, IndexMetadata.Kind.CUSTOM, null),
                                 IndexWriterConfig.emptyConfig(),
-                                 TypeUtil.isLiteral(validator) ? QueryEventListeners.NO_OP_TRIE_LISTENER
-                                                               : QueryEventListeners.NO_OP_BKD_LISTENER);
+                                TypeUtil.instance.isLiteral(validator) ? QueryEventListeners.NO_OP_TRIE_LISTENER
+                                                                       : QueryEventListeners.NO_OP_BKD_LISTENER);
     }
 
     public static IndexContext createIndexContext(String columnName, String indexName, AbstractType<?> validator)
@@ -207,8 +213,8 @@ public class SAITester extends CQLTester
                                 ColumnMetadata.regularColumn("sai", "internal", columnName, validator),
                                 IndexMetadata.fromSchemaMetadata(indexName, IndexMetadata.Kind.CUSTOM, null),
                                 IndexWriterConfig.emptyConfig(),
-                                 TypeUtil.isLiteral(validator) ? QueryEventListeners.NO_OP_TRIE_LISTENER
-                                                               : QueryEventListeners.NO_OP_BKD_LISTENER);
+                                TypeUtil.instance.isLiteral(validator) ? QueryEventListeners.NO_OP_TRIE_LISTENER
+                                                                       : QueryEventListeners.NO_OP_BKD_LISTENER);
     }
 
     protected void simulateNodeRestart()

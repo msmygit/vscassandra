@@ -19,7 +19,6 @@
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -38,7 +37,6 @@ import org.junit.Test;
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.randomizedtesting.annotations.Seed;
-import com.sun.jna.Pointer;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.Int32Type;
@@ -49,7 +47,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
@@ -67,17 +65,18 @@ import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
-import org.apache.hadoop.hdfs.web.JsonUtil;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.NumericUtils;
 
 import static org.apache.cassandra.Util.dk;
@@ -89,11 +88,7 @@ import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
-//@Seed(value = "3A64D2D8C02FD322:C75D376B778B2264")
-//@Seed(value = "62A3A1AD9A3E879B:9F9A441E2D9A76DD")
-//@Seed(value = "F87B6805568FCE9C:4CA80945456C4B57")
-@Seed(value = "8B4C74C2A762013B:3F9F1582B48184F0")
-public class BlockIndexWriterTest extends NdiRandomizedTest
+public class BlockIndexWriterTest extends SaiRandomizedTest
 {
     @Test
     public void test() throws Exception
@@ -370,29 +365,30 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
     @Test
     public void testMerge() throws Exception
     {
-        V2SegmentBuilder builder = new V2SegmentBuilder(UTF8Type.instance, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
+        IndexDescriptor indexDescriptor1 = newIndexDescriptor();
+        IndexContext indexContext1 = createIndexContext("index1", UTF8Type.instance);
+
+        V2SegmentBuilder builder = new V2SegmentBuilder(indexDescriptor1, indexContext1, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
         builder.add(ByteBuffer.wrap("aaa".getBytes(StandardCharsets.UTF_8)), 100);
         builder.add(ByteBuffer.wrap("aaa".getBytes(StandardCharsets.UTF_8)), 101);
         builder.add(ByteBuffer.wrap("ccc".getBytes(StandardCharsets.UTF_8)), 1000);
         builder.add(ByteBuffer.wrap("ccc".getBytes(StandardCharsets.UTF_8)), 1001);
 
-        IndexDescriptor indexDescriptor1 = newIndexDescriptor();
-
-        IndexContext indexContext1 = createIndexContext("index1", UTF8Type.instance);
-
         BlockIndexMeta meta1 = builder.flush(indexDescriptor1, indexContext1);
+        builder.release("testMerge 1");
 
-        V2SegmentBuilder builder2 = new V2SegmentBuilder(UTF8Type.instance, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
+        IndexDescriptor indexDescriptor2 = newIndexDescriptor();
+        IndexContext indexContext2 = createIndexContext("index2", UTF8Type.instance);
+
+        V2SegmentBuilder builder2 = new V2SegmentBuilder(indexDescriptor2, indexContext2, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
         builder2.add(ByteBuffer.wrap("bbb".getBytes(StandardCharsets.UTF_8)), 200);
         builder2.add(ByteBuffer.wrap("bbb".getBytes(StandardCharsets.UTF_8)), 201);
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2000);
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2001);
 
-        IndexDescriptor indexDescriptor2 = newIndexDescriptor();
-
-        IndexContext indexContext2 = createIndexContext("index2", UTF8Type.instance);
 
         BlockIndexMeta meta2 = builder2.flush(indexDescriptor2, indexContext2);
+        builder2.release("testMerge 2");
 
         BlockIndexFileProvider fileProvider1 = new PerIndexFileProvider(indexDescriptor1, indexContext1);
         BlockIndexFileProvider fileProvider2 = new PerIndexFileProvider(indexDescriptor2, indexContext2);
@@ -411,6 +407,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 //            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
 
         }
+        FileUtils.closeQuietly(merged, reader1, reader2);
     }
 
     @Test
@@ -490,6 +487,24 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             assertEquals("c", stringFromTerm(reader.seekTo(2, context, true)));
             assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
             assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
+        }
+    }
+
+    @Test
+    public void perSSTableSeekEdge() throws Throwable
+    {
+        List<Pair<ByteComparable, Long>> list = new ArrayList();
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("c"), v), 2L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("d"), v), 3L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("e"), v), 4L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("f"), v), 5L));
+
+        BytesRefBuilder builder = new BytesRefBuilder();
+        try (BlockIndexReader reader = createPerSSTableReader(list);
+             BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
+        {
+            BytesUtil.gatherBytes(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v), builder);
+            assertPair(reader.seekTo(builder.toBytesRef(), context), "c", 2);
         }
     }
 
@@ -823,6 +838,10 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         PostingList postings = BlockIndexReader.toOnePostingList(reader.traverse(start, end));
         IntArrayList results2 = collect(postings);
 
+        postings.close();
+        fileProvider.close();
+        reader.close();
+
         assertEquals(kdtreePostingList, results2);
     }
 
@@ -889,6 +908,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         }
         return list;
     }
+
 
     private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf,
                                                 BKDTreeRamBuffer buffer,

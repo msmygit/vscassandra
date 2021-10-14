@@ -41,6 +41,7 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.QueryEventListeners;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
@@ -151,7 +152,7 @@ public class LegacyOnDiskFormatTest
                                             indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, false),
                                             metadata.segments.get(0).getIndexRoot(IndexComponent.KD_TREE_POSTING_LISTS));
 
-        Expression expression = new Expression(indexContext).add(Operator.LT, Int32Type.instance.decompose(10));
+        Expression expression = new Expression(indexContext, Version.AA.onDiskFormat().indexFeatureSet()).add(Operator.LT, Int32Type.instance.decompose(10));
         BKDReader.IntersectVisitor query = bkdQueryFrom(expression, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
         PostingList postingList = bkdReader.intersect(query, QueryEventListeners.NO_OP_BKD_LISTENER, SSTableQueryContext.forTest());
         assertNotNull(postingList);
@@ -174,7 +175,7 @@ public class LegacyOnDiskFormatTest
                                                   indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, false),
                                                   root,
                                                   footerPointer);
-        Expression expression = new Expression(indexContext).add(Operator.EQ, UTF8Type.instance.decompose("10"));
+        Expression expression = new Expression(indexContext, Version.AA.onDiskFormat().indexFeatureSet()).add(Operator.EQ, UTF8Type.instance.decompose("10"));
         ByteComparable term = ByteComparable.fixedLength(expression.lower.value.encoded);
 
         PostingList result = termsReader.exactMatch(term, QueryEventListeners.NO_OP_TRIE_LISTENER, SSTableQueryContext.forTest());

@@ -72,8 +72,8 @@ public class V1SearchableIndex extends SearchableIndex
             this.minKey = metadatas.get(0).minKey;
             this.maxKey = metadatas.get(metadatas.size() - 1).maxKey;
 
-            this.minTerm = metadatas.stream().map(m -> m.minTerm).min(TypeUtil.comparator(indexContext.getValidator())).orElse(null);
-            this.maxTerm = metadatas.stream().map(m -> m.maxTerm).max(TypeUtil.comparator(indexContext.getValidator())).orElse(null);
+            this.minTerm = metadatas.stream().map(m -> m.minTerm).min(TypeUtil.instance.comparator(indexContext.getValidator())).orElse(null);
+            this.maxTerm = metadatas.stream().map(m -> m.maxTerm).max(TypeUtil.instance.comparator(indexContext.getValidator())).orElse(null);
 
             this.numRows = metadatas.stream().mapToLong(m -> m.numRows).sum();
 

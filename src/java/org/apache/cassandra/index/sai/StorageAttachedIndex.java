@@ -87,7 +87,7 @@ import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.analyzer.LuceneAnalyzer;
 import org.apache.cassandra.index.sai.analyzer.NonTokenizingOptions;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
@@ -258,18 +258,18 @@ public class StorageAttachedIndex implements Index
             throw new InvalidRequestException("Cannot create more than one storage-attached index on the same column: " + target.left);
         }
 
-        AbstractType<?> type = TypeUtil.cellValueType(target);
+        AbstractType<?> type = TypeUtil.instance.cellValueType(target);
 
         // If we are indexing map entries we need to validate the sub-types
-        if (TypeUtil.isComposite(type))
+        if (TypeUtil.instance.isComposite(type))
         {
             for (AbstractType<?> subType : type.subTypes())
             {
-                if (!SUPPORTED_TYPES.contains(subType.asCQL3Type()) && !TypeUtil.isFrozen(subType))
+                if (!SUPPORTED_TYPES.contains(subType.asCQL3Type()) && !TypeUtil.instance.isFrozen(subType))
                     throw new InvalidRequestException("Unsupported type: " + subType.asCQL3Type());
             }
         }
-        else if (!SUPPORTED_TYPES.contains(type.asCQL3Type()) && !TypeUtil.isFrozen(type))
+        else if (!SUPPORTED_TYPES.contains(type.asCQL3Type()) && !TypeUtil.instance.isFrozen(type))
         {
             throw new InvalidRequestException("Unsupported type: " + type.asCQL3Type());
         }

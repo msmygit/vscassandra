@@ -25,11 +25,14 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.ByteMapper;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 
 public class V2PrimaryKeyMap implements PrimaryKeyMap
@@ -38,6 +41,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     {
         private final BlockIndexFileProvider fileProvider;
         private final BlockIndexMeta metadata;
+        private final BlockIndexReader reader;
         private final PrimaryKey.PrimaryKeyFactory keyFactory;
         private final long size;
 
@@ -49,11 +53,16 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
             {
                 metadata = null;
                 size = 0;
+                reader = null;
             }
             else
             {
-                metadata = new BlockIndexMeta(fileProvider.openMetadataInput());
+                try (IndexInput input = fileProvider.openMetadataInput())
+                {
+                    metadata = new BlockIndexMeta(input);
+                }
                 size = metadata.numRows;
+                reader = new BlockIndexReader(fileProvider, false, metadata);
             }
         }
 
@@ -61,16 +70,13 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             //TODO We need a test for this condition with an empty SSTable (not sure it's possible)
-            return (size == 0) ? EMPTY
-                               : new V2PrimaryKeyMap(new BlockIndexReader(fileProvider, false, metadata),
-                                                     keyFactory,
-                                                     size);
+            return (size == 0) ? EMPTY : new V2PrimaryKeyMap(reader, keyFactory, size);
         }
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(fileProvider);
+            FileUtils.closeQuietly(fileProvider, reader);
         }
     }
 
@@ -107,12 +113,13 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
         BytesRef bytesRef = new BytesRef(ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41)));
-        return reader.seekTo(bytesRef, context).right;
+        Pair<BytesRef, Long> pair = reader.seekTo(bytesRef, context);
+        return pair == null ? 0 : pair.right;
     }
 
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(reader, context);
+        FileUtils.close(context);
     }
 }

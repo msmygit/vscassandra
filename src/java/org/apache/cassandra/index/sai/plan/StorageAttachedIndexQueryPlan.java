@@ -82,7 +82,7 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
             {
                 if (index.supportsExpression(expression.column(), expression.operator()))
                 {
-                    accumulator.accumulate (index.getIndexContext().indexFeatureSet());
+                    accumulator.accumulate(index.getIndexContext().indexFeatureSet());
                     selectedIndexesBuilder.add(index);
                 }
             }

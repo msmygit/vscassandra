@@ -27,11 +27,11 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.FileValidator;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.lucene.store.IndexOutput;
 
 
-public class FileValidatorTest extends NdiRandomizedTest
+public class FileValidatorTest extends SaiRandomizedTest
 {
     @Test
     public void testBig() throws Exception

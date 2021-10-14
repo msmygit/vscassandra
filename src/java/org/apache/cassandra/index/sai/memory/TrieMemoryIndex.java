@@ -44,6 +44,7 @@ import org.apache.cassandra.db.tries.Trie;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
@@ -86,7 +87,7 @@ public class TrieMemoryIndex extends MemoryIndex
         // MemoryIndex is per-core, so analyzer should be thread-safe..
         this.analyzerFactory = indexContext.getAnalyzerFactory();
         this.validator = indexContext.getValidator();
-        this.isLiteral = TypeUtil.isLiteral(validator);
+        this.isLiteral = TypeUtil.instance.isLiteral(validator);
     }
 
     @Override
@@ -97,7 +98,7 @@ public class TrieMemoryIndex extends MemoryIndex
             AbstractAnalyzer analyzer = analyzerFactory.create();
             try
             {
-                value = TypeUtil.encode(value, validator);
+                value = TypeUtil.instance.encode(value, validator, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
                 analyzer.reset(value.duplicate());
                 final PrimaryKey primaryKey = indexContext.keyFactory().createKey(key, clustering);
                 final long initialSizeOnHeap = data.sizeOnHeap();
@@ -182,14 +183,18 @@ public class TrieMemoryIndex extends MemoryIndex
 
     private ByteComparable encode(ByteBuffer input)
     {
-        return isLiteral ? version -> append(ByteSource.of(input, version), ByteSource.TERMINATOR)
-                         : version -> TypeUtil.asComparableBytes(input, validator, version);
+        return Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding()
+               ? isLiteral ? version -> append(ByteSource.of(input, version), ByteSource.TERMINATOR)
+                           : version -> TypeUtil.instance.asComparableBytes(input, validator, version, true)
+               : version -> TypeUtil.instance.asComparableBytes(input, validator, version, false);
     }
 
     private ByteComparable decode(ByteComparable term)
     {
-        return isLiteral ? version -> ByteSourceInverse.unescape(ByteSource.peekable(term.asComparableBytes(version)))
-                         : term;
+        return Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding()
+               ? isLiteral ? version -> ByteSourceInverse.unescape(ByteSource.peekable(term.asComparableBytes(version)))
+                           : term
+               : term;
 
     }
 

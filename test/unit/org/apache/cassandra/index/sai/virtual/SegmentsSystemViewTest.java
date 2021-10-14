@@ -40,6 +40,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.StorageService;
@@ -208,7 +209,7 @@ public class SegmentsSystemViewTest extends SAITester
                 IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor, sstable.metadata());
                 indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, index.getIndexContext());
 
-                if (sstableIndex.getIndexContext().isLiteral())
+                if (TypeUtil.instance.isLiteral(sstableIndex.getIndexContext().getValidator()))
                 {
                     addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext(), indexDescriptor);
                     addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext(), indexDescriptor);

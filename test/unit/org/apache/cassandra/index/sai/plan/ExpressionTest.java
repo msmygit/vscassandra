@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.disk.format.Version;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -34,9 +35,9 @@ public class ExpressionTest
     public void testBoundHashCode()
     {
         ByteBuffer buf1 = UTF8Type.instance.decompose("blah");
-        Expression.Bound b1 = new Expression.Bound(buf1, UTF8Type.instance, true);
+        Expression.Bound b1 = new Expression.Bound(buf1, UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
         ByteBuffer buf2 = UTF8Type.instance.decompose("blah");
-        Expression.Bound b2 = new Expression.Bound(buf2, UTF8Type.instance, true);
+        Expression.Bound b2 = new Expression.Bound(buf2, UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
         assertEquals(b1, b2);
         assertEquals(b1.hashCode(), b2.hashCode());
     }
@@ -45,9 +46,9 @@ public class ExpressionTest
     public void testNotMatchingBoundHashCode()
     {
         ByteBuffer buf1 = UTF8Type.instance.decompose("blah");
-        Expression.Bound b1 = new Expression.Bound(buf1, UTF8Type.instance, true);
+        Expression.Bound b1 = new Expression.Bound(buf1, UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
         ByteBuffer buf2 = UTF8Type.instance.decompose("blah2");
-        Expression.Bound b2 = new Expression.Bound(buf2, UTF8Type.instance, true);
+        Expression.Bound b2 = new Expression.Bound(buf2, UTF8Type.instance, true, Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
         assertNotEquals(b1, b2);
         assertNotEquals(b1.hashCode(), b2.hashCode());
     }

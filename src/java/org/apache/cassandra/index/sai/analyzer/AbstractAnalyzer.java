@@ -157,7 +157,7 @@ public abstract class AbstractAnalyzer implements Iterator<ByteBuffer>
 
         if (hasNonTokenizingOptions(options))
         {
-            if (TypeUtil.isIn(type, ANALYZABLE_TYPES))
+            if (TypeUtil.instance.isIn(type, ANALYZABLE_TYPES))
             {
                 // load NonTokenizingAnalyzer so it'll validate options
                 NonTokenizingAnalyzer a = new NonTokenizingAnalyzer(type, options);

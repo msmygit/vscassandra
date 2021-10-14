@@ -32,6 +32,7 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -59,8 +60,8 @@ public abstract class MemoryIndex
     {
         assert term != null;
 
-        minTerm = TypeUtil.min(term, minTerm, indexContext.getValidator());
-        maxTerm = TypeUtil.max(term, maxTerm, indexContext.getValidator());
+        minTerm = TypeUtil.instance.min(term, minTerm, indexContext.getValidator(), Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+        maxTerm = TypeUtil.instance.max(term, maxTerm, indexContext.getValidator(), Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
     }
 
     public ByteBuffer getMinTerm()

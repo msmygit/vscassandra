@@ -39,16 +39,13 @@ import org.slf4j.LoggerFactory;
 
 import com.carrotsearch.hppc.IntLongHashMap;
 import org.agrona.collections.IntArrayList;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PForDeltaPostingsWriter;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
-import org.apache.cassandra.io.util.FileUtils;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
 import static com.google.common.base.Preconditions.checkArgument;

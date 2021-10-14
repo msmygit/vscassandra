@@ -28,7 +28,6 @@ import java.util.Map;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
-import org.apache.cassandra.index.sai.disk.TermsIteratorMerger;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -131,8 +130,8 @@ public interface SegmentMerger extends Closeable
         @Override
         public void addSegment(IndexContext context, SegmentMetadata segment, PerIndexFiles indexFiles) throws IOException
         {
-            minTerm = TypeUtil.min(segment.minTerm, minTerm, context.getValidator());
-            maxTerm = TypeUtil.max(segment.maxTerm, maxTerm, context.getValidator());
+            minTerm = TypeUtil.instance.min(segment.minTerm, minTerm, context.getValidator(), true);
+            maxTerm = TypeUtil.instance.max(segment.maxTerm, maxTerm, context.getValidator(), true);
 
             segmentIterators.add(createIteratorState(context, segment, indexFiles));
         }
@@ -151,7 +150,7 @@ public interface SegmentMerger extends Closeable
             final SegmentMetadata.ComponentMetadataMap componentMetadataMap;
             try (NumericIndexWriter indexWriter = new NumericIndexWriter(indexDescriptor,
                                                                          indexContext,
-                                                                         TypeUtil.fixedSizeOf(indexContext.getValidator()),
+                                                                         TypeUtil.instance.fixedSizeOf(indexContext.getValidator()),
                                                                          maxSSTableRowId,
                                                                          Integer.MAX_VALUE,
                                                                          indexContext.getIndexWriterConfig(),

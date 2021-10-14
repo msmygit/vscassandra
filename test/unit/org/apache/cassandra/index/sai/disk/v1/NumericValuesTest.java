@@ -26,10 +26,10 @@ import org.junit.Test;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 
-public class NumericValuesTest extends NdiRandomizedTest
+public class NumericValuesTest extends SaiRandomizedTest
 {
     @Test
     public void testMonotonic() throws Exception

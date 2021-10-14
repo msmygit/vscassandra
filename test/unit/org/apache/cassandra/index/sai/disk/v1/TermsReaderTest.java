@@ -22,21 +22,18 @@ import java.util.List;
 
 import org.junit.Test;
 
-import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.Pair;
@@ -46,7 +43,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import static org.apache.cassandra.index.sai.disk.InvertedIndexBuilder.buildStringTermsEnum;
 import static org.apache.cassandra.index.sai.metrics.QueryEventListeners.NO_OP_TRIE_LISTENER;
 
-public class TermsReaderTest extends NdiRandomizedTest
+public class TermsReaderTest extends SaiRandomizedTest
 {
     @Test
     public void testTermQueriesAgainstShortPostingLists() throws IOException
