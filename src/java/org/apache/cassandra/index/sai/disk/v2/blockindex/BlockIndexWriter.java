@@ -595,7 +595,6 @@ public class BlockIndexWriter
         //       this isn't a single value per row index and so cannot have a row id -> point id map
         final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(temporary);
         org.apache.lucene.util.packed.BlockPackedWriter rowPointWriter = new org.apache.lucene.util.packed.BlockPackedWriter(rowPointOut, 128);
-        //final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
         // write the row id -> point id map
         final RowPointIterator rowPointIterator = this.rowPointIterator();
         long lastRowID = -1;
@@ -728,7 +727,6 @@ public class BlockIndexWriter
             currentBuffer.prefixes[currentBuffer.leafOrdinal] = termBuilder.get().length;
         }
 
-        //System.out.println("write leafIndex=" + leafOrdinal + " prefix=" + prefix + " len=" + len);
         currentBuffer.scratchOut.writeBytes(termBuilder.get().bytes, prefix, len);
         currentBuffer.postings[currentBuffer.leafOrdinal] = rowID;
         currentBuffer.leafOrdinal++;
@@ -809,9 +807,7 @@ public class BlockIndexWriter
         final BytesRef minValue = blockMinValues.get(buffer.leaf);
 
         assert minValue.equals(buffer.minValue);
-
-        // System.out.println("   writeLeaf leaf=" + buffer.leaf + " minValue=" + NumericUtils.sortableBytesToInt(buffer.minValue.bytes, 0));
-
+        
         this.leafBytesFPs.add((long) buffer.leaf);
 
         if (buffer.allLeafValuesSame)
