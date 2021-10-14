@@ -139,6 +139,12 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     }
 
     @Override
+    public SharedIndexInput openPointIdMapInput(boolean temporary) throws IOException
+    {
+        return new SharedIndexInput(openInput(ROW_ID_POINT_ID_MAP, temporary));
+    }
+
+    @Override
     public SharedIndexInput openCompressedValuesInput(boolean temporary)
     {
         return new SharedIndexInput(openInput(COMPRESSED_TERMS_DATA, temporary));

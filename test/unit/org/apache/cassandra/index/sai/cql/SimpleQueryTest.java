@@ -32,11 +32,16 @@ public class SimpleQueryTest extends SAITester
     {
         createTable("CREATE TABLE %s (id int primary key, value int)");
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
-        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 1);
+//        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 1);
+//        //flush();
+//        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 10, 10);
+
+        for (int x = 0; x < 100; x++)
+        {
+            execute("INSERT INTO %s (id, value) VALUES(?, ?)", x, x);
+        }
         flush();
-        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 10, 10);
-        flush();
-        compact();
-        assertEquals(2, execute("SELECT * FROM %s WHERE value >= 1").size());
+        //compact();
+        assertEquals(50, execute("SELECT * FROM %s WHERE value >= 50").size());
     }
 }

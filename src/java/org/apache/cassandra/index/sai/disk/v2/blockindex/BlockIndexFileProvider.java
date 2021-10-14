@@ -44,6 +44,8 @@ public interface BlockIndexFileProvider extends AutoCloseable
 
     IndexOutputWriter openPointIdMapOutput(boolean temporary) throws IOException;
 
+    SharedIndexInput openPointIdMapInput(boolean temporary) throws IOException;
+
     IndexOutputWriter openMetadataOutput() throws IOException;
 
     SharedIndexInput openValuesInput(boolean temporary);

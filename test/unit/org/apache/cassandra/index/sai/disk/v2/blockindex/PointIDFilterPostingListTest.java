@@ -129,6 +129,9 @@ public class PointIDFilterPostingListTest extends NdiRandomizedTest
         assertEquals(1, advResult4);
         assertEquals(2, postings4.nextPosting());
 
+        PointIDFilterPostingList postings5 = new PointIDFilterPostingList(40, 110, count, reader);
+        assertArrayEquals(new long[] {0, 1}, toArray(postings5));
+
         input.close();
     }
 
@@ -164,7 +167,7 @@ public class PointIDFilterPostingListTest extends NdiRandomizedTest
         while (true)
         {
             final long rowid = postings.nextPosting();
-            if ( rowid == PostingList.END_OF_STREAM)
+            if (rowid == PostingList.END_OF_STREAM)
             {
                 break;
             }

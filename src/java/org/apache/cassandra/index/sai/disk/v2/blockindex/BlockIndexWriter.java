@@ -50,7 +50,6 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
-import org.apache.cassandra.index.sai.disk.v1.BlockPackedWriter;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v2.postings.PostingsReader;
@@ -71,6 +70,7 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.packed.BlockPackedWriter;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter.BLOCK_SIZE;
@@ -593,8 +593,9 @@ public class BlockIndexWriter
 
         // TODO: when there are duplicate row ids it means
         //       this isn't a single value per row index and so cannot have a row id -> point id map
-        final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(false);
-        final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
+        final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(temporary);
+        org.apache.lucene.util.packed.BlockPackedWriter rowPointWriter = new org.apache.lucene.util.packed.BlockPackedWriter(rowPointOut, 128);
+        //final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
         // write the row id -> point id map
         final RowPointIterator rowPointIterator = this.rowPointIterator();
         long lastRowID = -1;
@@ -622,7 +623,9 @@ public class BlockIndexWriter
             rowPointWriter.add(rowPoint.pointID);
             lastRowID = rowPoint.rowID;
         }
-        final long rowPointMap_FP = rowPointWriter.finish();
+        //final long rowPointMap_FP = rowPointWriter.finish();
+        rowPointWriter.finish();
+        final long rowPointMap_FP = 0;
         rowPointIterator.close();
         rowPointOut.close();
 

@@ -29,7 +29,7 @@ public class PointIDFilterPostingList implements PostingList
     final long maxPointID;
     final LongValues rowIDPointIDMap;
     final long numRows;
-    private long currentRowID = 0;
+    private long currentRowID = -1;
 
     public PointIDFilterPostingList(long minPointID, long maxPointID, long numRows, LongValues rowIDPointIDMap)
     {

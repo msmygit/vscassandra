@@ -34,6 +34,7 @@ import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.SharedIndexInput;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.locator.ReplicaPlan;
 import org.apache.lucene.store.IndexInput;
 
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.COMPRESSED_TERMS_DATA;
@@ -98,6 +99,12 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     public IndexOutputWriter openPointIdMapOutput(boolean temporary) throws IOException
     {
         return indexDescriptor.openPerSSTableOutput(ROW_ID_POINT_ID_MAP, true, temporary);
+    }
+
+    @Override
+    public SharedIndexInput openPointIdMapInput(boolean temporary) throws IOException
+    {
+        return new SharedIndexInput(openInput(ROW_ID_POINT_ID_MAP, temporary));
     }
 
     @Override
