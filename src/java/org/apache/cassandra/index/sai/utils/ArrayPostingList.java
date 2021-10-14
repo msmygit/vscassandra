@@ -25,13 +25,21 @@ import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 
 import java.io.IOException;
 
-//TODO Change this whole lot to use longs
 public class ArrayPostingList implements OrdinalPostingList
 {
-    private final int[] postings;
+    private final long[] postings;
     private int idx = 0;
 
-    public ArrayPostingList(int[] postings)
+    public ArrayPostingList(int[] intPostings)
+    {
+        this.postings = new long[intPostings.length];
+        for (int x = 0; x < intPostings.length; x++)
+        {
+            this.postings[x] = intPostings[x];
+        }
+    }
+
+    public ArrayPostingList(long[] postings)
     {
         this.postings = postings;
     }
@@ -69,7 +77,7 @@ public class ArrayPostingList implements OrdinalPostingList
     {
         for (int i = idx; i < postings.length; ++i)
         {
-            final int segmentRowId = getPostingAt(i);
+            final long segmentRowId = getPostingAt(i);
 
             idx++;
 
@@ -95,7 +103,7 @@ public class ArrayPostingList implements OrdinalPostingList
         idx = 0;
     }
 
-    public int getPostingAt(int i)
+    public long getPostingAt(int i)
     {
         return postings[i];
     }

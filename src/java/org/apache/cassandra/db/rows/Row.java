@@ -50,6 +50,17 @@ import org.apache.cassandra.utils.btree.UpdateFunction;
  */
 public interface Row extends Unfiltered, Iterable<ColumnData>
 {
+    enum Unique
+    {
+        NOT_SET,
+        UNIQUE,
+        NOT_UNIQUE;
+    }
+
+    public void setUnique(Unique unique);
+
+    public Unique isUnique();
+
     /**
      * The clustering values for this row.
      */

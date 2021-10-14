@@ -82,12 +82,12 @@ public class MemtableIndex
         return index.getMaxTerm();
     }
 
-    public long index(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public long index(DecoratedKey key, Clustering clustering, ByteBuffer value, boolean unique)
     {
         if (value == null || value.remaining() == 0)
             return 0;
 
-        long ram = index.add(key, clustering, value);
+        long ram = index.add(key, clustering, value, unique);
         writeCount.increment();
         estimatedMemoryUsed.add(ram);
         return ram;

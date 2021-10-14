@@ -102,11 +102,13 @@ public class MemtableIndexWriter implements PerIndexWriter
                 return;
             }
 
-            final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable);
+            LongArrayList nonUniqueRowIDs = new LongArrayList();
+
+            final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable, nonUniqueRowIDs);
 
             try (MemtableTermsIterator terms = new MemtableTermsIterator(memtable.getMinTerm(), memtable.getMaxTerm(), iterator))
             {
-                long cellCount = flush(terms);
+                long cellCount = flush(terms, nonUniqueRowIDs);
 
                 indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
 
@@ -131,13 +133,12 @@ public class MemtableIndexWriter implements PerIndexWriter
         }
     }
 
-    private long flush(MemtableTermsIterator terms) throws IOException
+    private long flush(MemtableTermsIterator terms, LongArrayList nonUniqueRowIDs) throws IOException
     {
         long numRows;
 
         try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
         {
-
             BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
             numRows = writer.addAll(terms);
             // If no rows were written we need to delete any created column index components

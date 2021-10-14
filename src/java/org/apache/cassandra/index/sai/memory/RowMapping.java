@@ -51,7 +51,7 @@ public class RowMapping
     public static final RowMapping DUMMY = new RowMapping()
     {
         @Override
-        public Iterator<Pair<ByteComparable, LongArrayList>> merge(MemtableIndex index) { return Collections.emptyIterator(); }
+        public Iterator<Pair<ByteComparable, LongArrayList>> merge(MemtableIndex index, LongArrayList notUniqueRowIDs) { return Collections.emptyIterator(); }
 
         @Override
         public void complete() {}
@@ -90,7 +90,7 @@ public class RowMapping
      *
      * @return iterator of index term to postings mapping exists in the sstable
      */
-    public Iterator<Pair<ByteComparable, LongArrayList>> merge(MemtableIndex index)
+    public Iterator<Pair<ByteComparable, LongArrayList>> merge(MemtableIndex index, LongArrayList notUniqueRowIDs)
     {
         assert complete : "RowMapping is not built.";
 
@@ -117,6 +117,11 @@ public class RowMapping
                         {
                             postings = postings == null ? new LongArrayList() : postings;
                             postings.add(segmentRowId);
+
+                            if (!primaryKey.unique())
+                            {
+                                notUniqueRowIDs.add(segmentRowId);
+                            }
                         }
                     }
                     if (postings != null && !postings.isEmpty())

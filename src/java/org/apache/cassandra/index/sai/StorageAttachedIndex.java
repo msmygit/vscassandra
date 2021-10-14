@@ -584,7 +584,16 @@ public class StorageAttachedIndex implements Index
         @Override
         public void insertRow(Row row)
         {
-            adjustMemtableSize(indexContext.index(key, row, mt), CassandraWriteContext.fromContext(writeContext).getGroup());
+            Row.Unique unique = row.isUnique();
+
+            if (unique == Row.Unique.NOT_SET)
+            {
+                throw new IllegalStateException("Row.Unique.NOT_SET");
+            }
+
+            boolean uniqueBoolean = (unique == Row.Unique.UNIQUE);
+            
+            adjustMemtableSize(indexContext.index(key, row, mt, uniqueBoolean), CassandraWriteContext.fromContext(writeContext).getGroup());
         }
 
         @Override

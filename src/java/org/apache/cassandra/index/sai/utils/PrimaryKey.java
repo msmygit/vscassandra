@@ -90,6 +90,12 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private ClusteringComparator clusteringComparator;
     private long sstableRowId;
     private Supplier<DecoratedKey> decoratedKeySupplier;
+    private boolean unique = false;
+
+    public boolean unique()
+    {
+        return unique;
+    }
 
     public static class PrimaryKeyFactory
     {
@@ -118,6 +124,15 @@ public class PrimaryKey implements Comparable<PrimaryKey>
                                   indexFeatureSet.isRowAware() ? clustering : Clustering.EMPTY,
                                   indexFeatureSet.isRowAware() ? comparator : EMPTY_COMPARATOR,
                                   -1);
+        }
+
+        public PrimaryKey createKey(DecoratedKey partitionKey, Clustering clustering, boolean unique)
+        {
+            return new PrimaryKey(partitionKey,
+                                  indexFeatureSet.isRowAware() ? clustering : Clustering.EMPTY,
+                                  indexFeatureSet.isRowAware() ? comparator : EMPTY_COMPARATOR,
+                                  -1,
+                                  unique);
         }
 
         public PrimaryKey createKey(ByteSource.Peekable peekable, long sstableRowId) throws IOException
@@ -195,6 +210,11 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         this(sstableRowId >= 0 ? Kind.MAPPED : Kind.UNMAPPED, null, partitionKey, clustering, comparator, sstableRowId, null);
     }
 
+    private PrimaryKey(DecoratedKey partitionKey, Clustering clustering, ClusteringComparator comparator, long sstableRowId, boolean unique)
+    {
+        this(sstableRowId >= 0 ? Kind.MAPPED : Kind.UNMAPPED, null, partitionKey, clustering, comparator, sstableRowId, null, unique);
+    }
+
     private PrimaryKey(Token token)
     {
         this(Kind.TOKEN, token, null, Clustering.EMPTY, EMPTY_COMPARATOR, -1, () -> new BufferDecoratedKey(token, ByteBufferUtil.EMPTY_BYTE_BUFFER));
@@ -225,6 +245,25 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         this.clusteringComparator = clusteringComparator;
         this.sstableRowId = sstableRowId;
         this.decoratedKeySupplier = decoratedKeySupplier;
+    }
+
+    private PrimaryKey(Kind kind,
+                       Token token,
+                       DecoratedKey partitionKey,
+                       Clustering clustering,
+                       ClusteringComparator clusteringComparator,
+                       long sstableRowId,
+                       Supplier<DecoratedKey> decoratedKeySupplier,
+                       boolean unique)
+    {
+        this.kind = kind;
+        this.token = token;
+        this.partitionKey = partitionKey;
+        this.clustering = clustering;
+        this.clusteringComparator = clusteringComparator;
+        this.sstableRowId = sstableRowId;
+        this.decoratedKeySupplier = decoratedKeySupplier;
+        this.unique = unique;
     }
 
     public int size()

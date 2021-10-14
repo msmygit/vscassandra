@@ -375,7 +375,7 @@ public class QueryController
                 {
                     assert op == Operation.OperationType.AND;
 
-                    sstablePostings = new ConjunctionPostingList(new ArrayList(postingLists), null);
+                    sstablePostings = new ConjunctionPostingList(new ArrayList(postingLists));
                 }
 
                 PostingList.PeekablePostingList sstablePostingsPeekable = sstablePostings.peekable();

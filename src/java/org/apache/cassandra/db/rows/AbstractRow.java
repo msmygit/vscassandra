@@ -44,6 +44,18 @@ public abstract class AbstractRow implements Row
         return Unfiltered.Kind.ROW;
     }
 
+    private Unique isUnique = Unique.NOT_SET;
+
+    public void setUnique(Unique isUnique)
+    {
+        this.isUnique = isUnique;
+    }
+
+    public Unique isUnique()
+    {
+        return isUnique;
+    }
+
     @Override
     public boolean hasLiveData(int nowInSec, boolean enforceStrictLiveness)
     {

@@ -220,7 +220,7 @@ public class IndexContext
         return table;
     }
 
-    public long index(DecoratedKey key, Row row, Memtable mt)
+    public long index(DecoratedKey key, Row row, Memtable mt, boolean unique)
     {
         MemtableIndex current = liveMemtables.get(mt);
 
@@ -242,14 +242,14 @@ public class IndexContext
                 while (bufferIterator.hasNext())
                 {
                     ByteBuffer value = bufferIterator.next();
-                    bytes += target.index(key, row.clustering(), value);
+                    bytes += target.index(key, row.clustering(), value, unique);
                 }
             }
         }
         else
         {
             ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
-            target.index(key, row.clustering(), value);
+            target.index(key, row.clustering(), value, unique);
         }
         indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         return bytes;

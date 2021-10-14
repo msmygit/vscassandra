@@ -103,7 +103,9 @@ public class MemtableIndexWriter implements PerIndexWriter
             final DecoratedKey minKey = rowMapping.minKey.partitionKey();
             final DecoratedKey maxKey = rowMapping.maxKey.partitionKey();
 
-            final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable);
+            LongArrayList notUniqueRowIDs = new LongArrayList();
+
+            final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable, notUniqueRowIDs);
 
             try (MemtableTermsIterator terms = new MemtableTermsIterator(memtable.getMinTerm(), memtable.getMaxTerm(), iterator))
             {

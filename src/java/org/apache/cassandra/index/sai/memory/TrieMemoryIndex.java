@@ -90,7 +90,7 @@ public class TrieMemoryIndex extends MemoryIndex
     }
 
     @Override
-    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value, boolean unique)
     {
         synchronized (writeLock)
         {
@@ -99,7 +99,7 @@ public class TrieMemoryIndex extends MemoryIndex
             {
                 value = TypeUtil.encode(value, validator);
                 analyzer.reset(value.duplicate());
-                final PrimaryKey primaryKey = indexContext.keyFactory().createKey(key, clustering);
+                final PrimaryKey primaryKey = indexContext.keyFactory().createKey(key, clustering, unique);
                 final long initialSizeOnHeap = data.sizeOnHeap();
                 final long initialSizeOffHeap = data.sizeOffHeap();
                 final long reducerHeapSize = primaryKeysReducer.heapAllocations();

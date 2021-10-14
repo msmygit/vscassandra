@@ -716,7 +716,6 @@ public class BlockIndexWriter
             currentBuffer.prefixes[currentBuffer.leafOrdinal] = prefix;
             currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
         }
-        // System.out.println("term=" + termBuilder.get().utf8ToString() + " prefix=" + currentBuffer.prefixes[currentBuffer.leafOrdinal] + " length=" + currentBuffer.lengths[currentBuffer.leafOrdinal]);
 
         int prefix = currentBuffer.prefixes[currentBuffer.leafOrdinal];
         int len = termBuilder.get().length - currentBuffer.prefixes[currentBuffer.leafOrdinal];
@@ -726,7 +725,6 @@ public class BlockIndexWriter
             currentBuffer.prefixes[currentBuffer.leafOrdinal] = termBuilder.get().length;
         }
 
-        //System.out.println("write leafIndex=" + leafOrdinal + " prefix=" + prefix + " len=" + len);
         currentBuffer.scratchOut.writeBytes(termBuilder.get().bytes, prefix, len);
         currentBuffer.postings[currentBuffer.leafOrdinal] = rowID;
         currentBuffer.leafOrdinal++;
