@@ -481,177 +481,169 @@ public class BlockIndexReader implements AutoCloseable
     public List<PostingList.PeekablePostingList> traverse(final ByteComparable start,
                                                           final ByteComparable end) throws IOException
     {
-        final BlockIndexReaderContext context = initContext();
-
-        final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
-
-        // if there's only 1 leaf in the index, filter on it
-        if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
+        try (final BlockIndexReaderContext context = initContext())
         {
-            traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
-        }
+            final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
 
-        // TODO: conversion also done in the method above
-        BytesRef startBytes = null;
-        if (start != null)
-        {
-            startBytes = new BytesRef(ByteSourceInverse.readBytes(start.asComparableBytes(ByteComparable.Version.OSS41)));
-        }
-        BytesRef endBytes = null;
-        if (end != null)
-        {
-            endBytes = new BytesRef(ByteSourceInverse.readBytes(end.asComparableBytes(ByteComparable.Version.OSS41)));
-        }
-
-        final List<NodeIDLeafFP> leafNodeIDToLeafOrd = new ArrayList<>();
-
-        for (int nodeID : traverseTreeResult.nodeIDs)
-        {
-            final Collection<Long> multiPostingFPs = this.multiNodeIDToPostingsFP.get(nodeID);
-            if (multiPostingFPs != null && multiPostingFPs.size() > 0)
+            // if there's only 1 leaf in the index, filter on it
+            if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
             {
-                final int leaf = this.nodeIDToLeaf.get(nodeID);
-                for (final long fp : multiPostingFPs)
+                traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
+            }
+
+            BytesRef startBytes = start == null ? null : byteMapper.fromByteComparable(start);
+            BytesRef endBytes = end == null ? null : byteMapper.fromByteComparable(end);
+
+            final List<NodeIDLeafFP> leafNodeIDToLeafOrd = new ArrayList<>();
+
+            for (int nodeID : traverseTreeResult.nodeIDs)
+            {
+                final Collection<Long> multiPostingFPs = this.multiNodeIDToPostingsFP.get(nodeID);
+                if (multiPostingFPs != null && multiPostingFPs.size() > 0)
                 {
-                    leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leaf, fp));
+                    final int leaf = this.nodeIDToLeaf.get(nodeID);
+                    for (final long fp : multiPostingFPs)
+                    {
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leaf, fp));
+                    }
+                }
+                else
+                {
+                    final int leafOrdinal = nodeIDToLeaf.get(nodeID);
+                    Long postingsFP = null;
+                    if (nodeIDToPostingsFP.containsKey(nodeID))
+                    {
+                        postingsFP = nodeIDToPostingsFP.get(nodeID);
+                    }
+
+                    if (postingsFP != null)
+                    {
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
+                    }
                 }
             }
-            else
+            // sort by leaf id
+            Collections.sort(leafNodeIDToLeafOrd, (o1, o2) -> Integer.compare(o1.leaf, o2.leaf));
+            int minNodeID = leafNodeIDToLeafOrd.get(0).nodeID;
+            int minLeafOrd = leafNodeIDToLeafOrd.get(0).leaf;
+            int maxNodeID = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).nodeID;
+            int maxLeafOrd = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).leaf;
+
+            // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
+            //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
+
+            final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
+
+            final boolean minRangeExists = multiBlockLeafRanges.contains(minLeafOrd);
+
+            int startOrd = 1;
+            int endOrd = leafNodeIDToLeafOrd.size() - 1;
+
+            FilterResult firstResult = null;
+            FilterResult lastResult = null;
+
+            if (minLeafOrd == maxLeafOrd)
             {
-                final int leafOrdinal = nodeIDToLeaf.get(nodeID);
-                Long postingsFP = null;
-                if (nodeIDToPostingsFP.containsKey(nodeID))
-                {
-                    postingsFP = nodeIDToPostingsFP.get(nodeID);
-                }
-
-                if (postingsFP != null)
-                {
-                    leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
-                }
-            }
-        }
-        // sort by leaf id
-        Collections.sort(leafNodeIDToLeafOrd, (o1, o2) -> Integer.compare(o1.leaf, o2.leaf));
-        int minNodeID = leafNodeIDToLeafOrd.get(0).nodeID;
-        int minLeafOrd = leafNodeIDToLeafOrd.get(0).leaf;
-        int maxNodeID = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).nodeID;
-        int maxLeafOrd = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).leaf;
-
-        // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
-        //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
-
-        final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
-
-        final boolean minRangeExists = multiBlockLeafRanges.contains(minLeafOrd);
-
-        int startOrd = 1;
-        int endOrd = leafNodeIDToLeafOrd.size() - 1;
-
-        FilterResult firstResult = null;
-        FilterResult lastResult = null;
-
-        if (minLeafOrd == maxLeafOrd)
-        {
-            // TODO: if the minNode is all same values or multi-block there's
-            //       no need to filter
-            return Lists.newArrayList(filterLeaf(minNodeID,
-                                                 startBytes,
-                                                 endBytes,
-                                                 context).createPostings().peekable()
-            );
-        }
-
-        Integer firstFilterNodeID = null;
-
-        if (minRangeExists || start == null)
-        {
-            startOrd = 0;
-        }
-        else
-        {
-            firstFilterNodeID = minNodeID;
-            firstResult = filterLeaf(minNodeID,
-                                     startBytes,
-                                     endBytes,
-                                     context);
-        }
-
-        final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
-        final boolean maxLeafAllSameValues = leafValuesSame != null ? leafValuesSame.get(maxLeafOrd) : false;
-
-        if (end == null || maxRangeExists || maxLeafAllSameValues)
-        {
-            endOrd = leafNodeIDToLeafOrd.size();
-            NodeIDLeafFP pair = leafNodeIDToLeafOrd.get(endOrd - 1);
-
-            if (maxLeafAllSameValues)
-            {
-                // there is no order map for blocks with all the same value
-                assert !leafToOrderMapFP.containsKey(pair.leaf);
-            }
-        }
-        else
-        {
-            if (firstFilterNodeID == null ||
-                (firstFilterNodeID != null && firstFilterNodeID.intValue() != maxNodeID))
-            {
-                lastResult = filterLeaf(maxNodeID,
-                                        startBytes,
-                                        endBytes,
-                                        context
+                // TODO: if the minNode is all same values or multi-block there's
+                //       no need to filter
+                return Lists.newArrayList(filterLeaf(minNodeID,
+                                                     startBytes,
+                                                     endBytes,
+                                                     context).createPostings().peekable()
                 );
             }
-        }
 
-        int leafDiff = maxLeafOrd - minLeafOrd;
+            Integer firstFilterNodeID = null;
 
-        if ( (double)leafDiff / (double)meta.numLeaves > 0.50d)
-        {
-            long minPointId = 0;
-            long maxPointId = meta.numRows - 1;
-            if (firstResult != null)
+            if (minRangeExists || start == null)
             {
-                minPointId = firstResult.getMinPointId();
-            }
-            if (lastResult != null)
-            {
-                maxPointId = lastResult.getMaxPointId();
-            }
-            return Lists.newArrayList(new PointIDFilterPostingList(minPointId, maxPointId, meta.numRows, rowIDPointIDMap).peekable());
-        }
-
-        if (firstResult != null)
-        {
-            postingLists.add(firstResult.createPostings().peekable());
-        }
-
-        if (lastResult != null)
-        {
-            postingLists.add(lastResult.createPostings().peekable());
-        }
-
-        // make sure to iterate over the posting lists in leaf id order
-        // TODO: the postings are not in leaf id order
-        for (int x = startOrd; x < endOrd; x++)
-        {
-            final NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
-
-            // negative file pointer means an upper level big posting list so use multiPostingsInput
-            if (nodeIDLeafOrd.filePointer < 0)
-            {
-                long fp = nodeIDLeafOrd.filePointer * -1;
-                PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
-                postingLists.add(postings.peekable());
+                startOrd = 0;
             }
             else
             {
-                final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
-                PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
-                postingLists.add(postings.peekable());
+                firstFilterNodeID = minNodeID;
+                firstResult = filterLeaf(minNodeID,
+                                         startBytes,
+                                         endBytes,
+                                         context);
             }
+
+            final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
+            final boolean maxLeafAllSameValues = leafValuesSame != null ? leafValuesSame.get(maxLeafOrd) : false;
+
+            if (end == null || maxRangeExists || maxLeafAllSameValues)
+            {
+                endOrd = leafNodeIDToLeafOrd.size();
+                NodeIDLeafFP pair = leafNodeIDToLeafOrd.get(endOrd - 1);
+
+                if (maxLeafAllSameValues)
+                {
+                    // there is no order map for blocks with all the same value
+                    assert !leafToOrderMapFP.containsKey(pair.leaf);
+                }
+            }
+            else
+            {
+                if (firstFilterNodeID == null ||
+                    (firstFilterNodeID != null && firstFilterNodeID.intValue() != maxNodeID))
+                {
+                    lastResult = filterLeaf(maxNodeID,
+                                            startBytes,
+                                            endBytes,
+                                            context
+                    );
+                }
+            }
+
+            int leafDiff = maxLeafOrd - minLeafOrd;
+
+            if ((double) leafDiff / (double) meta.numLeaves > 0.50d)
+            {
+                long minPointId = 0;
+                long maxPointId = meta.numRows - 1;
+                if (firstResult != null)
+                {
+                    minPointId = firstResult.getMinPointId();
+                }
+                if (lastResult != null)
+                {
+                    maxPointId = lastResult.getMaxPointId();
+                }
+                return Lists.newArrayList(new PointIDFilterPostingList(minPointId, maxPointId, meta.numRows, rowIDPointIDMap).peekable());
+            }
+
+            if (firstResult != null)
+            {
+                postingLists.add(firstResult.createPostings().peekable());
+            }
+
+            if (lastResult != null)
+            {
+                postingLists.add(lastResult.createPostings().peekable());
+            }
+
+            // make sure to iterate over the posting lists in leaf id order
+            // TODO: the postings are not in leaf id order
+            for (int x = startOrd; x < endOrd; x++)
+            {
+                final NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
+
+                // negative file pointer means an upper level big posting list so use multiPostingsInput
+                if (nodeIDLeafOrd.filePointer < 0)
+                {
+                    long fp = nodeIDLeafOrd.filePointer * -1;
+                    PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput.sharedCopy(), fp, QueryEventListener.PostingListEventListener.NO_OP);
+                    postingLists.add(postings.peekable());
+                }
+                else
+                {
+                    final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
+                    PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                    postingLists.add(postings.peekable());
+                }
+            }
+            return postingLists;
         }
-        return postingLists;
     }
 
     public static class TraverseTreeResult
@@ -778,7 +770,7 @@ public class BlockIndexReader implements AutoCloseable
             @Override
             public PostingList createPostings() throws IOException
             {
-                final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                 return new FilteringPostingList(
                 cardinality,
                 // get the row id's term ordinal to compare against the startOrdinal
