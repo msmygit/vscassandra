@@ -623,7 +623,6 @@ public class BlockIndexWriter
             rowPointWriter.add(rowPoint.pointID);
             lastRowID = rowPoint.rowID;
         }
-        //final long rowPointMap_FP = rowPointWriter.finish();
         rowPointWriter.finish();
         final long rowPointMap_FP = 0;
         rowPointIterator.close();

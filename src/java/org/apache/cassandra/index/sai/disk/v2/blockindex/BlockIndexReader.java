@@ -565,10 +565,6 @@ public class BlockIndexReader implements Closeable
                                      startBytes,
                                      endBytes,
                                      context);
-//            if (firstResult != null)
-//            {
-//                postingLists.add(firstList.peekable());
-//            }
         }
 
         final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
@@ -595,10 +591,6 @@ public class BlockIndexReader implements Closeable
                                         endBytes,
                                         context
                 );
-//                if (lastResult != null)
-//                {
-//                    //postingLists.add(lastList.peekable());
-//                }
             }
         }
 
