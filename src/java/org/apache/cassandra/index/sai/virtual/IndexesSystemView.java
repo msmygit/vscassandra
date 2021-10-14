@@ -34,6 +34,7 @@ import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
@@ -115,7 +116,7 @@ public class IndexesSystemView extends AbstractVirtualTable
                                .column(COLUMN_NAME, context.getColumnName())
                                .column(IS_QUERYABLE, manager.isIndexQueryable(index))
                                .column(IS_BUILDING, manager.isIndexBuilding(indexName))
-                               .column(IS_STRING, context.isLiteral())
+                               .column(IS_STRING, TypeUtil.instance.isLiteral(context.getValidator()))
                                .column(ANALYZER, context.getAnalyzerFactory().toString())
                                .column(INDEXED_SSTABLE_COUNT, view.size())
                                .column(CELL_COUNT, context.getCellCount())

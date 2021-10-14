@@ -35,6 +35,15 @@ public interface IndexFeatureSet
     boolean isRowAware();
 
     /**
+     * Returns whether the on-disk format uses non-standard encoding of some datatypes.
+     *
+     * @return true if the index uses non-standard encoding
+     */
+    boolean usesNonStandardEncoding();
+
+    boolean supportsRounding();
+
+    /**
      * The {@code Accumulator} is used to accumulate the {@code IndexFeatureSet} responses from
      * multiple sources. This will include all the SSTables included in a query and all the indexes
      * attached to those SSTables.
@@ -45,6 +54,8 @@ public interface IndexFeatureSet
     public static class Accumulator
     {
         boolean isRowAware = true;
+        boolean usesNonStandardEncoding = false;
+        boolean supportsRounding = false;
         boolean complete = false;
 
         /**
@@ -57,6 +68,10 @@ public interface IndexFeatureSet
             assert !complete : "Cannot accumulate after complete has been called";
             if (!indexFeatureSet.isRowAware())
                 isRowAware = false;
+            if (indexFeatureSet.usesNonStandardEncoding())
+                usesNonStandardEncoding = true;
+            if (indexFeatureSet.supportsRounding())
+                supportsRounding = true;
         }
 
         /**
@@ -74,6 +89,18 @@ public interface IndexFeatureSet
                 public boolean isRowAware()
                 {
                     return isRowAware;
+                }
+
+                @Override
+                public boolean usesNonStandardEncoding()
+                {
+                    return usesNonStandardEncoding;
+                }
+
+                @Override
+                public boolean supportsRounding()
+                {
+                    return supportsRounding;
                 }
             };
         }

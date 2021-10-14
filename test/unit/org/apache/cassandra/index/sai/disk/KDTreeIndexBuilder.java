@@ -44,6 +44,7 @@ import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.ImmutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.KDTreeIndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
@@ -92,7 +93,7 @@ public class KDTreeIndexBuilder
         final SegmentMetadata metadata;
 
         IndexContext columnContext = SAITester.createIndexContext("test", Int32Type.instance);
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor, columnContext, TypeUtil.fixedSizeOf(type), maxSegmentRowId, size, IndexWriterConfig.defaultConfig("test"), false))
+        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor, columnContext, TypeUtil.instance.fixedSizeOf(type), maxSegmentRowId, size, IndexWriterConfig.defaultConfig("test"), false))
         {
             final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(pointValues);
             metadata = new SegmentMetadata(0,
@@ -228,7 +229,7 @@ public class KDTreeIndexBuilder
                 postings.add(currentSegmentRowId++);
                 assertTrue(terms.hasNext());
 
-                final ByteSource encoded = TypeUtil.asComparableBytes(terms.next(), type, ByteComparable.Version.OSS41);
+                final ByteSource encoded = TypeUtil.instance.asComparableBytes(terms.next(), type, ByteComparable.Version.OSS41, true);
                 return Pair.create(v -> encoded, postings);
             }
         };
@@ -273,9 +274,7 @@ public class KDTreeIndexBuilder
         };
         return Stream.generate(generator)
                 .limit(n)
-                .map(bd -> {
-                    return TypeUtil.encodeDecimal(DecimalType.instance.decompose(bd));
-                })
+                .map(bd -> TypeUtil.instance.encode(DecimalType.instance.decompose(bd), DecimalType.instance, true))
                 .collect(Collectors.toList())
                 .iterator();
     }
@@ -295,9 +294,7 @@ public class KDTreeIndexBuilder
         };
         return Stream.generate(generator)
                 .limit(n)
-                .map(bd -> {
-                    return TypeUtil.encodeBigInteger(IntegerType.instance.decompose(bd));
-                })
+                .map(bd -> TypeUtil.instance.encode(IntegerType.instance.decompose(bd), IntegerType.instance, true))
                 .collect(Collectors.toList())
                 .iterator();
     }

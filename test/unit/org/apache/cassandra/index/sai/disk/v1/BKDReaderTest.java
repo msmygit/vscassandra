@@ -28,17 +28,14 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.index.PointValues.Relation;
@@ -54,7 +51,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 
-public class BKDReaderTest extends NdiRandomizedTest
+public class BKDReaderTest extends SaiRandomizedTest
 {
     private final BKDReader.IntersectVisitor NONE_MATCH = new BKDReader.IntersectVisitor()
     {

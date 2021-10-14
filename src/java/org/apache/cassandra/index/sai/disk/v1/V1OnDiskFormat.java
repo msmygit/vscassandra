@@ -32,6 +32,11 @@ import com.codahale.metrics.Gauge;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.AsciiType;
+import org.apache.cassandra.db.marshal.BooleanType;
+import org.apache.cassandra.db.marshal.CompositeType;
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -49,6 +54,7 @@ import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.index.sai.utils.TypeOperations;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
@@ -113,6 +119,18 @@ public class V1OnDiskFormat implements OnDiskFormat
         public boolean isRowAware()
         {
             return false;
+        }
+
+        @Override
+        public boolean usesNonStandardEncoding()
+        {
+            return true;
+        }
+
+        @Override
+        public boolean supportsRounding()
+        {
+            return true;
         }
     };
 
@@ -254,7 +272,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
     {
-        return indexContext.isLiteral() ? LITERAL_COMPONENTS : NUMERIC_COMPONENTS;
+        return isLiteral(indexContext.getValidator()) ? LITERAL_COMPONENTS : NUMERIC_COMPONENTS;
     }
 
     @Override
@@ -266,7 +284,7 @@ public class V1OnDiskFormat implements OnDiskFormat
             protected Map<IndexComponent, FileHandle> populate(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
             {
                 Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
-                if (indexContext.isLiteral())
+                if (isLiteral(indexContext.getValidator()))
                 {
                     files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
                     files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
@@ -292,5 +310,12 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         // For the V1 format there are always 2 open files per index - index (kdtree or terms) + postings
         return 2;
+    }
+
+    private boolean isLiteral(AbstractType<?> type)
+    {
+        AbstractType<?> baseType = org.apache.cassandra.index.sai.utils.TypeUtil.instance.baseType(type);
+        return baseType instanceof UTF8Type || baseType instanceof AsciiType || baseType instanceof BooleanType ||
+               baseType instanceof CompositeType || (!baseType.subTypes().isEmpty() && !baseType.isMultiCell());
     }
 }

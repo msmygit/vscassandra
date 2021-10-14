@@ -53,6 +53,7 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     private final IndexDescriptor indexDescriptor;
 
     protected final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    protected final Map<IndexComponent, FileHandle> tempFiles = new EnumMap<>(IndexComponent.class);
 
     public PerSSTableFileProvider(IndexDescriptor indexDescriptor)
     {
@@ -186,6 +187,7 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     @Override
     public void close()
     {
+        FileUtils.closeQuietly(tempFiles.values());
         FileUtils.closeQuietly(files.values());
     }
 
@@ -196,7 +198,9 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
 
     private FileHandle getFileHandle(IndexComponent indexComponent, boolean temporary)
     {
-        return files.computeIfAbsent(indexComponent,
-                                     (c -> indexDescriptor.createPerSSTableFileHandle(c, temporary)));
+        return temporary ? tempFiles.computeIfAbsent(indexComponent,
+                                                     c -> indexDescriptor.createPerSSTableFileHandle(c, true))
+                         : files.computeIfAbsent(indexComponent,
+                                                 c -> indexDescriptor.createPerSSTableFileHandle(c, false));
     }
 }

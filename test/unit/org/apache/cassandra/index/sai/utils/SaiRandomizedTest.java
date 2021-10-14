@@ -24,6 +24,7 @@ import com.google.common.base.Preconditions;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.rules.RuleChain;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
@@ -41,7 +42,7 @@ import org.apache.cassandra.io.util.SequentialWriterOption;
 import org.apache.cassandra.schema.TableMetadata;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-public class NdiRandomizedTest extends RandomizedTest
+public class SaiRandomizedTest extends RandomizedTest
 {
     private static Thread.UncaughtExceptionHandler handler;
 
@@ -67,6 +68,9 @@ public class NdiRandomizedTest extends RandomizedTest
     @ClassRule
     public static TestRule classRules = RuleChain.outerRule(indexInputLeakDetector = new IndexInputLeakDetector())
                                                  .around(temporaryFolder = new TemporaryFolder());
+
+    @Rule
+    public TestRule testRules = new ResourceLeakDetector();
 
     public IndexDescriptor newIndexDescriptor() throws IOException
     {

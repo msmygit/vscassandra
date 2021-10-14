@@ -71,7 +71,7 @@ import org.apache.lucene.util.packed.PackedLongValues;
 
 import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter.LEAF_SIZE;
 
-public class BlockIndexReader implements Closeable
+public class BlockIndexReader implements AutoCloseable
 {
     final FileHandle indexFile;
     final PackedLongValues leafFilePointers;
@@ -81,6 +81,7 @@ public class BlockIndexReader implements Closeable
     final IntIntHashMap nodeIDToLeaf = new IntIntHashMap();
     final IntLongHashMap leafToOrderMapFP = new IntLongHashMap();
     final BlockIndexMeta meta;
+    final ByteMapper byteMapper;
     final IntLongHashMap nodeIDToPostingsFP = new IntLongHashMap();
     final IndexInput orderMapInput;
     final SeekingRandomAccessInput orderMapRandoInput;
@@ -98,9 +99,18 @@ public class BlockIndexReader implements Closeable
                             boolean temporary,
                             BlockIndexMeta meta) throws IOException
     {
+        this(fileProvider, temporary, meta, ByteMapper.DEFAULT);
+    }
+
+    public BlockIndexReader(BlockIndexFileProvider fileProvider,
+                            boolean temporary,
+                            BlockIndexMeta meta,
+                            ByteMapper byteMapper) throws IOException
+    {
         this.fileProvider = fileProvider;
         this.temporary = temporary;
         this.meta = meta;
+        this.byteMapper = byteMapper;
 
         // Can't validate temporary file because the file could contain multiple segments
 //        if (!temporary)
@@ -267,9 +277,9 @@ public class BlockIndexReader implements Closeable
 
     public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
     {
-        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-        postingsQueue.addAll(postingLists);
-        return MergePostingList.merge(postingsQueue);
+//        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+//        postingsQueue.addAll(postingLists);
+        return MergePostingList.merge(postingLists);
     }
 
     public List<PostingList.PeekablePostingList> traverse(ByteComparable start,
@@ -613,22 +623,12 @@ public class BlockIndexReader implements Closeable
 
         if (firstResult != null)
         {
-            System.out.println("firstResult.getMinPointId="+firstResult.getMinPointId());
             postingLists.add(firstResult.createPostings().peekable());
-        }
-        else
-        {
-            System.out.println("getMinPointId="+0);
         }
 
         if (lastResult != null)
         {
-            System.out.println("lastResult.getMaxPointId="+lastResult.getMaxPointId());
             postingLists.add(lastResult.createPostings().peekable());
-        }
-        else
-        {
-            System.out.println("getMaxPointId="+ (meta.numRows - 1));
         }
 
         // make sure to iterate over the posting lists in leaf id order
@@ -691,7 +691,7 @@ public class BlockIndexReader implements Closeable
         {
             int prevMin = min - 1;
 
-            boolean prevSameValues = leafValuesSame != null ? leafValuesSame.get(prevMin) : false;//leafValuesSame.get(prevMin);
+            boolean prevSameValues = leafValuesSame != null ? leafValuesSame.get(prevMin) : false;
             if (!prevSameValues)
             {
                 min--;
@@ -1004,6 +1004,14 @@ public class BlockIndexReader implements Closeable
     public Pair<BytesRef, Long> seekTo(final BytesRef target,
                                        final BlockIndexReaderContext context) throws IOException
     {
+        ByteComparable targetComparable = BytesUtil.fixedLength(target);
+        ByteComparable minComparable = BytesUtil.fixedLength(meta.minTerm);
+        if (ByteComparable.compare(targetComparable, minComparable, ByteComparable.Version.OSS41) <= 0)
+            return Pair.create(meta.minTerm, meta.minRowID);
+        ByteComparable maxComparable = BytesUtil.fixedLength(meta.maxTerm);
+        if (ByteComparable.compare(targetComparable, maxComparable, ByteComparable.Version.OSS41) >= 0)
+            return Pair.create(meta.maxTerm, meta.maxRowID);
+
         // TODO: do min/max term checking here to avoid extra IO
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
                                                               meta.indexFP,
@@ -1068,8 +1076,6 @@ public class BlockIndexReader implements Closeable
 
         context.arraysFilePointer = context.bytesInput.getFilePointer();
 
-        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
-
         context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
         context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
 
@@ -1112,8 +1118,6 @@ public class BlockIndexReader implements Closeable
             len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
             prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
 
-            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
-
             if (x == 0)
             {
                 if (context.firstTerm == null)
@@ -1131,7 +1135,6 @@ public class BlockIndexReader implements Closeable
                 context.bytesInput.readBytes(context.firstTerm, 0, len);
                 context.lastPrefix = len;
                 context.lastLen = len;
-                //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 context.bytesLength = 0;
                 context.leafBytesFP += len;
             }
@@ -1141,7 +1144,6 @@ public class BlockIndexReader implements Closeable
 //                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
                 context.lastLen = len;
-                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
                 if (x < seekIndex)
                     context.leafBytesFP += context.bytesLength;
 

@@ -20,11 +20,11 @@ package org.apache.cassandra.index.sai.disk.v1;
 import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.lucene.util.packed.DirectWriter;
 
-public class LeafOrderMapTest extends NdiRandomizedTest
+public class LeafOrderMapTest extends SaiRandomizedTest
 {
     @Test
     public void test() throws Exception

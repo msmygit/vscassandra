@@ -30,18 +30,16 @@ import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.Pair;
@@ -52,7 +50,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.NumericUtils;
 
-public class NumericIndexWriterTest extends NdiRandomizedTest
+public class NumericIndexWriterTest extends SaiRandomizedTest
 {
     private IndexDescriptor indexDescriptor;
     private String index;
@@ -145,7 +143,7 @@ public class NumericIndexWriterTest extends NdiRandomizedTest
         SegmentMetadata.ComponentMetadataMap indexMetas;
         try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
                                                                 indexContext,
-                                                                TypeUtil.fixedSizeOf(Int32Type.instance),
+                                                                TypeUtil.instance.fixedSizeOf(Int32Type.instance),
                                                                 maxSegmentRowId, maxSegmentRowId,
                                                                 IndexWriterConfig.defaultConfig("test"), false))
         {

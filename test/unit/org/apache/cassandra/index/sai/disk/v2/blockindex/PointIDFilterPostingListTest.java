@@ -26,7 +26,7 @@ import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -35,7 +35,7 @@ import org.apache.lucene.util.packed.BlockPackedReader;
 import org.apache.lucene.util.packed.BlockPackedWriter;
 import org.apache.lucene.util.packed.PackedInts;
 
-public class PointIDFilterPostingListTest extends NdiRandomizedTest
+public class PointIDFilterPostingListTest extends SaiRandomizedTest
 {
     @Test
     public void testRandom() throws Exception

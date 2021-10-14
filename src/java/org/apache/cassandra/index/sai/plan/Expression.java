@@ -37,8 +37,10 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
@@ -101,6 +103,7 @@ public class Expression
 
     public final IndexContext context;
     public final AbstractType<?> validator;
+    public final IndexFeatureSet indexFeatureSet;
 
     @VisibleForTesting
     protected Op operation;
@@ -110,11 +113,13 @@ public class Expression
 
     final List<ByteBuffer> exclusions = new ArrayList<>();
 
-    public Expression(IndexContext indexContext)
+
+    public Expression(IndexContext indexContext, IndexFeatureSet indexFeatureSet)
     {
         this.context = indexContext;
         this.analyzerFactory = indexContext.getQueryAnalyzerFactory();
         this.validator = indexContext.getValidator();
+        this.indexFeatureSet = indexFeatureSet;
     }
 
     public Expression add(Operator op, ByteBuffer value)
@@ -124,7 +129,7 @@ public class Expression
         // range search is always inclusive, otherwise we run the risk of
         // missing values that are within the exclusive range but are rejected
         // because their rounded value is the same as the value being queried.
-        lowerInclusive = upperInclusive = TypeUtil.supportsRounding(validator);
+        lowerInclusive = upperInclusive = indexFeatureSet.supportsRounding() && TypeUtil.instance.supportsRounding(validator);
         switch (op)
         {
             case LIKE_PREFIX:
@@ -132,7 +137,7 @@ public class Expression
             case EQ:
             case CONTAINS:
             case CONTAINS_KEY:
-                lower = new Bound(value, validator, true);
+                lower = new Bound(value, validator, true, indexFeatureSet.usesNonStandardEncoding());
                 upper = lower;
                 operation = Op.valueOf(op);
                 break;
@@ -144,7 +149,7 @@ public class Expression
                 if (operation == null)
                 {
                     operation = Op.NOT_EQ;
-                    lower = new Bound(value, validator, true);
+                    lower = new Bound(value, validator, true, indexFeatureSet.usesNonStandardEncoding());
                     upper = lower;
                 }
                 else
@@ -165,9 +170,9 @@ public class Expression
             case LT:
                 operation = Op.RANGE;
                 if (context.getDefinition().isReversedType())
-                    lower = new Bound(value, validator, lowerInclusive);
+                    lower = new Bound(value, validator, lowerInclusive, indexFeatureSet.usesNonStandardEncoding());
                 else
-                    upper = new Bound(value, validator, upperInclusive);
+                    upper = new Bound(value, validator, upperInclusive, indexFeatureSet.usesNonStandardEncoding());
                 break;
 
             case GTE:
@@ -184,9 +189,9 @@ public class Expression
             case GT:
                 operation = Op.RANGE;
                 if (context.getDefinition().isReversedType())
-                    upper = new Bound(value, validator,  upperInclusive);
+                    upper = new Bound(value, validator,  upperInclusive, indexFeatureSet.usesNonStandardEncoding());
                 else
-                    lower = new Bound(value, validator, lowerInclusive);
+                    lower = new Bound(value, validator, lowerInclusive, indexFeatureSet.usesNonStandardEncoding());
                 break;
         }
 
@@ -197,18 +202,18 @@ public class Expression
 
     public boolean isSatisfiedBy(ByteBuffer columnValue)
     {
-        if (!TypeUtil.isValid(columnValue, validator))
+        if (!TypeUtil.instance.isValid(columnValue, validator))
         {
             logger.error(context.logMessage("Value is not valid for indexed column {} with {}"), context.getColumnName(), validator);
             return false;
         }
 
-        Value value = new Value(columnValue, validator);
+        Value value = new Value(columnValue, validator, indexFeatureSet.usesNonStandardEncoding());
 
         if (lower != null)
         {
             // suffix check
-            if (TypeUtil.isLiteral(validator))
+            if (TypeUtil.instance.isLiteral(validator))
             {
                 if (!validateStringValue(value.raw, lower.value.raw))
                     return false;
@@ -216,7 +221,7 @@ public class Expression
             else
             {
                 // range or (not-)equals - (mainly) for numeric values
-                int cmp = TypeUtil.comparePostFilter(lower.value, value, validator);
+                int cmp = TypeUtil.instance.comparePostFilter(lower.value, value, validator, indexFeatureSet.usesNonStandardEncoding());
 
                 // in case of (NOT_)EQ lower == upper
                 if (operation == Op.EQ || operation == Op.CONTAINS_KEY || operation == Op.CONTAINS_VALUE || operation == Op.NOT_EQ)
@@ -230,7 +235,7 @@ public class Expression
         if (upper != null && lower != upper)
         {
             // string (prefix or suffix) check
-            if (TypeUtil.isLiteral(validator))
+            if (TypeUtil.instance.isLiteral(validator))
             {
                 if (!validateStringValue(value.raw, upper.value.raw))
                     return false;
@@ -238,7 +243,7 @@ public class Expression
             else
             {
                 // range - mainly for numeric values
-                int cmp = TypeUtil.comparePostFilter(upper.value, value, validator);
+                int cmp = TypeUtil.instance.comparePostFilter(upper.value, value, validator, indexFeatureSet.usesNonStandardEncoding());
                 if (cmp < 0 || (cmp == 0 && !upperInclusive))
                     return false;
             }
@@ -248,8 +253,8 @@ public class Expression
         // this covers EQ/RANGE with exclusions.
         for (ByteBuffer term : exclusions)
         {
-            if (TypeUtil.isLiteral(validator) && validateStringValue(value.raw, term) ||
-                TypeUtil.comparePostFilter(new Value(term, validator), value, validator) == 0)
+            if (TypeUtil.instance.isLiteral(validator) && validateStringValue(value.raw, term) ||
+                TypeUtil.instance.comparePostFilter(new Value(term, validator, indexFeatureSet.usesNonStandardEncoding()), value, validator, indexFeatureSet.usesNonStandardEncoding()) == 0)
                 return false;
         }
 
@@ -378,10 +383,10 @@ public class Expression
         public final ByteBuffer raw;
         public final ByteBuffer encoded;
 
-        public Value(ByteBuffer value, AbstractType<?> type)
+        public Value(ByteBuffer value, AbstractType<?> type, boolean usesNonStandardEncoding)
         {
             this.raw = value;
-            this.encoded = TypeUtil.encode(value, type);
+            this.encoded = TypeUtil.instance.encode(value, type,  usesNonStandardEncoding);
         }
 
         @Override
@@ -409,9 +414,9 @@ public class Expression
         public final Value value;
         public final boolean inclusive;
 
-        public Bound(ByteBuffer value, AbstractType<?> type, boolean inclusive)
+        public Bound(ByteBuffer value, AbstractType<?> type, boolean inclusive, boolean usesNonStandardEncoding)
         {
-            this.value = new Value(value, type);
+            this.value = new Value(value, type, usesNonStandardEncoding);
             this.inclusive = inclusive;
         }
 

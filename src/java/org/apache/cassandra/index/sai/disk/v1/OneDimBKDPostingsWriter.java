@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.utils.FBUtilities;

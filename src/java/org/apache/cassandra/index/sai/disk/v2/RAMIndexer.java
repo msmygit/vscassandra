@@ -15,20 +15,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
+package org.apache.cassandra.index.sai.disk.v2;
 
 import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.db.marshal.ByteBufferAccessor;
-import org.apache.cassandra.db.marshal.InetAddressType;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.index.sai.disk.ByteSliceReader;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.RAMPostingSlices;
+import org.apache.cassandra.index.sai.disk.TermsIterator;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.ByteBlockPool;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.Counter;
 
@@ -36,19 +39,20 @@ import org.apache.lucene.util.Counter;
  * Indexes strings into an on-heap inverted index to be flushed in an SSTable attached index later.
  * For flushing use the PostingTerms interface.
  */
-public class RAMStringIndexer
+public class RAMIndexer
 {
     private final AbstractType<?> termComparator;
     private final BytesRefHash termsHash;
     private final RAMPostingSlices slices;
     private final Counter bytesUsed;
+    private final BytesRefBuilder builder;
 
     // TODO This is pretty horrible
     public int rowCount = 0;
 
     private int[] lastSegmentRowID = new int[RAMPostingSlices.DEFAULT_TERM_DICT_SIZE];
 
-    public RAMStringIndexer(AbstractType<?> termComparator)
+    public RAMIndexer(AbstractType<?> termComparator)
     {
         this.termComparator = termComparator;
         bytesUsed = Counter.newCounter();
@@ -58,6 +62,7 @@ public class RAMStringIndexer
         termsHash = new BytesRefHash(termsPool);
 
         slices = new RAMPostingSlices(bytesUsed);
+        builder = new BytesRefBuilder();
     }
 
     public long estimatedBytesUsed()
@@ -132,10 +137,13 @@ public class RAMStringIndexer
         };
     }
 
-    public long add(BytesRef term, int segmentRowId)
+    public long add(ByteBuffer term, int segmentRowId)
     {
         long startBytes = estimatedBytesUsed();
-        int termID = termsHash.add(term);
+        ByteComparable byteComparable = v -> termComparator.asComparableBytes(term, v);
+        builder.clear();
+        BytesUtil.gatherBytes(byteComparable, builder);
+        int termID = termsHash.add(builder.get());
 
         if (termID >= 0)
         {

@@ -99,7 +99,9 @@ public class SSTableIndexWriter implements PerIndexWriter
                 while (valueIterator.hasNext())
                 {
                     ByteBuffer value = valueIterator.next();
-                    addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, indexContext.getValidator());
+                    addTerm(TypeUtil.instance.encode(value.duplicate(), indexContext.getValidator(), true),
+                            key,
+                            indexContext.getValidator());
                 }
             }
         }
@@ -107,7 +109,9 @@ public class SSTableIndexWriter implements PerIndexWriter
         {
             ByteBuffer value = indexContext.getValueOf(key.partitionKey(), row, nowInSec);
             if (value != null)
-                addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, indexContext.getValidator());
+                addTerm(TypeUtil.instance.encode(value.duplicate(), indexContext.getValidator(), true),
+                        key,
+                        indexContext.getValidator());
         }
         maxSSTableRowId = key.sstableRowId();
     }
@@ -153,7 +157,7 @@ public class SSTableIndexWriter implements PerIndexWriter
 
         if (term.remaining() == 0) return;
 
-        if (!TypeUtil.isLiteral(type))
+        if (!TypeUtil.instance.isLiteral(type))
         {
             limiter.increment(currentBuilder.add(term, key));
         }
@@ -333,7 +337,7 @@ public class SSTableIndexWriter implements PerIndexWriter
         PrimaryKey minKey = segments.get(0).minKey;
         PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
 
-        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
+        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(org.apache.cassandra.index.sai.utils.TypeUtil.instance.isLiteral(indexContext.getValidator()));
              PerIndexFiles perIndexFiles = indexDescriptor.newPerIndexFiles(indexContext, true))
         {
             for (final SegmentMetadata segment : segments)
@@ -351,7 +355,7 @@ public class SSTableIndexWriter implements PerIndexWriter
 
     private SegmentBuilder newSegmentBuilder()
     {
-        SegmentBuilder builder = indexContext.isLiteral()
+        SegmentBuilder builder = TypeUtil.instance.isLiteral(indexContext.getValidator())
                                  ? new SegmentBuilder.RAMStringSegmentBuilder(indexContext.getValidator(), limiter)
                                  : new SegmentBuilder.KDTreeSegmentBuilder(indexContext.getValidator(), limiter, indexContext.getIndexWriterConfig());
 
