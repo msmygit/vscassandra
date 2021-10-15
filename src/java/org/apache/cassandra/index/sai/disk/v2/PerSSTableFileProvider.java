@@ -161,7 +161,12 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
         final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
 
         for (IndexComponent indexComponent : components)
-            map.put(indexComponent, FileValidator.generate(openInput(indexComponent, false)));
+        {
+            try (IndexInput input = openInput(indexComponent, false))
+            {
+                map.put(indexComponent, FileValidator.generate(input));
+            }
+        }
 
         return map;
     }

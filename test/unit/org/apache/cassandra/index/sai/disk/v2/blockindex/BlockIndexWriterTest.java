@@ -65,8 +65,8 @@ import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
-import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -88,6 +88,7 @@ import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
+@Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
 public class BlockIndexWriterTest extends SaiRandomizedTest
 {
     @Test
@@ -251,14 +252,8 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         }
     }
 
-    private BlockIndexReader createPerIndexReader(String indexName, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
+    private BlockIndexReader createPerIndexReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
     {
-        IndexDescriptor indexDescriptor = newIndexDescriptor();
-
-        IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
-
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
         BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
 
         TermsIterator terms = new MemtableTermsIterator(null,
@@ -284,12 +279,8 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         return new BlockIndexReader(fileProvider, false, meta);
     }
 
-    private BlockIndexReader createPerSSTableReader(List<Pair<ByteComparable, Long>> list) throws Exception
+    private BlockIndexReader createPerSSTableReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, Long>> list) throws Exception
     {
-        IndexDescriptor indexDescriptor = newIndexDescriptor();
-
-        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
-
         BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
 
         Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
@@ -407,7 +398,7 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 //            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
 
         }
-        FileUtils.closeQuietly(merged, reader1, reader2);
+        FileUtils.closeQuietly(merged, reader1, reader2, fileProvider1, fileProvider2);
     }
 
     @Test
@@ -423,20 +414,21 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
 
-        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
-        assertEquals("cccc", stringFromTerm(pair.left));
-        assertEquals(6, pair.right.intValue());
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
 
-        Pair<BytesRef, Long> pair2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
-        assertEquals("gggzzzz", stringFromTerm(pair2.left));
-        assertEquals(10, pair2.right.intValue());
+            long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+            assertEquals(6L, pointId);
 
-        context.close();
-        blockIndexReader.close();
+            long pointId2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
+            assertEquals(10L, pointId2);
+        }
     }
 
     @Test
@@ -452,24 +444,27 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("g"), v), 6L));
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("h"), v), 7L));
 
-        try (BlockIndexReader reader = createPerSSTableReader(list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, list);
              BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
-            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
-            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-            assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7);
-            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
+            assertEquals(0L, reader.seekTo(new BytesRef("a"), context));
+            assertEquals(1L, reader.seekTo(new BytesRef("b"), context));
+            assertEquals(2L, reader.seekTo(new BytesRef("c"), context));
+            assertEquals(3L, reader.seekTo(new BytesRef("d"), context));
+            assertEquals(4L, reader.seekTo(new BytesRef("e"), context));
+            assertEquals(5L, reader.seekTo(new BytesRef("f"), context));
+            assertEquals(6L, reader.seekTo(new BytesRef("g"), context));
+            assertEquals(7L, reader.seekTo(new BytesRef("h"), context));
+            assertEquals(6L, reader.seekTo(new BytesRef("g"), context));
+            assertEquals(5L, reader.seekTo(new BytesRef("f"), context));
+            assertEquals(4L, reader.seekTo(new BytesRef("e"), context));
+            assertEquals(3L, reader.seekTo(new BytesRef("d"), context));
+            assertEquals(2L, reader.seekTo(new BytesRef("c"), context));
+            assertEquals(1L, reader.seekTo(new BytesRef("b"), context));
+            assertEquals(0L, reader.seekTo(new BytesRef("a"), context));
 
             assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
             assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
@@ -500,18 +495,15 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("f"), v), 5L));
 
         BytesRefBuilder builder = new BytesRefBuilder();
-        try (BlockIndexReader reader = createPerSSTableReader(list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, list);
              BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
             BytesUtil.gatherBytes(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v), builder);
-            assertPair(reader.seekTo(builder.toBytesRef(), context), "c", 2);
+            assertEquals(2L, reader.seekTo(builder.toBytesRef(), context));
         }
-    }
-
-    private void assertPair(Pair<BytesRef, Long> pair, String key, long rowId)
-    {
-        assertEquals(key, stringFromTerm(pair.left));
-        assertEquals(Long.valueOf(rowId), pair.right);
     }
 
     @Test
@@ -552,7 +544,9 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
             data.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(string), v), index));
         }
 
-        try (BlockIndexReader reader = createPerSSTableReader(data);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, data);
              BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
             for (int index = 0; index < randomIntBetween(500, 1500); index++)
@@ -564,10 +558,9 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
                 if (randomBoolean())
                 {
-                    Pair<BytesRef, Long> pair = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
+                    long pointId = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
 
-                    assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(pair.left));
-                    assertEquals(Long.valueOf(rowId), pair.right);
+                    assertEquals(rowId, pointId);
                 }
                 else
                 {
@@ -590,18 +583,15 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
 
-        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
-
-        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
-
-//        System.out.println("term="+pair.left.utf8ToString()+" pointId="+pair.right);
-
-        context.close();
-
-        blockIndexReader.close();
-
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
+            long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+        }
 //        BlockIndexWriter.RowPointIterator rowPointIterator = blockIndexReader.rowPointIterator();
 //        while (true)
 //        {
@@ -614,14 +604,14 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 //        }
 
 
-        list = new ArrayList();
-        list.add(add("cccc", new long[]{ 10, 11 })); // 2
-        list.add(add("qqqqqaaaaa", new long[]{ 400, 405, 409 })); //
-        list.add(add("zzzzzzzzzz", new long[] {20, 21, 24, 29, 30})); //
-
-        BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
-
-        blockIndexReader2.close();
+//        list = new ArrayList();
+//        list.add(add("cccc", new long[]{ 10, 11 })); // 2
+//        list.add(add("qqqqqaaaaa", new long[]{ 400, 405, 409 })); //
+//        list.add(add("zzzzzzzzzz", new long[] {20, 21, 24, 29, 30})); //
+//
+//        BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
+//
+//        blockIndexReader2.close();
 
 //        BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
 //        BlockIndexReader.IndexIterator iterator2 = blockIndexReader2.iterator();

@@ -64,7 +64,6 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     @Override
     public void startPartition(PrimaryKey primaryKey, long position) throws IOException
     {
-//        addKeyToMapping(primaryKey);
     }
 
     @Override

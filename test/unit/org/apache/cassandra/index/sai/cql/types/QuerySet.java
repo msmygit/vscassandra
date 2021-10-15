@@ -159,8 +159,12 @@ public abstract class QuerySet extends CQLTester
         {
             for (int index = 0; index < allRows.length; index++)
             {
-                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS ?",
-                        elementDataSet.values[index]), getExpectedRows(elementDataSet.values[index], allRows));
+//                System.out.println(index);
+            assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS ?",
+                                                   elementDataSet.values[index]), getExpectedRows(elementDataSet.values[index], allRows));
+//            Object[][] expected = getExpectedRows(elementDataSet.values[29], allRows);
+//            assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS ?",
+//                                                   elementDataSet.values[29]), getExpectedRows(elementDataSet.values[29], allRows));
             }
 
             for (int and = 0; and < allRows.length / 4; and++)

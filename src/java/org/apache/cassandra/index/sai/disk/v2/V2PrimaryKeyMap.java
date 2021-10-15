@@ -25,7 +25,6 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
-import org.apache.cassandra.index.sai.disk.v2.blockindex.ByteMapper;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
@@ -113,8 +112,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
         BytesRef bytesRef = new BytesRef(ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41)));
-        Pair<BytesRef, Long> pair = reader.seekTo(bytesRef, context);
-        return pair == null ? 0 : pair.right;
+        return reader.seekTo(bytesRef, context);
     }
 
     @Override
