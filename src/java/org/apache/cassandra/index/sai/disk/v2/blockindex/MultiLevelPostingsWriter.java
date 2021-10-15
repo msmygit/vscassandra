@@ -197,7 +197,6 @@ public class MultiLevelPostingsWriter
                 if (nodeIDPostingsFP.containsKey(leafNodeID))
                 {
                     final long postingsFP = nodeIDPostingsFP.get(leafNodeID);
-//                    final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
                     final PostingsReader reader = new PostingsReader(leafPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(reader.peekable());
                 }

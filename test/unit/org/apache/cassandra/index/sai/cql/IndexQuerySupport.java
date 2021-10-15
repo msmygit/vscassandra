@@ -293,26 +293,26 @@ public class IndexQuerySupport
 
         void execute(DataModel.Executor tester, DataModel model) throws Throwable
         {
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
-            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
-
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 4800000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 5000000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 5000000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LTE, 5000000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 5000000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GTE, 5000000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 22L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 400000000L);
-            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 10000000000L);
-
-            rangeQuery(tester, model, DataModel.BIGINT_COLUMN, 3000000000L, 7000000000L);
-
-            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-10"));
-            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-17"));
-            query(tester, model, DataModel.DATE_COLUMN, Operator.LT, SimpleDateType.instance.fromString("2013-06-17"));
-            query(tester, model, DataModel.DATE_COLUMN, Operator.LTE, SimpleDateType.instance.fromString("2013-06-17"));
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
+//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
+//
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 4800000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 5000000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 5000000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LTE, 5000000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 5000000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GTE, 5000000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 22L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 400000000L);
+//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 10000000000L);
+//
+//            rangeQuery(tester, model, DataModel.BIGINT_COLUMN, 3000000000L, 7000000000L);
+//
+//            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-10"));
+//            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-17"));
+//            query(tester, model, DataModel.DATE_COLUMN, Operator.LT, SimpleDateType.instance.fromString("2013-06-17"));
+//            query(tester, model, DataModel.DATE_COLUMN, Operator.LTE, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.GT, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.GTE, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2017-01-01"));

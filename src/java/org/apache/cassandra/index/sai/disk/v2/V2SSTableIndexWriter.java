@@ -201,7 +201,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 offsets.add(segmentRowIdOffset);
 
                 //TODO Need to look at some of these metrics
-                double rowCount = segmentMetadata.numRows;
+                double rowCount = segmentMetadata.numPoints;
                 if (indexContext.getIndexMetrics() != null)
                     indexContext.getIndexMetrics().compactionSegmentCellsPerSecond.update((long)(rowCount / flushMillis * 1000.0));
 

@@ -132,7 +132,7 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public long getRowCount()
     {
-        return metadata.numRows;
+        return metadata.numPoints;
     }
 
     @Override

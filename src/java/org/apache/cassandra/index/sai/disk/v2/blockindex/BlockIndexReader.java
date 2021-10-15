@@ -23,10 +23,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -36,7 +34,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
-import org.apache.commons.lang3.SerializationUtils;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
@@ -117,7 +114,7 @@ public class BlockIndexReader implements AutoCloseable
 //            this.fileProvider.validate(SerializationUtils.deserialize(meta.fileInfoMapBytes.bytes));
 
         rowIDPointIDMapInput = fileProvider.openPointIdMapInput(temporary);
-        rowIDPointIDMap = new BlockPackedReader(rowIDPointIDMapInput, PackedInts.VERSION_CURRENT, 128, meta.numRows, true);
+        rowIDPointIDMap = new BlockPackedReader(rowIDPointIDMapInput, PackedInts.VERSION_CURRENT, 128, meta.numPoints, true);
 
         SharedIndexInput bytesInput = fileProvider.openValuesInput(temporary);
         this.indexFile = fileProvider.getIndexFileHandle(temporary);
@@ -379,7 +376,7 @@ public class BlockIndexReader implements AutoCloseable
         @Override
         public IndexState next() throws IOException
         {
-            if (pointId >= meta.numRows)
+            if (pointId >= meta.numPoints)
             {
                 return null;
             }
@@ -600,7 +597,7 @@ public class BlockIndexReader implements AutoCloseable
             if ((double) leafDiff / (double) meta.numLeaves > 0.50d)
             {
                 long minPointId = 0;
-                long maxPointId = meta.numRows - 1;
+                long maxPointId = meta.numPoints - 1;
                 if (firstResult != null)
                 {
                     minPointId = firstResult.getMinPointId();
@@ -609,7 +606,7 @@ public class BlockIndexReader implements AutoCloseable
                 {
                     maxPointId = lastResult.getMaxPointId();
                 }
-                return Lists.newArrayList(new PointIDFilterPostingList(minPointId, maxPointId, meta.numRows, rowIDPointIDMap).peekable());
+                return Lists.newArrayList(new PointIDFilterPostingList(minPointId, maxPointId, meta.numPoints, rowIDPointIDMap).peekable());
             }
 
             if (firstResult != null)

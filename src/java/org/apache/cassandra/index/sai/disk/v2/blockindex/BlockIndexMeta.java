@@ -28,7 +28,6 @@ import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
-import org.assertj.core.internal.bytebuddy.implementation.bytecode.Throw;
 
 public class BlockIndexMeta implements IndexOnDiskMetadata
 {
@@ -42,7 +41,7 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
     public long leafValuesSameFP;
     public long leafValuesSamePostingsFP;
     public long nodeIDPostingsFP_FP;
-    public long numRows;
+    public long numPoints;
     public long minRowID;
     public long maxRowID;
     public BytesRef minTerm, maxTerm;
@@ -101,7 +100,7 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
                           long leafValuesSameFP,
                           long leafValuesSamePostingsFP,
                           long nodeIDPostingsFP_FP,
-                          long numRows,
+                          long numPoints,
                           long minRowID,
                           long maxRowID,
                           BytesRef minTerm,
@@ -120,7 +119,7 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
         this.leafValuesSameFP = leafValuesSameFP;
         this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
         this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
-        this.numRows = numRows;
+        this.numPoints = numPoints;
         this.minRowID = minRowID;
         this.maxRowID = maxRowID;
         this.minTerm = minTerm;

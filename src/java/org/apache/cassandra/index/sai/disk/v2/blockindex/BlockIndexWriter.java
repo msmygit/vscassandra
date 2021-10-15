@@ -57,7 +57,6 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
-import org.apache.lucene.util.packed.BlockPackedWriter;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter.BLOCK_SIZE;
@@ -316,7 +315,7 @@ public class BlockIndexWriter
         flushLastBuffers();
 
         // If nothing has been written then return early with an empty BlockIndexMeta
-        if (numRows == 0)
+        if (numPoints == 0)
             return new BlockIndexMeta();
 
         // write the block min values index
@@ -631,7 +630,7 @@ public class BlockIndexWriter
                                   leafValuesSameFP,
                                   leafValuesSamePostingsFP,
                                   nodeIDPostingsFP_FP,
-                                  numRows,
+                                  numPoints,
                                   minRowID,
                                   maxRowID,
                                   minTerm,
@@ -643,7 +642,7 @@ public class BlockIndexWriter
 
     private long minRowID = Long.MAX_VALUE;
     private long maxRowID = -1;
-    private long numRows = 0;
+    private long numPoints = 0;
     private BytesRef minTerm = null;
 
     final BytesRefBuilder realLastTerm = new BytesRefBuilder();
@@ -698,13 +697,11 @@ public class BlockIndexWriter
         }
         else
         {
-            //System.out.println("prefix=" + lastTermBuilder.get().utf8ToString() + " term=" + termBuilder.get().utf8ToString());
             int prefix = BytesUtil.bytesDifference(lastTermBuilder.get(), termBuilder.get());
             if (prefix == -1) prefix = length;
             currentBuffer.prefixes[currentBuffer.leafOrdinal] = prefix;
             currentBuffer.lengths[currentBuffer.leafOrdinal] = termBuilder.get().length;
         }
-        // System.out.println("term=" + termBuilder.get().utf8ToString() + " prefix=" + currentBuffer.prefixes[currentBuffer.leafOrdinal] + " length=" + currentBuffer.lengths[currentBuffer.leafOrdinal]);
 
         int prefix = currentBuffer.prefixes[currentBuffer.leafOrdinal];
         int len = termBuilder.get().length - currentBuffer.prefixes[currentBuffer.leafOrdinal];
@@ -724,7 +721,7 @@ public class BlockIndexWriter
             lastTermBuilder.clear();
             flushPreviousBufferAndSwap();
         }
-        numRows++;
+        numPoints++;
     }
 
     private void flushLastBuffers() throws IOException

@@ -57,6 +57,7 @@ public class SimpleQueryTest extends SAITester
         flush();
         //compact();
         assertEquals(50, execute("SELECT * FROM %s WHERE value >= 50").size());
+    }
 //=======
 //        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 1);
 //        flush();
@@ -107,31 +108,33 @@ public class SimpleQueryTest extends SAITester
 //
 //    }
 //
-//    @Test
-//    public void rangeTest() throws Throwable
-//    {
-//        DataModel dataModel = new DataModel.BaseDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA);
-//        DataModel.Executor executor = new SingleNodeExecutor(this, INDEX_QUERY_COUNTER);
-//        schemaChange(String.format("CREATE KEYSPACE IF NOT EXISTS %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'}", DataModel.KEYSPACE));
-//        dataModel.createTables(executor);
-//        dataModel.disableCompaction(executor);
-//        dataModel.createIndexes(executor);
-//        dataModel.insertRows(executor);
-//        dataModel.flush(executor);
+    @Test
+    public void rangeTest() throws Throwable
+    {
+        DataModel dataModel = new DataModel.CompositePartitionKeyDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA);
+        //DataModel dataModel = new DataModel.BaseDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA);
+        DataModel.Executor executor = new SingleNodeExecutor(this, INDEX_QUERY_COUNTER);
+        schemaChange(String.format("CREATE KEYSPACE IF NOT EXISTS %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'}", DataModel.KEYSPACE));
+        dataModel.createTables(executor);
+        dataModel.disableCompaction(executor);
+        dataModel.createIndexes(executor);
+        dataModel.insertRows(executor);
+        dataModel.flush(executor);
+
+//        UntypedResultSet result = execute("SELECT abbreviation FROM " + DataModel.KEYSPACE + "." + dataModel.indexedTable() + " WHERE murders_per_year <= 126 AND tiny_murders_per_year <= 9");
 //
-////        UntypedResultSet result = execute("SELECT abbreviation FROM " + DataModel.KEYSPACE + "." + dataModel.indexedTable() + " WHERE murders_per_year <= 126 AND tiny_murders_per_year <= 9");
-////
-////        System.out.println(result);
-//
-//        List<Object> result2 = dataModel.executeIndexed(executor, "SELECT abbreviation FROM " +
-//                                                                  DataModel.KEYSPACE + "." +
-//                                                                  dataModel.indexedTable() +
-//                                                                  " WHERE murders_per_year <= ? AND tiny_murders_per_year <= ?",
-//                                                        4 ,
-//                                                        (short)126,
-//                                                        (byte)9);
-//
-//        System.out.println(result2);
+//        System.out.println(result);
+
+        List<Object> result2 = dataModel.executeIndexed(executor,
+                                                        "SELECT abbreviation FROM " +
+                                                        DataModel.KEYSPACE + "." +
+                                                        dataModel.indexedTable() +
+                                                        " WHERE murders_per_year <= ? AND tiny_murders_per_year <= ?",
+                                                        4,
+                                                        (short) 126,
+                                                        (byte) 9);
+
+        System.out.println(result2);
 //>>>>>>> origin/STAR-158-406-block-index
     }
 }

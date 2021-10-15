@@ -87,17 +87,17 @@ public class AbstractQueryTester extends TestBaseImpl
     {
         List<Object[]> scenarios = new LinkedList<>();
 
-        scenarios.add(new Object[]{ "BaseDataModel",
-                                    (Supplier<DataModel>) () -> new DataModel.BaseDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA),
-                                    IndexQuerySupport.BASE_QUERY_SETS });
+//        scenarios.add(new Object[]{ "BaseDataModel",
+//                                    (Supplier<DataModel>) () -> new DataModel.BaseDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA),
+//                                    IndexQuerySupport.BASE_QUERY_SETS });
+//
+//        scenarios.add(new Object[]{ "CompoundKeyDataModel",
+//                                    (Supplier<DataModel>) () -> new DataModel.CompoundKeyDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA),
+//                                    IndexQuerySupport.BASE_QUERY_SETS });
 
-        scenarios.add(new Object[]{ "CompoundKeyDataModel",
-                                    (Supplier<DataModel>) () -> new DataModel.CompoundKeyDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA),
-                                    IndexQuerySupport.BASE_QUERY_SETS });
-
-        scenarios.add(new Object[]{ "CompoundKeyWithStaticsDataModel",
-                                    (Supplier<DataModel>) () -> new DataModel.CompoundKeyWithStaticsDataModel(DataModel.STATIC_COLUMNS, DataModel.STATIC_COLUMN_DATA),
-                                    IndexQuerySupport.STATIC_QUERY_SETS });
+//        scenarios.add(new Object[]{ "CompoundKeyWithStaticsDataModel",
+//                                    (Supplier<DataModel>) () -> new DataModel.CompoundKeyWithStaticsDataModel(DataModel.STATIC_COLUMNS, DataModel.STATIC_COLUMN_DATA),
+//                                    IndexQuerySupport.STATIC_QUERY_SETS });
 
         scenarios.add(new Object[]{ "CompositePartitionKeyDataModel",
                                     (Supplier<DataModel>) () -> new DataModel.CompositePartitionKeyDataModel(DataModel.NORMAL_COLUMNS, DataModel.NORMAL_COLUMN_DATA),

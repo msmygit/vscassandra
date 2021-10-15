@@ -25,7 +25,6 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
-import org.apache.cassandra.index.sai.disk.v2.blockindex.ByteMapper;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
@@ -61,7 +60,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
                 {
                     metadata = new BlockIndexMeta(input);
                 }
-                size = metadata.numRows;
+                size = metadata.numPoints;
                 reader = new BlockIndexReader(fileProvider, false, metadata);
             }
         }

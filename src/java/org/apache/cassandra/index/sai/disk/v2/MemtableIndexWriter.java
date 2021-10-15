@@ -130,7 +130,6 @@ public class MemtableIndexWriter implements PerIndexWriter
 
         try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
         {
-
             BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
             numRows = writer.addAll(terms);
             // If no rows were written we need to delete any created column index components
