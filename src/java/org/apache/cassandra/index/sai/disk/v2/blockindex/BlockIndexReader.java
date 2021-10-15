@@ -274,8 +274,6 @@ public class BlockIndexReader implements AutoCloseable
 
     public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
     {
-//        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-//        postingsQueue.addAll(postingLists);
         return MergePostingList.merge(postingLists);
     }
 
@@ -488,6 +486,13 @@ public class BlockIndexReader implements AutoCloseable
                 traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
             }
 
+            final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
+
+            //TODO Is this strictly correct?
+            if (traverseTreeResult.nodeIDs.size() == 0)
+                return postingLists;
+
+            // TODO: conversion also done in the method above
             BytesRef startBytes = start == null ? null : byteMapper.fromByteComparable(start);
             BytesRef endBytes = end == null ? null : byteMapper.fromByteComparable(end);
 
@@ -528,8 +533,6 @@ public class BlockIndexReader implements AutoCloseable
 
             // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
             //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
-
-            final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
 
             final boolean minRangeExists = multiBlockLeafRanges.contains(minLeafOrd);
 
@@ -990,16 +993,12 @@ public class BlockIndexReader implements AutoCloseable
         return context;
     }
 
-    public Pair<BytesRef, Long> seekTo(final BytesRef target,
-                                       final BlockIndexReaderContext context) throws IOException
+    public long seekTo(final BytesRef target, final BlockIndexReaderContext context) throws IOException
     {
-        ByteComparable targetComparable = BytesUtil.fixedLength(target);
-        ByteComparable minComparable = BytesUtil.fixedLength(meta.minTerm);
-        if (ByteComparable.compare(targetComparable, minComparable, ByteComparable.Version.OSS41) <= 0)
-            return Pair.create(meta.minTerm, meta.minRowID);
-        ByteComparable maxComparable = BytesUtil.fixedLength(meta.maxTerm);
-        if (ByteComparable.compare(targetComparable, maxComparable, ByteComparable.Version.OSS41) >= 0)
-            return Pair.create(meta.maxTerm, meta.maxRowID);
+        if (target.compareTo(meta.minTerm) <= 0)
+            return meta.minRowID;
+        if (target.compareTo(meta.maxTerm) >= 0)
+            return meta.maxRowID;
 
         // TODO: do min/max term checking here to avoid extra IO
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
@@ -1044,12 +1043,12 @@ public class BlockIndexReader implements AutoCloseable
                     if (target.compareTo(term) <= 0)
                     {
                         final long pointId = leafId * LEAF_SIZE + context.leafIndex++;
-                        return Pair.create(term, pointId);
+                        return pointId;
                     }
                 }
                 leafId++;
             }
-            return null;
+            return -1;
         }
     }
 
@@ -1130,7 +1129,6 @@ public class BlockIndexReader implements AutoCloseable
             else if (len > 0)
             {
                 context.bytesLength = len - prefix;
-//                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
                 context.lastLen = len;
                 if (x < seekIndex)

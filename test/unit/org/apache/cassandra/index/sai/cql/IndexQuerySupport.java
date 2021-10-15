@@ -293,26 +293,26 @@ public class IndexQuerySupport
 
         void execute(DataModel.Executor tester, DataModel model) throws Throwable
         {
-//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
-//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
-//            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
-//
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 4800000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 5000000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 5000000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LTE, 5000000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 5000000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GTE, 5000000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 22L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 400000000L);
-//            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 10000000000L);
-//
-//            rangeQuery(tester, model, DataModel.BIGINT_COLUMN, 3000000000L, 7000000000L);
-//
-//            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-10"));
-//            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-17"));
-//            query(tester, model, DataModel.DATE_COLUMN, Operator.LT, SimpleDateType.instance.fromString("2013-06-17"));
-//            query(tester, model, DataModel.DATE_COLUMN, Operator.LTE, SimpleDateType.instance.fromString("2013-06-17"));
+            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "MA");
+            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "LA");
+            query(tester, model, DataModel.ASCII_COLUMN, Operator.EQ, "XX");
+
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 4800000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 5000000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 5000000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LTE, 5000000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 5000000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GTE, 5000000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.EQ, 22L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.LT, 400000000L);
+            query(tester, model, DataModel.BIGINT_COLUMN, Operator.GT, 10000000000L);
+
+            rangeQuery(tester, model, DataModel.BIGINT_COLUMN, 3000000000L, 7000000000L);
+
+            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-10"));
+            query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2013-06-17"));
+            query(tester, model, DataModel.DATE_COLUMN, Operator.LT, SimpleDateType.instance.fromString("2013-06-17"));
+            query(tester, model, DataModel.DATE_COLUMN, Operator.LTE, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.GT, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.GTE, SimpleDateType.instance.fromString("2013-06-17"));
             query(tester, model, DataModel.DATE_COLUMN, Operator.EQ, SimpleDateType.instance.fromString("2017-01-01"));
@@ -508,6 +508,7 @@ public class IndexQuerySupport
         void query(DataModel.Executor tester, DataModel model, String column, Operator operator, Object value) throws Throwable
         {
             String query = String.format(DataModel.SIMPLE_SELECT_TEMPLATE, DataModel.ASCII_COLUMN, column, operator);
+            System.out.println("query="+query+" value="+value);
             String queryValidator = String.format(DataModel.SIMPLE_SELECT_WITH_FILTERING_TEMPLATE, DataModel.ASCII_COLUMN, column, operator);
             validate(tester, model, query, queryValidator, value, limit);
         }

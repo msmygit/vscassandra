@@ -112,8 +112,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
         BytesRef bytesRef = new BytesRef(ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41)));
-        Pair<BytesRef, Long> pair = reader.seekTo(bytesRef, context);
-        return pair == null ? 0 : pair.right;
+        return reader.seekTo(bytesRef, context);
     }
 
     @Override

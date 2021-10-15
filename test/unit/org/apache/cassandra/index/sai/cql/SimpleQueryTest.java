@@ -125,14 +125,16 @@ public class SimpleQueryTest extends SAITester
 //
 //        System.out.println(result);
 
+       //  SELECT abbreviation FROM %s WHERE visited > ? LIMIT ?
+
         List<Object> result2 = dataModel.executeIndexed(executor,
                                                         "SELECT abbreviation FROM " +
                                                         DataModel.KEYSPACE + "." +
                                                         dataModel.indexedTable() +
-                                                        " WHERE murders_per_year <= ? AND tiny_murders_per_year <= ?",
+                                                        //" WHERE murders_per_year <= ? AND tiny_murders_per_year <= ?",
+                                                        " WHERE visited > ?",
                                                         4,
-                                                        (short) 126,
-                                                        (byte) 9);
+                                                        "2013-06-17");
 
         System.out.println(result2);
 //>>>>>>> origin/STAR-158-406-block-index
