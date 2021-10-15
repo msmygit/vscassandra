@@ -23,10 +23,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -36,7 +34,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
-import org.apache.commons.lang3.SerializationUtils;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
@@ -274,8 +271,6 @@ public class BlockIndexReader implements AutoCloseable
 
     public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
     {
-//        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-//        postingsQueue.addAll(postingLists);
         return MergePostingList.merge(postingLists);
     }
 
@@ -482,7 +477,6 @@ public class BlockIndexReader implements AutoCloseable
 
         try (final BlockIndexReaderContext context = initContext())
         {
-
             final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
 
             // if there's only 1 leaf in the index, filter on it
@@ -490,6 +484,10 @@ public class BlockIndexReader implements AutoCloseable
             {
                 traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
             }
+
+            //TODO Is this strictly correct?
+            if (traverseTreeResult.nodeIDs.size() == 0)
+                return postingLists;
 
             // TODO: conversion also done in the method above
             BytesRef startBytes = start == null ? null : byteMapper.fromByteComparable(start);
@@ -945,16 +943,12 @@ public class BlockIndexReader implements AutoCloseable
         return context;
     }
 
-    public Pair<BytesRef, Long> seekTo(final BytesRef target,
-                                       final BlockIndexReaderContext context) throws IOException
+    public long seekTo(final BytesRef target, final BlockIndexReaderContext context) throws IOException
     {
-        ByteComparable targetComparable = BytesUtil.fixedLength(target);
-        ByteComparable minComparable = BytesUtil.fixedLength(meta.minTerm);
-        if (ByteComparable.compare(targetComparable, minComparable, ByteComparable.Version.OSS41) <= 0)
-            return Pair.create(meta.minTerm, meta.minRowID);
-        ByteComparable maxComparable = BytesUtil.fixedLength(meta.maxTerm);
-        if (ByteComparable.compare(targetComparable, maxComparable, ByteComparable.Version.OSS41) >= 0)
-            return Pair.create(meta.maxTerm, meta.maxRowID);
+        if (target.compareTo(meta.minTerm) <= 0)
+            return meta.minRowID;
+        if (target.compareTo(meta.maxTerm) >= 0)
+            return meta.maxRowID;
 
         // TODO: do min/max term checking here to avoid extra IO
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
@@ -999,12 +993,12 @@ public class BlockIndexReader implements AutoCloseable
                     if (target.compareTo(term) <= 0)
                     {
                         final long pointId = leafId * LEAF_SIZE + context.leafIndex++;
-                        return Pair.create(term, pointId);
+                        return pointId;
                     }
                 }
                 leafId++;
             }
-            return null;
+            return -1;
         }
     }
 
@@ -1019,8 +1013,6 @@ public class BlockIndexReader implements AutoCloseable
         context.prefixBits = context.bytesInput.readByte();
 
         context.arraysFilePointer = context.bytesInput.getFilePointer();
-
-        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
 
         context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
         context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
@@ -1064,8 +1056,6 @@ public class BlockIndexReader implements AutoCloseable
             len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
             prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
 
-            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
-
             if (x == 0)
             {
                 if (context.firstTerm == null)
@@ -1083,17 +1073,14 @@ public class BlockIndexReader implements AutoCloseable
                 context.bytesInput.readBytes(context.firstTerm, 0, len);
                 context.lastPrefix = len;
                 context.lastLen = len;
-                //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 context.bytesLength = 0;
                 context.leafBytesFP += len;
             }
             else if (len > 0)
             {
                 context.bytesLength = len - prefix;
-//                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
                 context.lastLen = len;
-                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
                 if (x < seekIndex)
                     context.leafBytesFP += context.bytesLength;
 
