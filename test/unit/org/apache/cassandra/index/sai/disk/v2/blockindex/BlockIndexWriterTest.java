@@ -422,7 +422,6 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
              BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
              BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
         {
-
             long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
             assertEquals(6L, pointId);
 

@@ -43,9 +43,10 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
     public long leafValuesSamePostingsFP;
     public long nodeIDPostingsFP_FP;
     public long numRows;
+    public long numPoints;
     public long minRowID;
     public long maxRowID;
-    public BytesRef minTerm, maxTerm;
+    public BytesRef minTerm, maxTerm, missingValueTerm;
     public long leafIDPostingsFP_FP;
     public BytesRef fileInfoMapBytes;
     public long rowPointMap_FP;
@@ -102,10 +103,12 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
                           long leafValuesSamePostingsFP,
                           long nodeIDPostingsFP_FP,
                           long numRows,
+                          long numPoints,
                           long minRowID,
                           long maxRowID,
                           BytesRef minTerm,
                           BytesRef maxTerm,
+                          BytesRef missingValueTerm,
                           long leafIDPostingsFP_FP,
                           BytesRef fileInfoMapBytes,
                           long rowPointMap_FP)
@@ -121,10 +124,12 @@ public class BlockIndexMeta implements IndexOnDiskMetadata
         this.leafValuesSamePostingsFP = leafValuesSamePostingsFP;
         this.nodeIDPostingsFP_FP = nodeIDPostingsFP_FP;
         this.numRows = numRows;
+        this.numPoints = numPoints;
         this.minRowID = minRowID;
         this.maxRowID = maxRowID;
         this.minTerm = minTerm;
         this.maxTerm = maxTerm;
+        this.missingValueTerm = missingValueTerm;
         this.leafIDPostingsFP_FP = leafIDPostingsFP_FP;
         this.fileInfoMapBytes = fileInfoMapBytes;
         this.rowPointMap_FP = rowPointMap_FP;

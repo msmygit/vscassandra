@@ -58,6 +58,7 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.packed.DirectWriter;
 
 import static org.apache.cassandra.index.sai.disk.v1.NumericValuesWriter.BLOCK_SIZE;
@@ -103,6 +104,8 @@ public class BlockIndexWriter
     private BlockBuffer currentBuffer = new BlockBuffer(), previousBuffer = new BlockBuffer();
     private int termOrdinal = 0; // number of unique terms
     private int leaf;
+
+    private LongBitSet setRowIDs = new LongBitSet(1024 * 1024);
 
     public static class BlockBuffer
     {
@@ -313,11 +316,24 @@ public class BlockIndexWriter
 
     public BlockIndexMeta finish() throws IOException
     {
-        flushLastBuffers();
-
         // If nothing has been written then return early with an empty BlockIndexMeta
-        if (numRows == 0)
+        if (numPoints == 0)
             return new BlockIndexMeta();
+
+        final long numRows = this.setRowIDs.cardinality(); // num rows without missing values
+        final BytesRef maxTerm = BytesRef.deepCopyOf(realLastTerm.toBytesRef());
+        // nudge the max term to be the missing value max term
+        final ByteComparable missingValueTerm = BytesUtil.nudge(BytesUtil.fixedLength(maxTerm), maxTerm.length - 1);
+        long setBit = 0;
+        while (true)
+        {
+            final long rowid = this.setRowIDs.nextSetBit(setBit);
+            if (rowid == -1) break;
+            add(missingValueTerm, rowid);
+            setBit = rowid + 1;
+        }
+
+        flushLastBuffers();
 
         // write the block min values index
         IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter());
@@ -390,7 +406,6 @@ public class BlockIndexWriter
                 {
                     assert minValue.compareTo(lastTerm.get()) > 0;
 
-                    //System.out.println("termsIndexWriter last add minValue=" + NumericUtils.sortableBytesToInt(minValue.bytes, 0));
                     termsIndexWriter.add(fixedLength(minValue), new Long(encodedLong));
                     lastTerm.clear();
                     lastTerm.append(minValue);
@@ -631,10 +646,12 @@ public class BlockIndexWriter
                                   leafValuesSamePostingsFP,
                                   nodeIDPostingsFP_FP,
                                   numRows,
+                                  numPoints,
                                   minRowID,
                                   maxRowID,
                                   minTerm,
-                                  BytesRef.deepCopyOf(realLastTerm.toBytesRef()), // last term
+                                  maxTerm, // last term
+                                  BytesUtil.gatherBytes(missingValueTerm),
                                   leafIDPostingsFP_FP,
                                   new BytesRef(fileInfoMapBytes),
                                   rowPointMap_FP);
@@ -642,13 +659,16 @@ public class BlockIndexWriter
 
     private long minRowID = Long.MAX_VALUE;
     private long maxRowID = -1;
-    private long numRows = 0;
+    private long numPoints = 0;
     private BytesRef minTerm = null;
 
     final BytesRefBuilder realLastTerm = new BytesRefBuilder();
 
     public void add(ByteComparable term, long rowID) throws IOException
     {
+        this.setRowIDs = LongBitSet.ensureCapacity(this.setRowIDs, rowID);
+        this.setRowIDs.set(rowID);
+
         minRowID = Math.min(minRowID, rowID);
         maxRowID = Math.max(maxRowID, rowID);
 
@@ -724,7 +744,7 @@ public class BlockIndexWriter
             lastTermBuilder.clear();
             flushPreviousBufferAndSwap();
         }
-        numRows++;
+        numPoints++;
     }
 
     private void flushLastBuffers() throws IOException
