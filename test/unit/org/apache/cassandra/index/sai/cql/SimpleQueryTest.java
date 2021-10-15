@@ -49,10 +49,13 @@ public class SimpleQueryTest extends SAITester
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 1, 1, 1);
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 2, 2, 2);
         flush();
+        execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 3, 2, 2);
+        execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 4, 1, 1);
+        flush();
         UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
-        assertEquals(1, result.size());
+        assertEquals(2, result.size());
         UntypedResultSet result2 = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
-        assertEquals(1, result2.size());
+        assertEquals(2, result2.size());
     }
 
     @Test
