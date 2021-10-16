@@ -201,6 +201,11 @@ public class StorageAttachedIndex implements Index
         this.indexContext = new IndexContext(baseCfs.metadata(), config);
     }
 
+    public IndexContext indexContext()
+    {
+        return indexContext;
+    }
+
     /**
      * Used via reflection in {@link IndexMetadata}
      */

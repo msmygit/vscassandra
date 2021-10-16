@@ -18,11 +18,17 @@
 package org.apache.cassandra.index.sai;
 
 import java.lang.invoke.MethodHandles;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -33,6 +39,7 @@ import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.carrotsearch.hppc.LongHashSet;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.RegularAndStaticColumns;
@@ -40,17 +47,26 @@ import org.apache.cassandra.db.WriteContext;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.lifecycle.Tracker;
+import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.rows.Row;
+import org.apache.cassandra.db.tries.MemtableTrie;
+import org.apache.cassandra.db.tries.Trie;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
+import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.IndexGroupMetrics;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.TableStateMetrics;
 import org.apache.cassandra.index.sai.plan.StorageAttachedIndexQueryPlan;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.transactions.IndexTransaction;
+import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTable;
@@ -63,8 +79,19 @@ import org.apache.cassandra.notifications.MemtableRenewedNotification;
 import org.apache.cassandra.notifications.SSTableAddedNotification;
 import org.apache.cassandra.notifications.SSTableListChangedNotification;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefArray;
+import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.Counter;
+import org.fastfilter.xor.Xor16;
+
+import static org.apache.cassandra.db.memtable.TrieMemtable.MAX_RECURSIVE_KEY_LENGTH;
 
 /**
  * Orchestrates building of storage-attached indices, and manages lifecycle of resources shared between them.
@@ -81,6 +108,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     private final ColumnFamilyStore baseCfs;
 
     private final SSTableContextManager contextManager;
+    final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
 
     StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
     {
@@ -92,6 +120,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
         Tracker tracker = baseCfs.getTracker();
         tracker.subscribe(this);
+
+        primaryKeyFactory = PrimaryKey.factory(baseCfs.metadata(), Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
     @Nullable
@@ -159,6 +189,211 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         return index instanceof StorageAttachedIndex && indices.contains(index);
     }
 
+    public static class MemRow
+    {
+        final int index;
+
+        public MemRow(int index)
+        {
+            this.index = index;
+        }
+    }
+
+    public class ColumnBlock
+    {
+        final BytesRefBuilder minTerm = new BytesRefBuilder();
+        final BytesRefBuilder maxTerm = new BytesRefBuilder();
+        final BytesRefBuilder temp = new BytesRefBuilder();
+        Xor16 valueAMQFilter;
+        LongHashSet valueHashes;
+        BytesRefArray bytes;
+
+        public BytesRef value(int idx, BytesRefBuilder builder)
+        {
+            return bytes.get(builder, idx);
+        }
+
+        public void finish()
+        {
+            valueAMQFilter = new Xor16(valueHashes.toArray());
+            valueHashes = null;
+        }
+
+        public void addValue(ByteComparable value)
+        {
+            // TODO: needs tokenization/multi-value support
+            if (bytes == null)
+            {
+                bytes = new BytesRefArray(Counter.newCounter(false));
+            }
+            temp.clear();
+            BytesUtil.gatherBytes(value, temp);
+
+            final BytesRef term = temp.get();
+
+            int termId = bytes.append(term);
+
+            if (minTerm.length() == 0)
+            {
+                minTerm.copyBytes(term);
+            }
+            else
+            {
+                if (minTerm.get().compareTo(term) > 0)
+                {
+                    minTerm.copyBytes(term);
+                }
+            }
+
+            if (maxTerm.length() == 0)
+            {
+                maxTerm.copyBytes(term);
+            }
+            else
+            {
+                if (maxTerm.get().compareTo(term) < 0)
+                {
+                    maxTerm.copyBytes(term);
+                }
+            }
+        }
+
+        public boolean mayContain(long hashOfValue)
+        {
+            final LongHashSet hs = valueHashes; // for concurrent replacement
+            if (hs != null)
+            {
+                return hs.contains(hashOfValue);
+            }
+            return valueAMQFilter.mayContain(hashOfValue);
+        }
+    }
+
+    public static final int BLOCK_SIZE = 1024;
+
+    final MemRowReducer memRowReducer = new MemRowReducer();
+
+    private class MemRowReducer implements MemtableTrie.UpsertTransformer<MemRow, MemRow>
+    {
+        @Override
+        public MemRow apply(MemRow existing, MemRow neww)
+        {
+            return neww;
+        }
+    }
+
+    public class BlockBuffer
+    {
+        final MemtableTrie<MemRow> trie = new MemtableTrie<>(BufferType.OFF_HEAP);
+        final IdentityHashMap<IndexContext,ColumnBlock> indexMap = new IdentityHashMap<>();
+        int count = 0;
+        private boolean finished = false;
+
+        public void addRow(DecoratedKey key, Row row) throws Exception
+        {
+            if (finished)
+            {
+                throw new IllegalStateException();
+            }
+            final PrimaryKey primaryKey = primaryKeyFactory.createKey(key, row.clustering());
+            final ByteComparable primaryKeyComparable = (version) -> primaryKey.asComparableBytes(version);
+
+            for (StorageAttachedIndex index : indices)
+            {
+                final AbstractAnalyzer analyzer = index.getIndexContext().getAnalyzerFactory().create();
+
+                try
+                {
+                    final ColumnBlock columnBlock = indexMap.get(index.getIndexContext());
+
+                    boolean isLiteral = TypeUtil.instance.isLiteral(index.getIndexContext().getValidator());
+
+                    final ByteBuffer value = index.getIndexContext().getValueOf(key, row, FBUtilities.nowInSeconds());
+
+                    final ByteBuffer encodedValue = TypeUtil.instance.encode(value, index.getIndexContext().getValidator(), Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding());
+
+                    analyzer.reset(encodedValue);
+
+                    while (analyzer.hasNext())
+                    {
+                        final ByteBuffer term = analyzer.next();
+
+                        final ByteComparable encodedTerm = encode(term.duplicate(), index.getIndexContext().getValidator(), isLiteral);
+
+                        columnBlock.addValue(encodedTerm);
+                    }
+                }
+                finally
+                {
+                    analyzer.end();
+                }
+            }
+
+            final MemRow memRow = new MemRow(count);
+
+            if (primaryKey.size() <= MAX_RECURSIVE_KEY_LENGTH)
+            {
+                trie.putRecursive(primaryKeyComparable, memRow, memRowReducer);
+            }
+            else
+            {
+                trie.apply(Trie.singleton(primaryKeyComparable, memRow), memRowReducer);
+            }
+
+            count++;
+        }
+
+        public void finish()
+        {
+            finished = true;
+        }
+    }
+
+    private ByteComparable encode(ByteBuffer input, AbstractType<?> validator, boolean isLiteral)
+    {
+        return Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding()
+               ? isLiteral ? version -> append(ByteSource.of(input, version), ByteSource.TERMINATOR)
+                           : version -> TypeUtil.instance.asComparableBytes(input, validator, version, true)
+               : version -> TypeUtil.instance.asComparableBytes(input, validator, version, false);
+    }
+
+    private ByteComparable decode(ByteComparable term, boolean isLiteral)
+    {
+        return Version.LATEST.onDiskFormat().indexFeatureSet().usesNonStandardEncoding()
+               ? isLiteral ? version -> ByteSourceInverse.unescape(ByteSource.peekable(term.asComparableBytes(version)))
+                           : term
+               : term;
+    }
+
+    private ByteSource append(ByteSource src, int lastByte)
+    {
+        return new ByteSource()
+        {
+            boolean done = false;
+
+            @Override
+            public int next()
+            {
+                if (done)
+                    return END_OF_STREAM;
+                int n = src.next();
+                if (n != END_OF_STREAM)
+                    return n;
+
+                done = true;
+                return lastByte;
+            }
+        };
+    }
+
+    private final ConcurrentMap<Memtable, MemtableNewIndex> liveMemtables = new ConcurrentHashMap<>();
+
+    public static class MemtableNewIndex
+    {
+        final List<BlockBuffer> blockBuffers = new ArrayList();
+        private BlockBuffer currentBlockBuffer;
+    }
+
     @Override
     public Index.Indexer indexerFor(Predicate<Index> indexSelector,
                                     DecoratedKey key,
@@ -174,23 +409,48 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                                 .filter(Objects::nonNull)
                                 .collect(Collectors.toSet());
 
+        MemtableNewIndex current = liveMemtables.get(memtable);
+
+        // We expect the relevant IndexMemtable to be present most of the time, so only make the
+        // call to computeIfAbsent() if it's not. (see https://bugs.openjdk.java.net/browse/JDK-8161372)
+        MemtableNewIndex target = (current != null)
+                               ? current
+                               : liveMemtables.computeIfAbsent(memtable, mt -> new MemtableNewIndex());//this, mt));
+
+
         return indexers.isEmpty() ? null : new StorageAttachedIndex.IndexerAdapter()
         {
             @Override
             public void insertRow(Row row)
             {
-                forEach(indexer -> indexer.insertRow(row));
+                try
+                {
+                    // TODO: create primary key
+                    //       create new block buffer if needed
+                    if (target.currentBlockBuffer == null)
+                    {
+                        target.currentBlockBuffer = new BlockBuffer();
+                    }
+
+                    target.currentBlockBuffer.addRow(key, row);
+
+                    if (target.currentBlockBuffer.count == BLOCK_SIZE)
+                    {
+                        target.currentBlockBuffer.finish();
+                        target.blockBuffers.add(target.currentBlockBuffer);
+                        target.currentBlockBuffer = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new RuntimeException(ex);
+                }
             }
 
             @Override
             public void updateRow(Row oldRow, Row newRow)
             {
-                forEach(indexer -> indexer.updateRow(oldRow, newRow));
-            }
-
-            private void forEach(Consumer<Index.Indexer> action)
-            {
-                indexers.forEach(action::accept);
+                insertRow(newRow);
             }
         };
     }
