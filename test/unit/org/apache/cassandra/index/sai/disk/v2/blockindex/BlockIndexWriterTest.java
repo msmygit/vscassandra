@@ -47,6 +47,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -402,6 +403,33 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
     }
 
     @Test
+    public void testMissingValues() throws Exception
+    {
+        List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
+        list.add(add("aaa", new long[]{ 15 })); // 0
+        list.add(add("aaabbb", new long[]{ 0, 1 })); // 0
+        list.add(add("aaabbb", new long[]{ 2, 3, 4 })); // 1
+        list.add(add("cccc", new long[]{ 6, 7, 8, 12 })); // 2
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
+            List<PostingList.PeekablePostingList> postings = blockIndexReader.traverse(BytesUtil.fixedLength(blockIndexReader.meta.missingValueTerm), BytesUtil.fixedLength(blockIndexReader.meta.missingValueTerm));
+            PostingList finalPostings = MergePostingList.merge(postings);
+            IntArrayList intPostings = collect(finalPostings);
+
+            System.out.println("intPostings="+intPostings);
+
+            assertArrayEquals(new int[] {5, 9, 10, 11, 13, 14}, intPostings.toArray());
+        }
+    }
+
+    @Test
     public void testPerIndexSeekTo() throws Exception
     {
         List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
@@ -422,6 +450,12 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
              BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
              BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
         {
+            List<PostingList.PeekablePostingList> postings = blockIndexReader.traverse(BytesUtil.fixedLength(blockIndexReader.meta.missingValueTerm), BytesUtil.fixedLength(blockIndexReader.meta.missingValueTerm));
+            PostingList finalPostings = MergePostingList.merge(postings);
+            IntArrayList intPostings = collect(finalPostings);
+
+            System.out.println("intPostings="+intPostings);
+
             long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
             assertEquals(6L, pointId);
 

@@ -321,6 +321,11 @@ public class BlockIndexWriter
             return new BlockIndexMeta();
 
         final long numRows = this.setRowIDs.cardinality(); // num rows without missing values
+
+        final long lastSetRowID = this.setRowIDs.prevSetBit(this.setRowIDs.length() - 1);
+
+        this.setRowIDs.flip(0, lastSetRowID + 1);
+
         final BytesRef maxTerm = BytesRef.deepCopyOf(realLastTerm.toBytesRef());
         // nudge the max term to be the missing value max term
         final ByteComparable missingValueTerm = BytesUtil.nudge(BytesUtil.fixedLength(maxTerm), maxTerm.length - 1);
@@ -328,7 +333,7 @@ public class BlockIndexWriter
         while (true)
         {
             final long rowid = this.setRowIDs.nextSetBit(setBit);
-            if (rowid == -1) break;
+            if (rowid == -1 || rowid > lastSetRowID) break;
             add(missingValueTerm, rowid);
             setBit = rowid + 1;
         }
