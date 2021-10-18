@@ -77,6 +77,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.NumericUtils;
@@ -254,22 +255,24 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
         writer.flush();
 
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
-        BlockIndexMeta blockIndexMeta = (BlockIndexMeta) V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
-        BlockIndexReader reader = new BlockIndexReader(fileProvider, false, blockIndexMeta);
-
-        BlockIndexReader.IndexIterator iterator = reader.iterator();
-
-        IndexState state = iterator.next();
-        assertNotNull(state);
-        assertEquals("a", stringFromTerm(state.term));
-        assertEquals(0, state.rowid);
-        state = iterator.next();
-        assertNotNull(state);
-        assertEquals("b", stringFromTerm(state.term));
-        assertEquals(1, state.rowid);
-        assertNull(iterator.next());
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             IndexInput input = fileProvider.openMetadataInput())
+        {
+            BlockIndexMeta blockIndexMeta = new BlockIndexMeta(input);
+            try (BlockIndexReader reader = new BlockIndexReader(fileProvider, false, blockIndexMeta);
+                 BlockIndexReader.IndexIterator iterator = reader.iterator())
+            {
+                IndexState state = iterator.next();
+                assertNotNull(state);
+                assertEquals("a", stringFromTerm(state.term));
+                assertEquals(0, state.rowid);
+                state = iterator.next();
+                assertNotNull(state);
+                assertEquals("b", stringFromTerm(state.term));
+                assertEquals(1, state.rowid);
+                assertNull(iterator.next());
+            }
+        }
     }
 
     @Test
@@ -296,28 +299,28 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2000);
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2001);
 
-
         BlockIndexMeta meta2 = builder2.flush(indexDescriptor2, indexContext2);
         builder2.release("testMerge 2");
 
-        BlockIndexFileProvider fileProvider1 = new PerIndexFileProvider(indexDescriptor1, indexContext1);
-        BlockIndexFileProvider fileProvider2 = new PerIndexFileProvider(indexDescriptor2, indexContext2);
-
-        BlockIndexReader reader1 = new BlockIndexReader(fileProvider1, true, meta1);
-        BlockIndexReader reader2 = new BlockIndexReader(fileProvider2, true, meta2);
-
-        BlockIndexReader.IndexIterator iterator = reader1.iterator();
-        BlockIndexReader.IndexIterator iterator2 = reader2.iterator();
-
-        MergeIndexIterators merged = new MergeIndexIterators(Lists.newArrayList(iterator, iterator2));
-        while (true)
+        try (BlockIndexFileProvider fileProvider1 = new PerIndexFileProvider(indexDescriptor1, indexContext1);
+             BlockIndexFileProvider fileProvider2 = new PerIndexFileProvider(indexDescriptor2, indexContext2);
+             BlockIndexReader reader1 = new BlockIndexReader(fileProvider1, true, meta1);
+             BlockIndexReader reader2 = new BlockIndexReader(fileProvider2, true, meta2))
         {
-            IndexState state = merged.next();
-            if (state == null) break;
+            BlockIndexReader.IndexIterator iterator = reader1.iterator();
+            BlockIndexReader.IndexIterator iterator2 = reader2.iterator();
+
+            try (MergeIndexIterators merged = new MergeIndexIterators(Lists.newArrayList(iterator, iterator2)))
+            {
+                while (true)
+                {
+                    IndexState state = merged.next();
+                    if (state == null) break;
 //            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
 
+                }
+            }
         }
-        FileUtils.closeQuietly(merged, reader1, reader2, fileProvider1, fileProvider2);
     }
 
     @Test
@@ -519,24 +522,25 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
                 List<PostingList.PeekablePostingList> postingLists = blockIndexReader.traverse(searchValue, searchValue);
 
-                PostingList postingList = MergePostingList.merge(postingLists);
-
-                int count = 0;
-
-                while (true)
+                try (PostingList postingList = MergePostingList.merge(postingLists))
                 {
-                    long rowId = postingList.nextPosting();
+                    int count = 0;
 
-                    if (rowId == PostingList.END_OF_STREAM)
-                        break;
+                    while (true)
+                    {
+                        long rowId = postingList.nextPosting();
 
-                    assertTrue(count < expectedPostings.size());
-                    assertEquals(expectedPostings.get(count), rowId);
-                    count++;
+                        if (rowId == PostingList.END_OF_STREAM)
+                            break;
+
+                        assertTrue(count < expectedPostings.size());
+                        assertEquals(expectedPostings.get(count), rowId);
+                        count++;
+                    }
+                    assertEquals("Traverse failed for term [" + term + "]. Should have got " + expectedPostings.size() + " rows but only got " + count,
+                                 expectedPostings.size(),
+                                 count);
                 }
-                assertEquals("Traverse failed for term [" + term + "]. Should have got " + expectedPostings.size() + " rows but only got " + count,
-                             expectedPostings.size(),
-                             count);
             }
         }
     }
