@@ -580,39 +580,42 @@ public class BlockIndexWriter
 
         // TODO: when there are duplicate row ids it means
         //       this isn't a single value per row index and so cannot have a row id -> point id map
-        final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(temporary);
-        org.apache.lucene.util.packed.BlockPackedWriter rowPointWriter = new org.apache.lucene.util.packed.BlockPackedWriter(rowPointOut, BLOCK_SIZE);
-        // write the row id -> point id map
-        final RowPointIterator rowPointIterator = this.rowPointIterator();
-        long lastRowID = -1;
-        while (true)
+        try (final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(temporary))
         {
-            final RowPoint rowPoint = rowPointIterator.next();
-            if (rowPoint == null)
+            org.apache.lucene.util.packed.BlockPackedWriter rowPointWriter = new org.apache.lucene.util.packed.BlockPackedWriter(rowPointOut, BLOCK_SIZE);
+            // write the row id -> point id map
+            try (final RowPointIterator rowPointIterator = this.rowPointIterator())
             {
-                break;
-            }
-            // fill in the gaps of the row ids
-            if (rowPoint.rowID - lastRowID > 1)
-            {
-                for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                long lastRowID = -1;
+                while (true)
                 {
-                    rowPointWriter.add(-1);
+                    final RowPoint rowPoint = rowPointIterator.next();
+                    if (rowPoint == null)
+                    {
+                        break;
+                    }
+                    // fill in the gaps of the row ids
+                    if (rowPoint.rowID - lastRowID > 1)
+                    {
+                        for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                        {
+                            rowPointWriter.add(-1);
+                        }
+                    }
+
+                    // assert there are no gaps
+
+                    // TODO: fix
+                    // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
+
+                    rowPointWriter.add(rowPoint.pointID);
+                    lastRowID = rowPoint.rowID;
                 }
+                rowPointWriter.finish();
+
             }
-
-            // assert there are no gaps
-
-            // TODO: fix
-            // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
-
-            rowPointWriter.add(rowPoint.pointID);
-            lastRowID = rowPoint.rowID;
         }
-        rowPointWriter.finish();
         final long rowPointMap_FP = 0;
-        rowPointIterator.close();
-        rowPointOut.close();
 
         // all files are written, create the CRC check
         byte[] fileInfoMapBytes;
