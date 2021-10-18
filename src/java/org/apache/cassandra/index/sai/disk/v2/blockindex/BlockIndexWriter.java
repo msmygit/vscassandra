@@ -31,7 +31,8 @@ import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
 import com.google.common.collect.TreeRangeSet;
-import org.apache.commons.lang.SerializationUtils;
+
+import org.apache.commons.lang3.SerializationUtils;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntLongHashMap;

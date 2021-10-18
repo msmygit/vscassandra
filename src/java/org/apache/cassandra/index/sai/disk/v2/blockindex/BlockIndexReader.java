@@ -511,16 +511,9 @@ public class BlockIndexReader implements AutoCloseable
                 }
                 else
                 {
-                    final int leafOrdinal = nodeIDToLeaf.get(nodeID);
-                    Long postingsFP = null;
                     if (nodeIDToPostingsFP.containsKey(nodeID))
                     {
-                        postingsFP = nodeIDToPostingsFP.get(nodeID);
-                    }
-
-                    if (postingsFP != null)
-                    {
-                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, nodeIDToLeaf.get(nodeID), nodeIDToPostingsFP.get(nodeID)));
                     }
                 }
             }
@@ -542,7 +535,7 @@ public class BlockIndexReader implements AutoCloseable
             FilterResult firstResult = null;
             FilterResult lastResult = null;
 
-            if (minLeafOrd == maxLeafOrd)
+            if (!minRangeExists && minLeafOrd == maxLeafOrd)
             {
                 // TODO: if the minNode is all same values or multi-block there's
                 //       no need to filter

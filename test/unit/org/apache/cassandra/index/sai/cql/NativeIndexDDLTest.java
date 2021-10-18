@@ -392,14 +392,14 @@ public class NativeIndexDDLTest extends SAITester
 
         execute("insert into %s(id, ck1, ck2, val) values('1', '2', 3, '3')");
         execute("insert into %s(id, ck1, ck2, val) values('1', '3', 4, '4')");
-        assertEquals(1, executeNet("SELECT * FROM %s WHERE ck1='3'").all().size());
-        assertEquals(2, executeNet("SELECT * FROM %s WHERE ck2>=0").all().size());
-        assertEquals(2, executeNet("SELECT * FROM %s WHERE ck2<=4").all().size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE ck1='3'").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE ck2>=0").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE ck2<=4").size());
 
         flush();
-        assertEquals(1, executeNet("SELECT * FROM %s WHERE ck1='2'").all().size());
-        assertEquals(2, executeNet("SELECT * FROM %s WHERE ck2>=3").all().size());
-        assertEquals(2, executeNet("SELECT * FROM %s WHERE ck2<=4").all().size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE ck1='2'").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE ck2>=3").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE ck2<=4").size());
 
         SecondaryIndexManager sim = getCurrentColumnFamilyStore().indexManager;
         StorageAttachedIndex index = (StorageAttachedIndex) sim.getIndexByName(indexNameCk1);
