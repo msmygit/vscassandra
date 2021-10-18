@@ -28,6 +28,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
@@ -47,6 +48,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -91,89 +93,6 @@ import static org.hamcrest.Matchers.is;
 @Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
 public class BlockIndexWriterTest extends SaiRandomizedTest
 {
-    @Test
-    public void test() throws Exception
-    {
-       /* List<Pair<ByteComparable, IntArrayList>> list = new ArrayList();
-        list.add(add("aaabbb", new int[] {0, 2})); // 2
-        list.add(add("aaabbbbbb", new int[] {1, 3})); // 2
-        list.add(add("aaabbbccccc", new int[] {4, 5, 6})); // 3
-        list.add(add("zzzzzzzggg", new int[] {10, 11, 12})); // 3
-
-        ByteBuffersDirectory dir = new ByteBuffersDirectory();
-        IndexOutput out = dir.createOutput("file", IOContext.DEFAULT);
-
-        //IndexComponents comps = newIndexComponents();
-        IndexDescriptor indexDescriptor = newIndexDescriptor();*/
-
-//        IndexOutputWriter indexOut = comps.createOutput(comps.kdTree);
-//        IndexOutputWriter postingsOut = comps.createOutput(comps.kdTreePostingLists);
-
-//        BlockIndexWriter prefixBytesWriter = new BlockIndexWriter(out, indexOut, postingsOut);
-//
-//        TermsIterator terms = new MemtableTermsIterator(null,
-//                                                        null,
-//                                                        list.iterator());
-//
-//        int pointCount = 0;
-//        while (terms.hasNext())
-//        {
-//            ByteComparable term = terms.next();
-//            PostingList postings = terms.postings();
-//            while (true)
-//            {
-//                long rowID = postings.nextPosting();
-//                if (rowID == PostingList.END_OF_STREAM) break;
-//                prefixBytesWriter.add(term, rowID);
-//                pointCount++;
-//            }
-//        }
-
-//        BlockIndexWriter.BlockIndexMeta meta = prefixBytesWriter.finish();
-//
-//        postingsOut.close();
-//
-//        try (IndexInput input = dir.openInput("file", IOContext.DEFAULT);
-//             IndexInput input2 = dir.openInput("file", IOContext.DEFAULT))
-//        {
-//            FileHandle indexFile = comps.createFileHandle(comps.kdTree);
-//            BlockIndexReader reader = new BlockIndexReader(input,
-//                                                           input2,
-//                                                           indexFile,
-//                                                           meta);
-
-//            reader.traverseForFilePointers(fixedLength(new BytesRef("aaa")),
-//                                           fixedLength(new BytesRef("aaabbbcczzzz")));
-
-//            reader.traverse(fixedLength(new BytesRef("aaa")),
-//                            fixedLength(new BytesRef("aaabbbcczzzz")));
-
-//            BytesRef foundTerm = reader.seekTo(new BytesRef("aaabbbccddddd"));
-//            System.out.println("foundTerm="+foundTerm.utf8ToString());
-
-//            BytesRef term3 = reader.seekTo(3);
-//            System.out.println("term3="+term3.utf8ToString());
-//
-//            BytesRef term1 = reader.seekTo(1);
-//            System.out.println("term1="+term1.utf8ToString());
-//
-//            BytesRef term6 = reader.seekTo(6);
-//            System.out.println("term6="+term6.utf8ToString());
-//
-//            BytesRef term8 = reader.seekTo(8);
-//            System.out.println("term8="+term8.utf8ToString());
-//
-//            List<String> results = new ArrayList<>();
-//            for (int x=0; x < pointCount; x++)
-//            {
-//                BytesRef term = reader.seekTo(x);
-//                results.add(term.utf8ToString());
-//                System.out.println("x="+x+" term=" + term.utf8ToString());
-//            }
-//            System.out.println("results="+results);
-        }
-    //}
-
     @Test
     public void testRanges() throws Exception
     {
@@ -512,7 +431,6 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         int numberOfIterations = randomIntBetween(10, 100);
         for (int iteration = 0; iteration < numberOfIterations; iteration++)
         {
-//            System.out.println("iteration = " + iteration);
             doRandomPerTableSeekTo(iteration);
         }
     }
@@ -568,6 +486,66 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
                 }
             }
         }
+    }
+
+    @Test
+    public void testTraversalPostings() throws Throwable
+    {
+        Map<String, LongArrayList> expected = new TreeMap<>();
+        expected.put("a", toLongArrayList(0));
+        expected.put("b", toLongArrayList(1, 2));
+        expected.put("c", toLongArrayList(3, 4, 5));
+        expected.put("d", toLongArrayList(6, 7, 8, 9));
+        expected.put("e", toLongArrayList(10, 11, 12, 13, 14));
+        expected.put("f", toLongArrayList(15, 16, 17, 18, 19, 20));
+
+        List<Pair<ByteComparable, LongArrayList>> termsList = new ArrayList();
+        for (String term : expected.keySet())
+        {
+            LongArrayList postings = expected.get(term);
+            termsList.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v), postings));
+        }
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, termsList))
+        {
+            for (String term : expected.keySet())
+            {
+                ByteComparable searchValue = v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v);
+                LongArrayList expectedPostings = expected.get(term);
+
+                List<PostingList.PeekablePostingList> postingLists = blockIndexReader.traverse(searchValue, searchValue);
+
+                PostingList postingList = MergePostingList.merge(postingLists);
+
+                int count = 0;
+
+                while (true)
+                {
+                    long rowId = postingList.nextPosting();
+
+                    if (rowId == PostingList.END_OF_STREAM)
+                        break;
+
+                    assertTrue(count < expectedPostings.size());
+                    assertEquals(expectedPostings.get(count), rowId);
+                    count++;
+                }
+                assertEquals("Traverse failed for term [" + term + "]. Should have got " + expectedPostings.size() + " rows but only got " + count,
+                             expectedPostings.size(),
+                             count);
+            }
+        }
+    }
+
+    private LongArrayList toLongArrayList(long... rowIds)
+    {
+        LongArrayList list = new LongArrayList();
+        list.add(rowIds);
+        return list;
     }
 
     @Test

@@ -508,16 +508,9 @@ public class BlockIndexReader implements AutoCloseable
                 }
                 else
                 {
-                    final int leafOrdinal = nodeIDToLeaf.get(nodeID);
-                    Long postingsFP = null;
                     if (nodeIDToPostingsFP.containsKey(nodeID))
                     {
-                        postingsFP = nodeIDToPostingsFP.get(nodeID);
-                    }
-
-                    if (postingsFP != null)
-                    {
-                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, nodeIDToLeaf.get(nodeID), nodeIDToPostingsFP.get(nodeID)));
                     }
                 }
             }
@@ -537,15 +530,11 @@ public class BlockIndexReader implements AutoCloseable
             int startOrd = 1;
             int endOrd = leafNodeIDToLeafOrd.size() - 1;
 
-            if (minLeafOrd == maxLeafOrd)
+            if (!minRangeExists && minLeafOrd == maxLeafOrd)
             {
                 // TODO: if the minNode is all same values or multi-block there's
                 //       no need to filter
-                return Lists.newArrayList(filterLeaf(minNodeID,
-                                                     startBytes,
-                                                     endBytes,
-                                                     context).peekable()
-                );
+                return Lists.newArrayList(filterLeaf(minNodeID, startBytes, endBytes, context).peekable());
             }
 
             Integer firstFilterNodeID = null;
@@ -557,11 +546,7 @@ public class BlockIndexReader implements AutoCloseable
             else
             {
                 firstFilterNodeID = minNodeID;
-                PostingList firstList = filterLeaf(minNodeID,
-                                                   startBytes,
-                                                   endBytes,
-                                                   context
-                );
+                PostingList firstList = filterLeaf(minNodeID, startBytes, endBytes, context);
                 if (firstList != null)
                 {
                     postingLists.add(firstList.peekable());
