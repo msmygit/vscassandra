@@ -74,7 +74,7 @@ import static org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil.fixedL
  */
 public class BlockIndexWriter
 {
-    public static final int LEAF_SIZE = 3;
+    public static final int LEAF_SIZE = 1024;
     // TODO: when the previous leaf min value is the same,
     //       write the leaf file pointer to the first occurence of the min value
     private final LongArrayList leafBytesFPs = new LongArrayList();
@@ -208,7 +208,7 @@ public class BlockIndexWriter
     }
 
     // iterator row id order
-    public RowPointIterator rowPointIterator() throws IOException
+    private RowPointIterator rowPointIterator() throws IOException
     {
         final DirectReaders.Reader orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
 
