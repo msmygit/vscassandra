@@ -235,7 +235,10 @@ public class V2SSTableIndexWriter implements PerIndexWriter
     public void flush() throws IOException
     {
         if (maybeAbort())
+        {
+            logger.warn(indexContext.logMessage("Indexing operation was aborted"));
             return;
+        }
 
         boolean emptySegment = currentBuilder == null || currentBuilder.isEmpty();
         logger.debug(indexContext.logMessage("Completing index flush with {}buffered data..."), emptySegment ? "no " : "");

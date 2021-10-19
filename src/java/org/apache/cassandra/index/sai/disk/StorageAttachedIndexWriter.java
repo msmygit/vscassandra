@@ -189,8 +189,10 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
             rowMapping.complete();
 
+            logger.debug(indexDescriptor.logMessage("About to flush per-column index writers for {} indexes."), columnIndexWriters.size());
             for (PerIndexWriter columnIndexWriter : columnIndexWriters)
             {
+                logger.debug("flushing " + columnIndexWriter.toString());
                 columnIndexWriter.flush();
             }
         }

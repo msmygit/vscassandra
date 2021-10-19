@@ -44,7 +44,6 @@ import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
-//import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
@@ -353,14 +352,6 @@ public class NodeStartupTest extends SAITester
                 break;
         }
     }
-
-//    private Set<IndexComponent> allIndexComponents()
-//    {
-//        Set<IndexComponent> components = new HashSet<>();
-//        components.addAll(V1OnDiskFormat.PER_SSTABLE_COMPONENTS);
-//        components.addAll(V1OnDiskFormat.NUMERIC_COMPONENTS);
-//        return components;
-//    }
 
     private void remove(IndexComponent component)
     {

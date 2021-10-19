@@ -508,7 +508,6 @@ public class IndexQuerySupport
         void query(DataModel.Executor tester, DataModel model, String column, Operator operator, Object value) throws Throwable
         {
             String query = String.format(DataModel.SIMPLE_SELECT_TEMPLATE, DataModel.ASCII_COLUMN, column, operator);
-            System.out.println("query="+query+" value="+value);
             String queryValidator = String.format(DataModel.SIMPLE_SELECT_WITH_FILTERING_TEMPLATE, DataModel.ASCII_COLUMN, column, operator);
             validate(tester, model, query, queryValidator, value, limit);
         }
