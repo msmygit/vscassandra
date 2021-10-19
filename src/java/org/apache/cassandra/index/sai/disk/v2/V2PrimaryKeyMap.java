@@ -84,7 +84,6 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
 
-
     private V2PrimaryKeyMap(BlockIndexReader reader,
                             PrimaryKey.PrimaryKeyFactory keyFactory,
                             long size)
@@ -93,6 +92,12 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         this.context = reader.initContext();
         this.keyFactory = keyFactory;
         this.size = size;
+    }
+
+    @Override
+    public boolean maybeContains(PrimaryKey key)
+    {
+        return false;
     }
 
     @Override

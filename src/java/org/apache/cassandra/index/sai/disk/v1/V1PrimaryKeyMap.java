@@ -110,6 +110,12 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
     }
 
     @Override
+    public boolean maybeContains(PrimaryKey key)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
         return primaryKeyFactory.createKey(new Murmur3Partitioner.LongToken(rowIdToToken.get(sstableRowId)),

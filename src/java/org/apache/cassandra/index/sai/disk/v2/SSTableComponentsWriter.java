@@ -26,6 +26,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.db.tries.Trie;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
@@ -41,18 +42,21 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.util.BytesRefBuilder;
 
 /**
  * Writes all SSTable-attached index token and offset structures.
  */
 public class SSTableComponentsWriter implements PerSSTableWriter
 {
-    Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
+    private static final Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
 
     private final IndexDescriptor indexDescriptor;
     private MemtableTrie<Long> rowMapping;
     private final List<BlockIndexMeta> metadatas;
+    private final LongArrayList keyHashes = new LongArrayList();
 
     public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
     {
@@ -88,8 +92,14 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         indexDescriptor.deletePerSSTableIndexComponents();
     }
 
+    final BytesRefBuilder temp = new BytesRefBuilder();
+
     private void addKeyToMapping(PrimaryKey key) throws IOException
     {
+        final ByteSource source = key.asComparableBytes(ByteComparable.Version.OSS41);
+        temp.clear();
+        BytesUtil.gatherBytes(source, temp);
+
         try
         {
             rowMapping.apply(Trie.singleton(v -> key.asComparableBytes(v), key.sstableRowId()), (existing, neww) -> neww);

@@ -42,6 +42,8 @@ public interface PrimaryKeyMap extends Closeable
         }
     }
 
+    boolean maybeContains(PrimaryKey key);
+
     PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException;
 
     long rowIdFromPrimaryKey(PrimaryKey key) throws IOException;
@@ -59,6 +61,12 @@ public interface PrimaryKeyMap extends Closeable
     PrimaryKeyMap IDENTITY = new PrimaryKeyMap()
     {
         @Override
+        public boolean maybeContains(PrimaryKey key)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId)
         {
             return PrimaryKey.factory().createKey(new Murmur3Partitioner.LongToken(sstableRowId), sstableRowId);
@@ -73,6 +81,12 @@ public interface PrimaryKeyMap extends Closeable
 
     PrimaryKeyMap EMPTY = new PrimaryKeyMap()
     {
+        @Override
+        public boolean maybeContains(PrimaryKey key)
+        {
+            return false;
+        }
+
         @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
         {
