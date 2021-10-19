@@ -91,7 +91,7 @@ import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
-@Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
+//@Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
 public class BlockIndexWriterTest extends SaiRandomizedTest
 {
     @Test
@@ -174,46 +174,50 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
     private BlockIndexReader createPerIndexReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
     {
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
-
-        TermsIterator terms = new MemtableTermsIterator(null,
-                                                        null,
-                                                        list.iterator());
-        while (terms.hasNext())
+        try (BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
         {
-            ByteComparable term = terms.next();
-            PostingList postings = terms.postings();
-            while (true)
+
+            TermsIterator terms = new MemtableTermsIterator(null,
+                                                            null,
+                                                            list.iterator());
+            while (terms.hasNext())
             {
-                long rowID = postings.nextPosting();
-                if (rowID == PostingList.END_OF_STREAM)
+                ByteComparable term = terms.next();
+                PostingList postings = terms.postings();
+                while (true)
                 {
-                    break;
+                    long rowID = postings.nextPosting();
+                    if (rowID == PostingList.END_OF_STREAM)
+                    {
+                        break;
+                    }
+                    blockIndexWriter.add(term, rowID);
                 }
-                blockIndexWriter.add(term, rowID);
             }
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+
+            return new BlockIndexReader(fileProvider, false, meta);
         }
-
-        BlockIndexMeta meta = blockIndexWriter.finish();
-
-        return new BlockIndexReader(fileProvider, false, meta);
     }
 
     private BlockIndexReader createPerSSTableReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, Long>> list) throws Exception
     {
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
-
-        Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
-
-        while (terms.hasNext())
+        try (BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
         {
-            Pair<ByteComparable, Long> entry = terms.next();
-            blockIndexWriter.add(entry.left, entry.right);
+
+            Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
+
+            while (terms.hasNext())
+            {
+                Pair<ByteComparable, Long> entry = terms.next();
+                blockIndexWriter.add(entry.left, entry.right);
+            }
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+
+            return new BlockIndexReader(fileProvider, false, meta);
         }
-
-        BlockIndexMeta meta = blockIndexWriter.finish();
-
-        return new BlockIndexReader(fileProvider, false, meta);
     }
 
     private Row createRow(ColumnMetadata column, ByteBuffer value)
@@ -574,144 +578,6 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         {
             long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
         }
-//        BlockIndexWriter.RowPointIterator rowPointIterator = blockIndexReader.rowPointIterator();
-//        while (true)
-//        {
-//            final BlockIndexWriter.RowPoint rowPoint = rowPointIterator.next();
-//            if (rowPoint == null)
-//            {
-//                break;
-//            }
-//            System.out.println("rowPoint="+rowPoint);
-//        }
-
-
-//        list = new ArrayList();
-//        list.add(add("cccc", new long[]{ 10, 11 })); // 2
-//        list.add(add("qqqqqaaaaa", new long[]{ 400, 405, 409 })); //
-//        list.add(add("zzzzzzzzzz", new long[] {20, 21, 24, 29, 30})); //
-//
-//        BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
-//
-//        blockIndexReader2.close();
-
-//        BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
-//        BlockIndexReader.IndexIterator iterator2 = blockIndexReader2.iterator();
-//
-//        MergeBlockReaders merged = new MergeBlockReaders(Lists.newArrayList(iterator, iterator2));
-//        while (true)
-//        {
-//            BlockIndexReader.IndexState state = merged.next();
-//            if (state == null) break;
-//            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-
-//        IndexDescriptor indexDescriptor = newIndexDescriptor();
-//        String indexName = "index_test";
-//
-//        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(indexName, indexDescriptor);
-//
-//        TermsIterator terms = new MemtableTermsIterator(null,
-//                                                        null,
-//                                                        list.iterator());
-//
-//        int pointCount = 0;
-//        while (terms.hasNext())
-//        {
-//            ByteComparable term = terms.next();
-//            PostingList postings = terms.postings();
-//            while (true)
-//            {
-//                long rowID = postings.nextPosting();
-//                if (rowID == PostingList.END_OF_STREAM)
-//                {
-//                    break;
-//                }
-//                blockIndexWriter.add(term, rowID);
-//                pointCount++;
-//            }
-//        }
-//
-//        BlockIndexMeta meta = blockIndexWriter.finish();
-//
-//        BlockIndexReader blockIndexReader = new BlockIndexReader(indexDescriptor, indexName, meta);
-
-        //final BlockIndexReader.IndexIterator iterator2 = blockIndexReader.iterator();
-
-//        BlockIndexReader.IndexIterator iterator3 = new BlockIndexReader.IndexIterator()
-//        {
-//            final BlockIndexReader.IndexState state = new BlockIndexReader.IndexState();
-//
-//            @Override
-//            public BlockIndexReader.IndexState next() throws IOException
-//            {
-//                BlockIndexReader.IndexState s1 = iterator2.next();
-//                if (s1 != null)
-//                {
-//                    state.rowid = s1.rowid + 10_000;
-//                    state.term = s1.term;
-//                    return state;
-//                }
-//                else
-//                {
-//                    return null;
-//                }
-//            }
-//
-//            @Override
-//            public BlockIndexReader.IndexState current()
-//            {
-//                return state;
-//            }
-//
-//            @Override
-//            public void close() throws IOException
-//            {
-//
-//            }
-//        };
-
-//        MergeBlockReaders merged = new MergeBlockReaders(Lists.newArrayList(iterator, iterator3));
-//        while (true)
-//        {
-//            BlockIndexReader.IndexState state = merged.next();
-//            if (state == null) break;
-//            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-
-
-//        List<Pair<BytesRef,Long>> results = new ArrayList<>();
-//
-//        while (true)
-//        {
-//            final BlockIndexReader.IndexState state = iterator.next();
-//            if (state == null)
-//            {
-//                break;
-//            }
-//            results.add(Pair.create(BytesRef.deepCopyOf(state.term), state.rowid));
-//            System.out.println("  results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-//
-//        for (Pair<BytesRef,Long> pair : results)
-//        {
-//            System.out.println("term="+pair.left.utf8ToString()+" rowid="+pair.right);
-//        }
-//
-
-//        List<PostingList.PeekablePostingList> lists = blockIndexReader.traverse(null,
-//                                                                                true,
-//                                                                                ByteComparable.fixedLength("cccc".getBytes(StandardCharsets.UTF_8)),
-//                                                                                false);
-//        PostingList postings = BlockIndexReader.toOnePostingList(lists);
-//
-//
-//        while (true)
-//        {
-//            final long rowID = postings.nextPosting();
-//            if (rowID == PostingList.END_OF_STREAM) break;
-//            System.out.println("testSameTerms rowid=" + rowID);
-//        }
     }
 
     @Test

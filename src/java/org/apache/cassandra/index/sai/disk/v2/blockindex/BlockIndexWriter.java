@@ -72,7 +72,7 @@ import static org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil.fixedL
  * The trie stores the min block values and the payload is the min and max leaf ids of the term.
  * When a term has a large posting list the min and max leaf id's are different.
  */
-public class BlockIndexWriter
+public class BlockIndexWriter implements Closeable
 {
     public static final int LEAF_SIZE = 1024;
     // TODO: when the previous leaf min value is the same,
@@ -208,7 +208,7 @@ public class BlockIndexWriter
     }
 
     // iterator row id order
-    private RowPointIterator rowPointIterator() throws IOException
+    private RowPointIterator rowPointIterator(SharedIndexInput leafPostingsInput) throws IOException
     {
         final DirectReaders.Reader orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
 
@@ -216,16 +216,13 @@ public class BlockIndexWriter
 
         final SeekingRandomAccessInput orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
 
-        final BlockIndexReader.BlockIndexReaderContext context = new BlockIndexReader.BlockIndexReaderContext();
-        context.leafLevelPostingsInput = this.fileProvider.openLeafPostingsInput(temporary);
-
         final List<RowPointIterator> iterators = new ArrayList<>();
 
         // create ordered readers
         for (Map.Entry<Integer,Long> entry : this.leafToPostingsFP.entrySet())
         {
             final long postingsFP = entry.getValue();
-            final PostingsReader postingsReader = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+            final PostingsReader postingsReader = new PostingsReader(leafPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
 
             final RowPoint rowPoint = new RowPoint();
 
@@ -309,7 +306,7 @@ public class BlockIndexWriter
                 iterators.add(iterator);
             }
         }
-        return new MergeRowPoints(iterators, context, orderMapRandoInput);
+        return new MergeRowPoints(iterators, orderMapRandoInput);
     }
 
     public BlockIndexMeta finish() throws IOException
@@ -320,325 +317,330 @@ public class BlockIndexWriter
         if (numRows == 0)
             return new BlockIndexMeta();
 
-        // write the block min values index
-        IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter());
-        int distinctCount = 0;
-        int start = 0;
-        int leafIdx = 0;
-
-        // write distinct min block terms and the min and max leaf id's encoded as a long
-        final BytesRefBuilder lastTerm = new BytesRefBuilder();
-        for (leafIdx = 0; leafIdx < blockMinValues.size(); leafIdx++)
-        {
-            final BytesRef minValue = blockMinValues.get(leafIdx);
-            if (leafIdx > 0)
-            {
-                final BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
-                if (!minValue.equals(prevMinValue))
-                {
-                    final int startLeaf = start;
-                    final int endLeaf = leafIdx - 1;
-
-                    if (leafValuesSame.get(endLeaf))
-                    {
-                        if (startLeaf < endLeaf)
-                        {
-                            multiBlockLeafRanges.add(Range.closed(startLeaf, endLeaf));
-                        }
-                    }
-                    else
-                    {
-                        if (startLeaf < endLeaf - 1)
-                        {
-                            multiBlockLeafRanges.add(Range.closed(startLeaf, endLeaf - 1));
-                        }
-                    }
-
-                    long encodedLong = (((long)startLeaf) << 32) | (endLeaf & 0xffffffffL);
-                    // TODO: when the start and end leaf's are the same encode a single int
-                    termsIndexWriter.add(fixedLength(prevMinValue), new Long(encodedLong));
-                    lastTerm.clear();
-                    lastTerm.append(prevMinValue);
-                    distinctCount = 0;
-                    start = leafIdx;
-                }
-            }
-            // TODO: assert that these results match the multi-block rangeset
-            if (leafIdx == blockMinValues.size() - 1 && leafIdx > 0)
-            {
-                final int endLeaf = leafIdx;
-                BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
-                long encodedLong = (((long)start) << 32) | (endLeaf & 0xffffffffL);
-                if (minValue.equals(prevMinValue))
-                {
-                    if (leafValuesSame.get(endLeaf))
-                    {
-                        if (start < endLeaf)
-                        {
-                            multiBlockLeafRanges.add(Range.closed(start, endLeaf));
-                        }
-                    }
-                    else
-                    {
-                        if (start < endLeaf - 1)
-                        {
-                            multiBlockLeafRanges.add(Range.closed(start, endLeaf - 1));
-                        }
-                    }
-                }
-
-                if (!minValue.equals(lastTerm.get()))
-                {
-                    assert minValue.compareTo(lastTerm.get()) > 0;
-
-                    //System.out.println("termsIndexWriter last add minValue=" + NumericUtils.sortableBytesToInt(minValue.bytes, 0));
-                    termsIndexWriter.add(fixedLength(minValue), new Long(encodedLong));
-                    lastTerm.clear();
-                    lastTerm.append(minValue);
-                }
-            }
-            distinctCount++;
-        }
-
-        assert leafBytesFPs.size() == blockMinValues.size()
-        : "leafFilePointers.size=" + leafBytesFPs.size() + " blockMinValues.size=" + blockMinValues.size();
-
-        final int numLeaves = leafBytesFPs.size();
-
-        final long leafFilePointersFP = valuesOut.getFilePointer();
-
-        for (int x = 0; x < realLeafBytesFPs.size(); x++)
-        {
-            valuesOut.writeVLong(realLeafBytesFPs.get(x));
-        }
-
-        final TreeMap<Integer,Integer> nodeIDToLeafOrdinal = new TreeMap();
-
-        rotateToTree(1, 0, leafBytesFPs.size() - 1, nodeIDToLeafOrdinal);
-
-        final TreeMap<Integer, Long> nodeIDToLeafPointer = new TreeMap<>();
-
-        long[] leafBlockFPs = leafBytesFPs.toLongArray();
-
-        assert numLeaves == leafBlockFPs.length;
-
-        // this is wacky lucene code that rearranges the leaf file pointers
-        if (numLeaves > 1)
-        {
-            int levelCount = 2;
-            while (true)
-            {
-                if (numLeaves >= levelCount && numLeaves <= 2 * levelCount)
-                {
-                    int lastLevel = 2 * (numLeaves - levelCount);
-                    assert lastLevel >= 0;
-                    if (lastLevel != 0)
-                    {
-                        // Last level is partially filled, so we must rotate the leaf FPs to match.  We do this here, after loading
-                        // at read-time, so that we can still delta code them on disk at write:
-                        long[] newLeafBlockFPs = new long[numLeaves];
-                        System.arraycopy(leafBlockFPs, lastLevel, newLeafBlockFPs, 0, leafBlockFPs.length - lastLevel);
-                        System.arraycopy(leafBlockFPs, 0, newLeafBlockFPs, leafBlockFPs.length - lastLevel, lastLevel);
-                        leafBlockFPs = newLeafBlockFPs;
-                    }
-                    break;
-                }
-
-                levelCount *= 2;
-            }
-        }
-
-        // traverse to gather into nodeIDToLeafPointer
-        recursePackIndex(leafBlockFPs,
-                         0l,
-                         1,
-                         true,
-                         nodeIDToLeafPointer);
-
-        // TODO: the "leafPointer" is actually the leaf id because
-        //       the binary tree code requires unique values
-        //       due to the same block min values having the same file pointer
-        //       the actual leaf file pointer can't be used here
-        final TreeMap<Long, Integer> leafPointerToNodeID = new TreeMap<>();
-        for (Map.Entry<Integer,Long> entry : nodeIDToLeafPointer.entrySet())
-        {
-            leafPointerToNodeID.put(entry.getValue(), entry.getKey());
-        }
-
-        final TreeMap<Integer,Integer> leafToNodeID = new TreeMap<>();
-
-        int ordinal = 0;
-        for (Map.Entry<Long, Integer> entry : leafPointerToNodeID.entrySet())
-        {
-            nodeIDToLeafOrdinal.put(entry.getValue(), ordinal);
-            leafToNodeID.put(ordinal, entry.getValue());
-            ordinal++;
-        }
-
+        long leafFilePointersFP = -1;
+        long nodeIDToLeafOrdinalFP = -1;
+        long leafIDPostingsFP_FP = -1;
+        long orderMapFP = -1;
+        long indexFP = -1;
         final IntLongHashMap nodeIDPostingsFP = new IntLongHashMap();
+        final TreeMap<Integer, Integer> nodeIDToLeafOrdinal = new TreeMap();
+        final TreeMap<Integer, Integer> leafToNodeID = new TreeMap<>();
 
-        final long nodeIDToLeafOrdinalFP = valuesOut.getFilePointer();
-        valuesOut.writeVInt(nodeIDToLeafOrdinal.size());
-
-        for (Map.Entry<Integer, Integer> entry : nodeIDToLeafOrdinal.entrySet())
+        // write the block min values index
+        try (IncrementalTrieWriter termsIndexWriter = new IncrementalDeepTrieWriterPageAware<>(trieSerializer, indexOut.asSequentialWriter()))
         {
-            valuesOut.writeVInt(entry.getKey());
-            valuesOut.writeVInt(entry.getValue());
+            int start = 0;
+            int leafIdx = 0;
 
-            int nodeID = entry.getKey();
-            int leafOrdinal = entry.getValue();
-
-            // nodeID >= numLeaves is a leaf node
-            if (nodeID >= numLeaves)
+            // write distinct min block terms and the min and max leaf id's encoded as a long
+            final BytesRefBuilder lastTerm = new BytesRefBuilder();
+            for (leafIdx = 0; leafIdx < blockMinValues.size(); leafIdx++)
             {
-                final Long postingsFP = leafToPostingsFP.get(leafOrdinal);
-
-                // postingsFP may be null with same value multi-block postings
-                if (postingsFP != null)
+                final BytesRef minValue = blockMinValues.get(leafIdx);
+                if (leafIdx > 0)
                 {
-                    nodeIDPostingsFP.put(nodeID, postingsFP);
+                    final BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
+                    if (!minValue.equals(prevMinValue))
+                    {
+                        final int startLeaf = start;
+                        final int endLeaf = leafIdx - 1;
+
+                        if (leafValuesSame.get(endLeaf))
+                        {
+                            if (startLeaf < endLeaf)
+                            {
+                                multiBlockLeafRanges.add(Range.closed(startLeaf, endLeaf));
+                            }
+                        }
+                        else
+                        {
+                            if (startLeaf < endLeaf - 1)
+                            {
+                                multiBlockLeafRanges.add(Range.closed(startLeaf, endLeaf - 1));
+                            }
+                        }
+
+                        long encodedLong = (((long) startLeaf) << 32) | (endLeaf & 0xffffffffL);
+                        // TODO: when the start and end leaf's are the same encode a single int
+                        termsIndexWriter.add(fixedLength(prevMinValue), new Long(encodedLong));
+                        lastTerm.clear();
+                        lastTerm.append(prevMinValue);
+                        start = leafIdx;
+                    }
                 }
-            }
-        }
-
-        final long leafIDPostingsFP_FP = leafPostingsOut.getFilePointer();
-        this.leafPostingsOut.writeVInt(leafToPostingsFP.size());
-        for (Map.Entry<Integer,Long> entry : leafToPostingsFP.entrySet())
-        {
-            this.leafPostingsOut.writeVInt(entry.getKey());
-            this.leafPostingsOut.writeVLong(entry.getValue());
-        }
-
-        final long orderMapFP = this.orderMapOut.getFilePointer();
-        orderMapOut.writeVInt(this.leafToOrderMapFP.size());
-        for (Map.Entry<Integer, Long> entry : this.leafToOrderMapFP.entrySet())
-        {
-            orderMapOut.writeVInt(entry.getKey());
-            orderMapOut.writeVLong(entry.getValue());
-        }
-
-        final long indexFP = termsIndexWriter.complete();
-
-        // write multiBlockLeafRanges
-        final long multiBlockLeafRangesFP = this.leafPostingsOut.getFilePointer();
-        IntRangeSetSerializer.serialize(multiBlockLeafRanges, this.leafPostingsOut);
-
-        // write leafValuesSame
-        final long leafValuesSameFP;
-        final long leafValuesSamePostingsFP;
-        if (this.leafValuesSame.cardinality() > 0)
-        {
-            leafValuesSameFP = leafPostingsOut.getFilePointer();
-            leafValuesSamePostingsFP = BitSetSerializer.serialize(this.leafValuesSame, this.leafPostingsOut);
-        }
-        else
-        {
-            leafValuesSameFP = -1;
-            leafValuesSamePostingsFP = -1;
-        }
-        final long nodeIDPostingsFP_FP = leafPostingsOut.getFilePointer();
-
-        this.leafPostingsOut.writeVInt(nodeIDPostingsFP.size());
-        for (IntLongCursor cursor : nodeIDPostingsFP)
-        {
-            this.leafPostingsOut.writeVInt(cursor.key);
-            this.leafPostingsOut.writeVLong(cursor.value);
-        }
-
-        // close leaf postings now because MultiLevelPostingsWriter reads leaf postings
-        this.leafPostingsOut.close();
-
-        final SharedIndexInput leafPostingsInput = this.fileProvider.openLeafPostingsInput(temporary);
-
-        final MultiLevelPostingsWriter multiLevelPostingsWriter = new MultiLevelPostingsWriter(leafPostingsInput,
-                                                                                               IndexWriterConfig.defaultConfig("indexName"),
-                                                                                               nodeIDPostingsFP,
-                                                                                               leafBytesFPs.size(),
-                                                                                               nodeIDToLeafOrdinal,
-                                                                                               this.multiBlockLeafRanges,
-                                                                                               leafToNodeID);
-
-        final IndexOutput bigPostingsOut = this.fileProvider.openMultiPostingsOutput(temporary);
-
-        final TreeMultimap<Integer, Long> nodeIDToMultilevelPostingsFP = multiLevelPostingsWriter.finish(bigPostingsOut);
-
-        final long nodeIDToMultilevelPostingsFP_FP = bigPostingsOut.getFilePointer();
-        bigPostingsOut.writeVInt(nodeIDToMultilevelPostingsFP.size());
-        for (Map.Entry<Integer,Long> entry : nodeIDToMultilevelPostingsFP.entries())
-        {
-            bigPostingsOut.writeVInt(entry.getKey());
-            bigPostingsOut.writeZLong(entry.getValue());
-        }
-
-        leafPostingsInput.close();
-        bigPostingsOut.close();
-        termsIndexWriter.close();
-        indexOut.close();
-        orderMapOut.close();
-        valuesOut.close();
-
-        assert realLeafBytesFPs.size() == realLeafBytesLengths.size();
-
-        // TODO: when there are duplicate row ids it means
-        //       this isn't a single value per row index and so cannot have a row id -> point id map
-        final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(false);
-        final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
-        // write the row id -> point id map
-        final RowPointIterator rowPointIterator = this.rowPointIterator();
-        long lastRowID = -1;
-        while (true)
-        {
-            final RowPoint rowPoint = rowPointIterator.next();
-            if (rowPoint == null)
-            {
-                break;
-            }
-            // fill in the gaps of the row ids
-            if (rowPoint.rowID - lastRowID > 1)
-            {
-                for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                // TODO: assert that these results match the multi-block rangeset
+                if (leafIdx == blockMinValues.size() - 1 && leafIdx > 0)
                 {
-                    rowPointWriter.add(-1);
+                    final int endLeaf = leafIdx;
+                    BytesRef prevMinValue = blockMinValues.get(leafIdx - 1);
+                    long encodedLong = (((long) start) << 32) | (endLeaf & 0xffffffffL);
+                    if (minValue.equals(prevMinValue))
+                    {
+                        if (leafValuesSame.get(endLeaf))
+                        {
+                            if (start < endLeaf)
+                            {
+                                multiBlockLeafRanges.add(Range.closed(start, endLeaf));
+                            }
+                        }
+                        else
+                        {
+                            if (start < endLeaf - 1)
+                            {
+                                multiBlockLeafRanges.add(Range.closed(start, endLeaf - 1));
+                            }
+                        }
+                    }
+
+                    if (!minValue.equals(lastTerm.get()))
+                    {
+                        assert minValue.compareTo(lastTerm.get()) > 0;
+
+                        //System.out.println("termsIndexWriter last add minValue=" + NumericUtils.sortableBytesToInt(minValue.bytes, 0));
+                        termsIndexWriter.add(fixedLength(minValue), new Long(encodedLong));
+                        lastTerm.clear();
+                        lastTerm.append(minValue);
+                    }
                 }
             }
 
-            // assert there are no gaps
+            assert leafBytesFPs.size() == blockMinValues.size()
+            : "leafFilePointers.size=" + leafBytesFPs.size() + " blockMinValues.size=" + blockMinValues.size();
 
-            // TODO: fix
-            // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
+            final int numLeaves = leafBytesFPs.size();
 
-            rowPointWriter.add(rowPoint.pointID);
-            lastRowID = rowPoint.rowID;
+            leafFilePointersFP = valuesOut.getFilePointer();
+
+            for (int x = 0; x < realLeafBytesFPs.size(); x++)
+            {
+                valuesOut.writeVLong(realLeafBytesFPs.get(x));
+            }
+
+            rotateToTree(1, 0, leafBytesFPs.size() - 1, nodeIDToLeafOrdinal);
+
+            final TreeMap<Integer, Long> nodeIDToLeafPointer = new TreeMap<>();
+
+            long[] leafBlockFPs = leafBytesFPs.toLongArray();
+
+            assert numLeaves == leafBlockFPs.length;
+
+            // this is wacky lucene code that rearranges the leaf file pointers
+            if (numLeaves > 1)
+            {
+                int levelCount = 2;
+                while (true)
+                {
+                    if (numLeaves >= levelCount && numLeaves <= 2 * levelCount)
+                    {
+                        int lastLevel = 2 * (numLeaves - levelCount);
+                        assert lastLevel >= 0;
+                        if (lastLevel != 0)
+                        {
+                            // Last level is partially filled, so we must rotate the leaf FPs to match.  We do this here, after loading
+                            // at read-time, so that we can still delta code them on disk at write:
+                            long[] newLeafBlockFPs = new long[numLeaves];
+                            System.arraycopy(leafBlockFPs, lastLevel, newLeafBlockFPs, 0, leafBlockFPs.length - lastLevel);
+                            System.arraycopy(leafBlockFPs, 0, newLeafBlockFPs, leafBlockFPs.length - lastLevel, lastLevel);
+                            leafBlockFPs = newLeafBlockFPs;
+                        }
+                        break;
+                    }
+
+                    levelCount *= 2;
+                }
+            }
+
+            // traverse to gather into nodeIDToLeafPointer
+            recursePackIndex(leafBlockFPs, 0l, 1, true, nodeIDToLeafPointer);
+
+            // TODO: the "leafPointer" is actually the leaf id because
+            //       the binary tree code requires unique values
+            //       due to the same block min values having the same file pointer
+            //       the actual leaf file pointer can't be used here
+            final TreeMap<Long, Integer> leafPointerToNodeID = new TreeMap<>();
+            for (Map.Entry<Integer, Long> entry : nodeIDToLeafPointer.entrySet())
+            {
+                leafPointerToNodeID.put(entry.getValue(), entry.getKey());
+            }
+
+            int ordinal = 0;
+            for (Map.Entry<Long, Integer> entry : leafPointerToNodeID.entrySet())
+            {
+                nodeIDToLeafOrdinal.put(entry.getValue(), ordinal);
+                leafToNodeID.put(ordinal, entry.getValue());
+                ordinal++;
+            }
+
+            nodeIDToLeafOrdinalFP = valuesOut.getFilePointer();
+            valuesOut.writeVInt(nodeIDToLeafOrdinal.size());
+
+            for (Map.Entry<Integer, Integer> entry : nodeIDToLeafOrdinal.entrySet())
+            {
+                valuesOut.writeVInt(entry.getKey());
+                valuesOut.writeVInt(entry.getValue());
+
+                int nodeID = entry.getKey();
+                int leafOrdinal = entry.getValue();
+
+                // nodeID >= numLeaves is a leaf node
+                if (nodeID >= numLeaves)
+                {
+                    final Long postingsFP = leafToPostingsFP.get(leafOrdinal);
+
+                    // postingsFP may be null with same value multi-block postings
+                    if (postingsFP != null)
+                    {
+                        nodeIDPostingsFP.put(nodeID, postingsFP);
+                    }
+                }
+            }
+
+            leafIDPostingsFP_FP = leafPostingsOut.getFilePointer();
+            this.leafPostingsOut.writeVInt(leafToPostingsFP.size());
+            for (Map.Entry<Integer, Long> entry : leafToPostingsFP.entrySet())
+            {
+                this.leafPostingsOut.writeVInt(entry.getKey());
+                this.leafPostingsOut.writeVLong(entry.getValue());
+            }
+
+            orderMapFP = this.orderMapOut.getFilePointer();
+            orderMapOut.writeVInt(this.leafToOrderMapFP.size());
+            for (Map.Entry<Integer, Long> entry : this.leafToOrderMapFP.entrySet())
+            {
+                orderMapOut.writeVInt(entry.getKey());
+                orderMapOut.writeVLong(entry.getValue());
+            }
+
+            indexFP = termsIndexWriter.complete();
         }
-        final long rowPointMap_FP = rowPointWriter.finish();
-        rowPointIterator.close();
-        rowPointOut.close();
 
-        // all files are written, create the CRC check
-        byte[] fileInfoMapBytes;
-        if (temporary)
-            fileInfoMapBytes = new byte[] {};
-        else
-            fileInfoMapBytes = SerializationUtils.serialize(this.fileProvider.fileInfoMap());
 
-        return new BlockIndexMeta(orderMapFP,
-                                  indexFP,
-                                  leafFilePointersFP,
-                                  leafBytesFPs.size(),
-                                  nodeIDToLeafOrdinalFP,
-                                  multiBlockLeafRangesFP,
-                                  nodeIDToMultilevelPostingsFP_FP,
-                                  leafValuesSameFP,
-                                  leafValuesSamePostingsFP,
-                                  nodeIDPostingsFP_FP,
-                                  numRows,
-                                  minRowID,
-                                  maxRowID,
-                                  minTerm,
-                                  BytesRef.deepCopyOf(realLastTerm.toBytesRef()), // last term
-                                  leafIDPostingsFP_FP,
-                                  new BytesRef(fileInfoMapBytes),
-                                  rowPointMap_FP);
+            // write multiBlockLeafRanges
+            final long multiBlockLeafRangesFP = this.leafPostingsOut.getFilePointer();
+            IntRangeSetSerializer.serialize(multiBlockLeafRanges, this.leafPostingsOut);
+
+            // write leafValuesSame
+            final long leafValuesSameFP;
+            final long leafValuesSamePostingsFP;
+            if (this.leafValuesSame.cardinality() > 0)
+            {
+                leafValuesSameFP = leafPostingsOut.getFilePointer();
+                leafValuesSamePostingsFP = BitSetSerializer.serialize(this.leafValuesSame, this.leafPostingsOut);
+            }
+            else
+            {
+                leafValuesSameFP = -1;
+                leafValuesSamePostingsFP = -1;
+            }
+            final long nodeIDPostingsFP_FP = leafPostingsOut.getFilePointer();
+
+            this.leafPostingsOut.writeVInt(nodeIDPostingsFP.size());
+            for (IntLongCursor cursor : nodeIDPostingsFP)
+            {
+                this.leafPostingsOut.writeVInt(cursor.key);
+                this.leafPostingsOut.writeVLong(cursor.value);
+            }
+
+            // close leaf postings now because MultiLevelPostingsWriter reads leaf postings
+            this.leafPostingsOut.close();
+
+            try (final SharedIndexInput leafPostingsInput = this.fileProvider.openLeafPostingsInput(temporary);
+                 final IndexOutput bigPostingsOut = this.fileProvider.openMultiPostingsOutput(temporary))
+            {
+
+                final MultiLevelPostingsWriter multiLevelPostingsWriter = new MultiLevelPostingsWriter(leafPostingsInput,
+                                                                                                       IndexWriterConfig.defaultConfig("indexName"),
+                                                                                                       nodeIDPostingsFP,
+                                                                                                       leafBytesFPs.size(),
+                                                                                                       nodeIDToLeafOrdinal,
+                                                                                                       this.multiBlockLeafRanges,
+                                                                                                       leafToNodeID);
+
+
+                final TreeMultimap<Integer, Long> nodeIDToMultilevelPostingsFP = multiLevelPostingsWriter.finish(bigPostingsOut);
+
+                final long nodeIDToMultilevelPostingsFP_FP = bigPostingsOut.getFilePointer();
+                bigPostingsOut.writeVInt(nodeIDToMultilevelPostingsFP.size());
+                for (Map.Entry<Integer, Long> entry : nodeIDToMultilevelPostingsFP.entries())
+                {
+                    bigPostingsOut.writeVInt(entry.getKey());
+                    bigPostingsOut.writeZLong(entry.getValue());
+                }
+
+                orderMapOut.close();
+                valuesOut.close();
+                indexOut.close();
+
+                assert realLeafBytesFPs.size() == realLeafBytesLengths.size();
+
+                // TODO: when there are duplicate row ids it means
+                //       this isn't a single value per row index and so cannot have a row id -> point id map
+                final IndexOutput rowPointOut = this.fileProvider.openPointIdMapOutput(false);
+                final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
+                // write the row id -> point id map
+                final RowPointIterator rowPointIterator = this.rowPointIterator(leafPostingsInput);
+                long lastRowID = -1;
+                while (true)
+                {
+                    final RowPoint rowPoint = rowPointIterator.next();
+                    if (rowPoint == null)
+                    {
+                        break;
+                    }
+                    // fill in the gaps of the row ids
+                    if (rowPoint.rowID - lastRowID > 1)
+                    {
+                        for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                        {
+                            rowPointWriter.add(-1);
+                        }
+                    }
+
+                    // assert there are no gaps
+
+                    // TODO: fix
+                    // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
+
+                    rowPointWriter.add(rowPoint.pointID);
+                    lastRowID = rowPoint.rowID;
+                }
+                final long rowPointMap_FP = rowPointWriter.finish();
+                rowPointIterator.close();
+                rowPointOut.close();
+
+                // all files are written, create the CRC check
+                byte[] fileInfoMapBytes;
+//                if (temporary)
+                    fileInfoMapBytes = new byte[]{};
+//                else
+//                    fileInfoMapBytes = SerializationUtils.serialize(this.fileProvider.fileInfoMap());
+
+                return new BlockIndexMeta(orderMapFP,
+                                          indexFP,
+                                          leafFilePointersFP,
+                                          leafBytesFPs.size(),
+                                          nodeIDToLeafOrdinalFP,
+                                          multiBlockLeafRangesFP,
+                                          nodeIDToMultilevelPostingsFP_FP,
+                                          leafValuesSameFP,
+                                          leafValuesSamePostingsFP,
+                                          nodeIDPostingsFP_FP,
+                                          numRows,
+                                          minRowID,
+                                          maxRowID,
+                                          minTerm,
+                                          BytesRef.deepCopyOf(realLastTerm.toBytesRef()), // last term
+                                          leafIDPostingsFP_FP,
+                                          new BytesRef(fileInfoMapBytes),
+                                          rowPointMap_FP);
+            }
+    }
+
+    @Override
+    public void close() throws IOException
+    {
+        FileUtils.closeQuietly(valuesOut, compressedValuesOut, indexOut, leafPostingsOut, orderMapOut);
+
     }
 
     private long minRowID = Long.MAX_VALUE;

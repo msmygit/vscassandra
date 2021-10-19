@@ -140,7 +140,6 @@ public class IndexInputReader extends IndexInput
     @Override
     public void close()
     {
-        logger.debug("Closing reader", new Throwable());
         try
         {
             input.close();
