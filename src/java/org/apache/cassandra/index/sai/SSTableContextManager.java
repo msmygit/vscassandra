@@ -43,6 +43,11 @@ public class SSTableContextManager
 
     private final ConcurrentHashMap<SSTableReader, SSTableContext> sstableContexts = new ConcurrentHashMap<>();
 
+    public ConcurrentHashMap<SSTableReader, SSTableContext> sstableContexts()
+    {
+        return sstableContexts;
+    }
+
     /**
      * Initialize {@link SSTableContext}s if they are not already initialized.
      *

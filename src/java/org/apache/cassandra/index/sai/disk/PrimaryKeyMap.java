@@ -33,16 +33,29 @@ public interface PrimaryKeyMap extends Closeable
 {
     public interface Factory extends Closeable
     {
-        PrimaryKeyMap.Factory IDENTITY = (context) -> PrimaryKeyMap.IDENTITY;
+        PrimaryKeyMap.Factory IDENTITY = new Factory()
+        {
+            @Override
+            public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
+            {
+                return PrimaryKeyMap.IDENTITY;
+            }
+
+            @Override
+            public boolean maybeContains(long hash)
+            {
+               throw new UnsupportedOperationException();
+            }
+        };
 
         PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException;
+
+        boolean maybeContains(long hash);
 
         default void close() throws IOException
         {
         }
     }
-
-    boolean maybeContains(PrimaryKey key);
 
     PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException;
 
@@ -61,12 +74,6 @@ public interface PrimaryKeyMap extends Closeable
     PrimaryKeyMap IDENTITY = new PrimaryKeyMap()
     {
         @Override
-        public boolean maybeContains(PrimaryKey key)
-        {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId)
         {
             return PrimaryKey.factory().createKey(new Murmur3Partitioner.LongToken(sstableRowId), sstableRowId);
@@ -81,12 +88,6 @@ public interface PrimaryKeyMap extends Closeable
 
     PrimaryKeyMap EMPTY = new PrimaryKeyMap()
     {
-        @Override
-        public boolean maybeContains(PrimaryKey key)
-        {
-            return false;
-        }
-
         @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
         {

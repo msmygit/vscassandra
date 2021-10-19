@@ -30,6 +30,10 @@ import org.apache.lucene.store.IndexInput;
 
 public interface BlockIndexFileProvider extends AutoCloseable
 {
+    SharedIndexInput openPrimaryKeyAMQInput(boolean temporary) throws IOException;
+
+    IndexOutputWriter openPrimaryKeyAMQOutput(boolean temporary) throws IOException;
+
     IndexOutputWriter openValuesOutput(boolean temporary) throws IOException;
 
     IndexOutputWriter openIndexOutput(boolean temporary) throws IOException;

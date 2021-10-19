@@ -21,6 +21,7 @@ import java.io.File;
 
 import com.google.common.base.Objects;
 
+import org.apache.cassandra.index.sai.disk.PrimaryKeyFilter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.PerIndexFiles;
@@ -42,7 +43,10 @@ public class SSTableContext extends SharedCloseableImpl
     public final IndexDescriptor indexDescriptor;
     public final PrimaryKeyMap.Factory primaryKeyMapFactory;
 
-    protected SSTableContext(SSTableReader sstable, PrimaryKeyMap.Factory primaryKeyMapFactory, IndexDescriptor indexDescriptor, RefCounted.Tidy tidy)
+    protected SSTableContext(SSTableReader sstable,
+                             PrimaryKeyMap.Factory primaryKeyMapFactory,
+                             IndexDescriptor indexDescriptor,
+                             RefCounted.Tidy tidy)
     {
         super(tidy);
         this.sstable = sstable;

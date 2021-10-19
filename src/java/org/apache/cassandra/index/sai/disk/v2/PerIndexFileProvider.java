@@ -19,6 +19,7 @@
 package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -60,6 +61,18 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     {
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
+    }
+
+    @Override
+    public SharedIndexInput openPrimaryKeyAMQInput(boolean temporary) throws IOException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public IndexOutputWriter openPrimaryKeyAMQOutput(boolean temporary) throws IOException
+    {
+        throw new UnsupportedOperationException();
     }
 
     @Override

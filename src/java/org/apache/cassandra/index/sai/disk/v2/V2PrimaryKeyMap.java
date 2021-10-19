@@ -20,11 +20,13 @@ package org.apache.cassandra.index.sai.disk.v2;
 import java.io.IOException;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyFilter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
+import org.apache.cassandra.index.sai.disk.v2.fastfilter.xor.Xor16;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
@@ -43,10 +45,19 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         private final BlockIndexReader reader;
         private final PrimaryKey.PrimaryKeyFactory keyFactory;
         private final long size;
+        private final PrimaryKeyFilter primaryKeyFilter;
+        final Xor16 xor;
 
         public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor) throws IOException
         {
             fileProvider = new PerSSTableFileProvider(indexDescriptor);
+
+            try (final IndexInput amqInput = fileProvider.openPrimaryKeyAMQInput(false))
+            {
+                xor = new Xor16(amqInput);
+                primaryKeyFilter = (hash) -> xor.mayContain(hash);
+            }
+
             this.keyFactory = indexDescriptor.primaryKeyFactory;
             if (indexDescriptor.isSSTableEmpty())
             {
@@ -63,6 +74,12 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
                 size = metadata.numRows;
                 reader = new BlockIndexReader(fileProvider, false, metadata);
             }
+        }
+
+        @Override
+        public boolean maybeContains(long hash)
+        {
+            return primaryKeyFilter.maybeContains(hash);
         }
 
         @Override
@@ -92,12 +109,6 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         this.context = reader.initContext();
         this.keyFactory = keyFactory;
         this.size = size;
-    }
-
-    @Override
-    public boolean maybeContains(PrimaryKey key)
-    {
-        return false;
     }
 
     @Override

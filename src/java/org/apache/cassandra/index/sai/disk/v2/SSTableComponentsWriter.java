@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.carrotsearch.hppc.LongArrayList;
+import net.openhft.hashing.LongHashFunction;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.db.tries.Trie;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
@@ -38,12 +39,14 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.MergeIndexIterators;
+import org.apache.cassandra.index.sai.disk.v2.fastfilter.xor.Xor16;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 
 /**
@@ -100,6 +103,10 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         temp.clear();
         BytesUtil.gatherBytes(source, temp);
 
+        final BytesRef primaryKeyRef = temp.get();
+        final long hash = LongHashFunction.xx3().hashBytes(primaryKeyRef.bytes, primaryKeyRef.offset, primaryKeyRef.length);
+        keyHashes.add(hash);
+
         try
         {
             rowMapping.apply(Trie.singleton(v -> key.asComparableBytes(v), key.sstableRowId()), (existing, neww) -> neww);
@@ -131,10 +138,18 @@ public class SSTableComponentsWriter implements PerSSTableWriter
 
     private void compactSegments() throws IOException
     {
+        final Xor16 xor = new Xor16(this.keyHashes.toArray());
+
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
         List<BlockIndexReader> readers = new ArrayList<>();
         try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))
         {
+            // write the AMQ xor filter of primary keys
+            try (final IndexOutput xorOutput = fileProvider.openPrimaryKeyAMQOutput(false))
+            {
+                xor.write(xorOutput);
+            }
+
             for (BlockIndexMeta metadata : metadatas)
             {
                 BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
@@ -152,6 +167,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
                     {
                         break;
                     }
+
                     writer.add(BytesUtil.fixedLength(state.term), state.rowid);
                 }
                 BlockIndexMeta meta = writer.finish();

@@ -21,6 +21,7 @@ import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -33,6 +34,7 @@ import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.openhft.hashing.LongHashFunction;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
@@ -68,6 +70,7 @@ import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 /**
  * Orchestrates building of storage-attached indices, and manages lifecycle of resources shared between them.
@@ -182,27 +185,23 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
             @Override
             public void insertRow(Row row)
             {
-//                final ByteSource totalKeyBytes = asComparableBytes(key, row.clustering(), ByteComparable.Version.OSS41);
-//                final byte[] totalKey = ByteSourceInverse.readBytes(totalKeyBytes);
+                final ByteSource totalKeyBytes = asComparableBytes(key, row.clustering(), ByteComparable.Version.OSS41);
+                final byte[] totalKey = ByteSourceInverse.readBytes(totalKeyBytes);
 
-//                final boolean isUnique = !filter.mightContain(totalKey);
-//
-//                if (isUnique)
-//                {
-//                    final boolean went = filter.put(totalKey);
-//                    if (!went)
-//                    {
-//                        // TODO: log warning?
-//                    }
-//                    row.setUnique(Row.Unique.UNIQUE);
-//                }
-//                else
-//                {
-//                    row.setUnique(Row.Unique.NOT_UNIQUE);
-//                }
+                final long hash = LongHashFunction.xx3().hashBytes(totalKey, 0, totalKey.length);
 
-                // TODO: implement per sstable primary key xor filter check
                 row.setUnique(Row.Unique.UNIQUE);
+
+                // TODO: check the sstable min/max primary key bounds first
+                for (Map.Entry<SSTableReader, SSTableContext> entry : sstableContextManager().sstableContexts().entrySet())
+                {
+                    final boolean maybe = entry.getValue().primaryKeyMapFactory.maybeContains(hash);
+                    if (maybe)
+                    {
+                        row.setUnique(Row.Unique.NOT_UNIQUE);
+                        break;
+                    }
+                }
 
                 forEach(indexer -> indexer.insertRow(row));
             }

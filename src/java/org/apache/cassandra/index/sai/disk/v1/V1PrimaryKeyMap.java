@@ -77,6 +77,12 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
         }
 
         @Override
+        public boolean maybeContains(long hash)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context)
         {
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));
@@ -107,12 +113,6 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
         this.reader = keyFetcher.createReader();
         this.primaryKeyFactory = primaryKeyFactory;
         this.size = size;
-    }
-
-    @Override
-    public boolean maybeContains(PrimaryKey key)
-    {
-        throw new UnsupportedOperationException();
     }
 
     @Override

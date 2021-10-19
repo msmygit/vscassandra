@@ -76,6 +76,7 @@ public enum IndexComponent
      */
     PRIMARY_KEY_OFFSETS("PrimaryKeyOffsets"),
     PRIMARY_KEY_MAP("PrimaryKeyMap"),
+    PRIMARY_KEY_AMQ("PrimaryKeyAMQ"),
     /**
      * Partition key token value for rows including row tombstone and static row. (access key is rowId)
      *

@@ -41,6 +41,7 @@ import static org.apache.cassandra.index.sai.disk.format.IndexComponent.GROUP_ME
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.KD_TREE_POSTING_LISTS;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ORDER_MAP;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.POSTING_LISTS;
+import static org.apache.cassandra.index.sai.disk.format.IndexComponent.PRIMARY_KEY_AMQ;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ROW_ID_POINT_ID_MAP;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.TERMS_DATA;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.TERMS_INDEX;
@@ -57,6 +58,12 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     public PerSSTableFileProvider(IndexDescriptor indexDescriptor)
     {
         this.indexDescriptor = indexDescriptor;
+    }
+
+    @Override
+    public IndexOutputWriter openPrimaryKeyAMQOutput(boolean temporary) throws IOException
+    {
+        return indexDescriptor.openPerSSTableOutput(PRIMARY_KEY_AMQ, true, temporary);
     }
 
     @Override
@@ -105,6 +112,12 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     public IndexOutputWriter openMetadataOutput() throws IOException
     {
         return indexDescriptor.openPerSSTableOutput(GROUP_META);
+    }
+
+    @Override
+    public SharedIndexInput openPrimaryKeyAMQInput(boolean temporary) throws IOException
+    {
+        return new SharedIndexInput(openInput(PRIMARY_KEY_AMQ, temporary));
     }
 
     @Override
