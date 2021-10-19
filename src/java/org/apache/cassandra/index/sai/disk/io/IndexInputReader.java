@@ -19,6 +19,10 @@ package org.apache.cassandra.index.sai.disk.io;
 
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.io.compress.CorruptBlockException;
 import org.apache.cassandra.io.util.FileHandle;
@@ -29,6 +33,8 @@ import org.apache.lucene.store.IndexInput;
 
 public class IndexInputReader extends IndexInput
 {
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
     private final RandomAccessReader input;
     private final Runnable doOnClose;
 
@@ -134,6 +140,7 @@ public class IndexInputReader extends IndexInput
     @Override
     public void close()
     {
+        logger.debug("Closing reader", new Throwable());
         try
         {
             input.close();
