@@ -385,6 +385,10 @@ public class QueryController
 
                     builder.add(new PostingListRangeIterator(indexContext, primaryKeyMap, context2));
                 }
+                else
+                {
+                    sstablePostings.close();
+                }
             }
             return builder;
         }

@@ -76,6 +76,16 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
             }
         }
 
+        public BytesRef minPrimaryKey()
+        {
+            return metadata.minTerm;
+        }
+
+        public BytesRef maxPrimaryKey()
+        {
+            return metadata.maxTerm;
+        }
+
         @Override
         public boolean maybeContains(long hash)
         {

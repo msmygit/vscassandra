@@ -49,6 +49,7 @@ import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.metrics.IndexGroupMetrics;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.TableStateMetrics;
@@ -71,6 +72,7 @@ import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.lucene.util.BytesRef;
 
 /**
  * Orchestrates building of storage-attached indices, and manages lifecycle of resources shared between them.
@@ -188,18 +190,24 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                 final ByteSource totalKeyBytes = asComparableBytes(key, row.clustering(), ByteComparable.Version.OSS41);
                 final byte[] totalKey = ByteSourceInverse.readBytes(totalKeyBytes);
 
+                final BytesRef totalKeyRef = new BytesRef(totalKey);
+
                 final long hash = LongHashFunction.xx3().hashBytes(totalKey, 0, totalKey.length);
 
                 row.setUnique(Row.Unique.UNIQUE);
 
-                // TODO: check the sstable min/max primary key bounds first
                 for (Map.Entry<SSTableReader, SSTableContext> entry : sstableContextManager().sstableContexts().entrySet())
                 {
-                    final boolean maybe = entry.getValue().primaryKeyMapFactory.maybeContains(hash);
-                    if (maybe)
+                    V2PrimaryKeyMap.V2PrimaryKeyMapFactory pkeyFactory = (V2PrimaryKeyMap.V2PrimaryKeyMapFactory)entry.getValue().primaryKeyMapFactory;
+                    if (totalKeyRef.compareTo(pkeyFactory.minPrimaryKey()) >= 0 &&
+                        totalKeyRef.compareTo(pkeyFactory.maxPrimaryKey()) <= 0)
                     {
-                        row.setUnique(Row.Unique.NOT_UNIQUE);
-                        break;
+                        final boolean maybe = entry.getValue().primaryKeyMapFactory.maybeContains(hash);
+                        if (maybe)
+                        {
+                            row.setUnique(Row.Unique.NOT_UNIQUE);
+                            break;
+                        }
                     }
                 }
 
