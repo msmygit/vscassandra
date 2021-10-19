@@ -188,7 +188,7 @@ public class MultiLevelPostingsWriter
                 }
             }
 
-            final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+            final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
 
             for (final Integer leafNodeID : leafNodeIDsCopy)
             {
@@ -197,7 +197,6 @@ public class MultiLevelPostingsWriter
                 if (nodeIDPostingsFP.containsKey(leafNodeID))
                 {
                     final long postingsFP = nodeIDPostingsFP.get(leafNodeID);
-//                    final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(leafPostingsInput, postingsFP);
                     final PostingsReader reader = new PostingsReader(leafPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(reader.peekable());
                 }

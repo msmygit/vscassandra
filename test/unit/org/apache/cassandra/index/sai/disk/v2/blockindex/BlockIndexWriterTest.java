@@ -549,6 +549,24 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
         }
     }
 
+    @Test
+    public void testMultiPostingsWriter() throws Throwable
+    {
+        ByteComparable term = v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v);
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
+        {
+            for (int rowId = 0; rowId < 100000; rowId++)
+                blockIndexWriter.add(term, rowId);
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+        }
+    }
+
     private LongArrayList toLongArrayList(long... rowIds)
     {
         LongArrayList list = new LongArrayList();
@@ -779,59 +797,6 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
                              bkdPosition,
                              kdtreePostingsHandle,
                              postingsPosition);
-
-//        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-//                                                                 columnContext,
-//                                                                 maxPointsPerLeaf,
-//                                                                 Integer.BYTES,
-//                                                                 maxRowID,
-//                                                                 totalRows,
-//                                                                 new IndexWriterConfig("test", 2, 8),
-//                                                                 false);
-//
-//        IndexComponent kdtree = IndexComponent.create(IndexComponent.Type.KD_TREE, index);
-//        IndexComponent kdtreePostings = IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index);
-//
-//        final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-//        final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
-//        assertThat(bkdPosition, is(greaterThan(0L)));
-//        final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
-//        assertThat(postingsPosition, is(greaterThan(0L)));
-//
-//        FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
-//        FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
-//        return new BKDReader(columnContext,
-//                             kdtreeHandle,
-//                             bkdPosition,
-//                             kdtreePostingsHandle,
-//                             postingsPosition,
-//                             PrimaryKeyMap.IDENTITY);
-
-//        IndexContext columnContext = SAITester.createIndexContext(index, Int32Type.instance);
-//        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-//                                                                 maxPointsPerLeaf,
-//                                                                 Integer.BYTES,
-//                                                                 maxRowID,
-//                                                                 totalRows,
-//                                                                 new IndexWriterConfig("test", 2, 8),
-//                                                                 false);
-//
-//
-//
-//        final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-//        final long bkdPosition = metadata.get(IndexComponents.NDIType.KD_TREE).root;
-//        assertThat(bkdPosition, is(greaterThan(0L)));
-//        final long postingsPosition = metadata.get(IndexComponents.NDIType.KD_TREE_POSTING_LISTS).root;
-//        assertThat(postingsPosition, is(greaterThan(0L)));
-//
-//        FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-//        FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
-//        return new BKDReader(indexDescriptor,
-//                             kdtree,
-//                             bkdPosition,
-//                             kdtreePostings,
-//                             postingsPosition,
-//                             PrimaryKeyMap.IDENTITY);
     }
 
     public static Pair<ByteComparable, LongArrayList> add(String term, long[] array)
