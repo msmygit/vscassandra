@@ -114,6 +114,8 @@ public class MemtableIndexWriter implements PerIndexWriter
                     logger.trace(indexContext.logMessage("Flushed {} Memtable index cells for {} in {} ms."), cellCount, indexDescriptor.descriptor, durationMillis);
                 }
 
+                logger.debug(indexContext.logMessage("Flushed {} Memtable index cells for {} in {} ms."), cellCount, indexDescriptor.descriptor, durationMillis);
+
                 indexContext.getIndexMetrics().memtableFlushCellsPerSecond.update((long) (cellCount * 1000.0 / durationMillis));
             }
         }
@@ -130,9 +132,9 @@ public class MemtableIndexWriter implements PerIndexWriter
     {
         long numRows;
 
-        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false))
         {
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
             numRows = writer.addAll(terms);
             // If no rows were written we need to delete any created column index components
             // so that the index is correctly identified as being empty (only having a completion marker)
@@ -148,6 +150,7 @@ public class MemtableIndexWriter implements PerIndexWriter
                 metadata.write(out);
             }
         }
+        logger.debug(indexContext.logMessage("Wrote {} indexed rows to disk for SSTable {}."), numRows, indexDescriptor.descriptor);
         return numRows;
     }
 }
