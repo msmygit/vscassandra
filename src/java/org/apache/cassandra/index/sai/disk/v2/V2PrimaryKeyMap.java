@@ -43,9 +43,11 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         private final BlockIndexReader reader;
         private final PrimaryKey.PrimaryKeyFactory keyFactory;
         private final long size;
+        private final int generation;
 
         public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor) throws IOException
         {
+            generation = indexDescriptor.descriptor.generation;
             fileProvider = new PerSSTableFileProvider(indexDescriptor);
             this.keyFactory = indexDescriptor.primaryKeyFactory;
             if (indexDescriptor.isSSTableEmpty())
@@ -69,7 +71,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             //TODO We need a test for this condition with an empty SSTable (not sure it's possible)
-            return (size == 0) ? EMPTY : new V2PrimaryKeyMap(reader, keyFactory, size);
+            return (size == 0) ? EMPTY : new V2PrimaryKeyMap(reader, keyFactory, size, generation);
         }
 
         @Override
@@ -80,19 +82,29 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     }
 
     private final BlockIndexReader reader;
-    private final BlockIndexReader.BlockIndexReaderContext context;
+    private final BlockIndexReader.BlockIndexReaderContext forwardContext;
+    private final BlockIndexReader.BlockIndexReaderContext reverseContext;
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
-
+    private final int generation;
 
     private V2PrimaryKeyMap(BlockIndexReader reader,
                             PrimaryKey.PrimaryKeyFactory keyFactory,
-                            long size)
+                            long size,
+                            int generation)
     {
         this.reader = reader;
-        this.context = reader.initContext();
+        this.forwardContext = reader.initContext();
+        this.reverseContext = reader.initContext();
         this.keyFactory = keyFactory;
         this.size = size;
+        this.generation = generation;
+    }
+
+    @Override
+    public int generation()
+    {
+        return generation;
     }
 
     @Override
@@ -104,20 +116,21 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
-        BytesRef term = reader.seekTo(sstableRowId, context, true);
+        BytesRef term = reader.seekTo(sstableRowId, forwardContext, true);
         return keyFactory.createKey(new ByteSource.Peekable(ByteSource.fixedLength(term.bytes, 0, term.length)), sstableRowId);
     }
 
     @Override
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
+
         BytesRef bytesRef = new BytesRef(ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41)));
-        return reader.seekTo(bytesRef, context);
+        return reader.seekTo(bytesRef, reverseContext);
     }
 
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(context);
+        FileUtils.close(forwardContext, reverseContext);
     }
 }
