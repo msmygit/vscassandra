@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -92,7 +93,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
     private final SSTableContextManager contextManager;
 
-    public final ConcurrentSkipListSet<PrimaryKey> nonUniqueKeys = new ConcurrentSkipListSet<>();
+    public final ConcurrentSkipListMap<PrimaryKey,Row> nonUniqueKeys = new ConcurrentSkipListMap<>();
     final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
 
     StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
@@ -224,7 +225,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
                 if (row.isUnique().equals(Row.Unique.NOT_UNIQUE))
                 {
-                    nonUniqueKeys.add(primaryKey);
+                    nonUniqueKeys.put(primaryKey, row);
                 }
 
                 forEach(indexer -> indexer.insertRow(row));

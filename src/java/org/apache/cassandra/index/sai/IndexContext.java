@@ -221,6 +221,41 @@ public class IndexContext
         return table;
     }
 
+    public long indexFirstMemtable(DecoratedKey key, Row row, boolean unique)
+    {
+        MemtableIndex target = liveMemtables.values().iterator().next();
+
+        // We expect the relevant IndexMemtable to be present most of the time, so only make the
+        // call to computeIfAbsent() if it's not. (see https://bugs.openjdk.java.net/browse/JDK-8161372)
+//        MemtableIndex target = (current != null)
+//                               ? current
+//                               : liveMemtables.computeIfAbsent(mt, memtable -> new MemtableIndex(this, mt));
+
+        long start = System.nanoTime();
+
+        long bytes = 0;
+
+        if (isNonFrozenCollection())
+        {
+            Iterator<ByteBuffer> bufferIterator = getValuesOf(row, FBUtilities.nowInSeconds());
+            if (bufferIterator != null)
+            {
+                while (bufferIterator.hasNext())
+                {
+                    ByteBuffer value = bufferIterator.next();
+                    bytes += target.index(key, row.clustering(), value, unique);
+                }
+            }
+        }
+        else
+        {
+            ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
+            target.index(key, row.clustering(), value, unique);
+        }
+        indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        return bytes;
+    }
+
     public long index(DecoratedKey key, Row row, Memtable mt, boolean unique)
     {
         MemtableIndex current = liveMemtables.get(mt);
