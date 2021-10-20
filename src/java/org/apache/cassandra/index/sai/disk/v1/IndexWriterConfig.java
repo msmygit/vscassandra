@@ -31,7 +31,7 @@ public class IndexWriterConfig
     public static final String POSTING_LIST_LVL_MIN_LEAVES = "bkd_postings_min_leaves";
     public static final String POSTING_LIST_LVL_SKIP_OPTION = "bkd_postings_skip";
 
-    private static final int DEFAULT_POSTING_LIST_MIN_LEAVES = 64;
+    private static final int DEFAULT_POSTING_LIST_MIN_LEAVES = 8;
     private static final int DEFAULT_POSTING_LIST_LVL_SKIP = 3;
 
     private static final IndexWriterConfig EMPTY_CONFIG = new IndexWriterConfig(null, -1, -1);
