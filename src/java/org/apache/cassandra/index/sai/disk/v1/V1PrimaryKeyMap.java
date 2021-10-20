@@ -47,6 +47,7 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
         private final long size;
         private final KeyFetcher keyFetcher;
         private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
+        private final int generation;
 
         private FileHandle token = null;
         private FileHandle offset = null;
@@ -69,6 +70,7 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
                 this.offsetReaderFactory = new MonotonicBlockPackedReader(offset, offsetsMeta);
                 this.keyFetcher = new DecoratedKeyFetcher(sstable);
                 this.primaryKeyFactory = indexDescriptor.primaryKeyFactory;
+                this.generation = indexDescriptor.descriptor.generation;
             }
             catch (Throwable t)
             {
@@ -82,7 +84,7 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));
             final LongArray rowIdToOffset = new LongArray.DeferredLongArray(() -> offsetReaderFactory.open());
 
-            return new V1PrimaryKeyMap(rowIdToToken, rowIdToOffset, keyFetcher, primaryKeyFactory, size);
+            return new V1PrimaryKeyMap(rowIdToToken, rowIdToOffset, keyFetcher, primaryKeyFactory, size, generation);
         }
 
         @Override
@@ -98,8 +100,9 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
     private final RandomAccessReader reader;
     private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
     private final long size;
+    private final int generation;
 
-    private V1PrimaryKeyMap(LongArray rowIdToToken, LongArray rowIdToOffset, KeyFetcher keyFetcher, PrimaryKey.PrimaryKeyFactory primaryKeyFactory, long size)
+    private V1PrimaryKeyMap(LongArray rowIdToToken, LongArray rowIdToOffset, KeyFetcher keyFetcher, PrimaryKey.PrimaryKeyFactory primaryKeyFactory, long size, int generation)
     {
         this.rowIdToToken = rowIdToToken;
         this.rowIdToOffset = rowIdToOffset;
@@ -107,6 +110,13 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
         this.reader = keyFetcher.createReader();
         this.primaryKeyFactory = primaryKeyFactory;
         this.size = size;
+        this.generation = generation;
+    }
+
+    @Override
+    public int generation()
+    {
+        return generation;
     }
 
     @Override
