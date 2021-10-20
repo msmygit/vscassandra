@@ -19,7 +19,9 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -28,16 +30,21 @@ import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
+import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
+import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v2.RowLoader;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
+import org.apache.cassandra.schema.ColumnMetadata;
 
 /**
  * Writes all on-disk index structures attached to a given SSTable.
@@ -53,10 +60,14 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
     private final PerSSTableWriter sstableComponentsWriter;
     private final Stopwatch stopwatch = Stopwatch.createUnstarted();
     private final RowMapping rowMapping;
+    private final List<ColumnMetadata> columns = new ArrayList();
+    private final ColumnFilter columnFilter;
 
     private DecoratedKey currentKey;
     private boolean tokenOffsetWriterCompleted = false;
     private boolean aborted = false;
+
+    private ColumnFamilyStore cfs;
 
     private long sstableRowId = 0;
 
@@ -83,6 +94,14 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
                                          .collect(Collectors.toList());
 
         this.sstableComponentsWriter = perColumnOnly ? PerSSTableWriter.NONE : indexDescriptor.newPerSSTableWriter();
+        ColumnFilter.Builder builder = ColumnFilter.selectionBuilder();
+        for (StorageAttachedIndex index : indices)
+        {
+            cfs = index.baseCfs();
+            columns.add(index.getIndexContext().getDefinition());
+            builder.add(index.getIndexContext().getDefinition());
+        }
+        columnFilter = builder.build();
     }
 
     @Override
@@ -122,7 +141,22 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
             // Ignore range tombstones...
             if (unfiltered.isRow())
             {
-                PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey, ((Row)unfiltered).clustering(), sstableRowId++);
+                final PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey, ((Row) unfiltered).clustering(), sstableRowId++);
+
+//                if (!primaryKey.unique())
+//                {
+//                try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
+//                                                                        primaryKey,
+//                                                                        columnFilter))
+//                {
+//                    if (iterator.hasNext())
+//                    {
+//                        Unfiltered unfiltered2 = iterator.next();
+//                        System.out.println("unfiltered2=" + unfiltered2.toString(cfs.metadata()));
+//                    }
+//                }
+                //}
+
                 sstableComponentsWriter.nextRow(primaryKey);
                 rowMapping.add(primaryKey);
 

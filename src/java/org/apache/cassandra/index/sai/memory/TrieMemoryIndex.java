@@ -62,7 +62,6 @@ public class TrieMemoryIndex extends MemoryIndex
     private static final int MINIMUM_QUEUE_SIZE = 128;
     private static final int MAX_RECURSIVE_KEY_LENGTH = 128;
 
-
     private final MemtableTrie<PrimaryKeys> data;
     private final PrimaryKeysReducer primaryKeysReducer;
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;

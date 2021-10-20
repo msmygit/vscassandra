@@ -90,11 +90,12 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private ClusteringComparator clusteringComparator;
     private long sstableRowId;
     private Supplier<DecoratedKey> decoratedKeySupplier;
-    private boolean unique = false;
+    private Boolean unique = null;
 
     public boolean unique()
     {
-        return unique;
+        assert unique != null;
+        return unique.booleanValue();
     }
 
     public static class PrimaryKeyFactory

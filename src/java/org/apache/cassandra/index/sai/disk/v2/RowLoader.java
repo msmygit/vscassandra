@@ -23,6 +23,7 @@ import org.apache.cassandra.db.ReadExecutionController;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
 import org.apache.cassandra.db.filter.ClusteringIndexFilter;
 import org.apache.cassandra.db.filter.ClusteringIndexNamesFilter;
+import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.rows.Row;
@@ -33,18 +34,21 @@ import org.apache.cassandra.utils.FBUtilities;
 
 public class RowLoader
 {
-    public static UnfilteredRowIterator loadRow(ColumnFamilyStore cfs, PrimaryKey primaryKey)
+    public static UnfilteredRowIterator loadRow(ColumnFamilyStore cfs,
+                                                PrimaryKey primaryKey,
+                                                ColumnFilter columnFilter)
     {
-        return null;
-//        SinglePartitionReadCommand partition = SinglePartitionReadCommand.create(cfs.metadata(),
-//                                                                                 command.nowInSec(),
-//                                                                                 command.columnFilter(),
-//                                                                                 RowFilter.NONE,
-//                                                                                 DataLimits.NONE,
-//                                                                                 primaryKey.partitionKey(),
-//                                                                                 makeFilter(primaryKey));
-//        ReadExecutionController executionController = partition.executionController();
-//        return partition.queryMemtableAndDisk(cfs, executionController);
+        //ColumnFilter cf = ColumnFilter.selectionBuilder().add(defCol).build();
+
+        SinglePartitionReadCommand partition = SinglePartitionReadCommand.create(cfs.metadata(),
+                                                                                 FBUtilities.nowInSeconds(),
+                                                                                 columnFilter,
+                                                                                 RowFilter.NONE,
+                                                                                 DataLimits.NONE,
+                                                                                 primaryKey.partitionKey(),
+                                                                                 makeFilter(primaryKey));
+        ReadExecutionController executionController = partition.executionController();
+        return partition.queryMemtableAndDisk(cfs, executionController);
     }
 
     private static ClusteringIndexFilter makeFilter(PrimaryKey key)

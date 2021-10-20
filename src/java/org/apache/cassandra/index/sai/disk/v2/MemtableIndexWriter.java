@@ -101,7 +101,7 @@ public class MemtableIndexWriter implements PerIndexWriter
 
             try (MemtableTermsIterator terms = new MemtableTermsIterator(memtable.getMinTerm(), memtable.getMaxTerm(), iterator))
             {
-                long cellCount = flush(terms, nonUniqueRowIDs);
+                long cellCount = flush(terms);
 
                 indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
 
@@ -128,7 +128,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         }
     }
 
-    private long flush(MemtableTermsIterator terms, LongArrayList nonUniqueRowIDs) throws IOException
+    private long flush(MemtableTermsIterator terms) throws IOException
     {
         long numRows;
 

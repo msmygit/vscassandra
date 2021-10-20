@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -54,6 +55,7 @@ import org.apache.cassandra.index.sai.metrics.IndexGroupMetrics;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.TableStateMetrics;
 import org.apache.cassandra.index.sai.plan.StorageAttachedIndexQueryPlan;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -89,6 +91,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     private final ColumnFamilyStore baseCfs;
 
     private final SSTableContextManager contextManager;
+
+    private final ConcurrentSkipListSet<BytesRef> nonUniqueKeys = new ConcurrentSkipListSet<>();
 
     StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
     {
@@ -210,6 +214,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                         }
                     }
                 }
+
+                //nonUniqueKeys.add(totalKeyRef);
 
                 forEach(indexer -> indexer.insertRow(row));
             }
