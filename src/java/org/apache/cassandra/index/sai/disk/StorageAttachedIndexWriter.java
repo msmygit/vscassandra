@@ -39,12 +39,18 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v2.RowLoader;
+import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
 import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 
 /**
  * Writes all on-disk index structures attached to a given SSTable.
@@ -66,6 +72,8 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
     private DecoratedKey currentKey;
     private boolean tokenOffsetWriterCompleted = false;
     private boolean aborted = false;
+
+    final StorageAttachedIndexGroup group;
 
     private ColumnFamilyStore cfs;
 
@@ -101,6 +109,9 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
             columns.add(index.getIndexContext().getDefinition());
             builder.add(index.getIndexContext().getDefinition());
         }
+
+        group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+
         columnFilter = builder.build();
     }
 
@@ -131,6 +142,8 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         }
     }
 
+    final BytesRefBuilder temp = new BytesRefBuilder();
+
     @Override
     public void nextUnfilteredCluster(Unfiltered unfiltered, long position)
     {
@@ -142,20 +155,6 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
             if (unfiltered.isRow())
             {
                 final PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey, ((Row) unfiltered).clustering(), sstableRowId++);
-
-//                if (!primaryKey.unique())
-//                {
-//                try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
-//                                                                        primaryKey,
-//                                                                        columnFilter))
-//                {
-//                    if (iterator.hasNext())
-//                    {
-//                        Unfiltered unfiltered2 = iterator.next();
-//                        System.out.println("unfiltered2=" + unfiltered2.toString(cfs.metadata()));
-//                    }
-//                }
-                //}
 
                 sstableComponentsWriter.nextRow(primaryKey);
                 rowMapping.add(primaryKey);
@@ -215,6 +214,20 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
         try
         {
+            for (PrimaryKey key : group.nonUniqueKeys)
+            {
+                try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
+                                                                        key,
+                                                                        columnFilter))
+                {
+                    if (iterator.hasNext())
+                    {
+                        Unfiltered unfiltered2 = iterator.next();
+                        System.out.println("unfiltered2=" + unfiltered2.toString(cfs.metadata()));
+                    }
+                }
+            }
+
             sstableComponentsWriter.complete();
             tokenOffsetWriterCompleted = true;
 
@@ -226,7 +239,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
             logger.debug(indexDescriptor.logMessage("About to flush per-column index writers for {} indexes."), columnIndexWriters.size());
             for (PerIndexWriter columnIndexWriter : columnIndexWriters)
             {
-                logger.debug("flushing " + columnIndexWriter.toString());
+                logger.debug("flushing columnIndexWriter=" + columnIndexWriter.toString());
                 columnIndexWriter.flush();
             }
         }

@@ -92,7 +92,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
     private final SSTableContextManager contextManager;
 
-    private final ConcurrentSkipListSet<BytesRef> nonUniqueKeys = new ConcurrentSkipListSet<>();
+    public final ConcurrentSkipListSet<PrimaryKey> nonUniqueKeys = new ConcurrentSkipListSet<>();
+    final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
 
     StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
     {
@@ -104,6 +105,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
         Tracker tracker = baseCfs.getTracker();
         tracker.subscribe(this);
+
+        primaryKeyFactory = PrimaryKey.factory(baseCfs.metadata(), Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
     @Nullable
@@ -191,22 +194,24 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
             @Override
             public void insertRow(Row row)
             {
-                final ByteSource totalKeyBytes = asComparableBytes(key, row.clustering(), ByteComparable.Version.OSS41);
-                final byte[] totalKey = ByteSourceInverse.readBytes(totalKeyBytes);
+                final PrimaryKey primaryKey = primaryKeyFactory.createKey(key, row.clustering());
+                final ByteSource keyByteSource = primaryKey.asComparableBytes(ByteComparable.Version.OSS41);
+                // TOOD: could read this into a temp however is the caller multithreaded?
+                final byte[] keyByteArray = ByteSourceInverse.readBytes(keyByteSource);
 
-                final BytesRef totalKeyRef = new BytesRef(totalKey);
+                final BytesRef keyBytesRef = new BytesRef(keyByteArray);
 
-                final long hash = LongHashFunction.xx3().hashBytes(totalKey, 0, totalKey.length);
+                final long keyHash = LongHashFunction.xx3().hashBytes(keyByteArray, 0, keyByteArray.length);
 
                 row.setUnique(Row.Unique.UNIQUE);
 
                 for (Map.Entry<SSTableReader, SSTableContext> entry : sstableContextManager().sstableContexts().entrySet())
                 {
                     V2PrimaryKeyMap.V2PrimaryKeyMapFactory pkeyFactory = (V2PrimaryKeyMap.V2PrimaryKeyMapFactory)entry.getValue().primaryKeyMapFactory;
-                    if (totalKeyRef.compareTo(pkeyFactory.minPrimaryKey()) >= 0 &&
-                        totalKeyRef.compareTo(pkeyFactory.maxPrimaryKey()) <= 0)
+                    if (keyBytesRef.compareTo(pkeyFactory.minPrimaryKey()) >= 0 &&
+                        keyBytesRef.compareTo(pkeyFactory.maxPrimaryKey()) <= 0)
                     {
-                        final boolean maybe = entry.getValue().primaryKeyMapFactory.maybeContains(hash);
+                        final boolean maybe = entry.getValue().primaryKeyMapFactory.maybeContains(keyHash);
                         if (maybe)
                         {
                             row.setUnique(Row.Unique.NOT_UNIQUE);
@@ -215,7 +220,12 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                     }
                 }
 
-                //nonUniqueKeys.add(totalKeyRef);
+                System.out.println("update keyHash="+keyHash);
+
+                if (row.isUnique().equals(Row.Unique.NOT_UNIQUE))
+                {
+                    nonUniqueKeys.add(primaryKey);
+                }
 
                 forEach(indexer -> indexer.insertRow(row));
             }

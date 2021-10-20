@@ -313,7 +313,6 @@ public class V2SSTableIndexWriter implements PerIndexWriter
 
             try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
             {
-
                 BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
 
                 // TODO: write row id -> point id map

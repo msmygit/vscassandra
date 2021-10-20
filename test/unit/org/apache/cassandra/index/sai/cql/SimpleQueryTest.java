@@ -50,6 +50,7 @@ public class SimpleQueryTest extends SAITester
         flush();
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 3, 2, 2);
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 4, 1, 1);
+        execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 1, 1, 2);
         flush();
         UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
         assertEquals(2, result.size());
@@ -66,7 +67,6 @@ public class SimpleQueryTest extends SAITester
         final ByteComparable byteComparable = v -> UTF8Type.instance.asComparableBytes(term.duplicate(), v);
 
         BytesRefBuilder builder = new BytesRefBuilder();
-
 
 //        byte[] bytes = ByteSourceInverse.readBytes(byteSource);
 //
