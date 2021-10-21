@@ -54,7 +54,7 @@ public abstract class MemoryIndex
 
     public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value, boolean unique);
 
-    public abstract RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
+    public abstract TrieMemoryIndex.MemoryResult search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
 
     public void setMinMaxTerm(ByteBuffer term)
     {

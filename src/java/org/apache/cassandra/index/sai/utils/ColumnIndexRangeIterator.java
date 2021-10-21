@@ -80,9 +80,9 @@ public class ColumnIndexRangeIterator extends RangeIterator
     {
         final List<RangeIterator> columnIndexRangeIterators = new ArrayList<>(1 + perSSTableIndexes.size());;
 
-        RangeIterator memtableIterator = expression.context.searchMemtable(expression, keyRange);
-        if (memtableIterator != null)
-            columnIndexRangeIterators.add(memtableIterator);
+//        RangeIterator memtableIterator = expression.context.searchMemtable(expression, keyRange);
+//        if (memtableIterator != null)
+//            columnIndexRangeIterators.add(memtableIterator);
 
         for (final SSTableIndex index : perSSTableIndexes)
         {

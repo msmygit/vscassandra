@@ -93,7 +93,7 @@ public class MemtableIndex
         return ram;
     }
 
-    public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange)
+    public TrieMemoryIndex.MemoryResult search(Expression expression, AbstractBounds<PartitionPosition> keyRange)
     {
         return index.search(expression, keyRange);
     }

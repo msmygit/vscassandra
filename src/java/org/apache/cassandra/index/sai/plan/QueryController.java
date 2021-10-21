@@ -276,11 +276,20 @@ public class QueryController
     {
         final RangeIterator.Builder builder = RangeUnionIterator.builder();
 
-        //final List<RangeIterator> memoryRangeIterators = new ArrayList<>();
         Multimap<MemtableIndex,RangeIterator> multimap = HashMultimap.create();
+        List<RangeIterator> nonUniqueKeyIterators = new ArrayList<>();
+
         for (final Expression expression : expressions)
         {
-            expression.context.searchMemtable2(expression, mergeRange, multimap);
+            expression.context.searchMemtable2(expression, mergeRange, multimap, nonUniqueKeyIterators);
+        }
+
+        System.out.println("nonUniqueKeyIterators="+nonUniqueKeyIterators);
+
+        // add the non-unique key iterators directly into the union builder
+        for (RangeIterator nonUniqueKeyIterator : nonUniqueKeyIterators)
+        {
+            builder.add(nonUniqueKeyIterator);
         }
 
         if (op == Operation.OperationType.AND)
@@ -312,13 +321,7 @@ public class QueryController
                 }
                 builder.add(orBuilder.build());
             }
-
-//            RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
-//            orBuilder.add(memoryRangeIterators);
-//            primaryMemoryRangeIterator = orBuilder.build();
         }
-
-        //builder.add(primaryMemoryRangeIterator);
 
         final List<PostingList> toClose = new ArrayList<>();
 

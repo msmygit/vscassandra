@@ -140,7 +140,7 @@ public class TrieMemoryIndex extends MemoryIndex
     }
 
     @Override
-    public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange)
+    public MemoryResult search(Expression expression, AbstractBounds<PartitionPosition> keyRange)
     {
         if (logger.isTraceEnabled())
             logger.trace("Searching memtable index on expression '{}'...", expression);
@@ -194,7 +194,6 @@ public class TrieMemoryIndex extends MemoryIndex
                ? isLiteral ? version -> ByteSourceInverse.unescape(ByteSource.peekable(term.asComparableBytes(version)))
                            : term
                : term;
-
     }
 
     private ByteSource append(ByteSource src, int lastByte)
@@ -218,15 +217,32 @@ public class TrieMemoryIndex extends MemoryIndex
         };
     }
 
-    private RangeIterator exactMatch(Expression expression)
+    public static class MemoryResult
+    {
+        public final RangeIterator iterator, nonUniquesIterator;
+
+        public MemoryResult(RangeIterator iterator, RangeIterator nonUniquesIterator)
+        {
+            this.iterator = iterator;
+            this.nonUniquesIterator = nonUniquesIterator;
+        }
+    }
+
+    private MemoryResult exactMatch(Expression expression)
     {
         final ByteComparable prefix = expression.lower == null ? ByteComparable.EMPTY : encode(expression.lower.value.encoded);
         final PrimaryKeys primaryKeys = data.get(prefix);
         if (primaryKeys == null)
         {
-            return RangeIterator.empty();
+            return null;
         }
-        return new KeyRangeIterator(primaryKeys.keys());
+
+        KeyRangeIterator nonUniqueKeysIterator = null;
+        if (!primaryKeys.nonUniqueKeys().isEmpty())
+        {
+            nonUniqueKeysIterator = new KeyRangeIterator(primaryKeys.nonUniqueKeys());
+        }
+        return new MemoryResult(new KeyRangeIterator(primaryKeys.keys()), nonUniqueKeysIterator);
     }
 
     public static class Collector
@@ -234,6 +250,7 @@ public class TrieMemoryIndex extends MemoryIndex
         PrimaryKey minimumKey = null;
         PrimaryKey maximumKey = null;
         PriorityQueue<PrimaryKey> mergedKeys = new PriorityQueue<>(lastQueueSize.get());
+        PriorityQueue<PrimaryKey> mergedNonUniqueKeys = new PriorityQueue<>(lastQueueSize.get());
 
         AbstractBounds<PartitionPosition> keyRange;
 
@@ -255,7 +272,14 @@ public class TrieMemoryIndex extends MemoryIndex
                 PrimaryKey first = primaryKeys.first();
                 if (keyRange.contains(first.partitionKey()))
                 {
-                    mergedKeys.add(first);
+                    if (!first.unique())
+                    {
+                        mergedNonUniqueKeys.add(first);
+                    }
+                    else
+                    {
+                        mergedKeys.add(first);
+                    }
 
                     minimumKey = minimumKey == null ? first : first.compareTo(minimumKey) < 0 ? first : minimumKey;
                     maximumKey = maximumKey == null ? first : first.compareTo(maximumKey) > 0 ? first : maximumKey;
@@ -273,7 +297,14 @@ public class TrieMemoryIndex extends MemoryIndex
             {
                 if (keyRange.contains(key.partitionKey()))
                 {
-                    mergedKeys.add(key);
+                    if (!key.unique())
+                    {
+                        mergedNonUniqueKeys.add(key);
+                    }
+                    else
+                    {
+                        mergedKeys.add(key);
+                    }
 
                     minimumKey = minimumKey == null ? key : key.compareTo(minimumKey) < 0 ? key : minimumKey;
                     maximumKey = maximumKey == null ? key : key.compareTo(maximumKey) > 0 ? key : maximumKey;
@@ -283,7 +314,7 @@ public class TrieMemoryIndex extends MemoryIndex
         }
     }
 
-    private RangeIterator rangeMatch(Expression expression, AbstractBounds<PartitionPosition> keyRange)
+    private MemoryResult rangeMatch(Expression expression, AbstractBounds<PartitionPosition> keyRange)
     {
         ByteComparable lowerBound, upperBound;
         boolean lowerInclusive, upperInclusive;
@@ -315,12 +346,14 @@ public class TrieMemoryIndex extends MemoryIndex
 
         if (cd.mergedKeys.isEmpty())
         {
-            return RangeIterator.empty();
+            return null;
         }
 
         //TODO Can we find a better way of estimating this?
         lastQueueSize.set(Math.max(MINIMUM_QUEUE_SIZE, cd.mergedKeys.size()));
-        return new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys);
+
+        return new MemoryResult(new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys),
+                                !cd.mergedNonUniqueKeys.isEmpty() ? new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedNonUniqueKeys) : null);
     }
 
     private class PrimaryKeysReducer implements MemtableTrie.UpsertTransformer<PrimaryKeys, PrimaryKey>

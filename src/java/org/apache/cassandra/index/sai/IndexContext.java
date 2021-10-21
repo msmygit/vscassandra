@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -61,6 +62,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
+import org.apache.cassandra.index.sai.memory.TrieMemoryIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -320,49 +322,29 @@ public class IndexContext
                             .orElse(null);
     }
 
-    public RangeIterator searchMemtable(Expression e, AbstractBounds<PartitionPosition> keyRange)
-    {
-        Collection<MemtableIndex> memtables = liveMemtables.values();
-
-        if (memtables.isEmpty())
-        {
-            return RangeIterator.empty();
-        }
-
-        RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
-
-        for (MemtableIndex index : memtables)
-        {
-            builder.add(index.search(e, keyRange));
-        }
-
-        return builder.build();
-    }
-
     public void searchMemtable2(Expression expression,
                                 AbstractBounds<PartitionPosition> keyRange,
-                                Multimap<MemtableIndex, RangeIterator> multiMap)
+                                Multimap<MemtableIndex, RangeIterator> multiMap,
+                                List<RangeIterator> nonUniqueKeyIterators)
     {
         Collection<MemtableIndex> memtables = liveMemtables.values();
 
         if (memtables.isEmpty())
         {
             return;
-            //return RangeIterator.empty();
         }
-
-        //RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
 
         for (MemtableIndex index : memtables)
         {
-            RangeIterator iterator = index.search(expression, keyRange);
-            multiMap.put(index, iterator);
-            //builder.add();
+            TrieMemoryIndex.MemoryResult result = index.search(expression, keyRange);
+
+            if (result.nonUniquesIterator != null)
+            {
+                nonUniqueKeyIterators.add(result.nonUniquesIterator);
+            }
+
+            multiMap.put(index, result.iterator);
         }
-
-        //return multiMap;
-
-        //return builder.build();
     }
 
     public long liveMemtableWriteCount()

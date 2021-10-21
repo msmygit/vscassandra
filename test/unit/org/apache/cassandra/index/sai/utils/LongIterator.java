@@ -52,10 +52,15 @@ public class LongIterator extends RangeIterator
 
     public LongIterator(long[] tokens, boolean[] uniques, LongFunction<Long> toOffset)
     {
-        super(tokens.length == 0 ? null : fromToken(tokens[0]), tokens.length == 0 ? null : fromToken(tokens[tokens.length - 1]), tokens.length);
+        super(tokens.length == 0 ? null : fromTokenAndRowId(tokens[0],
+                                                            toOffset.apply(tokens[0]),
+                                                            uniques[0]),
+              tokens.length == 0 ? null : fromTokenAndRowId(tokens[tokens.length - 1],
+                                                            toOffset.apply(tokens.length - 1),
+                                                            uniques[tokens.length - 1]),
+              tokens.length);
 
         this.keys = new ArrayList<>(tokens.length);
-        //for (long token : tokens)
         for (int x = 0; x < tokens.length; x++)
         {
             long token = tokens[x];

@@ -36,6 +36,7 @@ public class PrimaryKeys implements Iterable<PrimaryKey>
     long SET_ENTRY_OVERHEAD = 36;
 
     private final ConcurrentSkipListSet<PrimaryKey> keys = new ConcurrentSkipListSet<>();
+    private final ConcurrentSkipListSet<PrimaryKey> nonUniqueKeys = new ConcurrentSkipListSet<>();
 
     /**
      * Adds the specified {@link PrimaryKey}.
@@ -44,12 +45,23 @@ public class PrimaryKeys implements Iterable<PrimaryKey>
      */
     public long add(PrimaryKey key)
     {
+        // TODO: adding the non unique key to keys as well so that non unique keys are flushed as well
+        //       at query time the extra primary keys should resolve, this can be fixed...
+        if (!key.unique())
+        {
+            nonUniqueKeys.add(key);
+        }
         return keys.add(key) ? SET_ENTRY_OVERHEAD : 0;
     }
 
     public SortedSet<PrimaryKey> keys()
     {
         return keys;
+    }
+
+    public SortedSet<PrimaryKey> nonUniqueKeys()
+    {
+        return nonUniqueKeys;
     }
 
     public int size()
