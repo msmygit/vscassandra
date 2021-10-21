@@ -54,7 +54,7 @@ public abstract class MemoryIndex
 
     public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value, boolean unique);
 
-    public abstract TrieMemoryIndex.MemoryResult search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
+    public abstract MemoryResult search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
 
     public void setMinMaxTerm(ByteBuffer term)
     {
@@ -78,4 +78,15 @@ public abstract class MemoryIndex
      * Iterate all Term->PrimaryKeys mappings in sorted order
      */
     public abstract Iterator<Pair<ByteComparable, PrimaryKeys>> iterator();
+
+    public static class MemoryResult
+    {
+        public final RangeIterator iterator, nonUniquesIterator;
+
+        public MemoryResult(RangeIterator iterator, RangeIterator nonUniquesIterator)
+        {
+            this.iterator = iterator;
+            this.nonUniquesIterator = nonUniquesIterator;
+        }
+    }
 }

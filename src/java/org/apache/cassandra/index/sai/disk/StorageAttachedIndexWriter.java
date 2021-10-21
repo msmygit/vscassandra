@@ -213,7 +213,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         logger.debug(indexDescriptor.logMessage("Completed partition iteration for index flush for SSTable {}. Elapsed time: {} ms"),
                      indexDescriptor.descriptor, stopwatch.elapsed(TimeUnit.MILLISECONDS));
 
-        Map<ColumnMetadata,StorageAttachedIndex> indexedColumns = new HashMap();
+        final Map<ColumnMetadata,StorageAttachedIndex> indexedColumns = new HashMap();
         for (StorageAttachedIndex index : indices)
         {
             indexedColumns.put(index.getIndexContext().getDefinition(), index);
@@ -221,8 +221,10 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
         try
         {
+            // go through the non unique keys, find rows with missing indexed cells
             for (Map.Entry<PrimaryKey,Row> entry : group.nonUniqueKeys.entrySet())
             {
+                // gather missing indexed columns
                 List<ColumnMetadata> missingColumns = null;
                 for (ColumnMetadata indexedColumn : indexedColumns.keySet())
                 {
@@ -234,44 +236,35 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
                             missingColumns = new ArrayList<>();
                         }
                         missingColumns.add(indexedColumn);
-                        System.out.println("indexedColumn no mem cell="+indexedColumn.name);
                     }
                 }
 
-                try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
-                                                                        entry.getKey(),
-                                                                        columnFilter))
+                // TODO: implement replacing existing memory index values
+                //       eg, delete the existing value, index a new one
+                //       however the case is rare since the memory update should supercede
+                //       by timestamp the rows on disk
+                if (missingColumns.size() > 0)
                 {
-                    // for each memory row, find columns not indexed
-                    // if the row does not have some indexed columns
-                    // load the row from disk and index the unindexed disk row column cells
-
-                    if (iterator.hasNext())
+                    try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
+                                                                            entry.getKey(),
+                                                                            columnFilter))
                     {
-                        final Row realRow = (Row)iterator.next();
-
-                        if (missingColumns != null)
+                        // load the real disk row, index the missing columns
+                        if (iterator.hasNext())
                         {
-                            for (ColumnMetadata missingColumn : missingColumns)
+                            final Row realDiskRow = (Row) iterator.next();
+
+                            if (missingColumns != null)
                             {
-                                //Cell diskCell = realRow.getCell(missingColumn);
-                                System.out.println("diskCell missingColumn="+missingColumn);
-                                StorageAttachedIndex index = indexedColumns.get(missingColumn);
-                                index.getIndexContext().indexFirstMemtable(entry.getKey().partitionKey(), realRow, true);
+                                for (ColumnMetadata missingColumn : missingColumns)
+                                {
+                                    StorageAttachedIndex index = indexedColumns.get(missingColumn);
+                                    index.getIndexContext().indexFirstMemtable(entry.getKey().partitionKey(), realDiskRow, true);
+                                }
                             }
+
+                            System.out.println("unfiltered2=" + realDiskRow.toString(cfs.metadata()) + " memrow=" + entry.getValue());
                         }
-
-//                        for (ColumnMetadata col : entry.getValue().columns())
-//                        {
-//                            Cell diskCell = realRow.getCell(col);
-//                            Cell memCell = entry.getValue().getCell(col);
-//
-//                            boolean same = diskCell.equals(memCell);
-//
-//                            System.out.println("diskCell col="+col.name+" same="+same);
-//                        }
-
-                        System.out.println("unfiltered2=" + realRow.toString(cfs.metadata())+" memrow="+entry.getValue());
                     }
                 }
             }

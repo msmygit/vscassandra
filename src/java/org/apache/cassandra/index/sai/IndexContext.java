@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import org.slf4j.Logger;
@@ -68,7 +67,6 @@ import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.sai.view.IndexViewManager;
 import org.apache.cassandra.index.sai.view.View;
@@ -78,7 +76,6 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
-import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
 /**
  * Manage metadata for each column index.
@@ -338,12 +335,15 @@ public class IndexContext
         {
             TrieMemoryIndex.MemoryResult result = index.search(expression, keyRange);
 
-            if (result.nonUniquesIterator != null)
+            if (result != null && result.nonUniquesIterator != null)
             {
                 nonUniqueKeyIterators.add(result.nonUniquesIterator);
             }
 
-            multiMap.put(index, result.iterator);
+            if (result != null)
+            {
+                multiMap.put(index, result.iterator);
+            }
         }
     }
 

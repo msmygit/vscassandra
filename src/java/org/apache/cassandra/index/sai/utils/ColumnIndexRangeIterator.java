@@ -72,13 +72,13 @@ public class ColumnIndexRangeIterator extends RangeIterator
     }
 
     @SuppressWarnings("resource")
-    public static ColumnIndexRangeIterator build(final Expression expression,
+    public static void build(final Expression expression,
                                                  Set<SSTableIndex> perSSTableIndexes,
                                                  AbstractBounds<PartitionPosition> keyRange,
                                                  QueryContext queryContext,
                                                  final Map<SSTableReader.UniqueIdentifier, Map<Expression,SSTablePostings>> map)
     {
-        final List<RangeIterator> columnIndexRangeIterators = new ArrayList<>(1 + perSSTableIndexes.size());;
+        //final List<RangeIterator> columnIndexRangeIterators = new ArrayList<>(1 + perSSTableIndexes.size());;
 
 //        RangeIterator memtableIterator = expression.context.searchMemtable(expression, keyRange);
 //        if (memtableIterator != null)
@@ -115,7 +115,7 @@ public class ColumnIndexRangeIterator extends RangeIterator
                 Map<Expression,SSTablePostings> expressionMultimap = map.computeIfAbsent(index.getSSTable().instanceId, (id) -> new HashMap());
                 expressionMultimap.put(expression, new SSTablePostings(sstablePostingsRangeIterators, index));
 
-                columnIndexRangeIterators.addAll(sstablePostingsRangeIterators);
+                //columnIndexRangeIterators.addAll(sstablePostingsRangeIterators);
             }
             catch (Throwable e1)
             {
@@ -126,8 +126,8 @@ public class ColumnIndexRangeIterator extends RangeIterator
             }
         }
 
-        RangeIterator ranges = RangeUnionIterator.build(columnIndexRangeIterators);
-        return new ColumnIndexRangeIterator(ranges, perSSTableIndexes, queryContext);
+        //RangeIterator ranges = RangeUnionIterator.build(columnIndexRangeIterators);
+        //return new ColumnIndexRangeIterator(ranges, perSSTableIndexes, queryContext);
     }
 
     protected PrimaryKey computeNext()

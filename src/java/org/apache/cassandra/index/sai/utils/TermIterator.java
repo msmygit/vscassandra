@@ -42,7 +42,7 @@ public class TermIterator extends RangeIterator
     private final RangeIterator union;
     private final Set<SSTableIndex> referencedIndexes;
 
-    private TermIterator(RangeIterator union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
+    public TermIterator(RangeIterator union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
     {
         super(union.getMinimum(), union.getMaximum(), union.getCount());
 

@@ -48,7 +48,6 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
-import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.utils.Pair;
@@ -215,17 +214,6 @@ public class TrieMemoryIndex extends MemoryIndex
                 return lastByte;
             }
         };
-    }
-
-    public static class MemoryResult
-    {
-        public final RangeIterator iterator, nonUniquesIterator;
-
-        public MemoryResult(RangeIterator iterator, RangeIterator nonUniquesIterator)
-        {
-            this.iterator = iterator;
-            this.nonUniquesIterator = nonUniquesIterator;
-        }
     }
 
     private MemoryResult exactMatch(Expression expression)

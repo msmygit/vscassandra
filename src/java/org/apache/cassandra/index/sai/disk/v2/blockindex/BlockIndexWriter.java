@@ -307,34 +307,35 @@ public class BlockIndexWriter implements Closeable
         {
             final BlockPackedWriter rowPointWriter = new BlockPackedWriter(rowPointOut, BLOCK_SIZE);
             // write the row id -> point id map
-            final RowPointIterator rowPointIterator = this.rowPointIterator(leafPostingsInput);
-            long lastRowID = -1;
-            while (true)
+            try (final RowPointIterator rowPointIterator = this.rowPointIterator(leafPostingsInput))
             {
-                final RowPoint rowPoint = rowPointIterator.next();
-                if (rowPoint == null)
+                long lastRowID = -1;
+                while (true)
                 {
-                    break;
-                }
-                // fill in the gaps of the row ids
-                if (rowPoint.rowID - lastRowID > 1)
-                {
-                    for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                    final RowPoint rowPoint = rowPointIterator.next();
+                    if (rowPoint == null)
                     {
-                        rowPointWriter.add(-1);
+                        break;
                     }
+                    // fill in the gaps of the row ids
+                    if (rowPoint.rowID - lastRowID > 1)
+                    {
+                        for (int x = 0; x < rowPoint.rowID - lastRowID - 1; x++)
+                        {
+                            rowPointWriter.add(-1);
+                        }
+                    }
+
+                    // assert there are no gaps
+
+                    // TODO: fix
+                    // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
+
+                    rowPointWriter.add(rowPoint.pointID);
+                    lastRowID = rowPoint.rowID;
                 }
-
-                // assert there are no gaps
-
-                // TODO: fix
-                // assert rowPoint.rowID == i : "rowPoint.rowID="+rowPoint.rowID+" i="+i+" lastRowID="+lastRowID;
-
-                rowPointWriter.add(rowPoint.pointID);
-                lastRowID = rowPoint.rowID;
             }
             context.rowPointMap_FP = rowPointWriter.finish();
-            rowPointIterator.close();
         }
     }
 
