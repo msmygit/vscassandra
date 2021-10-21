@@ -31,7 +31,9 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +64,7 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.ColumnIndexRangeIterator;
 import org.apache.cassandra.index.sai.utils.ConjunctionPostingList;
@@ -273,34 +276,49 @@ public class QueryController
     {
         final RangeIterator.Builder builder = RangeUnionIterator.builder();
 
-        final List<RangeIterator> memoryRangeIterators = new ArrayList<>();
+        //final List<RangeIterator> memoryRangeIterators = new ArrayList<>();
+        Multimap<MemtableIndex,RangeIterator> multimap = HashMultimap.create();
         for (final Expression expression : expressions)
         {
-            final RangeIterator memtableIterator = expression.context.searchMemtable(expression, mergeRange);
-            memoryRangeIterators.add(memtableIterator);
+            expression.context.searchMemtable2(expression, mergeRange, multimap);
         }
-
-        final RangeIterator primaryMemoryRangeIterator;
 
         if (op == Operation.OperationType.AND)
         {
-            RangeIntersectionIterator.Builder andBuilder = RangeIntersectionIterator.builder();
-            for (RangeIterator it : memoryRangeIterators)
+            final Map<MemtableIndex, Collection<RangeIterator>> memMap = multimap.asMap();
+
+            for (Collection<RangeIterator> its : memMap.values())
             {
-                andBuilder.add(it);
+                RangeIntersectionIterator.Builder andBuilder = RangeIntersectionIterator.builder();
+                for (RangeIterator it : its)
+                {
+                    andBuilder.add(it);
+                }
+                builder.add(andBuilder.build());
             }
-            primaryMemoryRangeIterator = andBuilder.build();
         }
         else
         {
             assert op == Operation.OperationType.OR;
 
-            RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
-            orBuilder.add(memoryRangeIterators);
-            primaryMemoryRangeIterator = orBuilder.build();
+            final Map<MemtableIndex, Collection<RangeIterator>> memMap = multimap.asMap();
+
+            for (Collection<RangeIterator> its : memMap.values())
+            {
+                final RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
+                for (RangeIterator it : its)
+                {
+                    orBuilder.add(it);
+                }
+                builder.add(orBuilder.build());
+            }
+
+//            RangeUnionIterator.Builder orBuilder = RangeUnionIterator.builder();
+//            orBuilder.add(memoryRangeIterators);
+//            primaryMemoryRangeIterator = orBuilder.build();
         }
 
-        builder.add(primaryMemoryRangeIterator);
+        //builder.add(primaryMemoryRangeIterator);
 
         final List<PostingList> toClose = new ArrayList<>();
 

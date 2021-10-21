@@ -121,6 +121,15 @@ public class PrimaryKey implements Comparable<PrimaryKey>
                                   sstableRowId);
         }
 
+        public PrimaryKey createKey(DecoratedKey partitionKey, Clustering clustering, long sstableRowId, boolean unique)
+        {
+            return new PrimaryKey(partitionKey,
+                                  indexFeatureSet.isRowAware() ? clustering : Clustering.EMPTY,
+                                  indexFeatureSet.isRowAware() ? comparator : EMPTY_COMPARATOR,
+                                  sstableRowId,
+                                  unique);
+        }
+
         public PrimaryKey createKey(DecoratedKey partitionKey, Clustering clustering)
         {
             return new PrimaryKey(partitionKey,

@@ -50,6 +50,19 @@ public class LongIterator extends RangeIterator
         this(tokens, t -> t);
     }
 
+    public LongIterator(long[] tokens, boolean[] uniques, LongFunction<Long> toOffset)
+    {
+        super(tokens.length == 0 ? null : fromToken(tokens[0]), tokens.length == 0 ? null : fromToken(tokens[tokens.length - 1]), tokens.length);
+
+        this.keys = new ArrayList<>(tokens.length);
+        //for (long token : tokens)
+        for (int x = 0; x < tokens.length; x++)
+        {
+            long token = tokens[x];
+            this.keys.add(fromTokenAndRowId(token, toOffset.apply(token), uniques[x]));
+        }
+    }
+
     public LongIterator(long[] tokens, LongFunction<Long> toOffset)
     {
         super(tokens.length == 0 ? null : fromToken(tokens[0]), tokens.length == 0 ? null : fromToken(tokens[tokens.length - 1]), tokens.length);
@@ -99,6 +112,17 @@ public class LongIterator extends RangeIterator
     public static PrimaryKey fromToken(long token)
     {
         return PrimaryKey.factory().createKey(new BufferDecoratedKey(new Murmur3Partitioner.LongToken(token), ByteBufferUtil.bytes(token)));
+    }
+
+    // createKey(DecoratedKey partitionKey, Clustering clustering, long sstableRowId, boolean unique)
+
+    public static PrimaryKey fromTokenAndRowId(long token, long rowId, boolean unique)
+    {
+        return PrimaryKey.factory()
+                         .createKey(new BufferDecoratedKey(new Murmur3Partitioner.LongToken(token), ByteBufferUtil.bytes(token)),
+                                    Clustering.EMPTY,
+                                    rowId,
+                                    unique);
     }
 
     public static PrimaryKey fromTokenAndRowId(long token, long rowId)

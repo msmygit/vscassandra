@@ -32,7 +32,9 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multimap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +76,7 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
 /**
  * Manage metadata for each column index.
@@ -334,6 +337,32 @@ public class IndexContext
         }
 
         return builder.build();
+    }
+
+    public void searchMemtable2(Expression expression,
+                                AbstractBounds<PartitionPosition> keyRange,
+                                Multimap<MemtableIndex, RangeIterator> multiMap)
+    {
+        Collection<MemtableIndex> memtables = liveMemtables.values();
+
+        if (memtables.isEmpty())
+        {
+            return;
+            //return RangeIterator.empty();
+        }
+
+        //RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
+
+        for (MemtableIndex index : memtables)
+        {
+            RangeIterator iterator = index.search(expression, keyRange);
+            multiMap.put(index, iterator);
+            //builder.add();
+        }
+
+        //return multiMap;
+
+        //return builder.build();
     }
 
     public long liveMemtableWriteCount()

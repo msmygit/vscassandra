@@ -254,7 +254,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
                         {
                             for (ColumnMetadata missingColumn : missingColumns)
                             {
-                                Cell diskCell = realRow.getCell(missingColumn);
+                                //Cell diskCell = realRow.getCell(missingColumn);
                                 System.out.println("diskCell missingColumn="+missingColumn);
                                 StorageAttachedIndex index = indexedColumns.get(missingColumn);
                                 index.getIndexContext().indexFirstMemtable(entry.getKey().partitionKey(), realRow, true);
