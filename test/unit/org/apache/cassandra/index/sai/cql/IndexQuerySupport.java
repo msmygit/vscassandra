@@ -100,17 +100,17 @@ public class IndexQuerySupport
         dataModel.flush(executor);
         executeQueries(dataModel, executor, sets);
 
-        // queries across memory and disk indexes
-        dataModel.insertRows(executor);
-        executeQueries(dataModel, executor, sets);
+//        // queries across memory and disk indexes
+//        dataModel.insertRows(executor);
+//        executeQueries(dataModel, executor, sets);
 
         // queries w/ multiple SSTable indexes
-        dataModel.flush(executor);
-        executeQueries(dataModel, executor, sets);
+//        dataModel.flush(executor);
+//        executeQueries(dataModel, executor, sets);
 
         // queries after compacting to a single SSTable index
-        dataModel.compact(executor);
-        executeQueries(dataModel, executor, sets);
+//        dataModel.compact(executor);
+//        executeQueries(dataModel, executor, sets);
 
         // queries against Memtable updates and the existing SSTable index
         dataModel.updateCells(executor);

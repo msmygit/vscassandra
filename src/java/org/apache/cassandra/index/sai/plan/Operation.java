@@ -199,7 +199,8 @@ public class Operation
 
     static RangeIterator buildIterator(QueryController controller)
     {
-        return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        RangeIterator it = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        return it;
     }
 
     static FilterTree buildFilter(QueryController controller)

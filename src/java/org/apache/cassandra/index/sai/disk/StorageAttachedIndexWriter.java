@@ -243,7 +243,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
                 //       eg, delete the existing value, index a new one
                 //       however the case is rare since the memory update should supercede
                 //       by timestamp the rows on disk
-                if (missingColumns.size() > 0)
+                if (missingColumns != null && missingColumns.size() > 0)
                 {
                     try (UnfilteredRowIterator iterator = RowLoader.loadRow(cfs,
                                                                             entry.getKey(),

@@ -18,6 +18,7 @@
 package org.apache.cassandra.index.sai.utils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -40,9 +41,9 @@ public class TermIterator extends RangeIterator
     private final QueryContext context;
 
     private final RangeIterator union;
-    private final Set<SSTableIndex> referencedIndexes;
+    private final Collection<SSTableIndex> referencedIndexes;
 
-    public TermIterator(RangeIterator union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
+    public TermIterator(RangeIterator union, Collection<SSTableIndex> referencedIndexes, QueryContext queryContext)
     {
         super(union.getMinimum(), union.getMaximum(), union.getCount());
 

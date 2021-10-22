@@ -221,8 +221,6 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                     }
                 }
 
-                System.out.println("update keyHash="+keyHash);
-
                 if (row.isUnique().equals(Row.Unique.NOT_UNIQUE))
                 {
                     nonUniqueKeys.put(primaryKey, row);
@@ -234,7 +232,8 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
             @Override
             public void updateRow(Row oldRow, Row newRow)
             {
-                forEach(indexer -> indexer.updateRow(oldRow, newRow));
+                insertRow(newRow);
+                //forEach(indexer -> indexer.updateRow(oldRow, newRow));
             }
 
             private void forEach(Consumer<Index.Indexer> action)

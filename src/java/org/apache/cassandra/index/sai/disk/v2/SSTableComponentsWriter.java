@@ -138,7 +138,6 @@ public class SSTableComponentsWriter implements PerSSTableWriter
 
     private void compactSegments() throws IOException
     {
-        System.out.println("keyHashes="+keyHashes);
         final Xor16 xor = new Xor16(this.keyHashes.toArray());
 
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();

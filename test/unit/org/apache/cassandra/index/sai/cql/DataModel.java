@@ -319,6 +319,7 @@ public interface DataModel
 
         public void executeLocal(Executor tester, String query, Object... values) throws Throwable
         {
+            System.out.println("executeLocal query="+query);
             tester.executeLocal(formatIndexedQuery(query), values);
             tester.executeLocal(formatNonIndexedQuery(query), values);
         }

@@ -41,9 +41,13 @@ public class ComplexQueryTest extends SAITester
         execute("INSERT INTO %s (pk, a) VALUES (?, ?)", 2, 2);
         execute("INSERT INTO %s (pk, a) VALUES (?, ?)", 3, 3);
 
-        UntypedResultSet resultSet = execute("SELECT pk FROM %s WHERE a = 1 or a = 3");
+        // flush();
+//
+//        UntypedResultSet resultSet2 = execute("SELECT pk FROM %s WHERE a = 1");
+//        assertRowsIgnoringOrder(resultSet2, row(1));
 
-        assertRowsIgnoringOrder(resultSet, row(1), row(3) );
+        UntypedResultSet resultSet2 = execute("SELECT pk FROM %s WHERE a = 1 OR a = 3");
+        assertRowsIgnoringOrder(resultSet2, row(1), row(3) );
     }
 
     @Test

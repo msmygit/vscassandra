@@ -332,15 +332,15 @@ public class TrieMemoryIndex extends MemoryIndex
 
         data.subtrie(lowerBound, lowerInclusive, upperBound, upperInclusive).values().forEach(pk -> cd.processContent(pk));
 
-        if (cd.mergedKeys.isEmpty())
+        //TODO Can we find a better way of estimating this?
+        if (cd.mergedKeys != null)
         {
-            return null;
+            lastQueueSize.set(Math.max(MINIMUM_QUEUE_SIZE, cd.mergedKeys.size()));
         }
 
-        //TODO Can we find a better way of estimating this?
-        lastQueueSize.set(Math.max(MINIMUM_QUEUE_SIZE, cd.mergedKeys.size()));
+        System.out.println("cd.mergedNonUniqueKeys.size="+cd.mergedNonUniqueKeys.size());
 
-        return new MemoryResult(new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys),
+        return new MemoryResult(!cd.mergedKeys.isEmpty() ? new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys) : null,
                                 !cd.mergedNonUniqueKeys.isEmpty() ? new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedNonUniqueKeys) : null);
     }
 

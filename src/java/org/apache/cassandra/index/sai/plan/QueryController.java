@@ -188,55 +188,6 @@ public class QueryController
         }
     }
 
-    /**
-     * Build a {@link RangeIterator.Builder} from the given list of expressions by applying given operation (OR/AND).
-     * Building of such builder involves index search, results of which are persisted in the internal resources list
-     *
-     * @param op The operation type to coalesce expressions with.
-     * @param expressions The expressions to build range iterator from (expressions with not results are ignored).
-     *
-     * @return range iterator builder based on given expressions and operation type.
-     */
-//    public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
-//    {
-//        final Multimap<SSTableReader.UniqueIdentifier, ColumnIndexRangeIterator.ExpressionSSTablePostings> sstablePostingsMap = HashMultimap.create();
-//
-//        RangeIterator.Builder builder = op == Operation.OperationType.OR
-//                                        ? RangeUnionIterator.builder()
-//                                        : RangeIntersectionIterator.selectiveBuilder();
-//
-//        Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
-//
-//        final RangeIterator.Builder columnRangeBuilder = op == Operation.OperationType.OR
-//                                                         ? RangeUnionIterator.builder()
-//                                                         : RangeIntersectionIterator.selectiveBuilder();
-//
-//        try
-//        {
-//            for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
-//            {
-//                ColumnIndexRangeIterator columnIndexRangeIterator = ColumnIndexRangeIterator.build(e.getKey(),
-//                                                                                                   e.getValue(),
-//                                                                                                   mergeRange,
-//                                                                                                   queryContext,
-//                                                                                                   sstablePostingsMap);
-//                columnRangeBuilder.add(columnIndexRangeIterator);
-//
-//                @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-//                RangeIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext);
-//
-//                builder.add(index);
-//            }
-//        }
-//        catch (Throwable t)
-//        {
-//            // all sstable indexes in view have been referenced, need to clean up when exception is thrown
-//            FileUtils.closeQuietly(builder.ranges());
-//            view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
-//            throw t;
-//        }
-//        return builder;
-//    }
     public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
     {
         final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map = new HashMap();
@@ -247,17 +198,12 @@ public class QueryController
                                                          ? RangeUnionIterator.builder()
                                                          : RangeIntersectionIterator.selectiveBuilder();
 
-        Set<SSTableIndex> ssTableIndices = new HashSet();
+        List<SSTableIndex> ssTableIndices = new ArrayList<>();
 
         try
         {
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
             {
-//                ColumnIndexRangeIterator columnIndexRangeIterator = ColumnIndexRangeIterator.build(e.getKey(),
-//                                                                                                   e.getValue(),
-//                                                                                                   mergeRange,
-//                                                                                                   queryContext,
-//                                                                                                   map);
                 ColumnIndexRangeIterator.build(e.getKey(),
                                                e.getValue(),
                                                mergeRange,
@@ -265,24 +211,13 @@ public class QueryController
                                                map);
 
                 ssTableIndices.addAll(e.getValue());
-                //columnRangeBuilder.add(columnIndexRangeIterator);
             }
 
-//            try
-//            {
-//                try (RangeIterator columnIt = columnRangeBuilder.build())
-//                {
-//                }
-//            }
-//            catch (IOException ioex)
-//            {
-//                throw new RuntimeException(ioex);
-//            }
-
-            //RangeIterator.Builder perSSTableRangeIterators = getIndexesPostings(op, expressions, map);
             RangeIterator perSSTableRangeIterators = getIndexesPostings(op, expressions, map, ssTableIndices);
-
-            columnRangeBuilder.add(perSSTableRangeIterators);
+            if (perSSTableRangeIterators != null)
+            {
+                columnRangeBuilder.add(perSSTableRangeIterators);
+            }
 
             return columnRangeBuilder;
         }
@@ -293,26 +228,26 @@ public class QueryController
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw t;
         }
-        //return columnRangeBuilder;
     }
 
     public RangeIterator getIndexesPostings(Operation.OperationType op,
                                             Collection<Expression> expressions,
                                             final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map,
-                                            Set<SSTableIndex> ssTableIndices)
+                                            List<SSTableIndex> ssTableIndices)
     {
         final RangeIterator.Builder builder = RangeUnionIterator.builder();
 
         Multimap<MemtableIndex, RangeIterator> multimap = HashMultimap.create();
-        List<RangeIterator> nonUniqueKeyIterators = new ArrayList<>();
+        List<RangeIterator> memNonUniqueKeyIterators = new ArrayList<>();
 
         for (final Expression expression : expressions)
         {
-            expression.context.searchMemtable2(expression, mergeRange, multimap, nonUniqueKeyIterators);
+            expression.context.searchMemtable2(expression, mergeRange, multimap, memNonUniqueKeyIterators);
         }
 
         // add the non-unique key iterators directly into the union builder
-        for (RangeIterator nonUniqueKeyIterator : nonUniqueKeyIterators)
+        // to green light partial updates, to be handled by post filtering
+        for (RangeIterator nonUniqueKeyIterator : memNonUniqueKeyIterators)
         {
             builder.add(nonUniqueKeyIterator);
         }
@@ -435,7 +370,6 @@ public class QueryController
                                                                              maxKey,
                                                                              context.context,
                                                                              sstablePostingsPeekable);
-
                     builder.add(new PostingListRangeIterator(indexContext, primaryKeyMap, context2));
                 }
                 else
@@ -444,9 +378,15 @@ public class QueryController
                 }
             }
 
-            return new TermIterator(builder.build(), ssTableIndices, new QueryContext());
+            if (builder.rangeCount() == 0)
+            {
+                return null;
+            }
 
-            //return builder;
+            RangeIterator rangeIterator = builder.build();
+
+            // TODO: QueryContext ?
+            return new TermIterator(rangeIterator, ssTableIndices, new QueryContext());
         }
         catch (Throwable t)
         {

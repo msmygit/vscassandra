@@ -225,6 +225,11 @@ public class IndexContext
 
     public long indexFirstMemtable(DecoratedKey key, Row row, boolean unique)
     {
+        if (liveMemtables.size() == 0)
+        {
+            return 0;
+        }
+
         MemtableIndex target = liveMemtables.values().iterator().next();
 
         // We expect the relevant IndexMemtable to be present most of the time, so only make the
@@ -340,7 +345,7 @@ public class IndexContext
                 nonUniqueKeyIterators.add(result.nonUniquesIterator);
             }
 
-            if (result != null)
+            if (result != null && result.iterator != null)
             {
                 multiMap.put(index, result.iterator);
             }
