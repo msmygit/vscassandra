@@ -230,12 +230,12 @@ public class BlockIndexReader implements AutoCloseable
 
         private byte[] compBytes = new byte[10];
         private byte[] uncompBytes = new byte[10];
-        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput;
+        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesInput;
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
+            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesInput);
         }
     }
 
@@ -921,7 +921,6 @@ public class BlockIndexReader implements AutoCloseable
         // TODO: use initContext everywhere and lazily init the input streams
         BlockIndexReaderContext context = new BlockIndexReaderContext();
         context.bytesInput = fileProvider.openValuesInput(temporary);
-        context.bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
         context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(temporary);
         context.multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
         return context;

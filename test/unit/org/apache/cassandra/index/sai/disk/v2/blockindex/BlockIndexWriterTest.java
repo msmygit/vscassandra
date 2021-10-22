@@ -125,7 +125,8 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
                 {
                     break;
                 }
-                System.out.println("term "+(i++)+" ="+state.term.utf8ToString());
+
+                System.out.println("term "+(i++)+"="+state.term.utf8ToString()+" rowid="+state.rowid);
             }
         }
     }

@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,7 +37,6 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
-import static org.apache.cassandra.index.sai.disk.format.IndexComponent.COMPRESSED_TERMS_DATA;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.KD_TREE_POSTING_LISTS;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.META;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ORDER_MAP;
@@ -87,12 +85,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     }
 
     @Override
-    public IndexOutputWriter openCompressedValuesOutput(boolean temporary) throws IOException
-    {
-        return indexDescriptor.openPerIndexOutput(COMPRESSED_TERMS_DATA, indexContext, true, temporary);
-    }
-
-    @Override
     public IndexOutputWriter openPointIdMapOutput(boolean temporary) throws IOException
     {
         return indexDescriptor.openPerIndexOutput(ROW_ID_POINT_ID_MAP, indexContext, true, temporary);
@@ -138,12 +130,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     public SharedIndexInput openMultiPostingsInput(boolean temporary)
     {
         return new SharedIndexInput(openInput(KD_TREE_POSTING_LISTS, temporary));
-    }
-
-    @Override
-    public SharedIndexInput openCompressedValuesInput(boolean temporary)
-    {
-        return new SharedIndexInput(openInput(COMPRESSED_TERMS_DATA, temporary));
     }
 
     @Override

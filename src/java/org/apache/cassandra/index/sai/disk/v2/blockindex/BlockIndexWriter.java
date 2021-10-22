@@ -86,7 +86,7 @@ public class BlockIndexWriter implements Closeable
     private final boolean temporary;
 
     final List<BytesRef> blockMinValues = new ArrayList();
-    final IndexOutput valuesOut, compressedValuesOut;
+    final IndexOutput valuesOut;
     final IndexOutputWriter indexOut;
     final IndexOutput leafPostingsOut, orderMapOut;
 
@@ -121,7 +121,6 @@ public class BlockIndexWriter implements Closeable
         this.indexOut = fileProvider.openIndexOutput(temporary);
         this.leafPostingsOut = fileProvider.openLeafPostingsOutput(temporary);
         this.orderMapOut = fileProvider.openOrderMapOutput(temporary);
-        this.compressedValuesOut = fileProvider.openCompressedValuesOutput(temporary);
         this.postingsWriter = new PostingsWriter(leafPostingsOut);
     }
 
@@ -295,7 +294,7 @@ public class BlockIndexWriter implements Closeable
     @Override
     public void close() throws IOException
     {
-        FileUtils.closeQuietly(valuesOut, compressedValuesOut, indexOut, leafPostingsOut, orderMapOut);
+        FileUtils.closeQuietly(valuesOut, indexOut, leafPostingsOut, orderMapOut);
     }
 
     private void writePointIdMap(BlockIndexWriterContext context) throws IOException
