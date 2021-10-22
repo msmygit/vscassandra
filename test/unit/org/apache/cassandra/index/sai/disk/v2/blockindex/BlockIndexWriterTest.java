@@ -94,6 +94,42 @@ import static org.hamcrest.Matchers.is;
 //@Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
 public class BlockIndexWriterTest extends SaiRandomizedTest
 {
+
+    @Test
+    public void testSeekToSameValues() throws Exception
+    {
+        List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
+
+        LongArrayList rowids = new LongArrayList();
+        for (int x = 0; x < 20; x++)
+        {
+            rowids.add(x);
+        }
+
+        list.add(add("aaa", rowids.toArray())); // 0
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
+            BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
+            int i = 0;
+            while (true)
+            {
+                IndexState state = iterator.next();
+                if (state == null)
+                {
+                    break;
+                }
+                System.out.println("term "+(i++)+" ="+state.term.utf8ToString());
+            }
+        }
+    }
+
     @Test
     public void testRanges() throws Exception
     {

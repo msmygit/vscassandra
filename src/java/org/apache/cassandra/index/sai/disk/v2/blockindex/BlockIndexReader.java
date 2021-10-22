@@ -907,8 +907,7 @@ public class BlockIndexReader implements AutoCloseable
 
         if (context.currentLeafFP != leafFP)
         {
-            long filePointer = this.leafFilePointers.get(leaf);
-            readBlock(filePointer, context);
+            readBlock(leafFP, context);
             context.currentLeafFP = leafFP;
             context.leaf = (int) leaf;
             context.leafIndex = 0;
@@ -1102,6 +1101,7 @@ public class BlockIndexReader implements AutoCloseable
             }
             if (context.lastPrefix > 0 && context.firstTerm != null)
                 context.builder.append(context.firstTerm, 0, context.lastPrefix);
+
             if (context.bytesLength > 0 )
             {
                 context.builder.append(context.bytes, 0, context.bytesLength);
