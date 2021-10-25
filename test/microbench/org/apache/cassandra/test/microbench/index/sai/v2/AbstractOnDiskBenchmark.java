@@ -26,6 +26,8 @@ import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 
+import com.google.common.base.Stopwatch;
+
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
 import org.apache.cassandra.cache.ChunkCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -53,6 +55,7 @@ import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.tools.nodetool.Stop;
 import org.apache.lucene.store.IndexInput;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Setup;
@@ -197,7 +200,7 @@ public abstract class AbstractOnDiskBenchmark
             writer.nextRow(pk);
             rowId++;
         }
-        writer.complete();
+        writer.complete(Stopwatch.createStarted());
     }
 
 }

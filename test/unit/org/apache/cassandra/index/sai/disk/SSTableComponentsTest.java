@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.common.base.Stopwatch;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -75,7 +76,7 @@ public class SSTableComponentsTest extends SAITester
         assumeTrue(Version.LATEST == Version.BA);
 
         PerSSTableWriter writer = indexDescriptor.newPerSSTableWriter();
-        writer.complete();
+        writer.complete(Stopwatch.createStarted());
 
         PrimaryKeyMap primaryKeyMap = indexDescriptor.newPrimaryKeyMapFactory(null).newPerSSTablePrimaryKeyMap(null);
 
@@ -112,7 +113,7 @@ public class SSTableComponentsTest extends SAITester
         for (PrimaryKey key : expected)
             writer.nextRow(factory.createKey(key.partitionKey(), key.clustering(), sstableRowId++));
 
-        writer.complete();
+        writer.complete(Stopwatch.createStarted());
 
         PrimaryKeyMap primaryKeyMap = indexDescriptor.newPrimaryKeyMapFactory(null).newPerSSTablePrimaryKeyMap(null);
 

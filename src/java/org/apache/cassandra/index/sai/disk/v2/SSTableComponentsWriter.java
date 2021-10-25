@@ -74,9 +74,9 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         addKeyToMapping(key);
     }
 
-    public void complete() throws IOException
+    @Override
+    public void complete(Stopwatch stopwatch) throws IOException
     {
-        Stopwatch stopwatch = Stopwatch.createStarted();
         if (rowMapping.valuesCount() > 0)
         {
             flush(!metadatas.isEmpty());
@@ -84,7 +84,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
                          indexDescriptor.descriptor,
                          stopwatch.elapsed(TimeUnit.MILLISECONDS));
         }
-        compactSegments();
+        compactSegments(stopwatch);
         logger.debug(indexDescriptor.logMessage("Compacted segments for sstable {}. Elapsed time {}ms"),
                      indexDescriptor.descriptor,
                      stopwatch.elapsed(TimeUnit.MILLISECONDS));
@@ -142,12 +142,11 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         }
     }
 
-    private void compactSegments() throws IOException
+    private void compactSegments(Stopwatch stopwatch) throws IOException
     {
         if (metadatas.isEmpty())
             return;
 
-        Stopwatch stopwatch = Stopwatch.createStarted();
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>(metadatas.size());
         List<BlockIndexReader> readers = new ArrayList<>(metadatas.size());
         try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))

@@ -181,7 +181,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
         try
         {
-            sstableComponentsWriter.complete();
+            sstableComponentsWriter.complete(stopwatch);
             tokenOffsetWriterCompleted = true;
 
             logger.debug(indexDescriptor.logMessage("Flushed primary key map for SSTable {}. Elapsed time: {} ms."),
@@ -191,7 +191,7 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
             for (PerIndexWriter columnIndexWriter : columnIndexWriters)
             {
-                columnIndexWriter.flush();
+                columnIndexWriter.complete(stopwatch);
                 logger.debug(columnIndexWriter.indexContext().logMessage("Flushed index for SSTable {}. Elapsed time: {} ms."),
                              indexDescriptor.descriptor, stopwatch.elapsed(TimeUnit.MILLISECONDS));
             }

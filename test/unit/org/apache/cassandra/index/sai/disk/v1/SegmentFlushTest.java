@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import com.google.common.base.Stopwatch;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -45,13 +46,6 @@ import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.v1.TermsReader;
-import org.apache.cassandra.index.sai.disk.v1.V1IndexOnDiskMetadata;
-import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
@@ -150,7 +144,7 @@ public class SegmentFlushTest
         Row row2 = createRow(column, term2);
         writer.addRow(PrimaryKey.factory().createKey(key2, Clustering.EMPTY, sstableRowId2), row2);
 
-        writer.flush();
+        writer.complete(Stopwatch.createStarted());
 
         // verify segment count
         IndexOnDiskMetadata indexMetadata = indexDescriptor.newIndexMetadataSerializer().deserialize(indexDescriptor, context);

@@ -19,6 +19,8 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
 
+import com.google.common.base.Stopwatch;
+
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -37,7 +39,7 @@ public interface PerIndexWriter
     /**
      * Builds on-disk index data structures from accumulated data, moves them all to the filesystem, and fsync created files.
      */
-    void flush() throws IOException;
+    void complete(Stopwatch stopwatch) throws IOException;
 
     /**
      * Aborts accumulating data. Allows to clean up resources on error.

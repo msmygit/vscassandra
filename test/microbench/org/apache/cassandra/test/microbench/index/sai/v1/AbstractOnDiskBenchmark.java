@@ -23,6 +23,8 @@ import java.nio.file.Files;
 import java.util.Random;
 import java.util.stream.IntStream;
 
+import com.google.common.base.Stopwatch;
+
 import org.apache.cassandra.cache.ChunkCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.marshal.IntegerType;
@@ -181,7 +183,7 @@ public abstract class AbstractOnDiskBenchmark
         for (int i = 0; i < rows; i++)
             writer.recordCurrentTokenOffset(toToken(i), toOffset(i));
 
-        writer.complete();
+        writer.complete(Stopwatch.createStarted());
     }
 
     protected final LongArray openRowIdToTokenReader() throws IOException

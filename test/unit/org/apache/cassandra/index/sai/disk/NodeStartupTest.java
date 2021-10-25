@@ -44,7 +44,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndexBuilder;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v2.SSTableIndexWriter;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.inject.InvokePointBuilder;
@@ -79,11 +79,11 @@ public class NodeStartupTest extends SAITester
                                                                                   .build();
 
     private static final Injections.Barrier midBuildReleasesPreJoinStart = Injections.newBarrierCountDown("pre_join_mid_build", 1, false)
-                                                                                     .add(InvokePointBuilder.newInvokePoint().onClass(V2SSTableIndexWriter.class).onMethod("addRow").atEntry())
+                                                                                     .add(InvokePointBuilder.newInvokePoint().onClass(SSTableIndexWriter.class).onMethod("addRow").atEntry())
                                                                                      .build();
 
     private static final Injections.Barrier midBuildWaitsPreJoinFinish = Injections.newBarrierAwait("mid_build_pre_join", 1, false)
-                                                                                   .add(InvokePointBuilder.newInvokePoint().onClass(V2SSTableIndexWriter.class).onMethod("addRow").atExit())
+                                                                                   .add(InvokePointBuilder.newInvokePoint().onClass(SSTableIndexWriter.class).onMethod("addRow").atExit())
                                                                                    .build();
 
     private static final Injections.Barrier preJoinFinishReleasesMidBuild = Injections.newBarrierCountDown("mid_build_pre_join", 1, false)

@@ -19,6 +19,8 @@ package org.apache.cassandra.index.sai.disk;
 
 import java.io.IOException;
 
+import com.google.common.base.Stopwatch;
+
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -35,7 +37,7 @@ public interface PerSSTableWriter
 
     void nextRow(PrimaryKey key) throws IOException;
 
-    default void complete() throws IOException
+    default void complete(Stopwatch stopwatch) throws IOException
     {}
 
     default void abort(Throwable accumulator)

@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
 import com.google.common.collect.TreeRangeSet;
@@ -37,7 +38,6 @@ import org.junit.Test;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
-import com.carrotsearch.randomizedtesting.annotations.Seed;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.Int32Type;
@@ -62,15 +62,13 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.PerIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.PerSSTableFileProvider;
-import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v2.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
-import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -275,10 +273,10 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
         IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
 
-        V2SSTableIndexWriter writer = new V2SSTableIndexWriter(indexDescriptor,
-                                                               indexContext,
-                                                               memoryLimiter,
-                                                               () -> true);
+        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor,
+                                                           indexContext,
+                                                           memoryLimiter,
+                                                           () -> true);
 
         ColumnMetadata column = ColumnMetadata.regularColumn("sai", "internal", "column", UTF8Type.instance);
 
@@ -294,7 +292,7 @@ public class BlockIndexWriterTest extends SaiRandomizedTest
 
         writer.addRow(PrimaryKey.factory().createKey(key2, Clustering.EMPTY, 1), row2);
 
-        writer.flush();
+        writer.complete(Stopwatch.createStarted());
 
         try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
              IndexInput input = fileProvider.openMetadataInput())

@@ -23,6 +23,7 @@ import java.lang.invoke.MethodHandles;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,7 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.tools.nodetool.Stop;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.store.IndexOutput;
@@ -86,7 +88,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
-    public void flush() throws IOException
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         long start = System.nanoTime();
 

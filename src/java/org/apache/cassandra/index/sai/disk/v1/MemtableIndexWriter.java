@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +92,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
-    public void flush() throws IOException
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         long start = System.nanoTime();
 

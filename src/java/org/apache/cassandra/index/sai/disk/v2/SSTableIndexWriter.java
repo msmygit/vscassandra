@@ -55,9 +55,9 @@ import org.apache.lucene.store.IndexOutput;
  * Column index writer that accumulates (on-heap) indexed data from a compacted SSTable as it's being flushed to disk.
  */
 @NotThreadSafe
-public class V2SSTableIndexWriter implements PerIndexWriter
+public class SSTableIndexWriter implements PerIndexWriter
 {
-    private static final Logger logger = LoggerFactory.getLogger(V2SSTableIndexWriter.class);
+    private static final Logger logger = LoggerFactory.getLogger(SSTableIndexWriter.class);
     private static final NoSpamLogger noSpamLogger = NoSpamLogger.getLogger(logger, 1, TimeUnit.MINUTES);
 
     public static final int MAX_STRING_TERM_SIZE = Integer.getInteger("cassandra.sai.max_string_term_size_kb", 1) * 1024;
@@ -81,10 +81,10 @@ public class V2SSTableIndexWriter implements PerIndexWriter
     // segment writer
     private V2SegmentBuilder currentBuilder;
 
-    public V2SSTableIndexWriter(IndexDescriptor indexDescriptor,
-                                IndexContext indexContext,
-                                NamedMemoryLimiter limiter,
-                                BooleanSupplier isIndexValid)
+    public SSTableIndexWriter(IndexDescriptor indexDescriptor,
+                              IndexContext indexContext,
+                              NamedMemoryLimiter limiter,
+                              BooleanSupplier isIndexValid)
     {
         this.indexContext = indexContext;
         this.indexDescriptor = indexDescriptor;
@@ -127,15 +127,13 @@ public class V2SSTableIndexWriter implements PerIndexWriter
     }
 
     @Override
-    public void flush() throws IOException
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         if (maybeAbort())
         {
             logger.warn(indexContext.logMessage("Indexing operation was aborted"));
             return;
         }
-
-        Stopwatch stopwatch = Stopwatch.createStarted();
 
         boolean emptySegment = currentBuilder == null || currentBuilder.isEmpty();
         logger.debug(indexContext.logMessage("Completing index flush with {}buffered data..."), emptySegment ? "no " : "");
@@ -160,7 +158,7 @@ public class V2SSTableIndexWriter implements PerIndexWriter
                 currentBuilder = null;
             }
 
-            compactSegments();
+            compactSegments(stopwatch);
 
             logger.debug(indexContext.logMessage("Segment compaction finished on sstable {}. Elapsed time {}ms"),
                          indexDescriptor.descriptor,
@@ -316,12 +314,10 @@ public class V2SSTableIndexWriter implements PerIndexWriter
     }
 
 
-    private void compactSegments() throws IOException
+    private void compactSegments(Stopwatch stopwatch) throws IOException
     {
         if (metadatas.isEmpty())
             return;
-
-        Stopwatch stopwatch = Stopwatch.createStarted();
 
         List<BlockIndexReader> readers = new ArrayList<>();
         List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
