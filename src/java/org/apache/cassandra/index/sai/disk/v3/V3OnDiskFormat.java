@@ -21,19 +21,18 @@ package org.apache.cassandra.index.sai.disk.v3;
 import java.io.IOException;
 import java.util.Set;
 
-import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
-import org.apache.cassandra.index.sai.disk.v1.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v1.V1PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
-public class V3OnDiskFormat extends V2OnDiskFormat
+public class V3OnDiskFormat extends V1OnDiskFormat
 {
     public static final V3OnDiskFormat instance = new V3OnDiskFormat();
 
@@ -42,19 +41,19 @@ public class V3OnDiskFormat extends V2OnDiskFormat
         @Override
         public boolean isRowAware()
         {
-            return false;
+            return true;
         }
 
         @Override
         public boolean usesNonStandardEncoding()
         {
-            return false;
+            return true;
         }
 
         @Override
         public boolean supportsRounding()
         {
-            return false;
+            return true;
         }
     };
 
@@ -70,19 +69,13 @@ public class V3OnDiskFormat extends V2OnDiskFormat
     @Override
     public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
     {
-        return new V1PrimaryKeyMap.V1PrimaryKeyMapFactory(indexDescriptor, sstable);
+        return new V2PrimaryKeyMap.V2PrimaryKeyMapFactory(indexDescriptor);
     }
 
     @Override
     public Set<IndexComponent> perSSTableComponents()
     {
-        return V1OnDiskFormat.PER_SSTABLE_COMPONENTS;
-    }
-
-    @Override
-    public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
-    {
-        return PER_INDEX_COMPONENTS;
+        return V2OnDiskFormat.PER_SSTABLE_COMPONENTS;
     }
 
     @Override
