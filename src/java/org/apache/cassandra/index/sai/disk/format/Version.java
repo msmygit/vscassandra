@@ -25,6 +25,7 @@ import com.google.common.collect.Lists;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v3.V3OnDiskFormat;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.cassandra.index.sai.disk.format.IndexDescriptor.SAI_DESCRIPTOR;
@@ -38,7 +39,11 @@ public class Version
     // 6.8 formats
     public static final Version AA = new Version("aa", V1OnDiskFormat.instance, (c, i) -> aaFileNameFormat(c, i));
     // Stargazer
-    public static final Version BA = new Version("ba", V2OnDiskFormat.instance, (c, i) -> baFileNameFormat(c, i));
+    public static final Version BA = new Version("ba", V2OnDiskFormat.instance, (c, i) -> stargazerFileNameFormat(c, i, "ba"));
+
+    public static final Version ZZ = new Version("zz", V3OnDiskFormat.instance, (c, i) -> stargazerFileNameFormat(c, i, "zz"));
+
+
 
     // These are in reverse order so that the latest version is used first. Version matching tests
     // are more likely to match the latest version so we want to test that one first.
@@ -64,8 +69,13 @@ public class Version
     {
         checkArgument(input != null);
         checkArgument(input.length() == 2);
-        checkArgument(input.equals(AA.version) || input.equals(BA.version));
-        return input.equals(AA.version) ? AA : BA;
+        if (input.equals(AA.version))
+            return AA;
+        else if (input.equals(BA.version))
+            return BA;
+        else if (input.equals(ZZ.version))
+            return ZZ;
+        throw new IllegalArgumentException();
     }
 
     @Override
@@ -135,12 +145,12 @@ public class Version
     private static final String SAI_SEPARATOR = "+";
     private static final String EXTENSION = ".db";
 
-    private static String baFileNameFormat(IndexComponent indexComponent, IndexContext indexContext)
+    private static String stargazerFileNameFormat(IndexComponent indexComponent, IndexContext indexContext, String version)
     {
         StringBuilder stringBuilder = new StringBuilder();
 
         stringBuilder.append(SAI_DESCRIPTOR);
-        stringBuilder.append(SAI_SEPARATOR).append(Version.BA);
+        stringBuilder.append(SAI_SEPARATOR).append(version);
         if (indexContext != null)
             stringBuilder.append(SAI_SEPARATOR).append(indexContext.getIndexName());
         stringBuilder.append(SAI_SEPARATOR).append(indexComponent.representation);
