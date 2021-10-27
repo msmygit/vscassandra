@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -31,7 +31,9 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -44,6 +46,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 public class SegmentMergerTest extends SAITester
 {
@@ -62,6 +65,8 @@ public class SegmentMergerTest extends SAITester
     @Test
     public void literalIndexTest() throws Throwable
     {
+        assumeTrue(Version.LATEST == Version.AA);
+
         createTable("CREATE TABLE %s (pk int, value text, PRIMARY KEY(pk))");
         disableCompaction();
 
@@ -118,6 +123,8 @@ public class SegmentMergerTest extends SAITester
     @Test
     public void numericIndexTest() throws Throwable
     {
+        assumeTrue(Version.LATEST == Version.AA);
+
         createTable("CREATE TABLE %s (pk int, value int, PRIMARY KEY(pk))");
         disableCompaction();
 

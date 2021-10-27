@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import com.google.common.base.Stopwatch;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -39,16 +40,12 @@ import org.apache.cassandra.db.rows.BTreeRow;
 import org.apache.cassandra.db.rows.BufferCell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.IndexOnDiskMetadata;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v2.SSTableIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.v1.TermsReader;
-import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v2.V2IndexOnDiskMetadata;
-import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
@@ -94,7 +91,7 @@ public class SegmentFlushTest
     @Test
     public void testFlushBetweenRowIds() throws Exception
     {
-        assumeTrue(Version.LATEST == Version.BA);
+        assumeTrue(Version.LATEST == Version.AA);
         // exceeds max rowId per segment
         testFlushBetweenRowIds(0, Integer.MAX_VALUE, 1);
         testFlushBetweenRowIds(0, Long.MAX_VALUE - 1, 1);
@@ -106,7 +103,7 @@ public class SegmentFlushTest
     @Test
     public void testNoFlushBetweenRowIds() throws Exception
     {
-        assumeTrue(Version.LATEST == Version.BA);
+        assumeTrue(Version.LATEST == Version.AA);
         // not exceeds max rowId per segment
         testFlushBetweenRowIds(0, SegmentBuilder.LAST_VALID_SEGMENT_ROW_ID, 1);
         testFlushBetweenRowIds(Long.MAX_VALUE - SegmentBuilder.LAST_VALID_SEGMENT_ROW_ID, Long.MAX_VALUE - 1, 1);
@@ -147,13 +144,13 @@ public class SegmentFlushTest
         Row row2 = createRow(column, term2);
         writer.addRow(PrimaryKey.factory().createKey(key2, Clustering.EMPTY, sstableRowId2), row2);
 
-        writer.flush();
+        writer.complete(Stopwatch.createStarted());
 
         // verify segment count
         IndexOnDiskMetadata indexMetadata = indexDescriptor.newIndexMetadataSerializer().deserialize(indexDescriptor, context);
-        assertTrue(indexMetadata instanceof V2IndexOnDiskMetadata);
+        assertTrue(indexMetadata instanceof V1IndexOnDiskMetadata);
         // verify segment metadata
-        SegmentMetadata segmentMetadata = ((V2IndexOnDiskMetadata)indexMetadata).segment;
+        SegmentMetadata segmentMetadata = ((V1IndexOnDiskMetadata)indexMetadata).segments.get(0);
         segmentRowIdOffset = 0;
         posting1 = 0;
         posting2 = (int) (sstableRowId2 - segmentRowIdOffset);

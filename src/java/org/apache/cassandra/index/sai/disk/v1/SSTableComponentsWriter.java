@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.IOException;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,8 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         offsetWriter.add(keyOffset);
     }
 
-    public void complete() throws IOException
+    @Override
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         IOUtils.close(tokenWriter, offsetWriter, metadataWriter);
         indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);

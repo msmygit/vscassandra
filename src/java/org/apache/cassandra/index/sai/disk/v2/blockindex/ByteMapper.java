@@ -15,31 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
 
-import java.io.IOException;
+package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
-import com.google.common.base.Stopwatch;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 
-import org.apache.cassandra.db.tries.MemtableTrie;
-import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
-
-/**
- * Writes all SSTable-attached index token and offset structures.
- */
-public interface PerSSTableWriter
+public interface ByteMapper
 {
-    public static final PerSSTableWriter NONE = (key) -> {};
+    ByteMapper DEFAULT = new DefaultByteMapper();
 
-    default void startPartition(PrimaryKey key, long position) throws IOException
-    {}
+    BytesRef fromByteComparable(ByteComparable byteComparable);
 
-    void nextRow(PrimaryKey key) throws IOException;
+    public static class DefaultByteMapper implements ByteMapper
+    {
+        BytesRefBuilder builder = new BytesRefBuilder();
 
-    default void complete(Stopwatch stopwatch) throws IOException
-    {}
-
-    default void abort(Throwable accumulator)
-    {}
+        @Override
+        public BytesRef fromByteComparable(ByteComparable byteComparable)
+        {
+            builder.clear();
+            BytesUtil.gatherBytes(byteComparable, builder);
+            return builder.toBytesRef();
+        }
+    }
 }

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import java.util.Map;
 
@@ -82,7 +82,7 @@ public class IndexWriterConfig
 
         if (options.get(POSTING_LIST_LVL_MIN_LEAVES) != null || options.get(POSTING_LIST_LVL_SKIP_OPTION) != null)
         {
-            if (TypeUtil.isLiteral(type))
+            if (TypeUtil.instance.isLiteral(type))
             {
                 throw new InvalidRequestException(String.format("CQL type %s cannot have auxiliary posting lists on index %s.", type.asCQL3Type(), indexName));
             }

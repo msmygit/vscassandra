@@ -34,6 +34,7 @@ public class ListAsciiTest extends IndexingTypeSupport
     public static Collection<Object[]> generateParameters()
     {
         return generateParameters(new CollectionDataSet.ListDataSet<>(new DataSet.AsciiDataSet()));
+//        return generateParameters(new DataSet.AsciiDataSet());
     }
 
     public ListAsciiTest(DataSet<?> dataset, boolean widePartitions, Scenario scenario)

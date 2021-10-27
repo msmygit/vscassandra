@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,8 +31,6 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.MergePostingList;
-import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -59,12 +55,12 @@ public class ColumnIndexRangeIterator extends RangeIterator
         this.context = queryContext;
     }
 
-    public static class SSTablePostings
+    public static class SSTableIndexPostings
     {
         public final List<PostingListRangeIterator> sstablePostingsRangeIterators;
         public final SSTableIndex ssTableIndex;
 
-        public SSTablePostings(List<PostingListRangeIterator> sstablePostingsRangeIterators, SSTableIndex ssTableIndex)
+        public SSTableIndexPostings(List<PostingListRangeIterator> sstablePostingsRangeIterators, SSTableIndex ssTableIndex)
         {
             this.sstablePostingsRangeIterators = sstablePostingsRangeIterators;
             this.ssTableIndex = ssTableIndex;
@@ -76,7 +72,7 @@ public class ColumnIndexRangeIterator extends RangeIterator
                                                  Set<SSTableIndex> perSSTableIndexes,
                                                  AbstractBounds<PartitionPosition> keyRange,
                                                  QueryContext queryContext,
-                                                 final Map<SSTableReader.UniqueIdentifier, Map<Expression,SSTablePostings>> map)
+                                                 final Map<SSTableReader.UniqueIdentifier, Map<Expression, SSTableIndexPostings>> map)
     {
         final List<RangeIterator> columnIndexRangeIterators = new ArrayList<>(1 + perSSTableIndexes.size());;
 
@@ -112,8 +108,8 @@ public class ColumnIndexRangeIterator extends RangeIterator
                 if (sstableRangeIterators == null || sstableRangeIterators.isEmpty())
                     continue;
 
-                Map<Expression,SSTablePostings> expressionMultimap = map.computeIfAbsent(index.getSSTable().instanceId, (id) -> new HashMap());
-                expressionMultimap.put(expression, new SSTablePostings(sstablePostingsRangeIterators, index));
+                Map<Expression, SSTableIndexPostings> expressionMultimap = map.computeIfAbsent(index.getSSTable().instanceId, (id) -> new HashMap());
+                expressionMultimap.put(expression, new SSTableIndexPostings(sstablePostingsRangeIterators, index));
 
                 columnIndexRangeIterators.addAll(sstablePostingsRangeIterators);
             }

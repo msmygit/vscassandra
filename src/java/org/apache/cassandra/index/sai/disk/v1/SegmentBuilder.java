@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.RAMStringIndexer;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.BytesRefUtil;
@@ -88,7 +87,7 @@ public abstract class SegmentBuilder
         {
             super(termComparator, limiter);
 
-            int typeSize = TypeUtil.fixedSizeOf(termComparator);
+            int typeSize = TypeUtil.instance.fixedSizeOf(termComparator);
             this.kdTreeRamBuffer = new BKDTreeRamBuffer(1, typeSize);
             this.buffer = new byte[typeSize];
             this.totalBytesAllocated = this.kdTreeRamBuffer.ramBytesUsed();
@@ -102,7 +101,7 @@ public abstract class SegmentBuilder
 
         protected long addInternal(ByteBuffer term, int segmentRowId)
         {
-            TypeUtil.toComparableBytes(term, termComparator, buffer);
+            TypeUtil.instance.toComparableBytes(term, termComparator, buffer);
             return kdTreeRamBuffer.addPackedValue(segmentRowId, new BytesRef(buffer));
         }
 
@@ -111,7 +110,7 @@ public abstract class SegmentBuilder
         {
             try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
                                                                     indexContext,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
+                                                                    TypeUtil.instance.fixedSizeOf(termComparator),
                                                                     maxSegmentRowId,
                                                                     rowCount,
                                                                     indexWriterConfig,
@@ -193,8 +192,8 @@ public abstract class SegmentBuilder
         minKey = minKey == null ? key : minKey;
         maxKey = key;
 
-        minTerm = TypeUtil.min(term, minTerm, termComparator);
-        maxTerm = TypeUtil.max(term, maxTerm, termComparator);
+        minTerm = TypeUtil.instance.min(term, minTerm, termComparator, true);
+        maxTerm = TypeUtil.instance.max(term, maxTerm, termComparator, true);
 
         if (rowCount == 0)
         {

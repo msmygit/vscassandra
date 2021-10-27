@@ -23,10 +23,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -36,7 +34,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeMultimap;
-import org.apache.commons.lang3.SerializationUtils;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.IntIntHashMap;
@@ -70,16 +67,14 @@ import org.apache.lucene.util.packed.PackedLongValues;
 
 import static org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter.LEAF_SIZE;
 
-public class BlockIndexReader implements Closeable
+public class BlockIndexReader implements AutoCloseable
 {
     final FileHandle indexFile;
     final PackedLongValues leafFilePointers;
-    final LongArrayList compressedLeafFPs = new LongArrayList();
-    final IntArrayList compressedLeafLengths = new IntArrayList();
-    final IntArrayList leafLengths = new IntArrayList();
     final IntIntHashMap nodeIDToLeaf = new IntIntHashMap();
     final IntLongHashMap leafToOrderMapFP = new IntLongHashMap();
     final BlockIndexMeta meta;
+    final ByteMapper byteMapper;
     final IntLongHashMap nodeIDToPostingsFP = new IntLongHashMap();
     final IndexInput orderMapInput;
     final SeekingRandomAccessInput orderMapRandoInput;
@@ -95,9 +90,18 @@ public class BlockIndexReader implements Closeable
                             boolean temporary,
                             BlockIndexMeta meta) throws IOException
     {
+        this(fileProvider, temporary, meta, ByteMapper.DEFAULT);
+    }
+
+    public BlockIndexReader(BlockIndexFileProvider fileProvider,
+                            boolean temporary,
+                            BlockIndexMeta meta,
+                            ByteMapper byteMapper) throws IOException
+    {
         this.fileProvider = fileProvider;
         this.temporary = temporary;
         this.meta = meta;
+        this.byteMapper = byteMapper;
 
         // Can't validate temporary file because the file could contain multiple segments
 //        if (!temporary)
@@ -109,7 +113,6 @@ public class BlockIndexReader implements Closeable
         this.orderMapInput = fileProvider.openOrderMapInput(temporary);
         this.orderMapRandoInput = new SeekingRandomAccessInput(orderMapInput);
         SharedIndexInput multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
-//        SharedIndexInput bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
 
         orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(LEAF_SIZE - 1));
 
@@ -221,21 +224,19 @@ public class BlockIndexReader implements Closeable
         boolean readBlock = false;
         BytesRefBuilder builder = new BytesRefBuilder();
 
-        private byte[] compBytes = new byte[10];
-        private byte[] uncompBytes = new byte[10];
-        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput;
+        SharedIndexInput leafLevelPostingsInput, multiPostingsInput, bytesInput;
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesCompressedInput, bytesInput);
+            FileUtils.closeQuietly(seekingInput, leafLevelPostingsInput, multiPostingsInput, bytesInput);
         }
     }
 
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(indexFile, orderMapInput, fileProvider);
+        FileUtils.close(indexFile, orderMapInput);
     }
 
     static class NodeIDLeafFP
@@ -264,9 +265,7 @@ public class BlockIndexReader implements Closeable
 
     public static PostingList toOnePostingList(List<PostingList.PeekablePostingList> postingLists)
     {
-        PriorityQueue postingsQueue = new PriorityQueue(postingLists.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-        postingsQueue.addAll(postingLists);
-        return MergePostingList.merge(postingsQueue);
+        return MergePostingList.merge(postingLists);
     }
 
     public List<PostingList.PeekablePostingList> traverse(ByteComparable start,
@@ -468,153 +467,136 @@ public class BlockIndexReader implements Closeable
     public List<PostingList.PeekablePostingList> traverse(final ByteComparable start,
                                                           final ByteComparable end) throws IOException
     {
-        final BlockIndexReaderContext context = initContext();
-
-        final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
-
-        // if there's only 1 leaf in the index, filter on it
-        if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
-        {
-            traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
-        }
-
-        // TODO: conversion also done in the method above
-        BytesRef startBytes = null;
-        if (start != null)
-        {
-            startBytes = new BytesRef(ByteSourceInverse.readBytes(start.asComparableBytes(ByteComparable.Version.OSS41)));
-        }
-        BytesRef endBytes = null;
-        if (end != null)
-        {
-            endBytes = new BytesRef(ByteSourceInverse.readBytes(end.asComparableBytes(ByteComparable.Version.OSS41)));
-        }
-
-        final List<NodeIDLeafFP> leafNodeIDToLeafOrd = new ArrayList<>();
-
-        for (int nodeID : traverseTreeResult.nodeIDs)
-        {
-            final Collection<Long> multiPostingFPs = this.multiNodeIDToPostingsFP.get(nodeID);
-            if (multiPostingFPs != null && multiPostingFPs.size() > 0)
-            {
-                final int leaf = this.nodeIDToLeaf.get(nodeID);
-                for (final long fp : multiPostingFPs)
-                {
-                    leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leaf, fp));
-                }
-            }
-            else
-            {
-                final int leafOrdinal = nodeIDToLeaf.get(nodeID);
-                Long postingsFP = null;
-                if (nodeIDToPostingsFP.containsKey(nodeID))
-                {
-                    postingsFP = nodeIDToPostingsFP.get(nodeID);
-                }
-
-                if (postingsFP != null)
-                {
-                    leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leafOrdinal, postingsFP));
-                }
-            }
-        }
-        // sort by leaf id
-        Collections.sort(leafNodeIDToLeafOrd, (o1, o2) -> Integer.compare(o1.leaf, o2.leaf));
-        int minNodeID = leafNodeIDToLeafOrd.get(0).nodeID;
-        int minLeafOrd = leafNodeIDToLeafOrd.get(0).leaf;
-        int maxNodeID = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).nodeID;
-        int maxLeafOrd = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).leaf;
-
-        // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
-        //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
-
         final List<PostingList.PeekablePostingList> postingLists = new ArrayList<>();
 
-        final boolean minRangeExists = multiBlockLeafRanges.contains(minLeafOrd);
-
-        int startOrd = 1;
-        int endOrd = leafNodeIDToLeafOrd.size() - 1;
-
-        if (minLeafOrd == maxLeafOrd)
+        try (final BlockIndexReaderContext context = initContext())
         {
-            // TODO: if the minNode is all same values or multi-block there's
-            //       no need to filter
-            return Lists.newArrayList(filterLeaf(minNodeID,
-                                                 startBytes,
-                                                 endBytes,
-                                                 context).peekable()
-            );
-        }
+            final TraverseTreeResult traverseTreeResult = traverseForNodeIDs(start, end);
 
-        Integer firstFilterNodeID = null;
-
-        if (minRangeExists || start == null)
-        {
-            startOrd = 0;
-        }
-        else
-        {
-            firstFilterNodeID = minNodeID;
-            PostingList firstList = filterLeaf(minNodeID,
-                                               startBytes,
-                                               endBytes,
-                                               context
-            );
-            if (firstList != null)
+            // if there's only 1 leaf in the index, filter on it
+            if (traverseTreeResult.nodeIDs.size() == 0 && meta.numLeaves == 1)
             {
-                postingLists.add(firstList.peekable());
+                traverseTreeResult.nodeIDs.add(this.nodeIDToLeaf.keys().iterator().next().value);
             }
-        }
 
-        final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
-        final boolean allSameValues = leafValuesSame != null ? leafValuesSame.get(maxLeafOrd) : false;
+            //TODO Is this strictly correct?
+            if (traverseTreeResult.nodeIDs.size() == 0)
+                return postingLists;
 
-        if (end == null || maxRangeExists || allSameValues)
-        {
-            endOrd = leafNodeIDToLeafOrd.size();
-            NodeIDLeafFP pair = leafNodeIDToLeafOrd.get(endOrd - 1);
+            // TODO: conversion also done in the method above
+            BytesRef startBytes = start == null ? null : byteMapper.fromByteComparable(start);
+            BytesRef endBytes = end == null ? null : byteMapper.fromByteComparable(end);
 
-            if (allSameValues)
+            final List<NodeIDLeafFP> leafNodeIDToLeafOrd = new ArrayList<>();
+
+            for (int nodeID : traverseTreeResult.nodeIDs)
             {
-                // there is no order map for blocks with all the same value
-                assert !leafToOrderMapFP.containsKey(pair.leaf);
-            }
-        }
-        else
-        {
-            if (firstFilterNodeID == null ||
-                (firstFilterNodeID != null && firstFilterNodeID.intValue() != maxNodeID))
-            {
-                PostingList lastList = filterLeaf(maxNodeID,
-                                                  startBytes,
-                                                  endBytes,
-                                                  context
-                );
-                if (lastList != null)
+                final Collection<Long> multiPostingFPs = this.multiNodeIDToPostingsFP.get(nodeID);
+                if (multiPostingFPs != null && multiPostingFPs.size() > 0)
                 {
-                    postingLists.add(lastList.peekable());
+                    final int leaf = this.nodeIDToLeaf.get(nodeID);
+                    for (final long fp : multiPostingFPs)
+                    {
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, leaf, fp));
+                    }
+                }
+                else
+                {
+                    if (nodeIDToPostingsFP.containsKey(nodeID))
+                    {
+                        leafNodeIDToLeafOrd.add(new NodeIDLeafFP(nodeID, nodeIDToLeaf.get(nodeID), nodeIDToPostingsFP.get(nodeID)));
+                    }
                 }
             }
-        }
+            // sort by leaf id
+            Collections.sort(leafNodeIDToLeafOrd, (o1, o2) -> Integer.compare(o1.leaf, o2.leaf));
+            int minNodeID = leafNodeIDToLeafOrd.get(0).nodeID;
+            int minLeafOrd = leafNodeIDToLeafOrd.get(0).leaf;
+            int maxNodeID = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).nodeID;
+            int maxLeafOrd = leafNodeIDToLeafOrd.get(leafNodeIDToLeafOrd.size() - 1).leaf;
 
-        // make sure to iterate over the posting lists in leaf id order
-        // TODO: the postings are not in leaf id order
-        for (int x = startOrd; x < endOrd; x++)
-        {
-            final NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
+            // TODO: the leafNodeIDToLeafOrd list may have a big postings list at the end
+            //       since leafNodeIDToLeafOrd is sorted by leaf and there may be the same leaf
 
-            // negative file pointer means an upper level big posting list so use multiPostingsInput
-            if (nodeIDLeafOrd.filePointer < 0)
+
+            final boolean minRangeExists = multiBlockLeafRanges.contains(minLeafOrd);
+
+            int startOrd = 1;
+            int endOrd = leafNodeIDToLeafOrd.size() - 1;
+
+            if (!minRangeExists && minLeafOrd == maxLeafOrd)
             {
-                long fp = nodeIDLeafOrd.filePointer * -1;
-                PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
-                postingLists.add(postings.peekable());
+                // TODO: if the minNode is all same values or multi-block there's
+                //       no need to filter
+                return Lists.newArrayList(filterLeaf(minNodeID, startBytes, endBytes, context).peekable());
+            }
+
+            Integer firstFilterNodeID = null;
+
+            if (minRangeExists || start == null)
+            {
+                startOrd = 0;
             }
             else
             {
-                final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
-                PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
-                postingLists.add(postings.peekable());
+                firstFilterNodeID = minNodeID;
+                PostingList firstList = filterLeaf(minNodeID, startBytes, endBytes, context);
+                if (firstList != null)
+                {
+                    postingLists.add(firstList.peekable());
+                }
+            }
+
+            final boolean maxRangeExists = this.multiBlockLeafRanges.contains(maxLeafOrd);
+            final boolean allSameValues = leafValuesSame != null ? leafValuesSame.get(maxLeafOrd) : false;
+
+            if (end == null || maxRangeExists || allSameValues)
+            {
+                endOrd = leafNodeIDToLeafOrd.size();
+                NodeIDLeafFP pair = leafNodeIDToLeafOrd.get(endOrd - 1);
+
+                if (allSameValues)
+                {
+                    // there is no order map for blocks with all the same value
+                    assert !leafToOrderMapFP.containsKey(pair.leaf);
+                }
+            }
+            else
+            {
+                if (firstFilterNodeID == null ||
+                    (firstFilterNodeID != null && firstFilterNodeID.intValue() != maxNodeID))
+                {
+                    PostingList lastList = filterLeaf(maxNodeID,
+                                                      startBytes,
+                                                      endBytes,
+                                                      context
+                    );
+                    if (lastList != null)
+                    {
+                        postingLists.add(lastList.peekable());
+                    }
+                }
+            }
+
+            // make sure to iterate over the posting lists in leaf id order
+            // TODO: the postings are not in leaf id order
+            for (int x = startOrd; x < endOrd; x++)
+            {
+                final NodeIDLeafFP nodeIDLeafOrd = leafNodeIDToLeafOrd.get(x);
+
+                // negative file pointer means an upper level big posting list so use multiPostingsInput
+                if (nodeIDLeafOrd.filePointer < 0)
+                {
+                    long fp = nodeIDLeafOrd.filePointer * -1;
+                    PForDeltaPostingsReader postings = new PForDeltaPostingsReader(context.multiPostingsInput.sharedCopy(), fp, QueryEventListener.PostingListEventListener.NO_OP);
+                    postingLists.add(postings.peekable());
+                }
+                else
+                {
+                    final long postingsFP = nodeIDToPostingsFP.get(nodeIDLeafOrd.nodeID);
+                    PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                    postingLists.add(postings.peekable());
+                }
             }
         }
         return postingLists;
@@ -724,7 +706,7 @@ public class BlockIndexReader implements Closeable
         final int endIdxFinal = endIdx;
 
         final long postingsFP = nodeIDToPostingsFP.get(nodeID);
-        final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput, postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+        final PostingsReader postings = new PostingsReader(context.leafLevelPostingsInput.sharedCopy(), postingsFP, QueryEventListener.PostingListEventListener.NO_OP);
         FilteringPostingList filterPostings = new FilteringPostingList(
         cardinality,
         // get the row id's term ordinal to compare against the startOrdinal
@@ -919,8 +901,7 @@ public class BlockIndexReader implements Closeable
 
         if (context.currentLeafFP != leafFP)
         {
-            long filePointer = this.leafFilePointers.get(leaf);
-            readBlock(filePointer, context);
+            readBlock(leafFP, context);
             context.currentLeafFP = leafFP;
             context.leaf = (int) leaf;
             context.leafIndex = 0;
@@ -934,15 +915,18 @@ public class BlockIndexReader implements Closeable
         // TODO: use initContext everywhere and lazily init the input streams
         BlockIndexReaderContext context = new BlockIndexReaderContext();
         context.bytesInput = fileProvider.openValuesInput(temporary);
-        context.bytesCompressedInput = fileProvider.openCompressedValuesInput(temporary);
         context.leafLevelPostingsInput = fileProvider.openLeafPostingsInput(temporary);
         context.multiPostingsInput = fileProvider.openMultiPostingsInput(temporary);
         return context;
     }
 
-    public Pair<BytesRef, Long> seekTo(final BytesRef target,
-                                       final BlockIndexReaderContext context) throws IOException
+    public long seekTo(final BytesRef target, final BlockIndexReaderContext context) throws IOException
     {
+        if (target.compareTo(meta.minTerm) <= 0)
+            return meta.minRowID;
+        if (target.compareTo(meta.maxTerm) >= 0)
+            return meta.maxRowID;
+
         // TODO: do min/max term checking here to avoid extra IO
         try (TrieRangeIterator reader = new TrieRangeIterator(indexFile.instantiateRebufferer(),
                                                               meta.indexFP,
@@ -986,12 +970,12 @@ public class BlockIndexReader implements Closeable
                     if (target.compareTo(term) <= 0)
                     {
                         final long pointId = leafId * LEAF_SIZE + context.leafIndex++;
-                        return Pair.create(term, pointId);
+                        return pointId;
                     }
                 }
                 leafId++;
             }
-            return null;
+            return -1;
         }
     }
 
@@ -1006,8 +990,6 @@ public class BlockIndexReader implements Closeable
         context.prefixBits = context.bytesInput.readByte();
 
         context.arraysFilePointer = context.bytesInput.getFilePointer();
-
-        //System.out.println("arraysFilePointer="+arraysFilePointer+" lengthsBytesLen="+lengthsBytesLen+" prefixBytesLen="+prefixBytesLen+" lengthsBits="+lengthsBits+" prefixBits="+prefixBits);
 
         context.lengthsReader = DirectReaders.getReaderForBitsPerValue(context.lengthsBits);
         context.prefixesReader = DirectReaders.getReaderForBitsPerValue(context.prefixBits);
@@ -1051,8 +1033,6 @@ public class BlockIndexReader implements Closeable
             len = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer, x, context.lengthsReader);
             prefix = LeafOrderMap.getValue(context.seekingInput, context.arraysFilePointer + context.lengthsBytesLen, x, context.prefixesReader);
 
-            //System.out.println("x="+x+" len="+len+" prefix="+prefix);
-
             if (x == 0)
             {
                 if (context.firstTerm == null)
@@ -1070,17 +1050,14 @@ public class BlockIndexReader implements Closeable
                 context.bytesInput.readBytes(context.firstTerm, 0, len);
                 context.lastPrefix = len;
                 context.lastLen = len;
-                //System.out.println("firstTerm="+new BytesRef(firstTerm).utf8ToString());
                 context.bytesLength = 0;
                 context.leafBytesFP += len;
             }
             else if (len > 0)
             {
                 context.bytesLength = len - prefix;
-//                context.leafBytesFP += context.lastLen - context.lastPrefix;
                 context.lastPrefix = prefix;
                 context.lastLen = len;
-                //System.out.println("x=" + x + " bytesLength=" + bytesLength + " len=" + len + " prefix=" + prefix);
                 if (x < seekIndex)
                     context.leafBytesFP += context.bytesLength;
 
@@ -1117,6 +1094,7 @@ public class BlockIndexReader implements Closeable
             }
             if (context.lastPrefix > 0 && context.firstTerm != null)
                 context.builder.append(context.firstTerm, 0, context.lastPrefix);
+
             if (context.bytesLength > 0 )
             {
                 context.builder.append(context.bytes, 0, context.bytesLength);

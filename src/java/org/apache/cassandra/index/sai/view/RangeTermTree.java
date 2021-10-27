@@ -64,8 +64,8 @@ public class RangeTermTree implements TermTree
         ByteBuffer minTerm = e.lower == null ? min : e.lower.value.encoded;
         ByteBuffer maxTerm = e.upper == null ? max : e.upper.value.encoded;
 
-        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTerm, comparator),
-                                                              new Term(maxTerm, comparator),
+        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTerm, comparator, e.indexFeatureSet.usesNonStandardEncoding()),
+                                                              new Term(maxTerm, comparator, e.indexFeatureSet.usesNonStandardEncoding()),
                                                               null)));
     }
 
@@ -81,7 +81,9 @@ public class RangeTermTree implements TermTree
         public void addIndex(SSTableIndex index)
         {
             Interval<Term, SSTableIndex> interval =
-                    Interval.create(new Term(index.minTerm(), comparator), new Term(index.maxTerm(), comparator), index);
+                    Interval.create(new Term(index.minTerm(), comparator, index.indexFeatureSet().usesNonStandardEncoding()),
+                                    new Term(index.maxTerm(), comparator, index.indexFeatureSet().usesNonStandardEncoding()),
+                                    index);
 
             if (logger.isTraceEnabled())
             {
@@ -109,16 +111,18 @@ public class RangeTermTree implements TermTree
     {
         private final ByteBuffer term;
         private final AbstractType<?> comparator;
+        private final boolean usesNonStandardEncoding;
 
-        Term(ByteBuffer term, AbstractType<?> comparator)
+        Term(ByteBuffer term, AbstractType<?> comparator, boolean usesNonStandardEncoding)
         {
             this.term = term;
             this.comparator = comparator;
+            this.usesNonStandardEncoding = usesNonStandardEncoding;
         }
 
         public int compareTo(Term o)
         {
-            return TypeUtil.compare(term, o.term, comparator);
+            return TypeUtil.instance.compare(term, o.term, comparator, usesNonStandardEncoding);
         }
     }
 }

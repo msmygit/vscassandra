@@ -20,6 +20,8 @@ package org.apache.cassandra.index.sai.utils;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -35,6 +37,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
@@ -52,8 +55,6 @@ import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 public class PrimaryKey implements Comparable<PrimaryKey>
 {
     private static final ClusteringComparator EMPTY_COMPARATOR = new ClusteringComparator();
-
-    public static final Serializer serializer = new Serializer();
 
     public enum Kind
     {
@@ -90,6 +91,7 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private ClusteringComparator clusteringComparator;
     private long sstableRowId;
     private Supplier<DecoratedKey> decoratedKeySupplier;
+    private Map<Integer, Long> sstableRowIdMap = new HashMap<>();
 
     public static class PrimaryKeyFactory
     {
@@ -234,14 +236,21 @@ public class PrimaryKey implements Comparable<PrimaryKey>
 
     public ByteSource asComparableBytes(ByteComparable.Version version)
     {
+        ByteSource[] sources;
         if (kind.token)
-            return token.asComparableBytes(version);
-        ByteSource[] sources = new ByteSource[clustering.size() + 2];
-        sources[0] = partitionKey.getToken().asComparableBytes(version);
-        sources[1] = ByteSource.of(partitionKey.getKey(), version);
-        for (int index = 0; index < clustering.size(); index++)
         {
-            sources[index + 2] = ByteSource.of(clustering.bufferAt(index), version);
+            sources = new ByteSource[1];
+            sources[0] = token.asComparableBytes(version);
+        }
+        else
+        {
+            sources = new ByteSource[clustering.size() + 2];
+            sources[0] = partitionKey.getToken().asComparableBytes(version);
+            sources[1] = ByteSource.of(partitionKey.getKey(), version);
+            for (int index = 0; index < clustering.size(); index++)
+            {
+                sources[index + 2] = ByteSource.of(clustering.bufferAt(index), version);
+            }
         }
         return ByteSource.withTerminator(version == ByteComparable.Version.LEGACY
                                          ? ByteSource.END_OF_STREAM
@@ -287,6 +296,16 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         return sstableRowId;
     }
 
+    public long sstableRowId(PrimaryKeyMap primaryKeyMap) throws IOException
+    {
+        if (sstableRowIdMap.containsKey(primaryKeyMap.generation()))
+            return sstableRowIdMap.get(primaryKeyMap.generation());
+
+        long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(this);
+        sstableRowIdMap.put(primaryKeyMap.generation(), sstableRowId);
+        return sstableRowId;
+    }
+
     @Override
     public int compareTo(PrimaryKey o)
     {
@@ -323,41 +342,5 @@ public class PrimaryKey implements Comparable<PrimaryKey>
         if (obj instanceof PrimaryKey)
             return compareTo((PrimaryKey)obj) == 0;
         return false;
-    }
-
-    public static class Serializer
-    {
-        private static final ClusteringPrefix.Kind[] ALL_CLUSTERING_KINDS = ClusteringPrefix.Kind.values();
-
-        public void serialize(DataOutputPlus output, int version, PrimaryKey primaryKey) throws IOException
-        {
-            assert !primaryKey.kind.token : "TOKEN only primary keys can't be serialized";
-            output.writeByte(primaryKey.kind.ordinal());
-            PartitionPosition.serializer.serialize(primaryKey.partitionKey, output, version);
-            if (!primaryKey.kind.partition)
-            {
-                output.writeByte(primaryKey.clustering.kind().ordinal());
-                if (primaryKey.clustering.kind() != ClusteringPrefix.Kind.STATIC_CLUSTERING)
-                    Clustering.serializer.serialize(primaryKey.clustering, output, version, primaryKey.clusteringComparator.subtypes());
-            }
-        }
-
-        public PrimaryKey deserialize(DataInputPlus input,
-                                      int version,
-                                      IPartitioner partitioner,
-                                      ClusteringComparator clusteringComparator,
-                                      long sstableRowId) throws IOException
-        {
-            Kind partitionKind = Kind.fromOrdinal(input.readByte());
-            DecoratedKey partitionKey = (DecoratedKey)PartitionPosition.serializer.deserialize(input, partitioner, version);
-            if (partitionKind.partition)
-                return new PrimaryKey(partitionKey);
-            ClusteringPrefix.Kind kind = ALL_CLUSTERING_KINDS[input.readByte()];
-            Clustering clustering = kind == ClusteringPrefix.Kind.STATIC_CLUSTERING ? Clustering.STATIC_CLUSTERING
-                                                                                    : Clustering.serializer.deserialize(input,
-                                                                                                                        version,
-                                                                                                                        clusteringComparator.subtypes());
-            return new PrimaryKey(partitionKey, clustering, clusteringComparator, sstableRowId);
-        }
     }
 }

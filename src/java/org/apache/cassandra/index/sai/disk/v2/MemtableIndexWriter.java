@@ -23,29 +23,24 @@ import java.lang.invoke.MethodHandles;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.carrotsearch.hppc.LongArrayList;
-import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.ImmutableOneDimPointValues;
-import org.apache.cassandra.index.sai.disk.v1.InvertedIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.NumericIndexWriter;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexWriter;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.tools.nodetool.Stop;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.store.IndexOutput;
@@ -72,6 +67,12 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
+    public IndexContext indexContext()
+    {
+        return indexContext;
+    }
+
+    @Override
     public void addRow(PrimaryKey rowKey, Row row) throws IOException
     {
         // Memtable indexes are flushed directly to disk with the aid of a mapping between primary
@@ -87,7 +88,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
-    public void flush() throws IOException
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         long start = System.nanoTime();
 
@@ -119,6 +120,8 @@ public class MemtableIndexWriter implements PerIndexWriter
                     logger.trace(indexContext.logMessage("Flushed {} Memtable index cells for {} in {} ms."), cellCount, indexDescriptor.descriptor, durationMillis);
                 }
 
+                logger.debug(indexContext.logMessage("Flushed {} Memtable index cells for {} in {} ms."), cellCount, indexDescriptor.descriptor, durationMillis);
+
                 indexContext.getIndexMetrics().memtableFlushCellsPerSecond.update((long) (cellCount * 1000.0 / durationMillis));
             }
         }
@@ -135,11 +138,10 @@ public class MemtableIndexWriter implements PerIndexWriter
     {
         long numRows;
 
-        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext))
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false))
         {
-
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
-            numRows = writer.addAll(terms);
+            numRows = writer.addAll(terms, 0L);
             // If no rows were written we need to delete any created column index components
             // so that the index is correctly identified as being empty (only having a completion marker)
             if (numRows == 0)
@@ -154,6 +156,7 @@ public class MemtableIndexWriter implements PerIndexWriter
                 metadata.write(out);
             }
         }
+        logger.debug(indexContext.logMessage("Wrote {} indexed rows to disk for SSTable {}."), numRows, indexDescriptor.descriptor);
         return numRows;
     }
 }

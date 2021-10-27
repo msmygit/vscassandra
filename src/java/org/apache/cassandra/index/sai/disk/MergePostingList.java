@@ -74,7 +74,10 @@ public class MergePostingList implements PostingList
 
     public static PostingList merge(List<PeekablePostingList> postings)
     {
-        PriorityQueue postingQueue = new PriorityQueue(Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        if (postings.size() == 1)
+            return postings.get(0);
+
+        PriorityQueue postingQueue = new PriorityQueue(postings.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
         postingQueue.addAll(postings);
         return merge(postingQueue, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
     }

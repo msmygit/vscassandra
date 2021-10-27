@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.index.sai.plan;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -32,9 +31,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +55,6 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
 import org.apache.cassandra.index.sai.disk.MergePostingList;
@@ -238,7 +234,7 @@ public class QueryController
 //    }
     public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
     {
-        final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map = new HashMap();
+        final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings>> map = new HashMap();
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
@@ -258,6 +254,8 @@ public class QueryController
                 columnRangeBuilder.add(columnIndexRangeIterator);
             }
 
+
+
             RangeIterator.Builder perSSTableRangeIterators = getIndexesPostings(op, expressions, map);
             return perSSTableRangeIterators;
         }
@@ -273,7 +271,7 @@ public class QueryController
 
     public RangeIterator.Builder getIndexesPostings(Operation.OperationType op,
                                                     Collection<Expression> expressions,
-                                                    final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> map)
+                                                    final Map<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings>> map)
     {
         final RangeIterator.Builder builder = RangeUnionIterator.builder();
 
@@ -310,11 +308,11 @@ public class QueryController
 
         try
         {
-            for (Map.Entry<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTablePostings>> entry : map.entrySet())
+            for (Map.Entry<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings>> entry : map.entrySet())
             {
                 final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
 
-                final Map<Expression, ColumnIndexRangeIterator.SSTablePostings> expMap = entry.getValue();
+                final Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings> expMap = entry.getValue();
 
                 IndexContext indexContext = null;
                 PrimaryKeyMap primaryKeyMap = null;
@@ -323,7 +321,7 @@ public class QueryController
                 PrimaryKey maxKey = null;
                 PrimaryKey minKey = null;
 
-                for (ColumnIndexRangeIterator.SSTablePostings postings : expMap.values())
+                for (ColumnIndexRangeIterator.SSTableIndexPostings postings : expMap.values())
                 {
                     final PriorityQueue<PostingList.PeekablePostingList> expPostings = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
 
@@ -399,6 +397,11 @@ public class QueryController
             //view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw new RuntimeException(t);
         }
+    }
+
+    public IndexFeatureSet getIndexFeatureSet()
+    {
+        return indexFeatureSet;
     }
 
     private ClusteringIndexFilter makeFilter(PrimaryKey key)

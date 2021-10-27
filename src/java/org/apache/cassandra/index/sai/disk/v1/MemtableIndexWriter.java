@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +71,12 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
+    public IndexContext indexContext()
+    {
+        return indexContext;
+    }
+
+    @Override
     public void addRow(PrimaryKey key, Row row)
     {
         // Memtable indexes are flushed directly to disk with the aid of a mapping between primary
@@ -85,7 +92,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     }
 
     @Override
-    public void flush() throws IOException
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         long start = System.nanoTime();
 
@@ -137,7 +144,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
-        if (TypeUtil.isLiteral(termComparator))
+        if (TypeUtil.instance.isLiteral(termComparator))
         {
             try (InvertedIndexWriter writer = new InvertedIndexWriter(indexDescriptor, indexContext, false))
             {
@@ -149,7 +156,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         {
             try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
                                                                     indexContext,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
+                                                                    TypeUtil.instance.fixedSizeOf(termComparator),
                                                                     maxSegmentRowId,
                                                                     // Due to stale entries in IndexMemtable, we may have more indexed rows than num of rowIds.
                                                                     Integer.MAX_VALUE,

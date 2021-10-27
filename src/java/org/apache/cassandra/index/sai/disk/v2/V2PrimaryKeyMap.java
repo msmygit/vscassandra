@@ -27,9 +27,11 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 
 public class V2PrimaryKeyMap implements PrimaryKeyMap
@@ -38,22 +40,30 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     {
         private final BlockIndexFileProvider fileProvider;
         private final BlockIndexMeta metadata;
+        private final BlockIndexReader reader;
         private final PrimaryKey.PrimaryKeyFactory keyFactory;
         private final long size;
+        private final int generation;
 
         public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor) throws IOException
         {
+            generation = indexDescriptor.descriptor.generation;
             fileProvider = new PerSSTableFileProvider(indexDescriptor);
             this.keyFactory = indexDescriptor.primaryKeyFactory;
             if (indexDescriptor.isSSTableEmpty())
             {
                 metadata = null;
                 size = 0;
+                reader = null;
             }
             else
             {
-                metadata = new BlockIndexMeta(fileProvider.openMetadataInput());
+                try (IndexInput input = fileProvider.openMetadataInput())
+                {
+                    metadata = new BlockIndexMeta(input);
+                }
                 size = metadata.numRows;
+                reader = new BlockIndexReader(fileProvider, false, metadata);
             }
         }
 
@@ -61,33 +71,40 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             //TODO We need a test for this condition with an empty SSTable (not sure it's possible)
-            return (size == 0) ? EMPTY
-                               : new V2PrimaryKeyMap(new BlockIndexReader(fileProvider, false, metadata),
-                                                     keyFactory,
-                                                     size);
+            return (size == 0) ? EMPTY : new V2PrimaryKeyMap(reader, keyFactory, size, generation);
         }
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(fileProvider);
+            FileUtils.closeQuietly(fileProvider, reader);
         }
     }
 
     private final BlockIndexReader reader;
-    private final BlockIndexReader.BlockIndexReaderContext context;
+    private final BlockIndexReader.BlockIndexReaderContext forwardContext;
+    private final BlockIndexReader.BlockIndexReaderContext reverseContext;
     private final PrimaryKey.PrimaryKeyFactory keyFactory;
     private final long size;
-
+    private final int generation;
 
     private V2PrimaryKeyMap(BlockIndexReader reader,
                             PrimaryKey.PrimaryKeyFactory keyFactory,
-                            long size)
+                            long size,
+                            int generation)
     {
         this.reader = reader;
-        this.context = reader.initContext();
+        this.forwardContext = reader.initContext();
+        this.reverseContext = reader.initContext();
         this.keyFactory = keyFactory;
         this.size = size;
+        this.generation = generation;
+    }
+
+    @Override
+    public int generation()
+    {
+        return generation;
     }
 
     @Override
@@ -99,20 +116,21 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId) throws IOException
     {
-        BytesRef term = reader.seekTo(sstableRowId, context, true);
+        BytesRef term = reader.seekTo(sstableRowId, forwardContext, true);
         return keyFactory.createKey(new ByteSource.Peekable(ByteSource.fixedLength(term.bytes, 0, term.length)), sstableRowId);
     }
 
     @Override
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
+
         BytesRef bytesRef = new BytesRef(ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41)));
-        return reader.seekTo(bytesRef, context).right;
+        return reader.seekTo(bytesRef, reverseContext);
     }
 
     @Override
     public void close() throws IOException
     {
-        FileUtils.close(reader, context);
+        FileUtils.close(forwardContext, reverseContext);
     }
 }

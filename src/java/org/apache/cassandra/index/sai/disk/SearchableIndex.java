@@ -61,4 +61,6 @@ public abstract class SearchableIndex implements Closeable
     public abstract List<RangeIterator> search(Expression expression,
                                          AbstractBounds<PartitionPosition> keyRange,
                                          SSTableQueryContext context) throws IOException;
+
+    public abstract PostingList missingValuesPostings() throws IOException;
 }

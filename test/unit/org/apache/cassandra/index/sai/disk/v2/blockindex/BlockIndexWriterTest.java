@@ -19,7 +19,6 @@
 package org.apache.cassandra.index.sai.disk.v2.blockindex;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,7 +28,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
 import com.google.common.collect.TreeRangeSet;
@@ -37,8 +38,6 @@ import org.junit.Test;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.carrotsearch.hppc.LongArrayList;
-import com.carrotsearch.randomizedtesting.annotations.Seed;
-import com.sun.jna.Pointer;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.Int32Type;
@@ -49,7 +48,8 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.disk.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
@@ -62,22 +62,22 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.v2.PerIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.PerSSTableFileProvider;
-import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v2.V2SSTableIndexWriter;
+import org.apache.cassandra.index.sai.disk.v2.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v2.V2SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
-import org.apache.hadoop.hdfs.web.JsonUtil;
 import org.apache.lucene.index.PointValues;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.NumericUtils;
 
 import static org.apache.cassandra.Util.dk;
@@ -89,94 +89,45 @@ import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
-//@Seed(value = "3A64D2D8C02FD322:C75D376B778B2264")
-//@Seed(value = "62A3A1AD9A3E879B:9F9A441E2D9A76DD")
-//@Seed(value = "F87B6805568FCE9C:4CA80945456C4B57")
-@Seed(value = "8B4C74C2A762013B:3F9F1582B48184F0")
-public class BlockIndexWriterTest extends NdiRandomizedTest
+//@Seed("E0AF4F15BFD93AAB:547C2E55AC3ABF60")
+public class BlockIndexWriterTest extends SaiRandomizedTest
 {
+
     @Test
-    public void test() throws Exception
+    public void testSeekToSameValues() throws Exception
     {
-       /* List<Pair<ByteComparable, IntArrayList>> list = new ArrayList();
-        list.add(add("aaabbb", new int[] {0, 2})); // 2
-        list.add(add("aaabbbbbb", new int[] {1, 3})); // 2
-        list.add(add("aaabbbccccc", new int[] {4, 5, 6})); // 3
-        list.add(add("zzzzzzzggg", new int[] {10, 11, 12})); // 3
+        List<Pair<ByteComparable, LongArrayList>> list = new ArrayList();
 
-        ByteBuffersDirectory dir = new ByteBuffersDirectory();
-        IndexOutput out = dir.createOutput("file", IOContext.DEFAULT);
-
-        //IndexComponents comps = newIndexComponents();
-        IndexDescriptor indexDescriptor = newIndexDescriptor();*/
-
-//        IndexOutputWriter indexOut = comps.createOutput(comps.kdTree);
-//        IndexOutputWriter postingsOut = comps.createOutput(comps.kdTreePostingLists);
-
-//        BlockIndexWriter prefixBytesWriter = new BlockIndexWriter(out, indexOut, postingsOut);
-//
-//        TermsIterator terms = new MemtableTermsIterator(null,
-//                                                        null,
-//                                                        list.iterator());
-//
-//        int pointCount = 0;
-//        while (terms.hasNext())
-//        {
-//            ByteComparable term = terms.next();
-//            PostingList postings = terms.postings();
-//            while (true)
-//            {
-//                long rowID = postings.nextPosting();
-//                if (rowID == PostingList.END_OF_STREAM) break;
-//                prefixBytesWriter.add(term, rowID);
-//                pointCount++;
-//            }
-//        }
-
-//        BlockIndexWriter.BlockIndexMeta meta = prefixBytesWriter.finish();
-//
-//        postingsOut.close();
-//
-//        try (IndexInput input = dir.openInput("file", IOContext.DEFAULT);
-//             IndexInput input2 = dir.openInput("file", IOContext.DEFAULT))
-//        {
-//            FileHandle indexFile = comps.createFileHandle(comps.kdTree);
-//            BlockIndexReader reader = new BlockIndexReader(input,
-//                                                           input2,
-//                                                           indexFile,
-//                                                           meta);
-
-//            reader.traverseForFilePointers(fixedLength(new BytesRef("aaa")),
-//                                           fixedLength(new BytesRef("aaabbbcczzzz")));
-
-//            reader.traverse(fixedLength(new BytesRef("aaa")),
-//                            fixedLength(new BytesRef("aaabbbcczzzz")));
-
-//            BytesRef foundTerm = reader.seekTo(new BytesRef("aaabbbccddddd"));
-//            System.out.println("foundTerm="+foundTerm.utf8ToString());
-
-//            BytesRef term3 = reader.seekTo(3);
-//            System.out.println("term3="+term3.utf8ToString());
-//
-//            BytesRef term1 = reader.seekTo(1);
-//            System.out.println("term1="+term1.utf8ToString());
-//
-//            BytesRef term6 = reader.seekTo(6);
-//            System.out.println("term6="+term6.utf8ToString());
-//
-//            BytesRef term8 = reader.seekTo(8);
-//            System.out.println("term8="+term8.utf8ToString());
-//
-//            List<String> results = new ArrayList<>();
-//            for (int x=0; x < pointCount; x++)
-//            {
-//                BytesRef term = reader.seekTo(x);
-//                results.add(term.utf8ToString());
-//                System.out.println("x="+x+" term=" + term.utf8ToString());
-//            }
-//            System.out.println("results="+results);
+        LongArrayList rowids = new LongArrayList();
+        for (int x = 0; x < 20; x++)
+        {
+            rowids.add(x);
         }
-    //}
+
+        list.add(add("aaa", rowids.toArray())); // 0
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
+            BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
+            int i = 0;
+            while (true)
+            {
+                IndexState state = iterator.next();
+                if (state == null)
+                {
+                    break;
+                }
+
+                System.out.println("term "+(i++)+"="+state.term.utf8ToString()+" rowid="+state.rowid);
+            }
+        }
+    }
 
     @Test
     public void testRanges() throws Exception
@@ -256,58 +207,52 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         }
     }
 
-    private BlockIndexReader createPerIndexReader(String indexName, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
+    private BlockIndexReader createPerIndexReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, LongArrayList>> list) throws Exception
     {
-        IndexDescriptor indexDescriptor = newIndexDescriptor();
-
-        IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
-
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
-
-        TermsIterator terms = new MemtableTermsIterator(null,
-                                                        null,
-                                                        list.iterator());
-        while (terms.hasNext())
+        try (BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
         {
-            ByteComparable term = terms.next();
-            PostingList postings = terms.postings();
-            while (true)
+
+            TermsIterator terms = new MemtableTermsIterator(null,
+                                                            null,
+                                                            list.iterator());
+            while (terms.hasNext())
             {
-                long rowID = postings.nextPosting();
-                if (rowID == PostingList.END_OF_STREAM)
+                ByteComparable term = terms.next();
+                PostingList postings = terms.postings();
+                while (true)
                 {
-                    break;
+                    long rowID = postings.nextPosting();
+                    if (rowID == PostingList.END_OF_STREAM)
+                    {
+                        break;
+                    }
+                    blockIndexWriter.add(term, rowID);
                 }
-                blockIndexWriter.add(term, rowID);
             }
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+
+            return new BlockIndexReader(fileProvider, false, meta);
         }
-
-        BlockIndexMeta meta = blockIndexWriter.finish();
-
-        return new BlockIndexReader(fileProvider, false, meta);
     }
 
-    private BlockIndexReader createPerSSTableReader(List<Pair<ByteComparable, Long>> list) throws Exception
+    private BlockIndexReader createPerSSTableReader(BlockIndexFileProvider fileProvider, List<Pair<ByteComparable, Long>> list) throws Exception
     {
-        IndexDescriptor indexDescriptor = newIndexDescriptor();
-
-        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
-
-        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false);
-
-        Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
-
-        while (terms.hasNext())
+        try (BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
         {
-            Pair<ByteComparable, Long> entry = terms.next();
-            blockIndexWriter.add(entry.left, entry.right);
+
+            Iterator<Pair<ByteComparable, Long>> terms = list.iterator();
+
+            while (terms.hasNext())
+            {
+                Pair<ByteComparable, Long> entry = terms.next();
+                blockIndexWriter.add(entry.left, entry.right);
+            }
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+
+            return new BlockIndexReader(fileProvider, false, meta);
         }
-
-        BlockIndexMeta meta = blockIndexWriter.finish();
-
-        return new BlockIndexReader(fileProvider, false, meta);
     }
 
     private Row createRow(ColumnMetadata column, ByteBuffer value)
@@ -328,10 +273,10 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         IndexContext indexContext = createIndexContext(indexName, UTF8Type.instance);
 
-        V2SSTableIndexWriter writer = new V2SSTableIndexWriter(indexDescriptor,
-                                                               indexContext,
-                                                               memoryLimiter,
-                                                               () -> true);
+        SSTableIndexWriter writer = new SSTableIndexWriter(indexDescriptor,
+                                                           indexContext,
+                                                           memoryLimiter,
+                                                           () -> true);
 
         ColumnMetadata column = ColumnMetadata.regularColumn("sai", "internal", "column", UTF8Type.instance);
 
@@ -347,69 +292,73 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
         writer.addRow(PrimaryKey.factory().createKey(key2, Clustering.EMPTY, 1), row2);
 
-        writer.flush();
+        writer.complete(Stopwatch.createStarted());
 
-        BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
-
-        BlockIndexMeta blockIndexMeta = (BlockIndexMeta) V2OnDiskFormat.instance.newIndexMetadataSerializer().deserialize(indexDescriptor, indexContext);
-        BlockIndexReader reader = new BlockIndexReader(fileProvider, false, blockIndexMeta);
-
-        BlockIndexReader.IndexIterator iterator = reader.iterator();
-
-        IndexState state = iterator.next();
-        assertNotNull(state);
-        assertEquals("a", stringFromTerm(state.term));
-        assertEquals(0, state.rowid);
-        state = iterator.next();
-        assertNotNull(state);
-        assertEquals("b", stringFromTerm(state.term));
-        assertEquals(1, state.rowid);
-        assertNull(iterator.next());
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             IndexInput input = fileProvider.openMetadataInput())
+        {
+            BlockIndexMeta blockIndexMeta = new BlockIndexMeta(input);
+            try (BlockIndexReader reader = new BlockIndexReader(fileProvider, false, blockIndexMeta);
+                 BlockIndexReader.IndexIterator iterator = reader.iterator())
+            {
+                IndexState state = iterator.next();
+                assertNotNull(state);
+                assertEquals("a", stringFromTerm(state.term));
+                assertEquals(0, state.rowid);
+                state = iterator.next();
+                assertNotNull(state);
+                assertEquals("b", stringFromTerm(state.term));
+                assertEquals(1, state.rowid);
+                assertNull(iterator.next());
+            }
+        }
     }
 
     @Test
     public void testMerge() throws Exception
     {
-        V2SegmentBuilder builder = new V2SegmentBuilder(UTF8Type.instance, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
+        IndexDescriptor indexDescriptor1 = newIndexDescriptor();
+        IndexContext indexContext1 = createIndexContext("index1", UTF8Type.instance);
+
+        V2SegmentBuilder builder = new V2SegmentBuilder(indexDescriptor1, indexContext1, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
         builder.add(ByteBuffer.wrap("aaa".getBytes(StandardCharsets.UTF_8)), 100);
         builder.add(ByteBuffer.wrap("aaa".getBytes(StandardCharsets.UTF_8)), 101);
         builder.add(ByteBuffer.wrap("ccc".getBytes(StandardCharsets.UTF_8)), 1000);
         builder.add(ByteBuffer.wrap("ccc".getBytes(StandardCharsets.UTF_8)), 1001);
 
-        IndexDescriptor indexDescriptor1 = newIndexDescriptor();
+        BlockIndexMeta meta1 = builder.flush(indexDescriptor1, indexContext1, true);
+        builder.release("testMerge 1");
 
-        IndexContext indexContext1 = createIndexContext("index1", UTF8Type.instance);
+        IndexDescriptor indexDescriptor2 = newIndexDescriptor();
+        IndexContext indexContext2 = createIndexContext("index2", UTF8Type.instance);
 
-        BlockIndexMeta meta1 = builder.flush(indexDescriptor1, indexContext1);
-
-        V2SegmentBuilder builder2 = new V2SegmentBuilder(UTF8Type.instance, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
+        V2SegmentBuilder builder2 = new V2SegmentBuilder(indexDescriptor2, indexContext2, V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER);
         builder2.add(ByteBuffer.wrap("bbb".getBytes(StandardCharsets.UTF_8)), 200);
         builder2.add(ByteBuffer.wrap("bbb".getBytes(StandardCharsets.UTF_8)), 201);
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2000);
         builder2.add(ByteBuffer.wrap("ddd".getBytes(StandardCharsets.UTF_8)), 2001);
 
-        IndexDescriptor indexDescriptor2 = newIndexDescriptor();
+        BlockIndexMeta meta2 = builder2.flush(indexDescriptor2, indexContext2, true);
+        builder2.release("testMerge 2");
 
-        IndexContext indexContext2 = createIndexContext("index2", UTF8Type.instance);
-
-        BlockIndexMeta meta2 = builder2.flush(indexDescriptor2, indexContext2);
-
-        BlockIndexFileProvider fileProvider1 = new PerIndexFileProvider(indexDescriptor1, indexContext1);
-        BlockIndexFileProvider fileProvider2 = new PerIndexFileProvider(indexDescriptor2, indexContext2);
-
-        BlockIndexReader reader1 = new BlockIndexReader(fileProvider1, true, meta1);
-        BlockIndexReader reader2 = new BlockIndexReader(fileProvider2, true, meta2);
-
-        BlockIndexReader.IndexIterator iterator = reader1.iterator();
-        BlockIndexReader.IndexIterator iterator2 = reader2.iterator();
-
-        MergeIndexIterators merged = new MergeIndexIterators(Lists.newArrayList(iterator, iterator2));
-        while (true)
+        try (BlockIndexFileProvider fileProvider1 = new PerIndexFileProvider(indexDescriptor1, indexContext1);
+             BlockIndexFileProvider fileProvider2 = new PerIndexFileProvider(indexDescriptor2, indexContext2);
+             BlockIndexReader reader1 = new BlockIndexReader(fileProvider1, true, meta1);
+             BlockIndexReader reader2 = new BlockIndexReader(fileProvider2, true, meta2))
         {
-            IndexState state = merged.next();
-            if (state == null) break;
+            BlockIndexReader.IndexIterator iterator = reader1.iterator();
+            BlockIndexReader.IndexIterator iterator2 = reader2.iterator();
+
+            try (MergeIndexIterators merged = new MergeIndexIterators(Lists.newArrayList(iterator, iterator2)))
+            {
+                while (true)
+                {
+                    IndexState state = merged.next();
+                    if (state == null) break;
 //            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
 
+                }
+            }
         }
     }
 
@@ -426,20 +375,21 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
 
-        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
-        assertEquals("cccc", stringFromTerm(pair.left));
-        assertEquals(6, pair.right.intValue());
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
 
-        Pair<BytesRef, Long> pair2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
-        assertEquals("gggzzzz", stringFromTerm(pair2.left));
-        assertEquals(10, pair2.right.intValue());
+            long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+            assertEquals(6L, pointId);
 
-        context.close();
-        blockIndexReader.close();
+            long pointId2 = blockIndexReader.seekTo(new BytesRef("gggzzzz"), context);
+            assertEquals(10L, pointId2);
+        }
     }
 
     @Test
@@ -455,24 +405,27 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("g"), v), 6L));
         list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("h"), v), 7L));
 
-        try (BlockIndexReader reader = createPerSSTableReader(list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, list);
              BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
-            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
-            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-            assertPair(reader.seekTo(new BytesRef("h"), context), "h", 7);
-            assertPair(reader.seekTo(new BytesRef("g"), context), "g", 6);
-            assertPair(reader.seekTo(new BytesRef("f"), context), "f", 5);
-            assertPair(reader.seekTo(new BytesRef("e"), context), "e", 4);
-            assertPair(reader.seekTo(new BytesRef("d"), context), "d", 3);
-            assertPair(reader.seekTo(new BytesRef("c"), context), "c", 2);
-            assertPair(reader.seekTo(new BytesRef("b"), context), "b", 1);
-            assertPair(reader.seekTo(new BytesRef("a"), context), "a", 0);
+            assertEquals(0L, reader.seekTo(new BytesRef("a"), context));
+            assertEquals(1L, reader.seekTo(new BytesRef("b"), context));
+            assertEquals(2L, reader.seekTo(new BytesRef("c"), context));
+            assertEquals(3L, reader.seekTo(new BytesRef("d"), context));
+            assertEquals(4L, reader.seekTo(new BytesRef("e"), context));
+            assertEquals(5L, reader.seekTo(new BytesRef("f"), context));
+            assertEquals(6L, reader.seekTo(new BytesRef("g"), context));
+            assertEquals(7L, reader.seekTo(new BytesRef("h"), context));
+            assertEquals(6L, reader.seekTo(new BytesRef("g"), context));
+            assertEquals(5L, reader.seekTo(new BytesRef("f"), context));
+            assertEquals(4L, reader.seekTo(new BytesRef("e"), context));
+            assertEquals(3L, reader.seekTo(new BytesRef("d"), context));
+            assertEquals(2L, reader.seekTo(new BytesRef("c"), context));
+            assertEquals(1L, reader.seekTo(new BytesRef("b"), context));
+            assertEquals(0L, reader.seekTo(new BytesRef("a"), context));
 
             assertEquals("a", stringFromTerm(reader.seekTo(0, context, true)));
             assertEquals("b", stringFromTerm(reader.seekTo(1, context, true)));
@@ -493,10 +446,25 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         }
     }
 
-    private void assertPair(Pair<BytesRef, Long> pair, String key, long rowId)
+    @Test
+    public void perSSTableSeekEdge() throws Throwable
     {
-        assertEquals(key, stringFromTerm(pair.left));
-        assertEquals(Long.valueOf(rowId), pair.right);
+        List<Pair<ByteComparable, Long>> list = new ArrayList();
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("c"), v), 2L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("d"), v), 3L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("e"), v), 4L));
+        list.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("f"), v), 5L));
+
+        BytesRefBuilder builder = new BytesRefBuilder();
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
+        {
+            BytesUtil.gatherBytes(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v), builder);
+            assertEquals(2L, reader.seekTo(builder.toBytesRef(), context));
+        }
     }
 
     @Test
@@ -505,7 +473,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         int numberOfIterations = randomIntBetween(10, 100);
         for (int iteration = 0; iteration < numberOfIterations; iteration++)
         {
-//            System.out.println("iteration = " + iteration);
             doRandomPerTableSeekTo(iteration);
         }
     }
@@ -537,7 +504,9 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
             data.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(string), v), index));
         }
 
-        try (BlockIndexReader reader = createPerSSTableReader(data);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
+             BlockIndexReader reader = createPerSSTableReader(fileProvider, data);
              BlockIndexReader.BlockIndexReaderContext context = reader.initContext())
         {
             for (int index = 0; index < randomIntBetween(500, 1500); index++)
@@ -549,10 +518,9 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
 
                 if (randomBoolean())
                 {
-                    Pair<BytesRef, Long> pair = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
+                    long pointId = reader.seekTo(new BytesRef(rowIdToStringMap.get(rowId)), context);
 
-                    assertEquals(rowIdToStringMap.get(rowId), stringFromTerm(pair.left));
-                    assertEquals(Long.valueOf(rowId), pair.right);
+                    assertEquals(rowId, pointId);
                 }
                 else
                 {
@@ -560,6 +528,85 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
                 }
             }
         }
+    }
+
+    @Test
+    public void testTraversalPostings() throws Throwable
+    {
+        Map<String, LongArrayList> expected = new TreeMap<>();
+        expected.put("a", toLongArrayList(0));
+        expected.put("b", toLongArrayList(1, 2));
+        expected.put("c", toLongArrayList(3, 4, 5));
+        expected.put("d", toLongArrayList(6, 7, 8, 9));
+        expected.put("e", toLongArrayList(10, 11, 12, 13, 14));
+        expected.put("f", toLongArrayList(15, 16, 17, 18, 19, 20));
+
+        List<Pair<ByteComparable, LongArrayList>> termsList = new ArrayList();
+        for (String term : expected.keySet())
+        {
+            LongArrayList postings = expected.get(term);
+            termsList.add(Pair.create(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v), postings));
+        }
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, termsList))
+        {
+            for (String term : expected.keySet())
+            {
+                ByteComparable searchValue = v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v);
+                LongArrayList expectedPostings = expected.get(term);
+
+                List<PostingList.PeekablePostingList> postingLists = blockIndexReader.traverse(searchValue, searchValue);
+
+                try (PostingList postingList = MergePostingList.merge(postingLists))
+                {
+                    int count = 0;
+
+                    while (true)
+                    {
+                        long rowId = postingList.nextPosting();
+
+                        if (rowId == PostingList.END_OF_STREAM)
+                            break;
+
+                        assertTrue(count < expectedPostings.size());
+                        assertEquals(expectedPostings.get(count), rowId);
+                        count++;
+                    }
+                    assertEquals("Traverse failed for term [" + term + "]. Should have got " + expectedPostings.size() + " rows but only got " + count,
+                                 expectedPostings.size(),
+                                 count);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testMultiPostingsWriter() throws Throwable
+    {
+        ByteComparable term = v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose("a"), v);
+
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
+
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexWriter blockIndexWriter = new BlockIndexWriter(fileProvider, false))
+        {
+            for (int rowId = 0; rowId < 100000; rowId++)
+                blockIndexWriter.add(term, rowId);
+
+            BlockIndexMeta meta = blockIndexWriter.finish();
+        }
+    }
+
+    private LongArrayList toLongArrayList(long... rowIds)
+    {
+        LongArrayList list = new LongArrayList();
+        list.add(rowIds);
+        return list;
     }
 
     @Test
@@ -575,156 +622,15 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         list.add(add("gggzzzz", new long[]{ 500, 501, 502, 503, 504, 505 })); // 4, 5
         list.add(add("zzzzz", new long[]{ 700, 780, 782, 790, 794, 799 })); //
 
-        BlockIndexReader blockIndexReader = createPerIndexReader("index_test1", list);
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
+        IndexContext indexContext = createIndexContext("index_test1", UTF8Type.instance);
 
-        BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext();
-
-        Pair<BytesRef, Long> pair = blockIndexReader.seekTo(new BytesRef("cccc"), context);
-
-//        System.out.println("term="+pair.left.utf8ToString()+" pointId="+pair.right);
-
-        context.close();
-
-        blockIndexReader.close();
-
-//        BlockIndexWriter.RowPointIterator rowPointIterator = blockIndexReader.rowPointIterator();
-//        while (true)
-//        {
-//            final BlockIndexWriter.RowPoint rowPoint = rowPointIterator.next();
-//            if (rowPoint == null)
-//            {
-//                break;
-//            }
-//            System.out.println("rowPoint="+rowPoint);
-//        }
-
-
-        list = new ArrayList();
-        list.add(add("cccc", new long[]{ 10, 11 })); // 2
-        list.add(add("qqqqqaaaaa", new long[]{ 400, 405, 409 })); //
-        list.add(add("zzzzzzzzzz", new long[] {20, 21, 24, 29, 30})); //
-
-        BlockIndexReader blockIndexReader2 = createPerIndexReader("index_test12", list);
-
-        blockIndexReader2.close();
-
-//        BlockIndexReader.IndexIterator iterator = blockIndexReader.iterator();
-//        BlockIndexReader.IndexIterator iterator2 = blockIndexReader2.iterator();
-//
-//        MergeBlockReaders merged = new MergeBlockReaders(Lists.newArrayList(iterator, iterator2));
-//        while (true)
-//        {
-//            BlockIndexReader.IndexState state = merged.next();
-//            if (state == null) break;
-//            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-
-//        IndexDescriptor indexDescriptor = newIndexDescriptor();
-//        String indexName = "index_test";
-//
-//        BlockIndexWriter blockIndexWriter = new BlockIndexWriter(indexName, indexDescriptor);
-//
-//        TermsIterator terms = new MemtableTermsIterator(null,
-//                                                        null,
-//                                                        list.iterator());
-//
-//        int pointCount = 0;
-//        while (terms.hasNext())
-//        {
-//            ByteComparable term = terms.next();
-//            PostingList postings = terms.postings();
-//            while (true)
-//            {
-//                long rowID = postings.nextPosting();
-//                if (rowID == PostingList.END_OF_STREAM)
-//                {
-//                    break;
-//                }
-//                blockIndexWriter.add(term, rowID);
-//                pointCount++;
-//            }
-//        }
-//
-//        BlockIndexMeta meta = blockIndexWriter.finish();
-//
-//        BlockIndexReader blockIndexReader = new BlockIndexReader(indexDescriptor, indexName, meta);
-
-        //final BlockIndexReader.IndexIterator iterator2 = blockIndexReader.iterator();
-
-//        BlockIndexReader.IndexIterator iterator3 = new BlockIndexReader.IndexIterator()
-//        {
-//            final BlockIndexReader.IndexState state = new BlockIndexReader.IndexState();
-//
-//            @Override
-//            public BlockIndexReader.IndexState next() throws IOException
-//            {
-//                BlockIndexReader.IndexState s1 = iterator2.next();
-//                if (s1 != null)
-//                {
-//                    state.rowid = s1.rowid + 10_000;
-//                    state.term = s1.term;
-//                    return state;
-//                }
-//                else
-//                {
-//                    return null;
-//                }
-//            }
-//
-//            @Override
-//            public BlockIndexReader.IndexState current()
-//            {
-//                return state;
-//            }
-//
-//            @Override
-//            public void close() throws IOException
-//            {
-//
-//            }
-//        };
-
-//        MergeBlockReaders merged = new MergeBlockReaders(Lists.newArrayList(iterator, iterator3));
-//        while (true)
-//        {
-//            BlockIndexReader.IndexState state = merged.next();
-//            if (state == null) break;
-//            System.out.println("  merged results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-
-
-//        List<Pair<BytesRef,Long>> results = new ArrayList<>();
-//
-//        while (true)
-//        {
-//            final BlockIndexReader.IndexState state = iterator.next();
-//            if (state == null)
-//            {
-//                break;
-//            }
-//            results.add(Pair.create(BytesRef.deepCopyOf(state.term), state.rowid));
-//            System.out.println("  results term="+state.term.utf8ToString()+" rowid="+state.rowid);
-//        }
-//
-//        for (Pair<BytesRef,Long> pair : results)
-//        {
-//            System.out.println("term="+pair.left.utf8ToString()+" rowid="+pair.right);
-//        }
-//
-
-//        List<PostingList.PeekablePostingList> lists = blockIndexReader.traverse(null,
-//                                                                                true,
-//                                                                                ByteComparable.fixedLength("cccc".getBytes(StandardCharsets.UTF_8)),
-//                                                                                false);
-//        PostingList postings = BlockIndexReader.toOnePostingList(lists);
-//
-//
-//        while (true)
-//        {
-//            final long rowID = postings.nextPosting();
-//            if (rowID == PostingList.END_OF_STREAM) break;
-//            System.out.println("testSameTerms rowid=" + rowID);
-//        }
+        try (BlockIndexFileProvider fileProvider = new PerIndexFileProvider(indexDescriptor, indexContext);
+             BlockIndexReader blockIndexReader = createPerIndexReader(fileProvider, list);
+             BlockIndexReader.BlockIndexReaderContext context = blockIndexReader.initContext())
+        {
+            long pointId = blockIndexReader.seekTo(new BytesRef("cccc"), context);
+        }
     }
 
     @Test
@@ -823,6 +729,10 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         PostingList postings = BlockIndexReader.toOnePostingList(reader.traverse(start, end));
         IntArrayList results2 = collect(postings);
 
+        postings.close();
+        fileProvider.close();
+        reader.close();
+
         assertEquals(kdtreePostingList, results2);
     }
 
@@ -890,6 +800,7 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
         return list;
     }
 
+
     private BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf,
                                                 BKDTreeRamBuffer buffer,
                                                 IndexDescriptor indexDescriptor,
@@ -921,59 +832,6 @@ public class BlockIndexWriterTest extends NdiRandomizedTest
                              bkdPosition,
                              kdtreePostingsHandle,
                              postingsPosition);
-
-//        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-//                                                                 columnContext,
-//                                                                 maxPointsPerLeaf,
-//                                                                 Integer.BYTES,
-//                                                                 maxRowID,
-//                                                                 totalRows,
-//                                                                 new IndexWriterConfig("test", 2, 8),
-//                                                                 false);
-//
-//        IndexComponent kdtree = IndexComponent.create(IndexComponent.Type.KD_TREE, index);
-//        IndexComponent kdtreePostings = IndexComponent.create(IndexComponent.Type.KD_TREE_POSTING_LISTS, index);
-//
-//        final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-//        final long bkdPosition = metadata.get(IndexComponent.Type.KD_TREE).root;
-//        assertThat(bkdPosition, is(greaterThan(0L)));
-//        final long postingsPosition = metadata.get(IndexComponent.Type.KD_TREE_POSTING_LISTS).root;
-//        assertThat(postingsPosition, is(greaterThan(0L)));
-//
-//        FileHandle kdtreeHandle = indexDescriptor.createFileHandle(kdtree);
-//        FileHandle kdtreePostingsHandle = indexDescriptor.createFileHandle(kdtreePostings);
-//        return new BKDReader(columnContext,
-//                             kdtreeHandle,
-//                             bkdPosition,
-//                             kdtreePostingsHandle,
-//                             postingsPosition,
-//                             PrimaryKeyMap.IDENTITY);
-
-//        IndexContext columnContext = SAITester.createIndexContext(index, Int32Type.instance);
-//        final NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-//                                                                 maxPointsPerLeaf,
-//                                                                 Integer.BYTES,
-//                                                                 maxRowID,
-//                                                                 totalRows,
-//                                                                 new IndexWriterConfig("test", 2, 8),
-//                                                                 false);
-//
-//
-//
-//        final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
-//        final long bkdPosition = metadata.get(IndexComponents.NDIType.KD_TREE).root;
-//        assertThat(bkdPosition, is(greaterThan(0L)));
-//        final long postingsPosition = metadata.get(IndexComponents.NDIType.KD_TREE_POSTING_LISTS).root;
-//        assertThat(postingsPosition, is(greaterThan(0L)));
-//
-//        FileHandle kdtree = indexComponents.createFileHandle(indexComponents.kdTree);
-//        FileHandle kdtreePostings = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
-//        return new BKDReader(indexDescriptor,
-//                             kdtree,
-//                             bkdPosition,
-//                             kdtreePostings,
-//                             postingsPosition,
-//                             PrimaryKeyMap.IDENTITY);
     }
 
     public static Pair<ByteComparable, LongArrayList> add(String term, long[] array)

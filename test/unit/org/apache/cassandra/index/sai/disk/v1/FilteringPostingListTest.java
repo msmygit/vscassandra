@@ -24,12 +24,11 @@ import org.junit.Test;
 
 import org.apache.cassandra.index.sai.disk.FilteringPostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.lucene.util.FixedBitSet;
 
-public class FilteringPostingListTest extends NdiRandomizedTest
+public class FilteringPostingListTest extends SaiRandomizedTest
 {
     @Test
     public void shouldMatchAllWithoutAdvance() throws IOException

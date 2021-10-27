@@ -55,7 +55,6 @@ public class V2OnDiskFormat extends V1OnDiskFormat
                                                                                     IndexComponent.GROUP_META,
                                                                                     IndexComponent.TERMS_DATA,
                                                                                     IndexComponent.TERMS_INDEX,
-                                                                                    IndexComponent.COMPRESSED_TERMS_DATA,
                                                                                     IndexComponent.KD_TREE_POSTING_LISTS,
                                                                                     IndexComponent.POSTING_LISTS,
                                                                                     IndexComponent.ORDER_MAP,
@@ -65,7 +64,6 @@ public class V2OnDiskFormat extends V1OnDiskFormat
                                                                                   IndexComponent.META,
                                                                                   IndexComponent.TERMS_DATA,
                                                                                   IndexComponent.TERMS_INDEX,
-                                                                                  IndexComponent.COMPRESSED_TERMS_DATA,
                                                                                   IndexComponent.KD_TREE_POSTING_LISTS,
                                                                                   IndexComponent.POSTING_LISTS,
                                                                                   IndexComponent.ORDER_MAP,
@@ -79,6 +77,18 @@ public class V2OnDiskFormat extends V1OnDiskFormat
         public boolean isRowAware()
         {
             return true;
+        }
+
+        @Override
+        public boolean usesNonStandardEncoding()
+        {
+            return false;
+        }
+
+        @Override
+        public boolean supportsRounding()
+        {
+            return false;
         }
     };
 
@@ -145,7 +155,7 @@ public class V2OnDiskFormat extends V1OnDiskFormat
             NamedMemoryLimiter limiter = SEGMENT_BUILD_MEMORY_LIMITER;
             logger.info(index.getIndexContext().logMessage("Starting a compaction index build. Global segment memory usage: {}"), prettyPrintMemory(limiter.currentBytesUsed()));
 
-            return new V2SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
+            return new SSTableIndexWriter(indexDescriptor, index.getIndexContext(), limiter, index.isIndexValid());
         }
 
         return new MemtableIndexWriter(index.getIndexContext().getPendingMemtableIndex(tracker), indexDescriptor, index.getIndexContext(), rowMapping);

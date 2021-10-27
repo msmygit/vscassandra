@@ -37,7 +37,6 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
-import static org.apache.cassandra.index.sai.disk.format.IndexComponent.COMPRESSED_TERMS_DATA;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.KD_TREE_POSTING_LISTS;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.META;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ORDER_MAP;
@@ -48,11 +47,17 @@ import static org.apache.cassandra.index.sai.disk.format.IndexComponent.TERMS_IN
 
 public class PerIndexFileProvider implements BlockIndexFileProvider
 {
-    private static final Set<IndexComponent> components = EnumSet.of(TERMS_DATA, TERMS_INDEX, POSTING_LISTS, KD_TREE_POSTING_LISTS);
+    private static final Set<IndexComponent> components = EnumSet.of(TERMS_DATA,
+                                                                     TERMS_INDEX,
+                                                                     POSTING_LISTS,
+                                                                     ORDER_MAP,
+                                                                     KD_TREE_POSTING_LISTS,
+                                                                     ROW_ID_POINT_ID_MAP);
 
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
     private final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    private final Map<IndexComponent, FileHandle> tempFiles = new EnumMap<>(IndexComponent.class);
 
     public PerIndexFileProvider(IndexDescriptor indexDescriptor, IndexContext indexContext)
     {
@@ -82,12 +87,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     public IndexOutputWriter openOrderMapOutput(boolean temporary) throws IOException
     {
         return indexDescriptor.openPerIndexOutput(ORDER_MAP, indexContext, true, temporary);
-    }
-
-    @Override
-    public IndexOutputWriter openCompressedValuesOutput(boolean temporary) throws IOException
-    {
-        return indexDescriptor.openPerIndexOutput(COMPRESSED_TERMS_DATA, indexContext, true, temporary);
     }
 
     @Override
@@ -139,12 +138,6 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     }
 
     @Override
-    public SharedIndexInput openCompressedValuesInput(boolean temporary)
-    {
-        return new SharedIndexInput(openInput(COMPRESSED_TERMS_DATA, temporary));
-    }
-
-    @Override
     public SharedIndexInput openMetadataInput()
     {
         return new SharedIndexInput(openInput(META, false));
@@ -162,7 +155,12 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
         final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
 
         for (IndexComponent indexComponent : components)
-            map.put(indexComponent, FileValidator.generate(openInput(indexComponent, false)));
+        {
+            try (IndexInput input = openInput(indexComponent, false))
+            {
+                map.put(indexComponent, FileValidator.generate(input));
+            }
+        }
 
         return map;
     }
@@ -181,17 +179,20 @@ public class PerIndexFileProvider implements BlockIndexFileProvider
     @Override
     public void close()
     {
+        FileUtils.closeQuietly(tempFiles.values());
         FileUtils.closeQuietly(files.values());
     }
 
     private IndexInput openInput(IndexComponent indexComponent, boolean temporary)
     {
-        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary).sharedCopy());
+        return IndexFileUtils.instance.openInput(getFileHandle(indexComponent, temporary));
     }
 
     private FileHandle getFileHandle(IndexComponent indexComponent, boolean temporary)
     {
-        return files.computeIfAbsent(indexComponent,
-                                     (c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, temporary)));
+        return temporary ? tempFiles.computeIfAbsent(indexComponent,
+                                                     c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, true))
+                         : files.computeIfAbsent(indexComponent,
+                                                 c -> indexDescriptor.createPerIndexFileHandle(c, indexContext, false));
     }
 }

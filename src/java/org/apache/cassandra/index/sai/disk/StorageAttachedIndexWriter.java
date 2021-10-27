@@ -99,17 +99,17 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         
         currentKey = key;
 
-//        PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey.getToken(), sstableRowId);
-//
-//        try
-//        {
-//            sstableComponentsWriter.startPartition(primaryKey, position);
-//        }
-//        catch (Throwable t)
-//        {
-//            logger.error(indexDescriptor.logMessage("Failed to record a partition start during an index build"), t);
-//            abort(t, true);
-//        }
+        PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey.getToken(), sstableRowId);
+
+        try
+        {
+            sstableComponentsWriter.startPartition(primaryKey, position);
+        }
+        catch (Throwable t)
+        {
+            logger.error(indexDescriptor.logMessage("Failed to record a partition start during an index build"), t);
+            abort(t, true);
+        }
     }
 
     @Override
@@ -181,18 +181,22 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
         try
         {
-            sstableComponentsWriter.complete();
+            sstableComponentsWriter.complete(stopwatch);
             tokenOffsetWriterCompleted = true;
 
-            logger.debug(indexDescriptor.logMessage("Flushed tokens and offsets for SSTable {}. Elapsed time: {} ms."),
+            logger.debug(indexDescriptor.logMessage("Flushed primary key map for SSTable {}. Elapsed time: {} ms."),
                          indexDescriptor.descriptor, stopwatch.elapsed(TimeUnit.MILLISECONDS));
 
             rowMapping.complete();
 
             for (PerIndexWriter columnIndexWriter : columnIndexWriters)
             {
-                columnIndexWriter.flush();
+                columnIndexWriter.complete(stopwatch);
+                logger.debug(columnIndexWriter.indexContext().logMessage("Flushed index for SSTable {}. Elapsed time: {} ms."),
+                             indexDescriptor.descriptor, stopwatch.elapsed(TimeUnit.MILLISECONDS));
             }
+            logger.debug(indexDescriptor.logMessage("Completed index write for SSTable {}. Elapsed time: {} ms"),
+                         indexDescriptor.descriptor, stopwatch.elapsed(TimeUnit.MILLISECONDS));
         }
         catch (Throwable t)
         {

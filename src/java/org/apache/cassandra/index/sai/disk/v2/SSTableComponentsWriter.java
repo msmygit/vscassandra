@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +41,7 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.MergeIndexIterators;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.compress.BufferType;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.store.IndexOutput;
 
@@ -63,7 +66,6 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     @Override
     public void startPartition(PrimaryKey primaryKey, long position) throws IOException
     {
-        addKeyToMapping(primaryKey);
     }
 
     @Override
@@ -72,13 +74,20 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         addKeyToMapping(key);
     }
 
-    public void complete() throws IOException
+    @Override
+    public void complete(Stopwatch stopwatch) throws IOException
     {
         if (rowMapping.valuesCount() > 0)
         {
-            flush();
-            compactSegments();
+            flush(!metadatas.isEmpty());
+            logger.debug(indexDescriptor.logMessage("Final flush for sstable {}. Elapsed time {}ms"),
+                         indexDescriptor.descriptor,
+                         stopwatch.elapsed(TimeUnit.MILLISECONDS));
         }
+        compactSegments(stopwatch);
+        logger.debug(indexDescriptor.logMessage("Compacted segments for sstable {}. Elapsed time {}ms"),
+                     indexDescriptor.descriptor,
+                     stopwatch.elapsed(TimeUnit.MILLISECONDS));
         indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 
@@ -86,16 +95,17 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     {
         logger.debug(indexDescriptor.logMessage("Aborting token/offset writer for {}..."), indexDescriptor.descriptor);
         indexDescriptor.deletePerSSTableIndexComponents();
+        indexDescriptor.deletePerSSTableTemporaryComponents();
     }
 
     private void addKeyToMapping(PrimaryKey key) throws IOException
     {
         try
         {
+            if (rowMapping.reachedAllocatedSizeThreshold())
+                flush(true);
             rowMapping.apply(Trie.singleton(v -> key.asComparableBytes(v), key.sstableRowId()), (existing, neww) -> neww);
             // If the trie is full then we need to flush it and start a new one
-            if (rowMapping.reachedAllocatedSizeThreshold())
-                flush();
         }
         catch (MemtableTrie.SpaceExhaustedException e)
         {
@@ -103,11 +113,11 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         }
     }
 
-    private void flush() throws IOException
+    private void flush(boolean temporary) throws IOException
     {
         try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))
         {
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, true);
+            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, temporary);
             Iterator<Map.Entry<ByteComparable, Long>> iterator = rowMapping.entryIterator();
 
             while (iterator.hasNext())
@@ -115,39 +125,80 @@ public class SSTableComponentsWriter implements PerSSTableWriter
                 Map.Entry<ByteComparable, Long> entry = iterator.next();
                 writer.add(entry.getKey(), entry.getValue());
             }
-            metadatas.add(writer.finish());
+            BlockIndexMeta metadata = writer.finish();
+            rowMapping.discardBuffers();
+            if (temporary)
+            {
+                metadatas.add(metadata);
+                rowMapping = new MemtableTrie<>(BufferType.OFF_HEAP);
+            }
+            else
+            {
+                try (final IndexOutput out = fileProvider.openMetadataOutput())
+                {
+                    metadata.write(out);
+                }
+            }
         }
     }
 
-    private void compactSegments() throws IOException
+    private void compactSegments(Stopwatch stopwatch) throws IOException
     {
-        List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>();
-        BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor);
-        for (BlockIndexMeta metadata : metadatas)
-        {
-            BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
-            iterators.add(reader.iterator());
-        }
-        try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
-        {
-            BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
+        if (metadatas.isEmpty())
+            return;
 
-            while (true)
+        List<BlockIndexReader.IndexIterator> iterators = new ArrayList<>(metadatas.size());
+        List<BlockIndexReader> readers = new ArrayList<>(metadatas.size());
+        try (BlockIndexFileProvider fileProvider = new PerSSTableFileProvider(indexDescriptor))
+        {
+            for (BlockIndexMeta metadata : metadatas)
             {
-                BlockIndexReader.IndexState state = mergeIndexIterators.next();
-                if (state == null)
+                BlockIndexReader reader = new BlockIndexReader(fileProvider, true, metadata);
+                readers.add(reader);
+                iterators.add(reader.iterator());
+            }
+            logger.debug(indexDescriptor.logMessage("Created iterators for {} segments for sstable {}. Elapsed time {} ms"),
+                         metadatas.size(),
+                         indexDescriptor.descriptor,
+                         stopwatch.elapsed(TimeUnit.MILLISECONDS));
+            try (MergeIndexIterators mergeIndexIterators = new MergeIndexIterators(iterators))
+            {
+                BlockIndexWriter writer = new BlockIndexWriter(fileProvider, false);
+
+                long terms = 0;
+                while (true)
                 {
-                    break;
+                    BlockIndexReader.IndexState state = mergeIndexIterators.next();
+                    if (state == null)
+                    {
+                        break;
+                    }
+                    writer.add(BytesUtil.fixedLength(state.term), state.rowid);
+                    terms++;
                 }
-                writer.add(BytesUtil.fixedLength(state.term), state.rowid);
-            }
-            BlockIndexMeta meta = writer.finish();
+                logger.debug(indexDescriptor.logMessage("Completed adding {} terms to writer for sstable {}. Elapsed time {} ms"),
+                             terms,
+                             indexDescriptor.descriptor,
+                             stopwatch.elapsed(TimeUnit.MILLISECONDS));
 
-            try (final IndexOutput out = fileProvider.openMetadataOutput())
+                BlockIndexMeta meta = writer.finish();
+
+                logger.debug(indexDescriptor.logMessage("Completed writing per-sstable index files for sstable {}. Elapsed time {} ms"),
+                             indexDescriptor.descriptor,
+                             stopwatch.elapsed(TimeUnit.MILLISECONDS));
+
+                try (final IndexOutput out = fileProvider.openMetadataOutput())
+                {
+                    meta.write(out);
+                }
+            }
+            finally
             {
-                meta.write(out);
+                FileUtils.closeQuietly(readers);
             }
-
+        }
+        finally
+        {
             indexDescriptor.deletePerSSTableTemporaryComponents();
         }
     }

@@ -38,14 +38,12 @@ import org.apache.lucene.util.bkd.BKDWriter;
 public class ImmutableOneDimPointValues extends MutableOneDimPointValues
 {
     private final TermsIterator termEnum;
-    private final AbstractType termComparator;
     private final byte[] scratch;
 
     private ImmutableOneDimPointValues(TermsIterator termEnum, AbstractType<?> termComparator)
     {
         this.termEnum = termEnum;
-        this.termComparator = termComparator;
-        this.scratch = new byte[TypeUtil.fixedSizeOf(termComparator)];
+        this.scratch = new byte[TypeUtil.instance.fixedSizeOf(termComparator)];
     }
 
     public static ImmutableOneDimPointValues fromTermEnum(TermsIterator termEnum, AbstractType<?> termComparator)

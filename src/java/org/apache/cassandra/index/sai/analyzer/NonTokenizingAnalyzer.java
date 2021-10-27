@@ -71,7 +71,7 @@ public class NonTokenizingAnalyzer extends AbstractAnalyzer
     public boolean hasNext()
     {
         // check that we know how to handle the input, otherwise bail
-        if (!TypeUtil.isIn(type, ANALYZABLE_TYPES)) return false;
+        if (!TypeUtil.instance.isIn(type, ANALYZABLE_TYPES)) return false;
 
         if (hasNext)
         {

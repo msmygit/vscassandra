@@ -36,7 +36,6 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.store.IndexInput;
 
-import static org.apache.cassandra.index.sai.disk.format.IndexComponent.COMPRESSED_TERMS_DATA;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.GROUP_META;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.KD_TREE_POSTING_LISTS;
 import static org.apache.cassandra.index.sai.disk.format.IndexComponent.ORDER_MAP;
@@ -47,11 +46,17 @@ import static org.apache.cassandra.index.sai.disk.format.IndexComponent.TERMS_IN
 
 public class PerSSTableFileProvider implements BlockIndexFileProvider
 {
-    private static final Set<IndexComponent> components = EnumSet.of(TERMS_DATA, TERMS_INDEX, POSTING_LISTS, KD_TREE_POSTING_LISTS);
+    private static final Set<IndexComponent> components = EnumSet.of(TERMS_DATA,
+                                                                     TERMS_INDEX,
+                                                                     POSTING_LISTS,
+                                                                     ORDER_MAP,
+                                                                     KD_TREE_POSTING_LISTS,
+                                                                     ROW_ID_POINT_ID_MAP);
 
     private final IndexDescriptor indexDescriptor;
 
     protected final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    protected final Map<IndexComponent, FileHandle> tempFiles = new EnumMap<>(IndexComponent.class);
 
     public PerSSTableFileProvider(IndexDescriptor indexDescriptor)
     {
@@ -80,12 +85,6 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     public IndexOutputWriter openOrderMapOutput(boolean temporary) throws IOException
     {
         return indexDescriptor.openPerSSTableOutput(ORDER_MAP, true, temporary);
-    }
-
-    @Override
-    public IndexOutputWriter openCompressedValuesOutput(boolean temporary) throws IOException
-    {
-        return indexDescriptor.openPerSSTableOutput(COMPRESSED_TERMS_DATA, true, temporary);
     }
 
     @Override
@@ -137,12 +136,6 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     }
 
     @Override
-    public SharedIndexInput openCompressedValuesInput(boolean temporary)
-    {
-        return new SharedIndexInput(openInput(COMPRESSED_TERMS_DATA, temporary));
-    }
-
-    @Override
     public SharedIndexInput openMetadataInput()
     {
         return new SharedIndexInput(openInput(GROUP_META, false));
@@ -160,7 +153,12 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
         final HashMap<IndexComponent, FileValidator.FileInfo> map = new HashMap<>();
 
         for (IndexComponent indexComponent : components)
-            map.put(indexComponent, FileValidator.generate(openInput(indexComponent, false)));
+        {
+            try (IndexInput input = openInput(indexComponent, false))
+            {
+                map.put(indexComponent, FileValidator.generate(input));
+            }
+        }
 
         return map;
     }
@@ -179,6 +177,7 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
     @Override
     public void close()
     {
+        FileUtils.closeQuietly(tempFiles.values());
         FileUtils.closeQuietly(files.values());
     }
 
@@ -189,7 +188,9 @@ public class PerSSTableFileProvider implements BlockIndexFileProvider
 
     private FileHandle getFileHandle(IndexComponent indexComponent, boolean temporary)
     {
-        return files.computeIfAbsent(indexComponent,
-                                     (c -> indexDescriptor.createPerSSTableFileHandle(c, temporary)));
+        return temporary ? tempFiles.computeIfAbsent(indexComponent,
+                                                     c -> indexDescriptor.createPerSSTableFileHandle(c, true))
+                         : files.computeIfAbsent(indexComponent,
+                                                 c -> indexDescriptor.createPerSSTableFileHandle(c, false));
     }
 }

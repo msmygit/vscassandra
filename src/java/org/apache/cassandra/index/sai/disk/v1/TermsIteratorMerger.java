@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -23,6 +23,9 @@ import java.util.Comparator;
 import java.util.PriorityQueue;
 
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -93,8 +96,8 @@ public class TermsIteratorMerger implements TermsIterator
     public ByteComparable next()
     {
         ByteComparable nextTerm = mergedIterator.next();
-        minTerm = type.isReversed() ? TypeUtil.max(nextTerm, minTerm) : TypeUtil.min(nextTerm, minTerm);
-        maxTerm = type.isReversed() ? TypeUtil.min(nextTerm, maxTerm) : TypeUtil.max(nextTerm, minTerm);
+        minTerm = type.isReversed() ? TypeUtil.instance.max(nextTerm, minTerm) : TypeUtil.instance.min(nextTerm, minTerm);
+        maxTerm = type.isReversed() ? TypeUtil.instance.min(nextTerm, maxTerm) : TypeUtil.instance.max(nextTerm, minTerm);
 
         return nextTerm;
     }
