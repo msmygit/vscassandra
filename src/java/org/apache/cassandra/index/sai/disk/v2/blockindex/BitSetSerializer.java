@@ -85,6 +85,12 @@ public class BitSetSerializer
         }
 
         @Override
+        public long currentPosting()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public long size()
         {
             return bitSet.cardinality();

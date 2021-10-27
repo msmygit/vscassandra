@@ -55,6 +55,13 @@ public class MergePostingList implements PostingList
         this.size = size;
     }
 
+    @Override
+    public long currentPosting()
+    {
+        return postingLists.peek().currentPosting();
+    }
+
+
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings, Closeable onClose)
     {
         checkArgument(!postings.isEmpty());

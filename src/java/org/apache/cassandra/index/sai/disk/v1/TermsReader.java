@@ -269,6 +269,12 @@ public class TermsReader implements Closeable
         }
 
         @Override
+        public long currentPosting()
+        {
+            return wrapped.currentPosting();
+        }
+
+        @Override
         public long nextPosting() throws IOException
         {
             long next = wrapped.nextPosting();
