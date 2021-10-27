@@ -212,6 +212,7 @@ public class QueryController
         {
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
             {
+                System.out.println("getIndexes entry="+e+" sstableindexes="+e.getValue());
                 for (SSTableIndex ssTableIndex : e.getValue())
                 {
                     ExpressionSSTableIndex val = new ExpressionSSTableIndex(ssTableIndex, e.getKey());

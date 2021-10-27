@@ -24,27 +24,46 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Range;
 
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.TypeSizes;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
+import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
+import org.apache.cassandra.index.sai.disk.MergePostingList;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator2;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.utils.ConjunctionPostingList;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
+import org.apache.cassandra.index.sai.utils.TermIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.serializers.ListSerializer;
 import org.apache.cassandra.transport.ProtocolVersion;
@@ -200,7 +219,7 @@ public class Operation
         }
     }
 
-    static RangeIterator buildIterator(QueryController controller)
+    static RangeIterator buildIterator(QueryController controller) throws IOException
     {
         Node node = Node.buildTree(controller.filterOperation()).analyzeTree(controller);
 
@@ -211,36 +230,126 @@ public class Operation
         if (node instanceof AndNode)
         {
             op = OperationType.AND;
+
             AndNode andNode = (AndNode)node;
-            for (Node childNode : andNode.children())
-            {
-                expressions.addAll(childNode.expressionMap.values());
-            }
+
+            expressions.addAll(andNode.expressionMap.values());
+//
+//            System.out.println("AndNode num children="+andNode.children().size());
+//            for (Node childNode : andNode.children())
+//            {
+//                assert childNode.analyzed;
+//
+//                expressions.add(childNode.expression());
+//                //assert childNode.expressionMap != null;
+//
+//                //expressions.addAll(childNode.expressionMap.values());
+//            }
         }
         else if (node instanceof OrNode)
         {
 
         }
 
-        Multimap<SSTableReader.UniqueIdentifier, QueryController.ExpressionSSTableIndex> map = controller.getIndexes(op, expressions);
+        //return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
 
+        System.out.println("expressions="+expressions);
 
+        final Multimap<SSTableReader.UniqueIdentifier, QueryController.ExpressionSSTableIndex> map = controller.getIndexes(op, expressions);
 
-//        for (RowFilter.Expression expression : filterOperation.expressions())
-//                node.add(buildExpression(expression));
+        System.out.println("map="+map);
 
-        // controller.getIndexes(op, );
-        // return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        List<RangeIterator> topLevelRangeIterators = new ArrayList<>();
+
+        QueryContext queryContext = new QueryContext();
+
+        // for each sstable, create a range iterator
+        for (Map.Entry<SSTableReader.UniqueIdentifier, Collection<QueryController.ExpressionSSTableIndex>> entry : map.asMap().entrySet())
+        {
+            List<PostingList> sstablePostings = new ArrayList<>();
+            PrimaryKeyMap primaryKeyMap = null;
+            Set<SSTableIndex> ssTableIndices = new HashSet<>();
+            PrimaryKey minKey = null, maxKey = null;
+            SSTableReader ssTableReader = null;
+
+            for (QueryController.ExpressionSSTableIndex e : entry.getValue())
+            {
+                List<PostingList.PeekablePostingList> expressionPostingsLists = e.ssTableIndex.searchPostings(e.expression, controller.mergeRange(), null);
+                PostingList expressionPostings = MergePostingList.merge(expressionPostingsLists);
+
+                if (ssTableReader == null)
+                {
+                    ssTableReader = e.ssTableIndex.getSSTable();
+                }
+
+                if (minKey == null)
+                {
+                    minKey = e.ssTableIndex.minKey();
+                }
+                else
+                {
+                    minKey = e.ssTableIndex.minKey().compareTo(minKey) < 0 ? e.ssTableIndex.minKey() : minKey;
+                }
+                if (maxKey == null)
+                {
+                    maxKey = e.ssTableIndex.maxKey();
+                }
+                else
+                {
+                    maxKey = e.ssTableIndex.maxKey().compareTo(maxKey) > 0 ? e.ssTableIndex.maxKey() : maxKey;
+                }
+
+                sstablePostings.add(expressionPostings);
+
+                if (primaryKeyMap == null)
+                {
+                    primaryKeyMap = e.ssTableIndex.getSSTableContext().primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(null);
+                }
+                ssTableIndices.add(e.ssTableIndex);
+            }
+            ConjunctionPostingList sstableAndPostings = new ConjunctionPostingList(sstablePostings);
+
+            PostingList.PeekablePostingList sstablePeekablePostingList = sstableAndPostings.peekable();
+
+            final long firstRowId = sstablePeekablePostingList.peek();
+            if (firstRowId == PostingList.END_OF_STREAM)
+            {
+                // this sstable has no matches
+                // close all related resources
+                sstableAndPostings.close();
+                ssTableIndices.forEach(i -> i.release());
+                continue; // to the next sstable iterator
+            }
+
+            SSTableQueryContext ssTableQueryContext = queryContext.getSSTableQueryContext(ssTableReader);
+
+            IndexSearcherContext indexSearcherContext = new IndexSearcherContext(minKey,
+                                                                                 maxKey,
+                                                                                 ssTableQueryContext,
+                                                                                 sstablePeekablePostingList);
+
+            PostingListRangeIterator2 sstableAndRangeIterator = new PostingListRangeIterator2(primaryKeyMap,
+                                                                                              indexSearcherContext);
+
+            TermIterator termIterator = new TermIterator(sstableAndRangeIterator, ssTableIndices, new QueryContext());
+
+            topLevelRangeIterators.add(termIterator);
+        }
+
+        RangeIterator topLevelUnionIterator = RangeUnionIterator.build(topLevelRangeIterators);
+
+        return topLevelUnionIterator;
     }
 
-//    static FilterTree buildFilter(QueryController controller)
-//    {
-//        return Node.buildTree(controller.filterOperation()).buildFilter(controller);
-//    }
+    static FilterTree buildFilter(QueryController controller)
+    {
+        return Node.buildTree(controller.filterOperation()).buildFilter(controller);
+    }
 
     public static abstract class Node
     {
         ListMultimap<ColumnMetadata, Expression> expressionMap;
+        boolean analyzed = false;
 
         boolean canFilter()
         {
@@ -357,6 +466,7 @@ public class Operation
         public void analyze(List<RowFilter.Expression> expressionList, QueryController controller)
         {
             expressionMap = analyzeGroup(controller, OperationType.AND, expressionList);
+            analyzed = true;
         }
 
         @Override

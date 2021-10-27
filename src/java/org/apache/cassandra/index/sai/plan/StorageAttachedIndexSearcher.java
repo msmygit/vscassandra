@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -114,7 +115,14 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
      */
     private RangeIterator analyze()
     {
-        return Operation.buildIterator(controller);
+        try
+        {
+            return Operation.buildIterator(controller);
+        }
+        catch (IOException ioex)
+        {
+            throw new RuntimeException(ioex);
+        }
     }
 
     /**
@@ -128,8 +136,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
      */
     private FilterTree analyzeFilter()
     {
-        throw new UnsupportedOperationException();
-        //return Operation.buildFilter(controller);
+        return Operation.buildFilter(controller);
     }
 
     private static class ResultRetriever extends AbstractIterator<UnfilteredRowIterator> implements UnfilteredPartitionIterator
