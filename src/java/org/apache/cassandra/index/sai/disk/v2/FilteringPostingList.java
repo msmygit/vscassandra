@@ -47,6 +47,12 @@ public class FilteringPostingList implements PostingList
         this.delegate = delegate;
     }
 
+    @Override
+    public long currentPosting()
+    {
+        return delegate.currentPosting();
+    }
+
     public interface Filter
     {
         boolean matches(int ordinal, long rowID);

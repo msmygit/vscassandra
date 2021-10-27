@@ -73,6 +73,8 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
     private long[] currentPostings;
     private long postingsDecoded = 0;
 
+    private long currentPosting = 0;
+
     @VisibleForTesting
     public PForDeltaPostingsReader(SharedIndexInput sharedInput, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
@@ -95,6 +97,12 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
         this.summary = summary;
 
         reBuffer();
+    }
+
+    @Override
+    public long currentPosting()
+    {
+        return currentPosting;
     }
 
     @Override
@@ -150,13 +158,13 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
         if (postingsBlockIdx == block + 1)
         {
             // we're in the same block, just iterate through
-            return slowAdvance(targetRowId);
+            return currentPosting = slowAdvance(targetRowId);
         }
         assert block > 0;
         // Even if there was an exact match, block might contain duplicates.
         // We iterate to the target token from the beginning.
         lastPosInBlock(block - 1);
-        return slowAdvance(targetRowId);
+        return currentPosting = slowAdvance(targetRowId);
     }
 
     private long slowAdvance(long targetRowId) throws IOException
@@ -233,6 +241,8 @@ public class PForDeltaPostingsReader implements OrdinalPostingList
             advanceOnePosition(next);
         }
 //        System.out.println(this.getClass().getSimpleName()+ "@" + this.hashCode() + ".nextPosting = " + next);
+
+        this.currentPosting = next;
 
         return next;
     }

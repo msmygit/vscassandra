@@ -88,6 +88,12 @@ public class PostingsReader implements OrdinalPostingList
     }
 
     @Override
+    public long currentPosting()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public long getOrdinal()
     {
         return totalPostingsRead;

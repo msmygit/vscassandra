@@ -37,6 +37,12 @@ public class ArrayPostingList implements OrdinalPostingList
     }
 
     @Override
+    public long currentPosting()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public long getOrdinal()
     {
         return idx;

@@ -35,6 +35,8 @@ public interface PostingList extends Closeable
     @Override
     default void close() throws IOException {}
 
+    long currentPosting();
+
     /**
      * Retrieves the next segment row ID, not including row IDs that have been returned by {@link #advance(long)}.
      *
@@ -78,6 +80,12 @@ public interface PostingList extends Closeable
         public PeekablePostingList(PostingList wrapped)
         {
             this.wrapped = wrapped;
+        }
+
+        @Override
+        public long currentPosting()
+        {
+            return wrapped.currentPosting();
         }
 
         public long peek()
