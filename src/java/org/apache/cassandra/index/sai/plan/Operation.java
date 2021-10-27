@@ -26,6 +26,7 @@ package org.apache.cassandra.index.sai.plan;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -33,6 +34,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Multimap;
 
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.TypeSizes;
@@ -42,6 +44,7 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.serializers.ListSerializer;
 import org.apache.cassandra.transport.ProtocolVersion;
@@ -199,13 +202,41 @@ public class Operation
 
     static RangeIterator buildIterator(QueryController controller)
     {
-        return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        Node node = Node.buildTree(controller.filterOperation()).analyzeTree(controller);
+
+        List<Expression> expressions = new ArrayList<>();
+
+        Operation.OperationType op = null;
+
+        if (node instanceof AndNode)
+        {
+            op = OperationType.AND;
+            AndNode andNode = (AndNode)node;
+            for (Node childNode : andNode.children())
+            {
+                expressions.addAll(childNode.expressionMap.values());
+            }
+        }
+        else if (node instanceof OrNode)
+        {
+
+        }
+
+        Multimap<SSTableReader.UniqueIdentifier, QueryController.ExpressionSSTableIndex> map = controller.getIndexes(op, expressions);
+
+
+
+//        for (RowFilter.Expression expression : filterOperation.expressions())
+//                node.add(buildExpression(expression));
+
+        // controller.getIndexes(op, );
+        // return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
     }
 
-    static FilterTree buildFilter(QueryController controller)
-    {
-        return Node.buildTree(controller.filterOperation()).buildFilter(controller);
-    }
+//    static FilterTree buildFilter(QueryController controller)
+//    {
+//        return Node.buildTree(controller.filterOperation()).buildFilter(controller);
+//    }
 
     public static abstract class Node
     {
@@ -235,7 +266,7 @@ public class Operation
 
         abstract FilterTree filterTree();
 
-        abstract RangeIterator rangeIterator(QueryController controller);
+        //abstract RangeIterator rangeIterator(QueryController controller);
 
         static Node buildTree(RowFilter.FilterElement filterOperation)
         {
@@ -334,18 +365,18 @@ public class Operation
             return new FilterTree(OperationType.AND, expressionMap);
         }
 
-        @Override
-        RangeIterator rangeIterator(QueryController controller)
-        {
-            RangeIterator.Builder builder = controller.getIndexes(OperationType.AND, expressionMap.values());
-            for (Node child : children)
-            {
-                boolean canFilter = child.canFilter();
-                if (canFilter)
-                    builder.add(child.rangeIterator(controller));
-            }
-            return builder.build();
-        }
+//        @Override
+//        RangeIterator rangeIterator(QueryController controller)
+//        {
+//            RangeIterator.Builder builder = controller.getIndexes(OperationType.AND, expressionMap.values());
+//            for (Node child : children)
+//            {
+//                boolean canFilter = child.canFilter();
+//                if (canFilter)
+//                    builder.add(child.rangeIterator(controller));
+//            }
+//            return builder.build();
+//        }
     }
 
     public static class OrNode extends OperatorNode
@@ -362,15 +393,15 @@ public class Operation
             return new FilterTree(OperationType.OR, expressionMap);
         }
 
-        @Override
-        RangeIterator rangeIterator(QueryController controller)
-        {
-            RangeIterator.Builder builder = controller.getIndexes(OperationType.OR, expressionMap.values());
-            for (Node child : children)
-                if (child.canFilter())
-                    builder.add(child.rangeIterator(controller));
-            return builder.build();
-        }
+//        @Override
+//        RangeIterator rangeIterator(QueryController controller)
+//        {
+//            RangeIterator.Builder builder = controller.getIndexes(OperationType.OR, expressionMap.values());
+//            for (Node child : children)
+//                if (child.canFilter())
+//                    builder.add(child.rangeIterator(controller));
+//            return builder.build();
+//        }
     }
 
     public static class ExpressionNode extends Node
@@ -400,11 +431,11 @@ public class Operation
             return expression;
         }
 
-        @Override
-        RangeIterator rangeIterator(QueryController controller)
-        {
-            assert canFilter();
-            return controller.getIndexes(OperationType.AND, expressionMap.values()).build();
-        }
+//        @Override
+//        RangeIterator rangeIterator(QueryController controller)
+//        {
+//            assert canFilter();
+//            return controller.getIndexes(OperationType.AND, expressionMap.values()).build();
+//        }
     }
 }

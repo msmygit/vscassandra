@@ -29,6 +29,7 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
@@ -52,44 +53,48 @@ public class TermIterator extends RangeIterator
     }
 
     @SuppressWarnings("resource")
-    public static TermIterator build(final Expression e, Set<SSTableIndex> perSSTableIndexes, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext)
-    {
-        // Allow for the KDTree returning up to 100 posting lists per search. This reduces the
-        // number of ArrayList copies
-        final List<RangeIterator> tokens = new ArrayList<>(1 + (perSSTableIndexes.size() * 100));;
-
-        RangeIterator memtableIterator = e.context.searchMemtable(e, keyRange);
-        if (memtableIterator != null)
-            tokens.add(memtableIterator);
-
-        for (final SSTableIndex index : perSSTableIndexes)
-        {
-            try
-            {
-                queryContext.checkpoint();
-                queryContext.incSstablesHit();
-                assert !index.isReleased();
-
-                SSTableQueryContext context = queryContext.getSSTableQueryContext(index.getSSTable());
-                List<RangeIterator> keyIterators = index.search(e, keyRange, context);
-
-                if (keyIterators == null || keyIterators.isEmpty())
-                    continue;
-
-                tokens.addAll(keyIterators);
-            }
-            catch (Throwable e1)
-            {
-                if (logger.isDebugEnabled() && !(e1 instanceof AbortedOperationException))
-                    logger.debug(String.format("Failed search an index %s, skipping.", index.getSSTable()), e1);
-
-                throw Throwables.cleaned(e1);
-            }
-        }
-
-        RangeIterator ranges = RangeUnionIterator.build(tokens);
-        return new TermIterator(ranges, perSSTableIndexes, queryContext);
-    }
+//    public static TermIterator build(final Expression expression,
+//                                     Set<SSTableIndex> perSSTableIndexes,
+//                                     AbstractBounds<PartitionPosition> keyRange,
+//                                     QueryContext queryContext)
+//    {
+//        // Allow for the KDTree returning up to 100 posting lists per search. This reduces the
+//        // number of ArrayList copies
+//        final List<RangeIterator> tokens = new ArrayList<>(1 + (perSSTableIndexes.size() * 100));;
+//
+////        RangeIterator memtableIterator = expression.context.searchMemtable(expression, keyRange);
+////        if (memtableIterator != null)
+////            tokens.add(memtableIterator);
+//
+//        for (final SSTableIndex index : perSSTableIndexes)
+//        {
+//            try
+//            {
+//                queryContext.checkpoint();
+//                queryContext.incSstablesHit();
+//                assert !index.isReleased();
+//
+//                SSTableQueryContext context = queryContext.getSSTableQueryContext(index.getSSTable());
+//                //List<RangeIterator> keyIterators = index.search(expression, keyRange, context);
+//                List<PostingList.PeekablePostingList> postingLists = index.searchPostings(expression, keyRange, context);
+//
+//                if (postingLists == null || postingLists.isEmpty())
+//                    continue;
+//
+//                //tokens.addAll(keyIterators);
+//            }
+//            catch (Throwable e1)
+//            {
+//                if (logger.isDebugEnabled() && !(e1 instanceof AbortedOperationException))
+//                    logger.debug(String.format("Failed search an index %s, skipping.", index.getSSTable()), e1);
+//
+//                throw Throwables.cleaned(e1);
+//            }
+//        }
+//
+//        RangeIterator ranges = RangeUnionIterator.build(tokens);
+//        return new TermIterator(ranges, perSSTableIndexes, queryContext);
+//    }
 
     protected PrimaryKey computeNext()
     {

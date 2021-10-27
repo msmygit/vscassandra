@@ -29,7 +29,9 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,6 +176,18 @@ public class QueryController
         }
     }
 
+    public static class ExpressionSSTableIndex
+    {
+        public final SSTableIndex ssTableIndex;
+        public final Expression expression;
+
+        public ExpressionSSTableIndex(SSTableIndex ssTableIndex, Expression expression)
+        {
+            this.ssTableIndex = ssTableIndex;
+            this.expression = expression;
+        }
+    }
+
     /**
      * Build a {@link RangeIterator.Builder} from the given list of expressions by applying given operation (OR/AND).
      * Building of such builder involves index search, results of which are persisted in the internal resources list
@@ -183,32 +197,36 @@ public class QueryController
      *
      * @return range iterator builder based on given expressions and operation type.
      */
-    public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
+    public Multimap<SSTableReader.UniqueIdentifier,ExpressionSSTableIndex> getIndexes(Operation.OperationType op,
+                                                                                      Collection<Expression> expressions)
     {
-        RangeIterator.Builder builder = op == Operation.OperationType.OR
-                                        ? RangeUnionIterator.builder()
-                                        : RangeIntersectionIterator.selectiveBuilder();
+//        RangeIterator.Builder builder = op == Operation.OperationType.OR
+//                                        ? RangeUnionIterator.builder()
+//                                        : RangeIntersectionIterator.selectiveBuilder();
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
+
+        Multimap<SSTableReader.UniqueIdentifier,ExpressionSSTableIndex> map = HashMultimap.create();
 
         try
         {
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
             {
-                @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-                RangeIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext);
-
-                builder.add(index);
+                for (SSTableIndex ssTableIndex : e.getValue())
+                {
+                    ExpressionSSTableIndex val = new ExpressionSSTableIndex(ssTableIndex, e.getKey());
+                    map.put(ssTableIndex.getSSTable().instanceId, val);
+                }
             }
         }
         catch (Throwable t)
         {
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
-            FileUtils.closeQuietly(builder.ranges());
+            //FileUtils.closeQuietly(builder.ranges());
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
             throw t;
         }
-        return builder;
+        return map;
     }
 
     public IndexFeatureSet getIndexFeatureSet()
@@ -245,13 +263,57 @@ public class QueryController
         if (tableQueryMetrics != null) tableQueryMetrics.record(queryContext);
     }
 
-    /**
-     * Try to reference all SSTableIndexes before querying on disk indexes.
-     *
-     * If we attempt to proceed into {@link TermIterator#build(Expression, Set, AbstractBounds, QueryContext)}
-     * without first referencing all indexes, a concurrent compaction may decrement one or more of their backing
-     * SSTable {@link Ref} instances. This will allow the {@link SSTableIndex} itself to be released and will fail the query.
-     */
+    private Map<Expression, NavigableSet<SSTableIndex>> referenceAndGetView2(Operation.OperationType op, Collection<Expression> expressions)
+    {
+        SortedSet<String> indexNames = new TreeSet<>();
+        try
+        {
+            while (true)
+            {
+                List<SSTableIndex> referencedIndexes = new ArrayList<>();
+                boolean failed = false;
+
+                Map<Expression, NavigableSet<SSTableIndex>> view = getView(op, expressions);
+
+                for (SSTableIndex index : view.values().stream().flatMap(Collection::stream).collect(Collectors.toList()))
+                {
+                    indexNames.add(index.getIndexContext().getIndexName());
+
+                    if (index.reference())
+                    {
+                        referencedIndexes.add(index);
+                    }
+                    else
+                    {
+                        failed = true;
+                        break;
+                    }
+                }
+
+                if (failed)
+                {
+                    // TODO: This might be a good candidate for a table/index group metric in the future...
+                    referencedIndexes.forEach(QueryController::releaseQuietly);
+                }
+                else
+                {
+                    return view;
+                }
+            }
+        }
+        finally
+        {
+            Tracing.trace("Querying storage-attached indexes {}", indexNames);
+        }
+    }
+
+//    /**
+//     * Try to reference all SSTableIndexes before querying on disk indexes.
+//     *
+//     * If we attempt to proceed into {@link TermIterator#build(Expression, Set, AbstractBounds, QueryContext)}
+//     * without first referencing all indexes, a concurrent compaction may decrement one or more of their backing
+//     * SSTable {@link Ref} instances. This will allow the {@link SSTableIndex} itself to be released and will fail the query.
+//     */
     private Map<Expression, NavigableSet<SSTableIndex>> referenceAndGetView(Operation.OperationType op, Collection<Expression> expressions)
     {
         SortedSet<String> indexNames = new TreeSet<>();
@@ -296,6 +358,48 @@ public class QueryController
         }
     }
 
+    private Map<Expression, NavigableSet<SSTableIndex>> getView2(Operation.OperationType op, Collection<Expression> expressions)
+    {
+        // first let's determine the primary expression if op is AND
+        Pair<Expression, NavigableSet<SSTableIndex>> primary = (op == Operation.OperationType.AND) ? calculatePrimary(expressions) : null;
+
+        Map<Expression, NavigableSet<SSTableIndex>> indexes = new HashMap<>();
+        for (Expression e : expressions)
+        {
+            // NO_EQ and non-index column query should only act as FILTER BY for satisfiedBy(Row) method
+            // because otherwise it likely to go through the whole index.
+            if (!e.context.isIndexed() || e.getOp() == Expression.Op.NOT_EQ)
+            {
+                continue;
+            }
+
+            // primary expression, we'll have to add as is
+            if (primary != null && e.equals(primary.left))
+            {
+                indexes.put(primary.left, primary.right);
+
+                continue;
+            }
+
+            View view = e.context.getView();
+
+            NavigableSet<SSTableIndex> readers = new TreeSet<>(SSTableIndex.COMPARATOR);
+            if (primary != null && primary.right.size() > 0)
+            {
+                for (SSTableIndex index : primary.right)
+                    readers.addAll(view.match(index.minKey(), index.maxKey()));
+            }
+            else
+            {
+                readers.addAll(applyScope(view.match(e)));
+            }
+
+            indexes.put(e, readers);
+        }
+
+        return indexes;
+    }
+
     private Map<Expression, NavigableSet<SSTableIndex>> getView(Operation.OperationType op, Collection<Expression> expressions)
     {
         // first let's determine the primary expression if op is AND
@@ -337,6 +441,57 @@ public class QueryController
 
         return indexes;
     }
+
+//    public static class ExpressionSSTableIndex
+//    {
+//        public final Expression expression;
+//        public final SSTableIndex ssTableIndex;
+//
+//        public ExpressionSSTableIndex(Expression expression, SSTableIndex ssTableIndex)
+//        {
+//            this.expression = expression;
+//            this.ssTableIndex = ssTableIndex;
+//        }
+//    }
+
+//    private Multimap<SSTableReader.UniqueIdentifier,ExpressionSSTableIndex> calculatePrimary2(Collection<Expression> expressions)
+//    {
+//        Expression expression = null;
+//        NavigableSet<SSTableIndex> primaryIndexes = null;
+//
+//        Multimap<SSTableReader.UniqueIdentifier,ExpressionSSTableIndex> map = HashMultimap.create();
+//
+//        for (Expression e : expressions)
+//        {
+//            if (!e.context.isIndexed())
+//                continue;
+//
+//            View view = e.context.getView();
+//
+//            NavigableSet<SSTableIndex> indexes = new TreeSet<>(SSTableIndex.COMPARATOR);
+//
+//            Set<SSTableIndex> ssTableIndices = applyScope(view.match(e));
+//            indexes.addAll(ssTableIndices);
+//
+//            if (expression == null || primaryIndexes.size() > indexes.size())
+//            {
+//                primaryIndexes = indexes;
+//                expression = e;
+//            }
+//
+//            if (expression != null)
+//            {
+//                for (SSTableIndex ssTableIndex : primaryIndexes)
+//                {
+//                    map.put(ssTableIndex.getSSTable().instanceId, new ExpressionSSTableIndex(expression, ssTableIndex));
+//                }
+//            }
+//        }
+//
+//        return map;
+//
+//        //return expression == null ? null : Pair.create(expression, primaryIndexes);
+//    }
 
     private Pair<Expression, NavigableSet<SSTableIndex>> calculatePrimary(Collection<Expression> expressions)
     {

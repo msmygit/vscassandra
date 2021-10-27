@@ -172,6 +172,35 @@ public class V2SearchableIndex extends SearchableIndex
     }
 
     @Override
+    public List<PostingList.PeekablePostingList> searchPostings(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
+    {
+        if (intersects(keyRange))
+        {
+            ByteComparable lower = expression.lower == null
+                                   ? null
+                                   : v -> TypeUtil.instance.asComparableBytes(expression.lower.value.encoded,
+                                                                              indexContext.getValidator(),
+                                                                              v,
+                                                                              false);
+            ByteComparable upper = expression.upper == null
+                                   ? null
+                                   : v -> TypeUtil.instance.asComparableBytes(expression.upper.value.encoded,
+                                                                              indexContext.getValidator(),
+                                                                              v,
+                                                                              false);
+
+            List<PostingList.PeekablePostingList> postingLists = reader.traverse(lower, upper);
+
+            if (postingLists.isEmpty())
+                return Collections.emptyList();
+
+            return postingLists;
+        }
+
+        return Collections.emptyList();
+    }
+
+    @Override
     public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
         if (intersects(keyRange))

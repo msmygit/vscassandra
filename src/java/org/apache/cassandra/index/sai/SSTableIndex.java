@@ -31,6 +31,7 @@ import com.google.common.base.Objects;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.AbstractBounds;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
@@ -142,6 +143,11 @@ public class SSTableIndex
     public List<RangeIterator> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
     {
         return searchableIndex.search(expression, keyRange, context);
+    }
+
+    public List<PostingList.PeekablePostingList> searchPostings(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context) throws IOException
+    {
+        return searchableIndex.searchPostings(expression, keyRange, context);
     }
 
     public Version getVersion()

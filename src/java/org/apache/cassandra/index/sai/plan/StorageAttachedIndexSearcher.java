@@ -128,7 +128,8 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
      */
     private FilterTree analyzeFilter()
     {
-        return Operation.buildFilter(controller);
+        throw new UnsupportedOperationException();
+        //return Operation.buildFilter(controller);
     }
 
     private static class ResultRetriever extends AbstractIterator<UnfilteredRowIterator> implements UnfilteredPartitionIterator
