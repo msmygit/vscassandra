@@ -127,6 +127,12 @@ public class TermsIteratorMergerTest extends SAITester
                 }
 
                 @Override
+                public long currentPosting()
+                {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
                 public long size()
                 {
                     return postings.length;

@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,8 +30,11 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +57,13 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.ConjunctionPostingList;
+import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
+import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -188,21 +198,107 @@ public class QueryController
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
+        Multimap<SSTableReader.UniqueIdentifier, PostingListRangeIterator> sstableRangeIterators = HashMultimap.create();
+        Multimap<SSTableReader.UniqueIdentifier, SSTableIndex> sstableIndexMap = HashMultimap.create();
+
         try
         {
+            // per column
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
             {
                 @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-                RangeIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext, defer);
+                TermIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext, defer, sstableRangeIterators);
+
+                for (SSTableIndex ssTableIndex : index.referencedIndexes)
+                {
+                    sstableIndexMap.put(ssTableIndex.getSSTable().instanceId, ssTableIndex);
+                }
 
                 builder.add(index);
             }
+
+            if (op == Operation.OperationType.AND)
+            {
+                RangeIterator.Builder andBuilder = RangeUnionIterator.builder();
+                // create per-sstable ConjunctionPostingList's
+                for (Map.Entry<SSTableReader.UniqueIdentifier, Collection<PostingListRangeIterator>> entry : sstableRangeIterators.asMap().entrySet())
+                {
+                    List<PostingList> andLists = new ArrayList<>();
+
+                    IndexContext indexContext = null;
+                    PrimaryKeyMap primaryKeyMap = null;
+                    PrimaryKey minKey = null, maxKey = null;
+                    SSTableQueryContext queryContext = null;
+
+                    List<PostingListRangeIterator> subIterators = new ArrayList<>(entry.getValue());
+
+                    for (PostingListRangeIterator rangeIterator : subIterators)
+                    {
+                        PostingList.PeekablePostingList postings = rangeIterator.getSearcherContext().postingList;
+
+                        andLists.add(postings);
+
+                        indexContext = rangeIterator.indexContext;
+                        primaryKeyMap = rangeIterator.primaryKeyMap;
+                        minKey = ObjectUtils.min(minKey, rangeIterator.searcherContext.minimumKey);
+                        maxKey = ObjectUtils.max(maxKey, rangeIterator.searcherContext.maximumKey);
+
+                        queryContext = rangeIterator.queryContext;
+                    }
+
+                    // get the SSTableIndex's for this sstable reader to be closed when the
+                    // PostingListRangeIterator is closed
+                    final List<SSTableIndex> perSSTableIndexes = new ArrayList<>(sstableIndexMap.get(entry.getKey()));
+
+                    ConjunctionPostingList conjunctionPostingList = new ConjunctionPostingList(andLists);
+
+                    PostingList.PeekablePostingList conjunctionPeekable = conjunctionPostingList.peekable();
+
+                    if (conjunctionPeekable.peek() != PostingList.END_OF_STREAM)
+                    {
+
+                        IndexSearcherContext sstableContext = new IndexSearcherContext(minKey,
+                                                                                       maxKey,
+                                                                                       queryContext,
+                                                                                       conjunctionPeekable);
+
+                        // make sure this composite PostingListRangeIterator closes the original PostingListRangeIterator's
+                        // and per sstable SSTableIndex objects
+                        PostingListRangeIterator sstableRangeIterator = new PostingListRangeIterator(indexContext,
+                                                                                                     primaryKeyMap,
+                                                                                                     sstableContext,
+                                                                                                     () -> {
+                                                                                                         subIterators.forEach(i -> FileUtils.closeQuietly(i));
+                                                                                                         perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                                                                                                     });
+                        andBuilder.add(sstableRangeIterator);
+                    }
+                    else
+                    {
+                        // there are not matches, close things
+                        subIterators.forEach(i -> FileUtils.closeQuietly(i));
+                        perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                    }
+
+                    return andBuilder;
+                }
+            }
+        }
+        // duplicate code, | doesn't work
+        catch (IOException ioex)
+        {
+            // all sstable indexes in view have been referenced, need to clean up when exception is thrown
+            FileUtils.closeQuietly(builder.ranges());
+            view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
+
+            throw new RuntimeException(ioex);
         }
         catch (Throwable t)
         {
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
             FileUtils.closeQuietly(builder.ranges());
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
+
             throw t;
         }
         return builder;

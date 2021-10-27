@@ -17,6 +17,7 @@
  */
 package org.apache.cassandra.index.sai.disk;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.concurrent.TimeUnit;
@@ -55,15 +56,17 @@ public class PostingListRangeIterator extends RangeIterator
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final Stopwatch timeToExhaust = Stopwatch.createStarted();
-    private final SSTableQueryContext queryContext;
+    public final SSTableQueryContext queryContext;
 
-    private final PostingList postingList;
-    private final IndexContext indexContext;
-    private final PrimaryKeyMap primaryKeyMap;
-    private final IndexSearcherContext searcherContext;
+    public final PostingList postingList;
+    public final IndexContext indexContext;
+    public final PrimaryKeyMap primaryKeyMap;
+
+    public final IndexSearcherContext searcherContext;
 
     private boolean needsSkipping = false;
     private PrimaryKey skipToToken = null;
+    private Closeable toClose;
 
 
     /**
@@ -81,6 +84,26 @@ public class PostingListRangeIterator extends RangeIterator
         this.postingList = searcherContext.postingList;
         this.searcherContext = searcherContext;
         this.queryContext = this.searcherContext.context;
+    }
+
+    public PostingListRangeIterator(IndexContext indexContext,
+                                    PrimaryKeyMap primaryKeyMap,
+                                    IndexSearcherContext searcherContext,
+                                    Closeable toClose)
+    {
+        super(searcherContext.minimumKey, searcherContext.maximumKey, searcherContext.count());
+
+        this.indexContext = indexContext;
+        this.primaryKeyMap = primaryKeyMap;
+        this.postingList = searcherContext.postingList;
+        this.searcherContext = searcherContext;
+        this.queryContext = this.searcherContext.context;
+        this.toClose = toClose;
+    }
+
+    public IndexSearcherContext getSearcherContext()
+    {
+        return searcherContext;
     }
 
     @Override
@@ -129,7 +152,7 @@ public class PostingListRangeIterator extends RangeIterator
             logger.trace(indexContext.logMessage("PostinListRangeIterator exhausted after {} ms"), exhaustedInMills);
         }
 
-        FileUtils.closeQuietly(postingList, primaryKeyMap);
+        FileUtils.closeQuietly(postingList, primaryKeyMap, toClose);
     }
 
     private boolean exhausted()

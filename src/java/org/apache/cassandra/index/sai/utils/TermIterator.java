@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,8 +31,9 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
-import org.apache.cassandra.index.sai.Token;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 
@@ -41,7 +44,7 @@ public class TermIterator extends RangeIterator
     private final QueryContext context;
 
     private final RangeIterator union;
-    private final Set<SSTableIndex> referencedIndexes;
+    public final Set<SSTableIndex> referencedIndexes;
 
     private TermIterator(RangeIterator union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
     {
@@ -53,7 +56,12 @@ public class TermIterator extends RangeIterator
     }
 
     @SuppressWarnings("resource")
-    public static TermIterator build(final Expression e, Set<SSTableIndex> perSSTableIndexes, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer)
+    public static TermIterator build(final Expression e,
+                                     Set<SSTableIndex> perSSTableIndexes,
+                                     AbstractBounds<PartitionPosition> keyRange,
+                                     QueryContext queryContext,
+                                     boolean defer,
+                                     Multimap<SSTableReader.UniqueIdentifier, PostingListRangeIterator> sstableRangeIterators)
     {
         final List<RangeIterator> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
 
@@ -74,6 +82,12 @@ public class TermIterator extends RangeIterator
 
                 if (keyIterators == null || keyIterators.isEmpty())
                     continue;
+
+                for (RangeIterator it : keyIterators)
+                {
+                    PostingListRangeIterator postingListRangeIterator = (PostingListRangeIterator)it;
+                    sstableRangeIterators.put(index.getSSTable().instanceId, postingListRangeIterator);
+                }
 
                 tokens.addAll(keyIterators);
             }
@@ -121,7 +135,7 @@ public class TermIterator extends RangeIterator
         referencedIndexes.clear();
     }
 
-    private static void releaseQuietly(SSTableIndex index)
+    public static void releaseQuietly(SSTableIndex index)
     {
         try
         {

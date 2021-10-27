@@ -106,6 +106,12 @@ public class MemtableTermsIterator implements TermsIterator
             {
                 throw new UnsupportedOperationException();
             }
+
+            @Override
+            public long currentPosting()
+            {
+                throw new UnsupportedOperationException();
+            }
         };
     }
 

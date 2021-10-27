@@ -123,6 +123,12 @@ public class TermsIteratorMerger implements TermsIterator
         }
 
         @Override
+        public long currentPosting()
+        {
+            return monitored.currentPosting();
+        }
+
+        @Override
         public long size()
         {
             return monitored.size();

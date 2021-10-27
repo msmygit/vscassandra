@@ -37,6 +37,12 @@ public class PackedLongsPostingList implements PostingList
     }
 
     @Override
+    public long currentPosting()
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public long nextPosting()
     {
         if (iterator.hasNext())
