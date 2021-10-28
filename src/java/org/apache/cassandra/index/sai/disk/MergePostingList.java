@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.PriorityQueue;
 import javax.annotation.concurrent.NotThreadSafe;
 
+import org.apache.cassandra.index.sai.disk.v2.postings.Copyable;
 import org.apache.cassandra.io.util.FileUtils;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -34,10 +35,11 @@ import static com.google.common.base.Preconditions.checkArgument;
  * Merges multiple {@link PostingList} which individually contain unique items into a single list.
  */
 @NotThreadSafe
-public class MergePostingList implements PostingList
+public class MergePostingList implements PostingList, Copyable
 {
     final PriorityQueue<PeekablePostingList> postingLists;
     final List<PeekablePostingList> temp;
+    final List<PostingList> originals = new ArrayList<>();
     final Closeable onClose;
     final long size;
     private long lastRowId = -1;
@@ -48,16 +50,33 @@ public class MergePostingList implements PostingList
         this.onClose = onClose;
         this.postingLists = postingLists;
         long size = 0;
-        for (PostingList postingList : postingLists)
+        for (PeekablePostingList postingList : postingLists)
         {
             size += postingList.size();
+            originals.add(postingList.delegate());
         }
         this.size = size;
     }
 
     @Override
+    public PostingList copy() throws IOException
+    {
+        List<PostingList> list2 = new ArrayList<>();
+        for (PostingList postings : originals)
+        {
+            Copyable copyable = (Copyable)postings;
+            list2.add(copyable.copy());
+        }
+        return MergePostingList.mergeReg(list2);
+    }
+
+    @Override
     public long currentPosting()
     {
+        if (postingLists.isEmpty())
+        {
+            return PostingList.END_OF_STREAM;
+        }
         return postingLists.peek().currentPosting();
     }
 
@@ -70,6 +89,16 @@ public class MergePostingList implements PostingList
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings)
     {
         return merge(postings, () -> postings.forEach(posting -> FileUtils.closeQuietly(posting)));
+    }
+
+    public static PostingList mergeReg(List<PostingList> postings)
+    {
+        List<PeekablePostingList> peekPostings = new ArrayList<>();
+        for (PostingList list : postings)
+        {
+            peekPostings.add(list.peekable());
+        }
+        return MergePostingList.merge(peekPostings);
     }
 
     public static PostingList merge(List<PeekablePostingList> postings)

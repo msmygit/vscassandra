@@ -60,6 +60,7 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.PriorityQueue;
 import org.apache.lucene.util.packed.DirectWriter;
 
@@ -114,6 +115,8 @@ public class BlockIndexWriter implements Closeable
     private BlockBuffer currentBuffer = new BlockBuffer(), previousBuffer = new BlockBuffer();
     private int leaf;
 
+    private LongBitSet setRowIDs = new LongBitSet(1024 * 1024);
+
     public BlockIndexWriter(BlockIndexFileProvider fileProvider, boolean temporary) throws IOException
     {
         this.fileProvider = fileProvider;
@@ -150,6 +153,10 @@ public class BlockIndexWriter implements Closeable
 
     public void add(ByteComparable term, long rowID) throws IOException
     {
+        this.setRowIDs = LongBitSet.ensureCapacity(this.setRowIDs, rowID);
+        System.out.println("add rowID="+rowID);
+        this.setRowIDs.set(rowID);
+
         minRowID = Math.min(minRowID, rowID);
         maxRowID = Math.max(maxRowID, rowID);
 
@@ -219,11 +226,36 @@ public class BlockIndexWriter implements Closeable
 
     public BlockIndexMeta finish() throws IOException
     {
-        flushLastBuffers();
-
         // If nothing has been written then return early with an empty BlockIndexMeta
         if (numRows == 0)
             return new BlockIndexMeta();
+
+        final long numRows = this.setRowIDs.cardinality(); // num rows without missing values
+
+        final BytesRef maxTerm = BytesRef.deepCopyOf(realLastTerm.toBytesRef());
+        // nudge the max term to be the missing value max term
+        final ByteComparable missingValueTerm = BytesUtil.nudge(BytesUtil.fixedLength(maxTerm), maxTerm.length - 1);
+
+        long setBit = 0;
+        for (int rowid = 0; rowid <= maxRowID; rowid++)
+        {
+            if (!this.setRowIDs.get(rowid))
+            {
+                add(missingValueTerm, rowid);
+                System.out.println("write missingValueTerm rowid="+rowid);
+            }
+        }
+
+//        while (true)
+//        {
+//            final long rowid = this.setRowIDs.nextSetBit(setBit);
+//            if (rowid == -1 || rowid > maxRowID) break;
+//            System.out.println("write missingValueTerm rowid="+rowid);
+//            add(missingValueTerm, rowid);
+//            setBit = rowid + 1;
+//        }
+
+        flushLastBuffers();
 
         BlockIndexWriterContext context = new BlockIndexWriterContext();
 
@@ -287,6 +319,7 @@ public class BlockIndexWriter implements Closeable
                                   maxRowID,
                                   minTerm,
                                   realLastTerm.toBytesRef(), // last term
+                                  BytesUtil.gatherBytes(missingValueTerm),
                                   context.leafIDPostingsFP_FP,
                                   new BytesRef(fileInfoMapBytes),
                                   context.rowPointMap_FP);

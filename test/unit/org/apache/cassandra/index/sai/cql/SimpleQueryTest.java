@@ -51,74 +51,26 @@ public class SimpleQueryTest extends SAITester
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 2, 2, 2);
         flush();
         execute("INSERT INTO %s (id, value, value2) VALUES(?, ?, ?)", 3, 3, 3);
+        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, 4);
         flush();
 
         UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
+        assertEquals(0, result.size());
+
+        result = execute("SELECT * FROM %s WHERE value = 4 AND value2 = 1");
         assertEquals(1, result.size());
-        UntypedResultSet result2 = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
-        assertEquals(1, result2.size());
+
+        result = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
+        assertEquals(1, result.size());
+//        UntypedResultSet result2 = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
+//        assertEquals(1, result2.size());
+
+//        UntypedResultSet result = execute("SELECT * FROM %s WHERE value = 1 AND value2 = 1");
+//        assertEquals(1, result.size());
+//        UntypedResultSet result2 = execute("SELECT * FROM %s WHERE value = 2 AND value2 = 2");
+//        assertEquals(1, result2.size());
     }
-//=======
-////        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 10, "10");
-////        flush();
-////        compact();
-//        assertEquals(1, execute("SELECT * FROM %s WHERE value = 1").size());
-//    }
-//
-//    @Test
-//    public void literalTest() throws Throwable
-//    {
-//        createTable("CREATE TABLE %s (id int primary key, value text)");
-//        createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
-//        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 1, "1");
-//        flush();
-//        execute("INSERT INTO %s (id, value) VALUES(?, ?)", 10, "10");
-//        flush();
-//        compact();
-//        assertEquals(1, execute("SELECT * FROM %s WHERE value = '1'").size());
-//    }
-//
-//    @Test
-//    public void stringTest() throws Throwable
-//    {
-//        String string = "1";
-//        ByteBuffer term = UTF8Type.instance.decompose(string);
-//
-//        final ByteComparable byteComparable = v -> UTF8Type.instance.asComparableBytes(term.duplicate(), v);
-//
-//        BytesRefBuilder builder = new BytesRefBuilder();
-//
-//
-////        byte[] bytes = ByteSourceInverse.readBytes(byteSource);
-////
-////        gatherBytes(byteSource, builder);
-//
-//        BytesRef bytesRef = builder.toBytesRef();
-//
-//        System.out.println();
-//    }
-//
-//    @Test
-//    public void intTest() throws Throwable
-//    {
-//        int value = 10;
-//        ByteBuffer term = Int32Type.instance.decompose(value);
-//
-//        final ByteSource byteSource = Int32Type.instance.asComparableBytes(term.duplicate(), ByteComparable.Version.OSS41);
-//
-//        BytesRefBuilder builder = new BytesRefBuilder();
-//
-//
-//        byte[] bytes = ByteSourceInverse.readBytes(byteSource);
-//
-//        gatherBytes(byteSource, builder);
-//
-//        BytesRef bytesRef = builder.toBytesRef();
-//
-//        System.out.println();
-//
-//    }
-//
+
 //    @Test
 //    public void rangeTest() throws Throwable
 //    {

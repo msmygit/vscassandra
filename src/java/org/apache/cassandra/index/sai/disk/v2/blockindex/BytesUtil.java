@@ -94,6 +94,13 @@ public class BytesUtil
         };
     }
 
+    public static BytesRef gatherBytes(ByteComparable term)
+    {
+        BytesRefBuilder builder = new BytesRefBuilder();
+        gatherBytes(term, builder);
+        return builder.get();
+    }
+
     public static int gatherBytes(ByteComparable term, BytesRefBuilder builder)
     {
         return gatherBytes(term.asComparableBytes(ByteComparable.Version.OSS41), builder);

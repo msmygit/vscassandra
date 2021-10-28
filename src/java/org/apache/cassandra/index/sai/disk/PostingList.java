@@ -80,6 +80,11 @@ public interface PostingList extends Closeable
             this.wrapped = wrapped;
         }
 
+        public PostingList delegate()
+        {
+            return wrapped;
+        }
+
         public long peek()
         {
             if (peeked)

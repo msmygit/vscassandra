@@ -53,6 +53,7 @@ public class BlockIndexMetaTest
                                                      1012,
                                                      new BytesRef("ccc"),
                                                      new BytesRef("ddd"),
+                                                     new BytesRef("mdsdfddd"),
                                                      1015,
                                                      new BytesRef("zzz"),
                                                      1020);

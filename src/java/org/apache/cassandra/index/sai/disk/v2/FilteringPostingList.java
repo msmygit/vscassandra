@@ -47,6 +47,11 @@ public class FilteringPostingList implements PostingList
         this.delegate = delegate;
     }
 
+    public PostingList delegate()
+    {
+        return delegate;
+    }
+
     @Override
     public long currentPosting()
     {

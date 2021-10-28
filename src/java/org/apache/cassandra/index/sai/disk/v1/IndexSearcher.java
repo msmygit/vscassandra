@@ -92,7 +92,8 @@ public abstract class IndexSearcher implements Closeable
         IndexSearcherContext searcherContext = new IndexSearcherContext(metadata.minKey,
                                                                         metadata.maxKey,
                                                                         queryContext,
-                                                                        postingList.peekable());
+                                                                        postingList.peekable(),
+                                                                        null);
 
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext), searcherContext);
     }

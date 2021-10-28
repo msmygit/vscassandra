@@ -43,7 +43,7 @@ import org.apache.lucene.store.RandomAccessInput;
  * load.
  */
 @NotThreadSafe
-public class PostingsReader implements OrdinalPostingList
+public class PostingsReader implements OrdinalPostingList, Copyable
 {
     protected final IndexInput input;
     private final int blockSize;
@@ -89,6 +89,11 @@ public class PostingsReader implements OrdinalPostingList
         this.summary = summary;
 
         reBuffer();
+    }
+
+    public PostingsReader copy() throws IOException
+    {
+        return new PostingsReader(input, summary, listener);
     }
 
     @Override

@@ -21,12 +21,12 @@ import com.google.common.base.MoreObjects;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.OrdinalPostingList;
-import org.apache.cassandra.index.sai.disk.v2.V2PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.postings.Copyable;
 
 import java.io.IOException;
 
 //TODO Change this whole lot to use longs
-public class ArrayPostingList implements OrdinalPostingList
+public class ArrayPostingList implements OrdinalPostingList, Copyable
 {
     private final int[] postings;
     private int idx = 0;
@@ -34,6 +34,12 @@ public class ArrayPostingList implements OrdinalPostingList
     public ArrayPostingList(int[] postings)
     {
         this.postings = postings;
+    }
+
+    @Override
+    public PostingList copy() throws IOException
+    {
+        return new ArrayPostingList(postings);
     }
 
     @Override
@@ -45,7 +51,7 @@ public class ArrayPostingList implements OrdinalPostingList
     @Override
     public long currentPosting()
     {
-        throw new UnsupportedOperationException();
+        return postings[ idx > 0 ? idx - 1 : 0 ];
     }
 
     @Override

@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -36,10 +37,14 @@ public class ConjunctionPostingList implements PostingList
 
     private final List<PostingList> toClose;
 
-    private final PostingList nonUniqueKeyPostings;
     private boolean unique = false;
 
-    public ConjunctionPostingList(List<PostingList> lists, PostingList nonUniqueKeyPostings)
+    public ConjunctionPostingList(PostingList... lists)
+    {
+        this(Arrays.asList(lists));
+    }
+
+    public ConjunctionPostingList(List<PostingList> lists)
     {
         assert lists.size() >= 2;
 
@@ -49,7 +54,6 @@ public class ConjunctionPostingList implements PostingList
         lead1 = lists.get(0);
         lead2 = lists.get(1);
         others = lists.subList(2, lists.size()).toArray(new PostingList[0]);
-        this.nonUniqueKeyPostings = nonUniqueKeyPostings;
     }
 
     public boolean isUnique()
@@ -71,48 +75,13 @@ public class ConjunctionPostingList implements PostingList
         {
             assert !this.unique;
 
-            if (nonUniqueKeyPostings != null)
-            {
-                final long nonUniqueRowid1 = nonUniqueKeyPostings.advance(targetRowID);
-                if (nonUniqueRowid1 == targetRowID)
-                {
-                    // TODO: return that the row id exists in other sstables
-                    this.unique = true;
-                    return nonUniqueRowid1;
-                }
-            }
-
             assert targetRowID == lead1.currentPosting() : "targetRowID="+targetRowID+" lead1.currentPosting="+lead1.currentPosting();
 
             final long next2 = lead2.advance(targetRowID);
 
-            if (nonUniqueKeyPostings != null)
-            {
-                final long nonUniqueRowID2 = nonUniqueKeyPostings.advance(next2);
-                if (nonUniqueRowID2 == next2)
-                {
-                    // TODO: return that the row id exists in other sstables
-                    this.unique = true;
-                    return nonUniqueRowID2;
-                }
-            }
-
-            // System.out.println("lead2.advance(targetRowID)="+targetRowID+" next2="+next2);
-
             if (next2 != targetRowID)
             {
                 targetRowID = lead1.advance(next2);
-
-                if (nonUniqueKeyPostings != null)
-                {
-                    final long nonUniqueRowID3 = nonUniqueKeyPostings.advance(targetRowID);
-                    if (nonUniqueRowID3 == targetRowID)
-                    {
-                        // TODO: return that the row id exists in other sstables
-                        this.unique = true;
-                        return nonUniqueRowID3;
-                    }
-                }
 
                 if (next2 != targetRowID)
                 {
@@ -129,17 +98,6 @@ public class ConjunctionPostingList implements PostingList
                 if (other.currentPosting() < targetRowID)
                 {
                     final long next = other.advance(targetRowID);
-
-                    if (nonUniqueKeyPostings != null)
-                    {
-                        final long nonUniqueRowIDOther = nonUniqueKeyPostings.advance(targetRowID);
-                        if (nonUniqueRowIDOther == next)
-                        {
-                            // TODO: return that the row id exists in other sstables
-                            this.unique = true;
-                            return nonUniqueRowIDOther;
-                        }
-                    }
 
                     if (next > targetRowID)
                     {

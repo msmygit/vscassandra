@@ -29,6 +29,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Lists;
@@ -61,7 +62,9 @@ import org.apache.cassandra.index.sai.disk.MergePostingList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.v2.postings.Copyable;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.ColumnIndexRangeIterator;
 import org.apache.cassandra.index.sai.utils.ConjunctionPostingList;
@@ -308,9 +311,12 @@ public class QueryController
 
         try
         {
+            // iterate over each sstable
             for (Map.Entry<SSTableReader.UniqueIdentifier, Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings>> entry : map.entrySet())
             {
-                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+                final PriorityQueue<PostingList.PeekablePostingList> sstablePostingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+
+                final List<PostingList.PeekablePostingList> sstableMissingValuePostingLists = new ArrayList<>();
 
                 final Map<Expression, ColumnIndexRangeIterator.SSTableIndexPostings> expMap = entry.getValue();
 
@@ -321,8 +327,50 @@ public class QueryController
                 PrimaryKey maxKey = null;
                 PrimaryKey minKey = null;
 
+                List<PostingList> acrossSSTableMissingValuePostings = new ArrayList<>();
                 for (ColumnIndexRangeIterator.SSTableIndexPostings postings : expMap.values())
                 {
+                    SearchableIndex searchableIndex = postings.ssTableIndex.getSearchableIndex();
+                    PostingList missingValuePostings = searchableIndex.missingValuesPostings();
+                    if (missingValuePostings != null)
+                    {
+                        acrossSSTableMissingValuePostings.add(missingValuePostings);
+                    }
+                }
+
+                // iterate over the postings of each expression/column
+                for (ColumnIndexRangeIterator.SSTableIndexPostings postings : expMap.values())
+                {
+                    List<PostingList.PeekablePostingList> missingValuesPostingsList = new ArrayList<>();
+                    if (acrossSSTableMissingValuePostings.size() > 0)
+                    {
+                        for (PostingList list : acrossSSTableMissingValuePostings)
+                        {
+                            missingValuesPostingsList.add(((Copyable) list).copy().peekable());
+                        }
+                    }
+
+                    List<PostingList.PeekablePostingList> postingsCopies = new ArrayList<>();
+                    for (PostingListRangeIterator iterator : postings.sstablePostingsRangeIterators)
+                    {
+                        PostingList postingsCopy = iterator.context.copyablePostings.copy();
+                        postingsCopies.add(postingsCopy.peekable());
+                    }
+
+                    // AND the sstable postings with the missing values postings
+                    // to get the green light postings that are OR'd into the
+                    // sstable postings range iterator
+
+                    if (missingValuesPostingsList.size() > 0)
+                    {
+                        PostingList missingValuesPostings = MergePostingList.merge(missingValuesPostingsList);
+                        PostingList singleCopyPostings = MergePostingList.merge(postingsCopies);
+
+                        ConjunctionPostingList missingValuePostings = new ConjunctionPostingList(missingValuesPostings, singleCopyPostings);
+
+                        sstableMissingValuePostingLists.add(missingValuePostings.peekable());
+                    }
+
                     final PriorityQueue<PostingList.PeekablePostingList> expPostings = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
 
                     for (PostingListRangeIterator iterator : postings.sstablePostingsRangeIterators)
@@ -355,10 +403,10 @@ public class QueryController
                         }
                     }
 
-                    postingLists.add(MergePostingList.merge(expPostings).peekable());
+                    sstablePostingLists.add(MergePostingList.merge(expPostings).peekable());
                 }
 
-                if (postingLists.size() == 0)
+                if (sstablePostingLists.size() == 0)
                 {
                     continue;
                 }
@@ -367,25 +415,50 @@ public class QueryController
 
                 if (op == Operation.OperationType.OR)
                 {
-                    sstablePostings = MergePostingList.merge(postingLists);
+                    sstablePostings = MergePostingList.merge(sstablePostingLists);
                 }
                 else
                 {
                     assert op == Operation.OperationType.AND;
 
-                    sstablePostings = new ConjunctionPostingList(new ArrayList(postingLists), null);
+                    if (sstablePostingLists.size() < 2)
+                    {
+                        sstablePostings = null;
+                    }
+                    else
+                    {
+                        sstablePostings = new ConjunctionPostingList(new ArrayList(sstablePostingLists));
+                    }
                 }
 
-                PostingList.PeekablePostingList sstablePostingsPeekable = sstablePostings.peekable();
-
-                if (sstablePostingsPeekable.peek() != PostingList.END_OF_STREAM)
+                // OR missingValuesPostings with the direct postings
+                List<PostingList.PeekablePostingList> temp = new ArrayList<>();
+                if (sstablePostings != null)
                 {
-                    IndexSearcherContext context2 = new IndexSearcherContext(minKey,
-                                                                             maxKey,
-                                                                             context.context,
-                                                                             sstablePostingsPeekable);
+                    temp.add(sstablePostings.peekable());
+                }
+                temp.addAll(sstableMissingValuePostingLists);
+                if (temp.size() > 0)
+                {
+                    System.out.println("sstableMissingValuePostingLists=" + sstableMissingValuePostingLists);
+                    PostingList finalSSTablePostingList = MergePostingList.merge(temp);
 
-                    builder.add(new PostingListRangeIterator(indexContext, primaryKeyMap, context2));
+                    PostingList.PeekablePostingList sstablePostingsPeekable = finalSSTablePostingList.peekable();
+
+                    if (sstablePostingsPeekable.peek() != PostingList.END_OF_STREAM)
+                    {
+                        IndexSearcherContext context2 = new IndexSearcherContext(minKey,
+                                                                                 maxKey,
+                                                                                 context.context,
+                                                                                 sstablePostingsPeekable,
+                                                                                 null);
+
+                        builder.add(new PostingListRangeIterator(indexContext, primaryKeyMap, context2));
+                    }
+                    else
+                    {
+                        // TODO: close up resources
+                    }
                 }
             }
             return builder;

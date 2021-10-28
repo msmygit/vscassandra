@@ -72,6 +72,11 @@ public class SSTableIndex
         this.searchableIndex = sstableContext.indexDescriptor.newSearchableIndex(sstableContext, indexContext);
     }
 
+    public SearchableIndex getSearchableIndex()
+    {
+        return searchableIndex;
+    }
+
     public IndexContext getIndexContext()
     {
         return indexContext;

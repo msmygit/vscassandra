@@ -20,9 +20,12 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import com.sun.scenario.effect.Merge;
+import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
@@ -40,7 +43,9 @@ import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexFileProvider;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexMeta;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BlockIndexReader;
 import org.apache.cassandra.index.sai.disk.v2.blockindex.BytesUtil;
+import org.apache.cassandra.index.sai.disk.v2.postings.Copyable;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -73,6 +78,8 @@ public class V2SearchableIndex extends SearchableIndex
 
     private final PrimaryKeyMap.Factory primaryKeyMapFactory;
 
+    final ArrayPostingList missingValuesPostingsArray;
+
     public V2SearchableIndex(SSTableContext sstableContext, IndexContext indexContext)
     {
         this.indexContext = indexContext;
@@ -88,7 +95,32 @@ public class V2SearchableIndex extends SearchableIndex
 
             this.reader = new BlockIndexReader(fileProvider, false, metadata, (b) -> fromByteComparable(b));
 
-            this. primaryKeyMapFactory = sstableContext.primaryKeyMapFactory;
+            List<PostingList.PeekablePostingList> lists = reader.traverse(BytesUtil.fixedLength(metadata.missingValueTerm), BytesUtil.fixedLength(metadata.missingValueTerm));
+            try (PostingList missingValuesPostings = MergePostingList.merge(lists))
+            {
+                IntArrayList rowids = new IntArrayList();
+                while (true)
+                {
+                    int rowid = (int)missingValuesPostings.nextPosting();
+                    System.out.println("missing values rowid=" + rowid);//Arrays.toString(rowids.toIntArray()));
+                    if (rowid == PostingList.END_OF_STREAM || rowid == -1)
+                    {
+                        break;
+                    }
+                    rowids.add(rowid);
+
+                }
+                if (rowids.size() > 0)
+                {
+                    missingValuesPostingsArray = new ArrayPostingList(rowids.toIntArray());
+                }
+                else
+                {
+                    missingValuesPostingsArray = null;
+                }
+            }
+
+            this.primaryKeyMapFactory = sstableContext.primaryKeyMapFactory;
             primaryKeyMap = sstableContext.primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(null);
 
             ByteSource byteSource = ByteSource.fixedLength(metadata.minTerm.bytes, metadata.minTerm.offset, metadata.minTerm.length);
@@ -116,7 +148,7 @@ public class V2SearchableIndex extends SearchableIndex
     @Override
     public PostingList missingValuesPostings() throws IOException
     {
-        return null;
+        return missingValuesPostingsArray;
     }
 
     private BytesRef fromByteComparable(ByteComparable byteComparable)
@@ -124,8 +156,6 @@ public class V2SearchableIndex extends SearchableIndex
         BytesRefBuilder builder = new BytesRefBuilder();
         BytesUtil.gatherBytes(byteComparable, builder);
         return builder.toBytesRef();
-//        ByteBuffer byteBuffer = indexContext.getValidator().fromComparableBytes(byteComparable.asPeekableBytes(ByteComparable.Version.OSS41), ByteComparable.Version.OSS41);
-//        return new BytesRef(byteBuffer.array(), byteBuffer.arrayOffset(), byteBuffer.limit());
     }
 
     @Override
@@ -221,10 +251,22 @@ public class V2SearchableIndex extends SearchableIndex
         if (postingList == null)
             return RangeIterator.empty();
 
+        PostingList delegate = postingList;
+
+        if (postingList instanceof PostingList.PeekablePostingList)
+        {
+            delegate = ((PostingList.PeekablePostingList)postingList).delegate();
+        }
+        if (delegate instanceof FilteringPostingList)
+        {
+            delegate = ((FilteringPostingList)delegate).delegate();
+        }
+
         IndexSearcherContext searcherContext = new IndexSearcherContext(minKey,
                                                                         maxKey,
                                                                         queryContext,
-                                                                        postingList.peekable());
+                                                                        delegate.peekable(),
+                                                                        (Copyable) delegate);
 
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext), searcherContext);
     }
