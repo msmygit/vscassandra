@@ -18,11 +18,13 @@
 
 package org.apache.cassandra.io.util;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.DataOutput;
+import java.io.IOError;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.zip.CRC32;
-
 import javax.annotation.Nonnull;
 
 import com.google.common.base.Charsets;
