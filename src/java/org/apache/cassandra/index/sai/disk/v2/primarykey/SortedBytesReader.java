@@ -28,8 +28,10 @@ import org.apache.cassandra.index.sai.utils.SharedIndexInput2;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.packed.BlockPackedReader;
 import org.apache.lucene.util.packed.PackedInts;
 
@@ -78,34 +80,48 @@ public class SortedBytesReader implements Closeable
         return this.blockBytesReader.seek(idx);
     }
 
+    private final BytesRefBuilder nextTermTemp = new BytesRefBuilder();
     /**
      * Looks up a point id by term
      */
     public long seekTo(BytesRef target) throws IOException
     {
-        int block = -1;
-        try (TrieRangeIterator reader = new TrieRangeIterator(minTermsFile.instantiateRebufferer(),
-                                                              meta.minTermsFP,
-                                                              BytesUtil.fixedLength(target),
-                                                              null,
-                                                              true,
-                                                              true))
+        if (nextTermTemp.length() == 0 && target.compareTo(nextTermTemp.get()) >= 0)
         {
-            final Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
 
-            if (iterator.hasNext())
+            try (TrieRangeIterator reader = new TrieRangeIterator(minTermsFile.instantiateRebufferer(),
+                                                                  meta.minTermsFP,
+                                                                  BytesUtil.fixedLength(target),
+                                                                  null,
+                                                                  true,
+                                                                  true))
             {
-                final Pair<ByteSource, Long> pair = iterator.next();
-                block = pair.right.intValue();
-            }
-            else
-            {
-                block = (int) meta.numBlocks - 1;
+                final Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
+
+                if (iterator.hasNext())
+                {
+                    final Pair<ByteSource, Long> pair = iterator.next();
+                    currentBlock = pair.right.intValue();
+
+                    nextTermTemp.clear();
+
+                    // get the next term as the ceiling to avoid checking the trie if the next
+                    // seekTo call
+                    if (iterator.hasNext())
+                    {
+                        final Pair<ByteSource, Long> nextBlockPair = iterator.next();
+                        BytesUtil.gatherBytes(nextBlockPair.left, nextTermTemp);
+                    }
+                }
+                else
+                {
+                    currentBlock = (int) meta.numBlocks - 1;
+                }
             }
         }
 
         // negate the block id as the target may be in the previous block
-        final long useBlockId = block > 0 ? block - 1 : 0;
+        final long useBlockId = currentBlock > 0 ? currentBlock - 1 : 0;
 
         long pointId = useBlockId * BLOCK_SIZE;
         while (true)
