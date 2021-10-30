@@ -40,6 +40,7 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
@@ -73,14 +74,13 @@ import org.openjdk.jmh.annotations.Warmup;
 //@Warmup(iterations = 100000, time = 1, timeUnit = TimeUnit.SECONDS)
 //@Measurement(iterations = 10, time = 1, timeUnit = TimeUnit.SECONDS)
 @Warmup(iterations = 2, time = 5, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 30, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 3, time = 20, timeUnit = TimeUnit.SECONDS)
 @Fork(value = 1)
 @Threads(1)
 @State(Scope.Benchmark)
 public class SAILuceneQueryTest extends CQLTester
 {
-    private static final int NUM_INVOCATIONS = 100;
-    public static int ROWS = 100_000;
+    public static int ROWS = 1_000_000;
 
     static String keyspace;
     String table;
@@ -114,6 +114,7 @@ public class SAILuceneQueryTest extends CQLTester
         Path luceneDir = Files.createTempDirectory("jmh_lucene_test");
         directory = FSDirectory.open(luceneDir);
         IndexWriterConfig config = new IndexWriterConfig(new KeywordAnalyzer());
+        config.setMergePolicy(NoMergePolicy.INSTANCE);
         IndexWriter indexWriter = new IndexWriter(directory, config);
 
         Document document = new Document();
@@ -136,13 +137,20 @@ public class SAILuceneQueryTest extends CQLTester
             document.add(columnB);
 
             indexWriter.addDocument(document);
+
+            // create 100 segments
+            // create 100 sstable indexes
+            if (i % 100_000 == 0)
+            {
+                indexWriter.flush();
+                flush(keyspace);
+            }
         }
 
-        indexWriter.forceMerge(1);
+        //indexWriter.forceMerge(1);
         indexWriter.close();
 
-        flush(keyspace);
-        compact(keyspace);
+        //compact(keyspace);
 
         luceneReader = DirectoryReader.open(directory);
 
@@ -169,7 +177,7 @@ public class SAILuceneQueryTest extends CQLTester
 
     public int genColumnA()
     {
-        return ThreadLocalRandom.current().nextInt(0, 50);
+        return ThreadLocalRandom.current().nextInt(0, 100);
     }
 
     public int genColumnB()
@@ -179,7 +187,8 @@ public class SAILuceneQueryTest extends CQLTester
 
     @Benchmark
     @OperationsPerInvocation(1)
-    @BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    //@BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    @BenchmarkMode({ Mode.Throughput})
     public Object queryExact2ANDLucene() throws Throwable
     {
         int columnA = genColumnA();
@@ -213,7 +222,8 @@ public class SAILuceneQueryTest extends CQLTester
 
     @Benchmark
     @OperationsPerInvocation(1)
-    @BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    //@BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    @BenchmarkMode({ Mode.Throughput})
     public Object queryExact2ANDSAI() throws Throwable
     {
         saiQueryCount++;
