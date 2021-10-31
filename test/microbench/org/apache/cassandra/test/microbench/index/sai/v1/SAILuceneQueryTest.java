@@ -115,18 +115,41 @@ public class SAILuceneQueryTest extends CQLTester
         directory = FSDirectory.open(luceneDir);
         IndexWriterConfig config = new IndexWriterConfig(new KeywordAnalyzer());
         config.setMergePolicy(NoMergePolicy.INSTANCE);
+        config.setRAMBufferSizeMB(1000);
         IndexWriter indexWriter = new IndexWriter(directory, config);
 
         Document document = new Document();
 
+        int[] colAValues = new int[ROWS];
+        int[] colBValues = new int[ROWS];
+
         System.err.println("Writing "+ROWS+" rows");
+
+        long saiIndexStart = System.currentTimeMillis();
+
         for (int i = 0; i < ROWS; i++)
         {
             int columnAValue = genColumnA();
             int columnBValue = genColumnB();
 
-            execute(writeStatement, i, columnAValue, columnBValue);
+            colAValues[i] = columnAValue;
+            colBValues[i] = columnBValue;
 
+            execute(writeStatement, i, columnAValue, columnBValue);
+        }
+
+        long saiIndexingDuration = System.currentTimeMillis() - saiIndexStart;
+
+        long luceneIndexingStart = System.currentTimeMillis();
+
+        for (int i = 0; i < ROWS; i++)
+        {
+            int columnAValue = colAValues[i];
+            int columnBValue = colBValues[i];
+
+            // using strings here because otherwise we're testing
+            // against lucene's kdtree which uses a bitset
+            // which is not exactly a same same comparison
             StringField key = new StringField("key", Integer.toString(i), Field.Store.YES);
             StringField columnA = new StringField("columnA", Integer.toString(columnAValue), Field.Store.YES);
             StringField columnB = new StringField("columnB", Integer.toString(columnBValue), Field.Store.YES);
@@ -140,14 +163,19 @@ public class SAILuceneQueryTest extends CQLTester
 
             // create 100 segments
             // create 100 sstable indexes
-            if (i % 100_000 == 0)
-            {
-                indexWriter.flush();
-                flush(keyspace);
-            }
+//            if (i % 100_000 == 0)
+//            {
+//                indexWriter.flush();
+//                flush(keyspace);
+//            }
         }
 
-        //indexWriter.forceMerge(1);
+        long luceneIndexingDuration = System.currentTimeMillis() - luceneIndexingStart;
+
+        System.out.println("saiIndexingDuration="+saiIndexingDuration+" luceneIndexingDuration="+luceneIndexingDuration);
+
+        indexWriter.flush();
+        indexWriter.forceMerge(1);
         indexWriter.close();
 
         //compact(keyspace);
@@ -175,6 +203,7 @@ public class SAILuceneQueryTest extends CQLTester
         CQLTester.cleanup();
     }
 
+    // A * B < ROWS otherwise not all queries will have matches
     public int genColumnA()
     {
         return ThreadLocalRandom.current().nextInt(0, 100);
@@ -182,7 +211,7 @@ public class SAILuceneQueryTest extends CQLTester
 
     public int genColumnB()
     {
-        return ThreadLocalRandom.current().nextInt(0, 250);
+        return ThreadLocalRandom.current().nextInt(0, 500);
     }
 
     @Benchmark
