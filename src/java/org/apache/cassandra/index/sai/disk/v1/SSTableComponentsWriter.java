@@ -24,11 +24,11 @@ import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesWriter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.lucene.util.IOUtils;
 
 /**
@@ -43,7 +43,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     private final NumericValuesWriter offsetWriter;
     private final MetadataWriter metadataWriter;
 
-    private DecoratedKey currentKey;
+    private PrimaryKey currentKey;
 
     private long currentKeyPartitionOffset;
 
@@ -62,18 +62,17 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     }
 
     @Override
-    public void startPartition(DecoratedKey key, long position)
+    public void startPartition(PrimaryKey primaryKey, long position)
     {
-        currentKey = key;
+        currentKey = primaryKey;
         currentKeyPartitionOffset = position;
     }
 
     @Override
-    public void nextRow() throws IOException
+    public void nextRow(PrimaryKey primaryKey) throws IOException
     {
-        recordCurrentTokenOffset((long) currentKey.getToken().getTokenValue(), currentKeyPartitionOffset);
+        recordCurrentTokenOffset(primaryKey.token().getLongValue(), currentKeyPartitionOffset);
     }
-
 
     @Override
     public void complete(Stopwatch stopwatch) throws IOException
@@ -95,5 +94,4 @@ public class SSTableComponentsWriter implements PerSSTableWriter
         tokenWriter.add(tokenValue);
         offsetWriter.add(keyOffset);
     }
-
 }

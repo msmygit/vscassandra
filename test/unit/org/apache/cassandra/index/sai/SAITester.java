@@ -60,6 +60,7 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
@@ -69,6 +70,7 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
@@ -119,6 +121,10 @@ public class SAITester extends CQLTester
 
     protected static ColumnIdentifier V1_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v1", true);
     protected static ColumnIdentifier V2_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v2", true);
+
+    public static final PrimaryKey.PrimaryKeyFactory TEST_FACTORY = Version.LATEST.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance,
+                                                                                                                    PrimaryKey.EMPTY_COMPARATOR);
+
 
     static
     {
@@ -245,7 +251,7 @@ public class SAITester extends CQLTester
 
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
-            File file = IndexDescriptor.create(sstable.descriptor).fileFor(indexComponent);
+            File file = IndexDescriptor.create(sstable).fileFor(indexComponent);
             corruptionType.corrupt(file);
         }
     }
@@ -256,7 +262,7 @@ public class SAITester extends CQLTester
 
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
-            File file = IndexDescriptor.create(sstable.descriptor).fileFor(indexComponent, indexContext);
+            File file = IndexDescriptor.create(sstable).fileFor(indexComponent, indexContext);
             corruptionType.corrupt(file);
         }
     }
@@ -305,7 +311,7 @@ public class SAITester extends CQLTester
 
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
-            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
+            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
             if (!indexDescriptor.validatePerSSTableComponentsChecksum() || !indexDescriptor.validatePerIndexComponentsChecksum(context))
                 return false;
         }

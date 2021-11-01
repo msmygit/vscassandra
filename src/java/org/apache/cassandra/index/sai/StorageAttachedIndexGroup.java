@@ -124,7 +124,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         if (indices.isEmpty())
         {
             for (SSTableReader sstable : contextManager.sstables())
-                sstable.unregisterComponents(IndexDescriptor.create(sstable.descriptor).getLivePerSSTableComponents(), baseCfs.getTracker());
+                sstable.unregisterComponents(IndexDescriptor.create(sstable).getLivePerSSTableComponents(), baseCfs.getTracker());
             deletePerSSTableFiles(baseCfs.getLiveSSTables());
             baseCfs.getTracker().unsubscribe(this);
         }
@@ -214,7 +214,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     @Override
     public SSTableFlushObserver getFlushObserver(Descriptor descriptor, LifecycleNewTracker tracker, TableMetadata tableMetadata)
     {
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata.partitioner, tableMetadata.comparator);
         try
         {
             return new StorageAttachedIndexWriter(indexDescriptor, indices, tracker);
@@ -259,7 +259,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     @VisibleForTesting
     public static Set<Component> getLiveComponents(SSTableReader sstable, Collection<StorageAttachedIndex> indices)
     {
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
         Set<Component> components = indexDescriptor.getLivePerSSTableComponents();
         indices.stream().forEach(index -> components.addAll(indexDescriptor.getLivePerIndexComponents(index.getIndexContext())));
         return components;
@@ -298,7 +298,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     void deletePerSSTableFiles(Collection<SSTableReader> sstables)
     {
         contextManager.release(sstables);
-        sstables.forEach(sstableReader -> IndexDescriptor.create(sstableReader.descriptor).deletePerSSTableIndexComponents());
+        sstables.forEach(sstableReader -> IndexDescriptor.create(sstableReader).deletePerSSTableIndexComponents());
     }
 
     void dropIndexSSTables(Collection<SSTableReader> ss, StorageAttachedIndex index)
@@ -330,7 +330,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         if (!results.right.isEmpty())
         {
             results.right.forEach(sstable -> {
-                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable.descriptor);
+                IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
                 indexDescriptor.deletePerSSTableIndexComponents();
                 // Column indexes are invalid if their SSTable-level components are corrupted so delete
                 // their associated index files and mark them non-queryable.

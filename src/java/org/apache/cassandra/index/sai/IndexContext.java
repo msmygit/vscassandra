@@ -36,6 +36,7 @@ import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.ClusteringComparator;
@@ -62,6 +63,7 @@ import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -103,6 +105,7 @@ public class IndexContext
     private final IndexWriterConfig indexWriterConfig;
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
     private final AbstractAnalyzer.AnalyzerFactory queryAnalyzerFactory;
+    private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
 
     public IndexContext(TableMetadata tableMeta, IndexMetadata config)
     {
@@ -128,6 +131,8 @@ public class IndexContext
         this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(config.options)
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), config.options)
                                     : this.analyzerFactory;
+
+        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(tableMeta.partitioner, tableMeta.comparator);
 
         logger.info(logMessage("Initialized column context with index writer config: {}"),
                 this.indexWriterConfig.toString());
@@ -156,10 +161,11 @@ public class IndexContext
         this.indexWriterConfig = indexWriterConfig;
         Map<String, String> options = config != null ? config.options : Collections.emptyMap();
         this.analyzerFactory = AbstractAnalyzer.fromOptions(getValidator(), options);
-
         this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(options)
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), options)
                                     : this.analyzerFactory;
+        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(DatabaseDescriptor.getPartitioner(),
+                                                                                 clusteringComparator);
     }
 
     public IndexContext(TableMetadata table, ColumnMetadata column)
@@ -180,6 +186,8 @@ public class IndexContext
         this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(options)
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), options)
                                     : this.analyzerFactory;
+        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(table.partitioner,
+                                                                                 clusteringComparator);
     }
 
     public AbstractType<?> keyValidator()
@@ -190,6 +198,11 @@ public class IndexContext
     public ClusteringComparator clusteringComparator()
     {
         return clusteringComparator;
+    }
+
+    public PrimaryKey.PrimaryKeyFactory keyFactory()
+    {
+        return primaryKeyFactory;
     }
 
     public IndexMetrics getIndexMetrics()

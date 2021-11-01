@@ -126,7 +126,7 @@ public abstract class AbstractOnDiskBenchmark
                                     metadata.keyspace,
                                     metadata.name,
                                     SSTableUniqueIdentifierFactory.instance.defaultBuilder().generator(Stream.empty()).get());
-        indexDescriptor = IndexDescriptor.create(descriptor);
+        indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
         index = "test";
         indexContext = SAITester.createIndexContext(index, IntegerType.instance);
 
