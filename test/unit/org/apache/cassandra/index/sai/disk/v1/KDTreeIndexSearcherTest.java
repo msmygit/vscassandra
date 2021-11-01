@@ -173,7 +173,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
             assertEquals(results.getMinimum(), results.getCurrent());
             assertTrue(results.hasNext());
 
-            assertEquals(0L, results.next().getLong());
+            assertEquals(0L, results.next().partitionKey().getToken().getLongValue());
         }
 
         try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
@@ -211,7 +211,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
             assertEquals(results.getMinimum(), results.getCurrent());
             assertTrue(results.hasNext());
 
-            List<Long> actualTokenList = Lists.newArrayList(Iterators.transform(results, Token::get));
+            List<Long> actualTokenList = Lists.newArrayList(Iterators.transform(results, key -> key.partitionKey().getToken().getLongValue()));
             assertEquals(expectedTokenList, actualTokenList);
         }
 

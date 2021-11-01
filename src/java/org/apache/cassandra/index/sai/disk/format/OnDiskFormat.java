@@ -27,8 +27,10 @@ import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 /**
  * An interface to the on-disk format of an index. This provides format agnostics methods
@@ -75,6 +77,16 @@ public interface OnDiskFormat
      * @return true if the per-index index components have been built and are complete
      */
     public boolean isPerIndexBuildComplete(IndexDescriptor indexDescriptor, IndexContext indexContext);
+
+    /**
+     * Returns a {@link PrimaryKeyMap.Factory} for the SSTable
+     *
+     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
+     * @param sstable The {@link SSTableReader} associated with the {@link IndexDescriptor}
+     * @return a {@link PrimaryKeyMap.Factory} for the SSTable
+     * @throws IOException
+     */
+    public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException;
 
     /**
      * Create a new {@link SearchableIndex} for an on-disk index. This is held by the {@SSTableIndex}

@@ -24,9 +24,9 @@ import org.apache.lucene.store.IndexOutput;
 
 public class NumericValuesMeta
 {
-    final long valueCount;
-    final int blockSize;
-    final long blockMetaOffset;
+    public final long valueCount;
+    public final int blockSize;
+    public final long blockMetaOffset;
 
     public NumericValuesMeta(IndexInput input) throws IOException
     {

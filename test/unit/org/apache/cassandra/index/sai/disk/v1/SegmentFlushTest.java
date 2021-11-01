@@ -44,6 +44,7 @@ import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
@@ -65,8 +66,8 @@ public class SegmentFlushTest
     private static long segmentRowIdOffset;
     private static int posting1;
     private static int posting2;
-    private static DecoratedKey minKey;
-    private static DecoratedKey maxKey;
+    private static PrimaryKey minKey;
+    private static PrimaryKey maxKey;
     private static ByteBuffer minTerm;
     private static ByteBuffer maxTerm;
     private static int numRows;
@@ -127,13 +128,13 @@ public class SegmentFlushTest
         DecoratedKey key1 = keys.get(0);
         ByteBuffer term1 = UTF8Type.instance.decompose("a");
         Row row1 = createRow(column, term1);
-        writer.addRow(key1, sstableRowId1, row1);
+        writer.addRow(PrimaryKey.DEFAULT_FACTORY.createKey(key1, Clustering.EMPTY, sstableRowId1), row1);
 
         // expect a flush if exceed max rowId per segment
         DecoratedKey key2 = keys.get(1);
         ByteBuffer term2 = UTF8Type.instance.decompose("b");
         Row row2 = createRow(column, term2);
-        writer.addRow(key2, sstableRowId2, row2);
+        writer.addRow(PrimaryKey.DEFAULT_FACTORY.createKey(key2, Clustering.EMPTY, sstableRowId2), row2);
 
         writer.complete(Stopwatch.createStarted());
 
@@ -148,8 +149,8 @@ public class SegmentFlushTest
         segmentRowIdOffset = 0;
         posting1 = 0;
         posting2 = (int) (sstableRowId2 - segmentRowIdOffset);
-        minKey = key1;
-        maxKey = key2;
+        minKey = PrimaryKey.DEFAULT_FACTORY.createKey(key1);
+        maxKey = PrimaryKey.DEFAULT_FACTORY.createKey(key2);
         minTerm = term1;
         maxTerm = term2;
         numRows = 2;

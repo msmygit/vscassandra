@@ -35,6 +35,7 @@ import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -45,6 +46,7 @@ import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.lucene.store.IndexInput;
@@ -102,6 +104,11 @@ public class V1OnDiskFormat implements OnDiskFormat
 
     private static final IndexFeatureSet v1IndexFeatureSet = new IndexFeatureSet()
     {
+        @Override
+        public boolean isRowAware()
+        {
+            return false;
+        }
     };
 
     protected V1OnDiskFormat()
@@ -124,6 +131,12 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER) &&
                indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
+    }
+
+    @Override
+    public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
+    {
+        return new V1PrimaryKeyMap.V1PrimaryKeyMapFactory(indexDescriptor, sstable);
     }
 
     @Override
