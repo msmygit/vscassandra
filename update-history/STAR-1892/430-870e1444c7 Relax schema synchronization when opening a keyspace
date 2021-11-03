@@ -1,0 +1,1433 @@
+--- a/src/java/org/apache/cassandra/db/ColumnFamilyStore.java
++++ b/src/java/org/apache/cassandra/db/ColumnFamilyStore.java
+@@ -3370,13 +3370,8 @@
+ 
+         CompactionManager.instance.interruptCompactionForCFs(concatWithIndexes(), (sstable) -> true, true);
+ 
+-<<<<<<<
+-        if (DatabaseDescriptor.isAutoSnapshot())
+-            snapshot(Keyspace.getTimestampedSnapshotNameWithPrefix(name, ColumnFamilyStore.SNAPSHOT_DROP_PREFIX));
+-=======
+         if (isAutoSnapshotEnabled())
+             snapshot(Keyspace.getTimestampedSnapshotNameWithPrefix(name, ColumnFamilyStore.SNAPSHOT_DROP_PREFIX), DatabaseDescriptor.getAutoSnapshotTtl());
+->>>>>>>
+ 
+         CommitLog.instance.forceRecycleAllSegments(Collections.singleton(metadata.id));
+ 
+--- a/src/java/org/apache/cassandra/db/Keyspace.java
++++ b/src/java/org/apache/cassandra/db/Keyspace.java
+@@ -42,10 +42,7 @@
+ import org.apache.cassandra.concurrent.Stage;
+ import org.apache.cassandra.config.CassandraRelevantProperties;
+ import org.apache.cassandra.config.DatabaseDescriptor;
+-<<<<<<<
+-=======
+ import org.apache.cassandra.config.DurationSpec;
+->>>>>>>
+ import org.apache.cassandra.db.lifecycle.SSTableSet;
+ import org.apache.cassandra.db.partitions.PartitionUpdate;
+ import org.apache.cassandra.db.repair.CassandraKeyspaceRepairManager;
+@@ -384,9 +381,6 @@
+             return;
+ 
+         cfs.onTableDropped();
+-<<<<<<<
+-        unloadCf(cfs);
+-=======
+         unloadCf(cfs, dropData);
+     }
+ 
+@@ -398,17 +392,6 @@
+         for (ColumnFamilyStore cfs : getColumnFamilyStores())
+             unloadCf(cfs, dropData);
+         metric.release();
+->>>>>>>
+-    }
+-
+-    /**
+-     * Unloads all column family stores and releases metrics.
+-     */
+-    public void unload()
+-    {
+-        for (ColumnFamilyStore cfs : getColumnFamilyStores())
+-            unloadCf(cfs);
+-        metric.release();
+     }
+ 
+     // disassociate a cfs from this keyspace instance.
+--- a/src/java/org/apache/cassandra/schema/Schema.java
++++ b/src/java/org/apache/cassandra/schema/Schema.java
+@@ -17,13 +17,6 @@
+  */
+ package org.apache.cassandra.schema;
+ 
+-<<<<<<<
+-import java.net.UnknownHostException;
+-import java.util.*;
+-import java.util.concurrent.CopyOnWriteArrayList;
+-import java.util.function.Supplier;
+-import java.util.stream.Collectors;
+-=======
+ import java.time.Duration;
+ import java.util.Collection;
+ import java.util.Collections;
+@@ -36,7 +29,6 @@
+ import java.util.concurrent.TimeUnit;
+ import java.util.function.Consumer;
+ import java.util.function.Supplier;
+->>>>>>>
+ 
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.base.Preconditions;
+@@ -46,7 +38,6 @@
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+-<<<<<<<
+ import org.apache.cassandra.config.CassandraRelevantProperties;
+ import org.apache.cassandra.cql3.functions.Function;
+ import org.apache.cassandra.cql3.functions.FunctionName;
+@@ -55,11 +46,6 @@
+ import org.apache.cassandra.db.Keyspace;
+ import org.apache.cassandra.db.KeyspaceNotDefinedException;
+ import org.apache.cassandra.db.SystemKeyspace;
+-=======
+-import org.apache.cassandra.config.DatabaseDescriptor;
+-import org.apache.cassandra.cql3.functions.*;
+-import org.apache.cassandra.db.*;
+->>>>>>>
+ import org.apache.cassandra.db.marshal.AbstractType;
+ import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
+ import org.apache.cassandra.exceptions.ConfigurationException;
+@@ -73,24 +59,15 @@
+ import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+ import org.apache.cassandra.service.PendingRangeCalculatorService;
+ import org.apache.cassandra.service.StorageService;
+-<<<<<<<
+ import org.apache.cassandra.utils.FBUtilities;
+ import org.apache.cassandra.utils.concurrent.Awaitable;
+ import org.apache.cassandra.utils.concurrent.LoadingMap;
+-=======
+-import org.apache.cassandra.utils.Pair;
+-import org.apache.cassandra.utils.concurrent.LoadingMap;
+-
+-import org.cliffc.high_scale_lib.NonBlockingHashMap;
+->>>>>>>
+ 
+ import static com.google.common.collect.Iterables.size;
+ import static java.lang.String.format;
+ import static org.apache.cassandra.config.DatabaseDescriptor.isDaemonInitialized;
+ import static org.apache.cassandra.config.DatabaseDescriptor.isToolInitialized;
+ 
+-<<<<<<<
+-=======
+ /**
+  * Manages shared schema, keyspace instances and table metadata refs. Provides methods to initialize, modify and query
+  * both the shared and local schema, as well as to register listeners.
+@@ -105,7 +82,6 @@
+  * the registered callback is executed which performs the remaining updates for tables metadata refs and keyspace
+  * instances (see {@link #mergeAndUpdateVersion(SchemaTransformationResult, boolean)}).
+  */
+->>>>>>>
+ public class Schema implements SchemaProvider
+ {
+     private static final Logger logger = LoggerFactory.getLogger(Schema.class);
+@@ -120,15 +96,12 @@
+     private volatile TableMetadataRefCache tableMetadataRefCache = TableMetadataRefCache.EMPTY;
+ 
+     // Keyspace objects, one per keyspace. Only one instance should ever exist for any given keyspace.
+-<<<<<<<
+-=======
+     // We operate on loading map because we need to achieve atomic initialization with at-most-once semantics for
+     // loadFunction. Although it seems that this is a valid case for using ConcurrentHashMap.computeIfAbsent,
+     // we should not use it because we have no knowledge about the loadFunction and in fact that load function may
+     // do some nested calls to maybeAddKeyspaceInstance, also using different threads, and in a blocking manner.
+     // This may lead to a deadlock. The documentation of ConcurrentHashMap says that manipulating other keys inside
+     // the lambda passed to the computeIfAbsent method is prohibited.
+->>>>>>>
+     private final LoadingMap<String, Keyspace> keyspaceInstances = new LoadingMap<>();
+ 
+     private volatile UUID version = SchemaConstants.emptyVersion;
+@@ -276,7 +249,6 @@
+     public Keyspace maybeAddKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction)
+     {
+         return keyspaceInstances.blockingLoadIfAbsent(keyspaceName, loadFunction);
+-<<<<<<<
+     }
+ 
+     private Keyspace maybeRemoveKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
+@@ -312,25 +284,6 @@
+                                              .mapToInt(tm -> tm.params.gcGraceSeconds)
+                                              .max()
+                                              .orElse(Integer.MIN_VALUE);
+-=======
+-    }
+-
+-    public Keyspace maybeRemoveKeyspaceInstance(String keyspaceName)
+-    {
+-        try
+-        {
+-            return keyspaceInstances.blockingUnloadIfPresent(keyspaceName, Keyspace::unload);
+-        }
+-        catch (LoadingMap.UnloadExecutionException e)
+-        {
+-            throw new AssertionError("Failed to unload the keyspace " + keyspaceName);
+-        }
+-    }
+-
+-    public Keyspaces snapshot()
+-    {
+-        return keyspaces;
+->>>>>>>
+     }
+ 
+     /**
+@@ -763,19 +716,12 @@
+     {
+         SchemaDiagnostics.keyspaceDropping(this, keyspaceMetadata);
+ 
+-<<<<<<<
+-        // remove the keyspace from the static instances.
+-        maybeRemoveKeyspaceInstance(keyspace.name);
+-        unload(keyspace);
+-        Keyspace.writeOrder.awaitNewBarrier();
+-=======
+         boolean initialized = Keyspace.isInitialized();
+         Keyspace keyspace = initialized ? Keyspace.open(keyspaceMetadata.name, this, false) : null;
+         if (initialized)
+         {
+             if (keyspace == null)
+                 return;
+->>>>>>>
+ 
+             keyspaceMetadata.views.forEach(v -> dropView(keyspace, v, dropData));
+             keyspaceMetadata.tables.forEach(t -> dropTable(keyspace, t, dropData));
+@@ -807,11 +753,7 @@
+     private void dropTable(Keyspace keyspace, TableMetadata metadata, boolean dropData)
+     {
+         SchemaDiagnostics.tableDropping(this, metadata);
+-<<<<<<<
+-        Keyspace.open(metadata.keyspace).dropCf(metadata.id);
+-=======
+         keyspace.dropCf(metadata.id, dropData);
+->>>>>>>
+         SchemaDiagnostics.tableDropped(this, metadata);
+     }
+ 
+--- a/src/java/org/apache/cassandra/utils/concurrent/LoadingMap.java
++++ b/src/java/org/apache/cassandra/utils/concurrent/LoadingMap.java
+@@ -18,213 +18,17 @@
+ 
+ package org.apache.cassandra.utils.concurrent;
+ 
+-<<<<<<<
+-import java.util.Map;
+-import java.util.Objects;
+-import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.Future;
+-import java.util.concurrent.atomic.AtomicReference;
+-=======
+-import java.util.concurrent.ConcurrentHashMap;
+-import java.util.concurrent.ExecutionException;
+->>>>>>>
+ import java.util.function.BiFunction;
+ import java.util.function.Consumer;
+ import java.util.function.Function;
+ import java.util.function.Supplier;
+-<<<<<<<
+-=======
+-import java.util.stream.Stream;
+->>>>>>>
+ 
+ import com.google.common.annotations.VisibleForTesting;
+ import org.cliffc.high_scale_lib.NonBlockingHashMap;
+ 
+ /**
+-<<<<<<<
+- * An extension of {@link NonBlockingHashMap} where all values are wrapped by {@link CompletableFuture}.
+- * <p>
+- * The main purpose of this class is to provide the functionality of concurrent hash map which may perform operations
+- * like {@link ConcurrentHashMap#compute(Object, BiFunction)} with synchronization scope reduced to the single key -
+- * that is, when dealing with a single key, unlike {@link ConcurrentHashMap} the whole map is not locked for the time
+- * the mapping function is running. This may help to avoid the case when loading/unloading a value for a key K1 while
+- * loading/unloading a value for a key K2. Such scenario is forbidden in case of {@link ConcurrentHashMap} and leads to
+- * a deadlock. On the other hand, {@link NonBlockingHashMap} does not guarantee at-most-once semantics of running the
+- * mapping function for a single key.
+- */
+-public class LoadingMap<K, V>
+-{
+-    // The map of futures lets us synchronize on per key basis rather than synchronizing the whole map.
+-    // It works in the way that when there is an ongoing computation (update) on a key, the other thread
+-    // trying to access that key recevies an incomplete future and needs to wait until the computation is done.
+-    // This way we can achieve serial execution for each key while different keys can be processed concurrently.
+-    // It also ensures exactly-once semantics for the update operation.
+-    private final Map<K, CompletableFuture<V>> internalMap;
+-
+-    public LoadingMap()
+-    {
+-        this.internalMap = new NonBlockingHashMap<>();
+-    }
+-
+-    public LoadingMap(int initialSize)
+-    {
+-        this.internalMap = new NonBlockingHashMap<>(initialSize);
+-    }
+-
+-    /**
+-     * Recomputes the given object in the map in a thread-safe way.
+-     * The remapping function is applied for the entry of the provided key with the following rules:
+-     * - if entry exists, it is passed to the remapping function
+-     * - if entry does not exist, null is passed to the remapping function
+-     * - if the remapping function returns non-null value, the entry is added or replaced
+-     * - if the remapping function returns null value, the entry is removed
+-     * <p>
+-     * The remapping function is guaranteed to be applied exactly once.
+-     * <p>
+-     * The method blocks until the update is applied. The method waits for the ongoing updates for the same key, but
+-     * it does not wait for any updates for other keys.
+-     */
+-    public V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
+-    {
+-        CompletableFuture<V> newEntry = new CompletableFuture<>();
+-        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, false, false);
+-        return updateOrRemoveEntry(key, remappingFunction, previousEntry, newEntry);
+-    }
+-
+-    /**
+-     * Similar to {@link #compute(Object, BiFunction)} but the mapping function is applied only if there is no existing
+-     * entry in the map. Thus, the mapping function will be applied at-most-once.
+-     */
+-    public V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction)
+-    {
+-        CompletableFuture<V> newEntry = new CompletableFuture<>();
+-        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, false, true);
+-        if (previousEntry != null)
+-            return previousEntry.join();
+-
+-        return updateOrRemoveEntry(key, (k, v) -> mappingFunction.apply(k), previousEntry, newEntry);
+-    }
+-
+-    /**
+-     * Similar to {@link #compute(Object, BiFunction)} but the remapping function is applied only if there is existing
+-     * item in the map. Thus, the remapping function will be applied at-most-once and the value parameter will never be
+-     * {@code null}.
+-     */
+-    public V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
+-    {
+-        CompletableFuture<V> newEntry = new CompletableFuture<>();
+-        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, true, false);
+-        if (previousEntry == null)
+-            return null;
+-
+-        return updateOrRemoveEntry(key, remappingFunction, previousEntry, newEntry);
+-    }
+-
+-    /**
+-     * Safely replaces the future entry in the internal map, reattempting if the existing entry resolves to {@code null},
+-     *
+-     * @param key           key for which the entry is to be replaced
+-     * @param newEntry      new entry to be put into the map
+-     * @param skipIfMissing if set, the entry will be replaced only if there is an existing entry in the map
+-     *                      (which resolves to a non-null value); otherwise, the method returns {@code null}
+-     * @param skipIfExists  if set, the entry will be put into the map only if there is no existing entry (which resolves
+-     *                      to a non-null value); otherwise, the method returns the existing entry
+-     * @return the existing entry or {@code null} if there was no entry in the map
+-     */
+-    private CompletableFuture<V> replaceEntry(K key, CompletableFuture<V> newEntry, boolean skipIfMissing, boolean skipIfExists)
+-    {
+-        CompletableFuture<V> previousEntry;
+-        V previousValue;
+-        do
+-        {
+-            previousEntry = internalMap.get(key);
+-
+-            if (previousEntry == null)
+-            {
+-                if (skipIfMissing || internalMap.putIfAbsent(key, newEntry) == null)
+-                    // skip-if-missing: break fast if we are aiming to remove the entry - if it does not exist, there is nothing to do
+-                    // put-if-abset: there were no entry for the provided key, so we put a promise there and break
+-                    return null;
+-            }
+-            else
+-            {
+-                previousValue = previousEntry.join();
+-
+-                if (previousValue != null)
+-                {
+-                    if (skipIfExists || internalMap.replace(key, previousEntry, newEntry))
+-                        // skip-if-exist: break fast if we are aiming to compute a new entry only if it is missing
+-                        // replace: there was a legitmate entry with a non-null value - we replace it with a promise and break
+-                        return previousEntry;
+-                }
+-
+-                // otherwise, if previousValue == null, some other thread deleted the entry in the meantime; we need
+-                // to try again because yet another thread might have attempted to do something for that key
+-            }
+-        } while (true);
+-    }
+-
+-    /**
+-     * Applies the transformation on entry in a safe way. If the transformation throws an exception, the previous state
+-     * is recovered.
+-     *
+-     * @param key               key for which we process entries
+-     * @param remappingFunction remapping function which gets the key, the current entry value and is expected to return
+-     *                          a new value or null if the entry is to be removed
+-     * @param previousEntry     previous entry, which is no longer in the map but its value is already resolved and non-null
+-     * @param newEntry          new entry, which is already in the map and is a non-completed promise
+-     * @return the resolved value of the new entry
+-     */
+-    private V updateOrRemoveEntry(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction, CompletableFuture<V> previousEntry, CompletableFuture<V> newEntry)
+-    {
+-        V previousValue = previousEntry != null ? previousEntry.join() : null;
+-
+-        try
+-        {
+-            // apply the provided remapping function
+-            V newValue = remappingFunction.apply(key, previousValue);
+-            if (newValue == null)
+-            {
+-                // null result means we should remove the entry
+-                CompletableFuture<V> removedEntry = internalMap.remove(key);
+-                newEntry.complete(null);
+-                assert removedEntry == newEntry;
+-                return null;
+-            }
+-            else
+-            {
+-                // non-null result means we should complete the new entry promise with the returned value
+-                newEntry.complete(newValue);
+-                return newValue;
+-            }
+-        }
+-        catch (RuntimeException ex)
+-        {
+-            // in case of exception (which may happen only in remapping function), we simply revert the change and
+-            // rethrow the exception
+-            if (previousEntry != null)
+-            {
+-                // if the entry existed before, the new entry promise is simply completed with the old value
+-                newEntry.complete(previousValue);
+-            }
+-            else
+-            {
+-                // if the entry did not exist before, the new entry is removed and promise is completed with null, which
+-                // tells other threads waiting for the promise completion to try again
+-                CompletableFuture<V> f = internalMap.remove(key);
+-                assert f == newEntry;
+-                newEntry.complete(null);
+-            }
+-
+-            throw ex;
+-        }
+-    }
+-
+-    @VisibleForTesting
+-    Future<V> getUnsafe(K key)
+-=======
+  * An extension of {@link NonBlockingHashMap} where all values are wrapped by {@link Future}.
+  * <p>
+  * The main purpose of this class is to provide the functionality of concurrent hash map which may perform operations like
+@@ -251,12 +55,10 @@
+      */
+     @VisibleForTesting
+     Future<V> get(K key)
+->>>>>>>
+     {
+         return internalMap.get(key);
+     }
+ 
+-<<<<<<<
+     /**
+      * Get a value for a given key. Returns a non-null object only if there is a successfully initialized value associated,
+      * with the provided key. It returns {@code null} if there is no value for the key, or the value is being initialized
+@@ -266,35 +68,6 @@
+     {
+         Future<V> future = internalMap.get(key);
+         return future != null ? future.getNow() : null;
+-=======
+-    public V getIfReady(K key)
+-    {
+-        CompletableFuture<V> f = internalMap.get(key);
+-        return f != null ? f.getNow(null) : null;
+-    }
+-
+-    public V get(K key)
+-    {
+-        while (true)
+-        {
+-            CompletableFuture<V> entry = internalMap.get(key);
+-            if (entry == null)
+-                // value not found
+-                return null;
+-
+-            V value = entry.join();
+-            if (value != null)
+-                return value;
+-
+-            // we need to retry because info == null means that the entry got removed
+-            Thread.yield();
+-        }
+-    }
+-
+-    public Stream<V> valuesStream()
+-    {
+-        return internalMap.keySet().stream().map(this::get).filter(Objects::nonNull);
+->>>>>>>
+     }
+ 
+     /**
+@@ -311,21 +84,6 @@
+      * throws exception, it is rethrown by this method. In both cases nothing gets added to the map.
+      * <p/>
+      * It is allowed to nest loading for a different key, though nested loading for the same key results in a deadlock.
+-<<<<<<<
+-     * <p/>
+-     * Note that this is just a special case of {@link #computeIfAbsent(Object, Function)} which would just throw
+-     * {@link NullPointerException} if the mapping function returns {@code null}. This method is there mostly to ensure
+-     * parity with OSS implementation.
+-     */
+-    public V blockingLoadIfAbsent(K key, Supplier<? extends V> loadFunction) throws RuntimeException
+-    {
+-        return computeIfAbsent(key, k -> {
+-            V result = loadFunction.get();
+-            if (result == null)
+-                throw new NullPointerException("The mapping function returned null");
+-            return result;
+-        });
+-=======
+      */
+     public V blockingLoadIfAbsent(K key, Supplier<? extends V> loadFunction) throws RuntimeException
+     {
+@@ -375,7 +133,6 @@
+             // to load entry fails
+             Thread.yield();
+         }
+->>>>>>>
+     }
+ 
+     /**
+@@ -386,16 +143,6 @@
+      * When unload function fails, the value is removed from the map anyway and the failure is rethrown.
+      * <p/>
+      * When the key was not found, the method returns {@code null}.
+-<<<<<<<
+-=======
+-     * <p>
+-     * Note that this has slightly different semantics than {@link #computeIfPresent(Object, BiFunction)} where
+-     * the mapping function returns {@code null} - in particular, the value is removed from the map regardless the
+-     * mapping function succeedes or not. The value removed from the map (if existed) is returned (unlike in case of
+-     * {@link #computeIfPresent(Object, BiFunction)} which always return new value - {@code null} in case of removing).
+-     * If the mapping function fails, the value associated with the provided key (if existed) is encapsulated in the
+-     * exception.
+->>>>>>>
+      *
+      * @throws UnloadExecutionException when the unloading failed to complete - this is checked exception because
+      *                                  the value is removed from the map regardless of the result of unloading;
+@@ -403,26 +150,6 @@
+      */
+     public V blockingUnloadIfPresent(K key, Consumer<? super V> unloadFunction) throws UnloadExecutionException
+     {
+-<<<<<<<
+-        AtomicReference<Throwable> failure = new AtomicReference<>();
+-        AtomicReference<V> value = new AtomicReference<>();
+-        computeIfPresent(key, (k, v) -> {
+-            try
+-            {
+-                value.set(v);
+-                unloadFunction.accept(v);
+-            }
+-            catch (Throwable t)
+-            {
+-                failure.set(t);
+-            }
+-            return null;
+-        });
+-        if (failure.get() == null)
+-            return value.get();
+-        else
+-            throw new UnloadExecutionException(value.get(), failure.get());
+-=======
+         Promise<V> droppedFuture = new AsyncPromise<V>().setSuccess(null);
+ 
+         Future<V> existingFuture;
+@@ -452,7 +179,6 @@
+             Future<V> future = internalMap.remove(key);
+             assert future == droppedFuture;
+         }
+->>>>>>>
+     }
+ 
+     /**
+--- a/test/unit/org/apache/cassandra/db/CounterCacheTest.java
++++ b/test/unit/org/apache/cassandra/db/CounterCacheTest.java
+@@ -193,12 +193,8 @@
+         CacheService.instance.invalidateCounterCache();
+         assertEquals(0, CacheService.instance.counterCache.size());
+ 
+-<<<<<<<
+-        Keyspace ks = Schema.instance.maybeRemoveKeyspaceInstance(KEYSPACE1);
+-=======
+         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(KEYSPACE1);
+         SchemaTestUtil.dropKeyspaceIfExist(KEYSPACE1, true);
+->>>>>>>
+ 
+         try
+         {
+@@ -208,11 +204,7 @@
+         }
+         finally
+         {
+-<<<<<<<
+-            Schema.instance.maybeAddKeyspaceInstance(ks.getName(), () -> ks);
+-=======
+             SchemaTestUtil.addOrUpdateKeyspace(ksm, true);
+->>>>>>>
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/db/KeyspaceTest.java
++++ b/test/unit/org/apache/cassandra/db/KeyspaceTest.java
+@@ -21,13 +21,6 @@
+ import java.nio.ByteBuffer;
+ import java.util.Collection;
+ 
+-<<<<<<<
+-=======
+-import org.apache.cassandra.gms.Gossiper;
+-import org.apache.cassandra.schema.MigrationManager;
+-import org.apache.cassandra.schema.Schema;
+-import org.assertj.core.api.Assertions;
+->>>>>>>
+ import org.junit.Test;
+ 
+ import org.apache.cassandra.Util;
+@@ -52,19 +45,10 @@
+ import org.apache.cassandra.utils.FBUtilities;
+ import org.assertj.core.api.Assertions;
+ 
+-<<<<<<<
+-import static org.junit.Assert.*;
+-import static org.mockito.ArgumentMatchers.any;
+-import static org.mockito.ArgumentMatchers.anyString;
+-import static org.mockito.Mockito.mock;
+-import static org.mockito.Mockito.spy;
+-import static org.mockito.Mockito.when;
+-=======
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+->>>>>>>
+ 
+ public class KeyspaceTest extends CQLTester
+ {
+--- a/test/unit/org/apache/cassandra/db/RowCacheTest.java
++++ b/test/unit/org/apache/cassandra/db/RowCacheTest.java
+@@ -370,13 +370,9 @@
+         CacheService.instance.setRowCacheCapacityInMB(1);
+         rowCacheLoad(100, 50, 0);
+         CacheService.instance.rowCache.submitWrite(Integer.MAX_VALUE).get();
+-<<<<<<<
+ 
+         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(KEYSPACE_CACHED);
+         SchemaTestUtil.dropKeyspaceIfExist(KEYSPACE_CACHED, true);
+-=======
+-        Keyspace instance = Schema.instance.maybeRemoveKeyspaceInstance(KEYSPACE_CACHED);
+->>>>>>>
+         try
+         {
+             CacheService.instance.rowCache.size();
+@@ -387,11 +383,7 @@
+         }
+         finally
+         {
+-<<<<<<<
+-            Schema.instance.maybeAddKeyspaceInstance(instance.getName(), () -> instance);
+-=======
+             SchemaTestUtil.addOrUpdateKeyspace(ksm, true);
+->>>>>>>
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/db/view/ViewUtilsTest.java
++++ b/test/unit/org/apache/cassandra/db/view/ViewUtilsTest.java
+@@ -78,13 +78,7 @@
+         replicationMap.put("DC1", "1");
+         replicationMap.put("DC2", "1");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-        KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, replicationMap));
+-        Schema.instance.load(meta);
+-=======
+         recreateKeyspace(replicationMap);
+->>>>>>>
+ 
+         Optional<Replica> naturalEndpoint = ViewUtils.getViewNaturalEndpoint(Keyspace.open(KS).getReplicationStrategy(),
+                                                                              new StringToken("CA"),
+@@ -115,13 +109,7 @@
+         replicationMap.put("DC1", "2");
+         replicationMap.put("DC2", "2");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-        KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, replicationMap));
+-        Schema.instance.load(meta);
+-=======
+         recreateKeyspace(replicationMap);
+->>>>>>>
+ 
+         Optional<Replica> naturalEndpoint = ViewUtils.getViewNaturalEndpoint(Keyspace.open(KS).getReplicationStrategy(),
+                                                                              new StringToken("CA"),
+@@ -151,13 +139,7 @@
+         replicationMap.put("DC1", "1");
+         replicationMap.put("DC2", "1");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-        KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, replicationMap));
+-        Schema.instance.load(meta);
+-=======
+         recreateKeyspace(replicationMap);
+->>>>>>>
+ 
+         Optional<Replica> naturalEndpoint = ViewUtils.getViewNaturalEndpoint(Keyspace.open(KS).getReplicationStrategy(),
+                                                                              new StringToken("AB"),
+--- a/test/unit/org/apache/cassandra/service/OptionalTasksTest.java
++++ b/test/unit/org/apache/cassandra/service/OptionalTasksTest.java
+@@ -59,12 +59,8 @@
+         Objects.requireNonNull(cfs).metric.coordinatorReadLatency.update(100, TimeUnit.NANOSECONDS);
+ 
+         // Remove the Keyspace name to make it invisible to the updater...
+-<<<<<<<
+-        Keyspace removed = Schema.instance.maybeRemoveKeyspaceInstance(KEYSPACE);
+-=======
+         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(KEYSPACE);
+         SchemaTestUtil.dropKeyspaceIfExist(KEYSPACE, true);
+->>>>>>>
+ 
+         try
+         {
+@@ -78,11 +74,7 @@
+         finally
+         {
+             // Restore the removed Keyspace to put things back the way we found them.
+-<<<<<<<
+-            Schema.instance.maybeAddKeyspaceInstance(removed.getName(), () -> removed);
+-=======
+             SchemaTestUtil.addOrUpdateKeyspace(ksm, true);
+->>>>>>>
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java
++++ b/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java
+@@ -124,11 +124,7 @@
+         configOptions.put("DC2", "2");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -168,11 +164,7 @@
+         configOptions.put("DC2", "1");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -215,11 +207,7 @@
+         configOptions.put("DC2", "1");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -256,11 +244,7 @@
+         configOptions.put("DC2", "2");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -299,11 +283,7 @@
+         configOptions.put("DC2", "2");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -355,11 +335,7 @@
+         configOptions.put("DC2", "2");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -426,11 +402,7 @@
+         configOptions.put("DC2", "2");
+         configOptions.put(ReplicationParams.CLASS, "NetworkTopologyStrategy");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.create(false, configOptions));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -489,11 +461,7 @@
+         metadata.updateNormalToken(new StringToken("B"), InetAddressAndPort.getByName("127.0.0.2"));
+         metadata.updateNormalToken(new StringToken("C"), InetAddressAndPort.getByName("127.0.0.3"));
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.simpleTransient(2));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+@@ -524,11 +492,7 @@
+         Map<String, String> configOptions = new HashMap<>();
+         configOptions.put("replication_factor", "2");
+ 
+-<<<<<<<
+-        Schema.instance.maybeRemoveKeyspaceInstance("Keyspace1");
+-=======
+         SchemaTestUtil.dropKeyspaceIfExist("Keyspace1", false);
+->>>>>>>
+         KeyspaceMetadata meta = KeyspaceMetadata.create("Keyspace1", KeyspaceParams.simpleTransient(2));
+         SchemaTestUtil.addOrUpdateKeyspace(meta, false);
+ 
+--- a/test/unit/org/apache/cassandra/utils/concurrent/LoadingMapTest.java
++++ b/test/unit/org/apache/cassandra/utils/concurrent/LoadingMapTest.java
+@@ -20,58 +20,31 @@
+ 
+ import java.time.Duration;
+ import java.time.Instant;
+-<<<<<<<
+-import java.util.Set;
+ import java.util.concurrent.CyclicBarrier;
+-import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.Future;
+-=======
+-import java.util.concurrent.CyclicBarrier;
+->>>>>>>
+ import java.util.concurrent.ThreadLocalRandom;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.TimeoutException;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.concurrent.atomic.AtomicInteger;
+-<<<<<<<
+-=======
+-import java.util.concurrent.atomic.AtomicReference;
+-import java.util.stream.Collectors;
+-import java.util.stream.Stream;
+->>>>>>>
+ 
+ import com.google.common.util.concurrent.Uninterruptibles;
+ import org.junit.After;
+ import org.junit.Before;
+ import org.junit.Test;
+ 
+-<<<<<<<
+-import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
+-=======
+ import org.apache.cassandra.concurrent.ExecutorPlus;
+->>>>>>>
+ import org.apache.cassandra.utils.Throwables;
+ import org.awaitility.Awaitility;
+ import org.awaitility.core.ConditionFactory;
+ 
+-<<<<<<<
+ import static org.apache.cassandra.concurrent.ExecutorFactory.Global.executorFactory;
+ import static org.apache.cassandra.utils.FBUtilities.now;
+ import static org.assertj.core.api.Assertions.assertThat;
+-=======
+-import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+-import static org.junit.Assert.fail;
+->>>>>>>
+ 
+ public class LoadingMapTest
+ {
+     private LoadingMap<Integer, String> map;
+-<<<<<<<
+-    private final DebuggableThreadPoolExecutor executor = DebuggableThreadPoolExecutor.createWithFixedPoolSize("TEST", 10);
+-=======
+     private final ExecutorPlus executor = executorFactory().pooled("TEST", 10);
+->>>>>>>
+     private final CyclicBarrier b1 = new CyclicBarrier(2);
+     private final CyclicBarrier b2 = new CyclicBarrier(2);
+ 
+@@ -86,17 +59,10 @@
+     @After
+     public void afterTest() throws TimeoutException
+     {
+-<<<<<<<
+-        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+-        while (executor.getPendingTaskCount() > 0 || executor.getActiveTaskCount() > 0)
+-        {
+-            if (Instant.now().isAfter(deadline))
+-=======
+         Instant deadline = now().plus(Duration.ofSeconds(5));
+         while (executor.getPendingTaskCount() > 0 || executor.getActiveTaskCount() > 0)
+         {
+             if (now().isAfter(deadline))
+->>>>>>>
+                 throw new TimeoutException();
+ 
+             Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS);
+@@ -108,107 +74,6 @@
+     }
+ 
+     @Test
+-<<<<<<<
+-=======
+-    public void compute()
+-    {
+-        assertThat(map.compute(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isNull();
+-            return "one";
+-        })).isEqualTo("one");
+-        assertThat(map.get(1)).isEqualTo("one");
+-
+-        assertThat(map.compute(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isEqualTo("one");
+-            return "1";
+-        })).isEqualTo("1");
+-        assertThat(map.get(1)).isEqualTo("1");
+-
+-        assertThat(map.compute(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isEqualTo("1");
+-            return null;
+-        })).isNull();
+-        assertThat(map.get(1)).isNull();
+-
+-        assertThat(map.compute(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isNull();
+-            return null;
+-        })).isNull();
+-        assertThat(map.get(1)).isNull();
+-    }
+-
+-    @Test
+-    public void computeIfAbsentOrIfMissing()
+-    {
+-        assertThat(map.computeIfPresent(1, (k, v) -> {
+-            fail();
+-            return "one";
+-        })).isNull();
+-        assertThat(map.get(1)).isNull();
+-
+-        assertThat(map.computeIfAbsent(1, k -> {
+-            assertThat(k).isEqualTo(1);
+-            return "one";
+-        })).isEqualTo("one");
+-        assertThat(map.get(1)).isEqualTo("one");
+-
+-        assertThat(map.computeIfAbsent(1, k -> {
+-            fail();
+-            return "1";
+-        })).isEqualTo("one");
+-        assertThat(map.get(1)).isEqualTo("one");
+-
+-        assertThat(map.computeIfPresent(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isEqualTo("one");
+-            return "1";
+-        })).isEqualTo("1");
+-        assertThat(map.get(1)).isEqualTo("1");
+-
+-        assertThat(map.computeIfPresent(1, (k, v) -> {
+-            assertThat(k).isEqualTo(1);
+-            assertThat(v).isEqualTo("1");
+-            return null;
+-        })).isNull();
+-        assertThat(map.get(1)).isNull();
+-
+-        assertThat(map.computeIfPresent(1, (k, v) -> {
+-            fail();
+-            return "one";
+-        })).isNull();
+-        assertThat(map.get(1)).isNull();
+-    }
+-
+-    @Test
+-    public void values() throws Exception
+-    {
+-        map.computeIfAbsent(1, ignored -> "one");
+-        map.computeIfAbsent(2, ignored -> "two");
+-        map.computeIfAbsent(3, ignored -> "three");
+-        executor.submit(() -> map.compute(2, (k, v) -> {
+-            Throwables.maybeFail(b1::await);
+-            return "2";
+-        }));
+-        executor.submit(() -> map.compute(3, (k, v) -> {
+-            Throwables.maybeFail(b2::await);
+-            return null;
+-        }));
+-
+-        Stream<String> s = map.valuesStream(); // we should not need to wait for the stream
+-        Future<Set<String>> f = executor.submit(() -> s.collect(Collectors.toSet()));
+-        assertThat(f).isNotDone();
+-        b1.await();
+-        assertThat(f).isNotDone();
+-        b2.await();
+-        await().untilAsserted(() -> assertThat(f.get()).containsExactlyInAnyOrder("one", "2"));
+-    }
+-
+-    @Test
+->>>>>>>
+     public void loadForDifferentKeysShouldNotBlockEachOther() throws Exception
+     {
+         f1 = submitLoad(1, "one", b1, null);
+@@ -217,15 +82,10 @@
+         f2 = submitLoad(2, "two", b2, null);
+         await().untilAsserted(() -> assertThat(b2.getNumberWaiting()).isGreaterThan(0)); // wait until we enter loading function
+ 
+-<<<<<<<
+         assertThat(map.get(1)).isNotNull();
+         assertThat(map.get(2)).isNotNull();
+         assertThat(map.getIfReady(1)).isNull();
+         assertThat(map.getIfReady(2)).isNull();
+-=======
+-        assertThat(map.getUnsafe(1)).isNotNull().isNotDone();
+-        assertThat(map.getUnsafe(2)).isNotNull().isNotDone();
+->>>>>>>
+         assertThat(f1).isNotDone();
+         assertThat(f2).isNotDone();
+ 
+@@ -239,37 +99,22 @@
+         b1.await();
+         assertFuture(f1, "one");
+ 
+-<<<<<<<
+-        assertThat(map.get(1)).isEqualTo("one");
+-        assertThat(map.get(2)).isEqualTo("two");
+-=======
+         assertThat(map.getIfReady(1)).isEqualTo("one");
+         assertThat(map.getIfReady(2)).isEqualTo("two");
+->>>>>>>
+     }
+ 
+     @Test
+     public void loadInsideLoadShouldNotCauseDeadlock()
+     {
+-<<<<<<<
+         String v = map.blockingLoadIfAbsent(1, () -> {
+             assertThat(map.blockingLoadIfAbsent(2, () -> "two")).isEqualTo("two");
+-=======
+-        String v = map.compute(1, (ignoredKey, ignoredExisting) -> {
+-            assertThat(map.compute(2, (_ignoredKey, _ignoredExisting) -> "two")).isEqualTo("two");
+->>>>>>>
+             return "one";
+         });
+ 
+         assertThat(v).isEqualTo("one");
+ 
+-<<<<<<<
+-        assertThat(map.get(1)).isEqualTo("one");
+-        assertThat(map.get(2)).isEqualTo("two");
+-=======
+         assertThat(map.getIfReady(1)).isEqualTo("one");
+         assertThat(map.getIfReady(2)).isEqualTo("two");
+->>>>>>>
+     }
+ 
+     @Test
+@@ -283,15 +128,10 @@
+         f2 = submitUnload(2, "two", b2, null);
+         await().untilAsserted(() -> assertThat(b2.getNumberWaiting()).isGreaterThan(0)); // wait until we enter unloading function
+ 
+-<<<<<<<
+         assertThat(map.get(1)).isNotNull();
+         assertThat(map.get(2)).isNotNull();
+         assertThat(map.getIfReady(1)).isNull();
+         assertThat(map.getIfReady(2)).isNull();
+-=======
+-        assertThat(map.getUnsafe(1)).isNotNull().isNotDone();
+-        assertThat(map.getUnsafe(2)).isNotNull().isNotDone();
+->>>>>>>
+         assertThat(f1).isNotDone();
+         assertThat(f2).isNotDone();
+ 
+@@ -305,7 +145,6 @@
+         b1.await();
+         assertFuture(f1, "one");
+ 
+-<<<<<<<
+         assertThat(map.get(1)).isNull();
+         assertThat(map.get(2)).isNull();
+     }
+@@ -332,41 +171,6 @@
+ 
+         assertThat(map.get(1)).isNull();
+         assertThat(map.get(2)).isNull();
+-=======
+-        assertThat(map.getUnsafe(1)).isNull();
+-        assertThat(map.getUnsafe(2)).isNull();
+-    }
+-
+-    @Test
+-    public void unloadInsideUnloadShouldNotCauseDeadlock()
+-    {
+-        initMap();
+-        AtomicReference<String> removed1 = new AtomicReference<>();
+-        AtomicReference<String> removed2 = new AtomicReference<>();
+-
+-        assertThat(map.compute(1, (ignoredKey1, v1) -> {
+-            if (v1 == null)
+-                return null;
+-
+-            assertThat(map.getUnsafe(1)).isNotDone();
+-            assertThat(map.compute(2, (ignoredKey2, v2) -> {
+-                if (v2 == null)
+-                    return null;
+-
+-                assertThat(map.getUnsafe(2)).isNotDone();
+-                removed2.set(v2);
+-                return null;
+-            })).isNull();
+-            assertThat(removed2.get()).isEqualTo("two");
+-            removed1.set(v1);
+-            return null;
+-        })).isNull();
+-
+-        assertThat(removed1.get()).isEqualTo("one");
+-
+-        assertThat(map.getUnsafe(1)).isNull();
+-        assertThat(map.getUnsafe(2)).isNull();
+->>>>>>>
+     }
+ 
+     @Test
+@@ -384,11 +188,7 @@
+         b1.await();
+ 
+         assertFutures("one", "one");
+-<<<<<<<
+-        assertThat(map.get(1)).isEqualTo("one");
+-=======
+         assertThat(map.getIfReady(1)).isEqualTo("one");
+->>>>>>>
+         assertThat(b2.getNumberWaiting()).isZero();
+     }
+ 
+@@ -400,21 +200,13 @@
+         await().untilAsserted(() -> assertThat(b1.getNumberWaiting()).isGreaterThan(0)); // wait until we enter unloading function
+ 
+         f2 = submitUnload(1, "one", b2, null);
+-<<<<<<<
+ 
+         assertFuture(f2, null); // f2 should return immediately
+-=======
+-        assertThat(f2).isNotDone();
+->>>>>>>
+ 
+         b1.await(); // let f1 continue
+         assertFuture(f1, "one");
+ 
+-<<<<<<<
+-        assertThat(map.get(1)).isNull();
+-=======
+         assertThat(map.getIfReady(1)).isNull();
+->>>>>>>
+         assertThat(b2.getNumberWaiting()).isZero();
+     }
+ 
+@@ -435,11 +227,7 @@
+         b1.await();
+ 
+         assertFutures("one", "two");
+-<<<<<<<
+-        assertThat(map.get(1)).isEqualTo("two");
+-=======
+         assertThat(map.getIfReady(1)).isEqualTo("two");
+->>>>>>>
+     }
+ 
+     @Test
+@@ -457,11 +245,7 @@
+         b1.await();
+ 
+         assertFutures("one", "one");
+-<<<<<<<
+-        assertThat(map.get(1)).isNull();
+-=======
+         assertThat(map.getIfReady(1)).isNull();
+->>>>>>>
+     }
+ 
+     @Test
+@@ -485,15 +269,9 @@
+     @Test
+     public void nullLoad()
+     {
+-<<<<<<<
+         f1 = submitLoad(1, null, null, null);
+         f1.awaitThrowUncheckedOnInterrupt(5, TimeUnit.SECONDS);
+         assertThat(f1.cause()).isInstanceOf(NullPointerException.class);
+-=======
+-        f1 = submitLoad2(1, null, null, null);
+-        assertThatExceptionOfType(ExecutionException.class).isThrownBy(() -> f1.get(5, TimeUnit.SECONDS))
+-                                                           .withCauseInstanceOf(NullPointerException.class);
+->>>>>>>
+ 
+         assertThat(map.get(1)).isNull();
+         assertThat(map.get(2)).isNull();
+@@ -505,21 +283,12 @@
+         f1 = submitLoad(1, null, null, () -> {
+             throw new RuntimeException("abc");
+         });
+-<<<<<<<
+-        assertThatExceptionOfType(ExecutionException.class).isThrownBy(() -> f1.get(5, TimeUnit.SECONDS))
+-                                                           .withCauseInstanceOf(RuntimeException.class)
+-                                                           .withMessageContaining("abc");
+-
+-        assertThat(map.getUnsafe(1)).isNull();
+-        assertThat(map.getUnsafe(2)).isNull();
+-=======
+         f1.awaitThrowUncheckedOnInterrupt(5, TimeUnit.SECONDS);
+         assertThat(f1.cause()).isInstanceOf(RuntimeException.class);
+         assertThat(f1.cause()).hasMessage("abc");
+ 
+         assertThat(map.get(1)).isNull();
+         assertThat(map.get(2)).isNull();
+->>>>>>>
+     }
+ 
+     @Test
+@@ -530,33 +299,6 @@
+         f1 = submitUnload(1, "one", null, () -> {
+             throw new RuntimeException("abc");
+         });
+-<<<<<<<
+-
+-        assertThatExceptionOfType(ExecutionException.class).isThrownBy(() -> f1.get(5, TimeUnit.SECONDS))
+-                                                           .withCauseInstanceOf(RuntimeException.class)
+-                                                           .withMessageContaining("abc");
+-
+-        assertThat(map.get(1)).isEqualTo("one");
+-        assertThat(map.get(2)).isEqualTo("two");
+-    }
+-
+-    @Test
+-    public void failedUnload2()
+-    {
+-        initMap();
+-
+-        f1 = submitUnload2(1, "one", null, () -> {
+-            throw new RuntimeException("abc");
+-        });
+-        assertThatExceptionOfType(ExecutionException.class).isThrownBy(() -> f1.get(5, TimeUnit.SECONDS))
+-                                                           .withCauseInstanceOf(LoadingMap.UnloadExecutionException.class)
+-                                                           .withRootCauseInstanceOf(RuntimeException.class)
+-                                                           .withMessageContaining("abc")
+-                                                           .matches(ex -> {
+-
+-                                                               return ((LoadingMap.UnloadExecutionException) ex.getCause()).value().equals("one");
+-                                                           });
+-=======
+         f1.awaitThrowUncheckedOnInterrupt(5, TimeUnit.SECONDS);
+         assertThat(f1.cause()).isInstanceOf(LoadingMap.UnloadExecutionException.class);
+         LoadingMap.UnloadExecutionException ex = (LoadingMap.UnloadExecutionException) f1.cause();
+@@ -564,7 +306,6 @@
+         assertThat(ex).hasRootCauseInstanceOf(RuntimeException.class);
+         assertThat(ex).hasRootCauseMessage("abc");
+         assertThat((String) ex.value()).isEqualTo("one");
+->>>>>>>
+ 
+         assertThat(map.get(1)).isNull();
+     }
+@@ -585,13 +326,7 @@
+                     {
+                         barrier.await();
+                         Uninterruptibles.sleepUninterruptibly(ThreadLocalRandom.current().nextInt(50), TimeUnit.MILLISECONDS);
+-<<<<<<<
+                         map.blockingLoadIfAbsent(1, () -> {
+-=======
+-                        map.compute(1, (ignoredKey, existing) -> {
+-                            if (existing != null)
+-                                return existing;
+->>>>>>>
+                             int s = state.get();
+                             Uninterruptibles.sleepUninterruptibly(ThreadLocalRandom.current().nextInt(50, 100), TimeUnit.MILLISECONDS);
+                             if (!state.compareAndSet(s, s + 1))
+@@ -619,23 +354,13 @@
+                     {
+                         barrier.await();
+                         Uninterruptibles.sleepUninterruptibly(ThreadLocalRandom.current().nextInt(50), TimeUnit.MILLISECONDS);
+-<<<<<<<
+                         map.blockingUnloadIfPresent(1, v -> {
+-=======
+-                        map.compute(1, (ignoredKey, v) -> {
+-                            if (v == null)
+-                                return null;
+->>>>>>>
+                             int s = state.incrementAndGet();
+                             Uninterruptibles.sleepUninterruptibly(ThreadLocalRandom.current().nextInt(50, 100), TimeUnit.MILLISECONDS);
+                             if (!state.compareAndSet(s, s + 1))
+                                 failures.incrementAndGet();
+                             if (ThreadLocalRandom.current().nextInt(100) < 10)
+                                 throw new RuntimeException();
+-<<<<<<<
+-=======
+-                            return null;
+->>>>>>>
+                         });
+                     }
+                     catch (InterruptedException e)
+@@ -662,25 +387,9 @@
+ 
+     private void assertFuture(Future<String> f, String v)
+     {
+-<<<<<<<
+         assertThat(f.awaitThrowUncheckedOnInterrupt(5, TimeUnit.SECONDS)).isTrue();
+         f.rethrowIfFailed();
+         assertThat(f.getNow()).isEqualTo(v);
+-=======
+-        try
+-        {
+-            assertThat(f.get(5, TimeUnit.SECONDS)).isEqualTo(v);
+-        }
+-        catch (InterruptedException e)
+-        {
+-            Thread.currentThread().interrupt();
+-            throw Throwables.unchecked(e);
+-        }
+-        catch (ExecutionException | TimeoutException e)
+-        {
+-            throw Throwables.unchecked(e);
+-        }
+->>>>>>>
+     }
+ 
+     private void assertFutures(String v1, String v2)
+@@ -691,26 +400,6 @@
+ 
+     private Future<String> submitLoad(int key, String value, CyclicBarrier b, Throwables.DiscreteAction<?> extraAction)
+     {
+-<<<<<<<
+-=======
+-        return executor.submit(() -> map.compute(key, (ignoredKey, existing) -> {
+-            if (existing != null)
+-                return existing;
+-
+-            Throwable t = null;
+-            if (extraAction != null)
+-                t = Throwables.perform(t, extraAction);
+-            if (b != null)
+-                t = Throwables.perform(t, b::await);
+-            if (t != null)
+-                throw Throwables.unchecked(t);
+-            return value;
+-        }));
+-    }
+-
+-    private Future<String> submitLoad2(int key, String value, CyclicBarrier b, Throwables.DiscreteAction<?> extraAction)
+-    {
+->>>>>>>
+         return executor.submit(() -> map.blockingLoadIfAbsent(key, () -> {
+             Throwable a = null;
+             if (extraAction != null)
+@@ -725,31 +414,6 @@
+ 
+     private Future<String> submitUnload(int key, String expectedValue, CyclicBarrier b, Throwables.DiscreteAction<?> extraAction)
+     {
+-<<<<<<<
+-=======
+-        return executor.submit(() -> {
+-            AtomicReference<String> removedValue = new AtomicReference<>();
+-            map.compute(key, (ignoredKey, v) -> {
+-                if (v == null)
+-                    return null;
+-                removedValue.set(v);
+-                assertThat(v).isEqualTo(expectedValue);
+-                Throwable t = null;
+-                if (extraAction != null)
+-                    t = Throwables.perform(t, extraAction);
+-                if (b != null)
+-                    t = Throwables.perform(t, b::await);
+-                if (t != null)
+-                    throw Throwables.unchecked(t);
+-                return null;
+-            });
+-            return removedValue.get();
+-        });
+-    }
+-
+-    private Future<String> submitUnload2(int key, String expectedValue, CyclicBarrier b, Throwables.DiscreteAction<?> extraAction)
+-    {
+->>>>>>>
+         return executor.submit(() -> map.blockingUnloadIfPresent(key, v -> {
+             assertThat(v).isEqualTo(expectedValue);
+             Throwable a = null;
+@@ -764,27 +428,15 @@
+ 
+     private void initMap()
+     {
+-<<<<<<<
+         map.blockingLoadIfAbsent(1, () -> "one");
+         map.blockingLoadIfAbsent(2, () -> "two");
+ 
+         assertThat(map.getIfReady(1)).isEqualTo("one");
+         assertThat(map.getIfReady(2)).isEqualTo("two");
+-=======
+-        map.compute(1, (ignoredKey, ignoredValue) -> "one");
+-        map.compute(2, (ignoredKey, ignoredValue) -> "two");
+-
+-        assertThat(map.get(1)).isEqualTo("one");
+-        assertThat(map.get(2)).isEqualTo("two");
+->>>>>>>
+     }
+ 
+     private ConditionFactory await()
+     {
+         return Awaitility.await().pollDelay(10, TimeUnit.MILLISECONDS).atMost(5, TimeUnit.SECONDS);
+     }
+-<<<<<<<
+-}
+-=======
+-}
+->>>>>>>
++}
+\ No newline at end of file
