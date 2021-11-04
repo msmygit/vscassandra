@@ -34,12 +34,12 @@ import java.util.concurrent.ScheduledFuture;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.MoreExecutors;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.concurrent.ImmediateExecutor;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.gms.ApplicationState;
@@ -136,7 +136,7 @@ public class MigrationCoordinatorTest
             when(versions.knows(any())).thenReturn(true);
             when(versions.getRaw(any())).thenReturn(MessagingService.current_version);
             this.coordinator = new MigrationCoordinator(messagingService,
-                                                        MoreExecutors.newDirectExecutorService(),
+                                                        ImmediateExecutor.INSTANCE,
                                                         oneTimeExecutor,
                                                         () -> ManagementFactory.getRuntimeMXBean().getUptime(),
                                                         maxOutstandingRequests,

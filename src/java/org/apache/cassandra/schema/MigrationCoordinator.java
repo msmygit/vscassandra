@@ -31,9 +31,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -47,6 +44,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+
+import org.apache.cassandra.concurrent.ExecutorPlus;
+import org.apache.cassandra.concurrent.FutureTask;
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +66,9 @@ import org.apache.cassandra.net.RequestCallback;
 import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.concurrent.ImmediateFuture;
 import org.apache.cassandra.utils.concurrent.WaitQueue;
+import org.apache.cassandra.utils.concurrent.Future;
 
 import static org.apache.cassandra.utils.Clock.Global.nanoTime;
 import static org.apache.cassandra.utils.concurrent.WaitQueue.newWaitQueue;
@@ -81,7 +83,7 @@ import static org.apache.cassandra.net.Verb.SCHEMA_PUSH_REQ;
 public class MigrationCoordinator
 {
     private static final Logger logger = LoggerFactory.getLogger(MigrationCoordinator.class);
-    private static final CompletableFuture<Void> FINISHED_FUTURE = CompletableFuture.completedFuture(null);
+    private static final Future<Void> FINISHED_FUTURE = ImmediateFuture.success(null);
 
     private static final int MIGRATION_DELAY_IN_MS = CassandraRelevantProperties.MIGRATION_DELAY.getInt();
     private static final int MAX_OUTSTANDING_VERSION_REQUESTS = 3;
@@ -179,7 +181,7 @@ public class MigrationCoordinator
     private final Map<InetAddressAndPort, UUID> endpointVersions = new HashMap<>();
     private final AtomicInteger inflightTasks = new AtomicInteger();
     private final Set<InetAddressAndPort> ignoredEndpoints = getIgnoredEndpoints();
-    private final ExecutorService executor;
+    private final ExecutorPlus executor;
     private final ScheduledExecutorService periodicCheckExecutor;
     private final MessagingService messagingService;
     private final AtomicReference<ScheduledFuture<?>> periodicPullTask = new AtomicReference<>();
@@ -196,7 +198,7 @@ public class MigrationCoordinator
      * @param periodicCheckExecutor executor on which the periodic checks are scheduled
      */
     MigrationCoordinator(MessagingService messagingService,
-                         ExecutorService executor,
+                         ExecutorPlus executor,
                          ScheduledExecutorService periodicCheckExecutor,
                          LongSupplier getUptimeFn,
                          int maxOutstandingVersionRequests,
@@ -221,15 +223,15 @@ public class MigrationCoordinator
                                                  : curTask);
     }
 
-    private synchronized List<CompletableFuture<Void>> pullUnreceivedSchemaVersions()
+    private synchronized List<Future<Void>> pullUnreceivedSchemaVersions()
     {
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        List<Future<Void>> futures = new ArrayList<>();
         for (VersionInfo info : versionInfo.values())
         {
             if (info.wasReceived() || info.outstandingRequests.size() > 0)
                 continue;
 
-            CompletableFuture<Void> future = maybePullSchema(info);
+            Future<Void> future = maybePullSchema(info);
             if (future != null && future != FINISHED_FUTURE)
                 futures.add(future);
         }
@@ -237,7 +239,7 @@ public class MigrationCoordinator
         return futures;
     }
 
-    private synchronized CompletableFuture<Void> maybePullSchema(VersionInfo info)
+    private synchronized Future<Void> maybePullSchema(VersionInfo info)
     {
         if (info.endpoints.isEmpty() || info.wasReceived() || !shouldPullSchema(info.version))
             return FINISHED_FUTURE;
@@ -368,7 +370,7 @@ public class MigrationCoordinator
         return !Objects.equals(schemaVersion.get(), info.version);
     }
 
-    public synchronized CompletableFuture<Void> reportEndpointVersion(InetAddressAndPort endpoint, UUID version)
+    public synchronized Future<Void> reportEndpointVersion(InetAddressAndPort endpoint, UUID version)
     {
         if (ignoredEndpoints.contains(endpoint) || IGNORED_VERSIONS.contains(version))
         {
@@ -393,7 +395,7 @@ public class MigrationCoordinator
         return maybePullSchema(info);
     }
 
-    public CompletableFuture<Void> reportEndpointVersion(InetAddressAndPort endpoint, EndpointState state)
+    public Future<Void> reportEndpointVersion(InetAddressAndPort endpoint, EndpointState state)
     {
         if (state == null)
             return FINISHED_FUTURE;
@@ -435,25 +437,28 @@ public class MigrationCoordinator
         }
     }
 
-    private CompletableFuture<Void> scheduleSchemaPull(InetAddressAndPort endpoint, VersionInfo info)
+    private Future<Void> scheduleSchemaPull(InetAddressAndPort endpoint, VersionInfo info)
     {
-        Executor submissionExecutor = shouldPullImmediately(endpoint, info.version)
-                                      ? this::submitToMigrationIfNotShutdown
-                                      : r -> ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(r), MIGRATION_DELAY_IN_MS, TimeUnit.MILLISECONDS);
+        FutureTask<Void> task = new FutureTask<>(() -> pullSchema(endpoint, new Callback(endpoint, info)));
 
-        return CompletableFuture.runAsync(() -> pullSchema(endpoint, new Callback(endpoint, info)), submissionExecutor);
+        if (shouldPullImmediately(endpoint, info.version))
+            submitToMigrationIfNotShutdown(task);
+        else
+            ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(task), MIGRATION_DELAY_IN_MS, TimeUnit.MILLISECONDS);
+
+        return task;
     }
 
-    private CompletableFuture<Void> submitToMigrationIfNotShutdown(Runnable task)
+    private Future<Void> submitToMigrationIfNotShutdown(Runnable task)
     {
         if (executor.isShutdown() || executor.isTerminated())
         {
             logger.info("Skipped scheduled pulling schema from other nodes: the MIGRATION executor service has been shutdown.");
-            return CompletableFuture.completedFuture(null);
+            return ImmediateFuture.success(null);
         }
         else
         {
-            return CompletableFuture.runAsync(task, executor);
+            return executor.submit(task, null);
         }
     }
 
@@ -473,7 +478,7 @@ public class MigrationCoordinator
             fail();
         }
 
-        CompletableFuture<Void> fail()
+        Future<Void> fail()
         {
             return pullComplete(endpoint, info, false);
         }
@@ -483,7 +488,7 @@ public class MigrationCoordinator
             response(message.payload);
         }
 
-        CompletableFuture<Void> response(Collection<Mutation> mutations)
+        Future<Void> response(Collection<Mutation> mutations)
         {
             synchronized (info)
             {
@@ -567,7 +572,7 @@ public class MigrationCoordinator
         });
     }
 
-    private synchronized CompletableFuture<Void> pullComplete(InetAddressAndPort endpoint, VersionInfo info, boolean wasSuccessful)
+    private synchronized Future<Void> pullComplete(InetAddressAndPort endpoint, VersionInfo info, boolean wasSuccessful)
     {
         if (wasSuccessful)
             info.markReceived();
@@ -655,9 +660,9 @@ public class MigrationCoordinator
                && messagingService.versions.getRaw(endpoint) == MessagingService.current_version;
     }
 
-    public CompletableFuture<?> announceWithoutPush(Collection<Mutation> schema)
+    public Future<?> announceWithoutPush(Collection<Mutation> schema)
     {
-        return CompletableFuture.runAsync(() -> schemaUpdateCallback.accept(null, schema), executor);
+        return executor.submit(() -> schemaUpdateCallback.accept(null, schema));
     }
 
 }

@@ -17,10 +17,9 @@
  */
 package org.apache.cassandra.schema;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
+import java.util.Set;
 
-import org.apache.cassandra.utils.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +31,7 @@ import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.concurrent.Future;
 
 import static org.apache.cassandra.concurrent.Stage.MIGRATION;
 
@@ -84,7 +84,7 @@ public class MigrationManager
         for (InetAddressAndPort node : liveEndpoints)
         {
             EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(node);
-            CompletableFuture<Void> pull = MigrationCoordinator.instance.reportEndpointVersion(node, state);
+            Future<Void> pull = MigrationCoordinator.instance.reportEndpointVersion(node, state);
             if (pull != null)
                 FBUtilities.waitOnFuture(pull);
         }
