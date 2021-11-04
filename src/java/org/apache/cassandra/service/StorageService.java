@@ -5409,12 +5409,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public List<String> getKeyspaces()
     {
-        return Lists.newArrayList(Schema.instance.sharedAndLocalKeyspaces().names());
+        return Lists.newArrayList(Schema.instance.distributedAndLocalKeyspaces().names());
     }
 
     public List<String> getNonSystemKeyspaces()
     {
-        return Lists.newArrayList(Schema.instance.sharedKeyspaces().names());
+        return Lists.newArrayList(Schema.instance.distributedKeyspaces().names());
     }
 
     public List<String> getNonLocalStrategyKeyspaces()

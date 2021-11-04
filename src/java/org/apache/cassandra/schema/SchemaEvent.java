@@ -101,18 +101,18 @@ public final class SchemaEvent extends DiagnosticEvent
         this.viewsDiff = viewsDiff;
         this.indexesDiff = indexesDiff;
 
-        this.keyspaces = schema.sharedAndLocalKeyspaces().names();
-        this.nonSystemKeyspaces = schema.sharedKeyspaces().names();
+        this.keyspaces = schema.distributedAndLocalKeyspaces().names();
+        this.nonSystemKeyspaces = schema.distributedKeyspaces().names();
         this.userKeyspaces = schema.getUserKeyspaces().names();
         this.numberOfTables = schema.getNumberOfTables();
         this.version = schema.getVersion();
 
-        this.indexTables = schema.sharedKeyspaces().stream()
+        this.indexTables = schema.distributedKeyspaces().stream()
                                  .flatMap(ks -> ks.tables.indexTables().entrySet().stream())
                                  .collect(Collectors3.toImmutableMap(e -> String.format("%s,%s", e.getValue().keyspace, e.getKey()),
                                                                      e -> String.format("%s,%s,%s", e.getValue().id.toHexString(), e.getValue().keyspace, e.getValue().name)));
 
-        this.tables = schema.sharedKeyspaces().stream()
+        this.tables = schema.distributedKeyspaces().stream()
                             .flatMap(ks -> StreamSupport.stream(ks.tablesAndViews().spliterator(), false))
                             .map(e -> String.format("%s,%s,%s", e.id.toHexString(), e.keyspace, e.name))
                             .collect(Collectors3.toImmutableList());
