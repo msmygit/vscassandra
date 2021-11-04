@@ -26,11 +26,11 @@ import com.google.common.base.Preconditions;
 /**
  * Immutable snapshot of the current schema along with its version.
  */
-public class SharedSchema
+public class DistributedSchema
 {
     private final Keyspaces keyspaces;
 
-    public SharedSchema(Keyspaces keyspaces)
+    public DistributedSchema(Keyspaces keyspaces)
     {
         Objects.requireNonNull(keyspaces);
         this.keyspaces = keyspaces;
@@ -60,7 +60,7 @@ public class SharedSchema
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        SharedSchema schema = (SharedSchema) o;
+        DistributedSchema schema = (DistributedSchema) o;
         return keyspaces.equals(schema.keyspaces);
     }
 

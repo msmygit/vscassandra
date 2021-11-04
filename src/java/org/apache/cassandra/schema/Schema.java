@@ -54,7 +54,7 @@ public final class Schema implements SchemaProvider
 {
     public static final Schema instance = new Schema();
 
-    private volatile Keyspaces sharedKeyspaces = Keyspaces.none();
+    private volatile Keyspaces distributedKeyspaces = Keyspaces.none();
 
     private volatile TableMetadataRefCache tableMetadataRefCache = TableMetadataRefCache.EMPTY;
 
@@ -138,14 +138,14 @@ public final class Schema implements SchemaProvider
      */
     synchronized public void load(KeyspaceMetadata ksm)
     {
-        KeyspaceMetadata previous = sharedKeyspaces.getNullable(ksm.name);
+        KeyspaceMetadata previous = distributedKeyspaces.getNullable(ksm.name);
 
         if (previous == null)
             loadNew(ksm);
         else
             reload(previous, ksm);
 
-        sharedKeyspaces = sharedKeyspaces.withAddedOrUpdated(ksm);
+        distributedKeyspaces = distributedKeyspaces.withAddedOrUpdated(ksm);
     }
 
     private synchronized void loadNew(KeyspaceMetadata ksm)
@@ -238,7 +238,7 @@ public final class Schema implements SchemaProvider
 
     public Keyspaces snapshot()
     {
-        return sharedKeyspaces;
+        return distributedKeyspaces;
     }
 
     /**
@@ -261,7 +261,7 @@ public final class Schema implements SchemaProvider
      */
     synchronized void unload(KeyspaceMetadata ksm)
     {
-        sharedKeyspaces = sharedKeyspaces.without(ksm.name);
+        distributedKeyspaces = distributedKeyspaces.without(ksm.name);
 
         this.tableMetadataRefCache = tableMetadataRefCache.withRemovedRefs(ksm);
 
@@ -270,13 +270,13 @@ public final class Schema implements SchemaProvider
 
     public int getNumberOfTables()
     {
-        return sharedKeyspaces.stream().mapToInt(k -> size(k.tablesAndViews())).sum();
+        return distributedKeyspaces.stream().mapToInt(k -> size(k.tablesAndViews())).sum();
     }
 
     public ViewMetadata getView(String keyspaceName, String viewName)
     {
         assert keyspaceName != null;
-        KeyspaceMetadata ksm = sharedKeyspaces.getNullable(keyspaceName);
+        KeyspaceMetadata ksm = distributedKeyspaces.getNullable(keyspaceName);
         return (ksm == null) ? null : ksm.views.getNullable(viewName);
     }
 
@@ -291,13 +291,13 @@ public final class Schema implements SchemaProvider
     public KeyspaceMetadata getKeyspaceMetadata(String keyspaceName)
     {
         assert keyspaceName != null;
-        KeyspaceMetadata keyspace = sharedKeyspaces.getNullable(keyspaceName);
+        KeyspaceMetadata keyspace = distributedKeyspaces.getNullable(keyspaceName);
         return null != keyspace ? keyspace : VirtualKeyspaceRegistry.instance.getKeyspaceMetadataNullable(keyspaceName);
     }
 
     private Set<String> getNonSystemKeyspacesSet()
     {
-        return Sets.difference(sharedKeyspaces.names(), SchemaConstants.LOCAL_SYSTEM_KEYSPACE_NAMES);
+        return Sets.difference(distributedKeyspaces.names(), SchemaConstants.LOCAL_SYSTEM_KEYSPACE_NAMES);
     }
 
     /**
@@ -315,10 +315,10 @@ public final class Schema implements SchemaProvider
      */
     public List<String> getNonLocalStrategyKeyspaces()
     {
-        return sharedKeyspaces.stream()
-                              .filter(keyspace -> keyspace.params.replication.klass != LocalStrategy.class)
-                              .map(keyspace -> keyspace.name)
-                              .collect(Collectors.toList());
+        return distributedKeyspaces.stream()
+                                   .filter(keyspace -> keyspace.params.replication.klass != LocalStrategy.class)
+                                   .map(keyspace -> keyspace.name)
+                                   .collect(Collectors.toList());
     }
 
     /**
@@ -339,7 +339,7 @@ public final class Schema implements SchemaProvider
     public Iterable<TableMetadata> getTablesAndViews(String keyspaceName)
     {
         assert keyspaceName != null;
-        KeyspaceMetadata ksm = sharedKeyspaces.getNullable(keyspaceName);
+        KeyspaceMetadata ksm = distributedKeyspaces.getNullable(keyspaceName);
         assert ksm != null;
         return ksm.tablesAndViews();
     }
@@ -349,7 +349,7 @@ public final class Schema implements SchemaProvider
      */
     public ImmutableSet<String> getKeyspaces()
     {
-        return sharedKeyspaces.names();
+        return distributedKeyspaces.names();
     }
 
     /* TableMetadata/Ref query/control methods */
@@ -415,7 +415,7 @@ public final class Schema implements SchemaProvider
     @Override
     public TableMetadata getTableMetadata(TableId id)
     {
-        TableMetadata table = sharedKeyspaces.getTableOrViewNullable(id);
+        TableMetadata table = distributedKeyspaces.getTableOrViewNullable(id);
         return null != table ? table : VirtualKeyspaceRegistry.instance.getTableMetadataNullable(id);
     }
 
@@ -553,7 +553,7 @@ public final class Schema implements SchemaProvider
      */
     public synchronized void reloadSchemaAndAnnounceVersion()
     {
-        Keyspaces before = sharedKeyspaces.filter(k -> !SchemaConstants.isLocalSystemKeyspace(k.name));
+        Keyspaces before = distributedKeyspaces.filter(k -> !SchemaConstants.isLocalSystemKeyspace(k.name));
         Keyspaces after = SchemaKeyspace.fetchNonSystemKeyspaces();
         merge(Keyspaces.diff(before, after));
         updateVersionAndAnnounce();
@@ -579,12 +579,12 @@ public final class Schema implements SchemaProvider
     public synchronized SchemaTransformationResult transform(SchemaTransformation transformation, boolean locally, long now) throws UnknownHostException
     {
         KeyspacesDiff diff;
-        Keyspaces before = sharedKeyspaces;
+        Keyspaces before = distributedKeyspaces;
         Keyspaces after = transformation.apply(before);
         diff = Keyspaces.diff(before, after);
 
         if (diff.isEmpty())
-            return new SchemaTransformationResult(new SharedSchema(before), new SharedSchema(after), diff, Collections.emptyList());
+            return new SchemaTransformationResult(new DistributedSchema(before), new DistributedSchema(after), diff, Collections.emptyList());
 
         Collection<Mutation> mutations = SchemaKeyspace.convertSchemaDiffToMutations(diff, now);
         SchemaKeyspace.applyChanges(mutations);
@@ -594,7 +594,7 @@ public final class Schema implements SchemaProvider
         if (!locally)
             passiveAnnounceVersion();
 
-        return new SchemaTransformationResult(new SharedSchema(before), new SharedSchema(after), diff, mutations);
+        return new SchemaTransformationResult(new DistributedSchema(before), new DistributedSchema(after), diff, mutations);
     }
 
     /**
@@ -606,7 +606,7 @@ public final class Schema implements SchemaProvider
         Set<String> affectedKeyspaces = SchemaKeyspace.affectedKeyspaces(mutations);
 
         // fetch the current state of schema for the affected keyspaces only
-        Keyspaces before = sharedKeyspaces.filter(k -> affectedKeyspaces.contains(k.name));
+        Keyspaces before = distributedKeyspaces.filter(k -> affectedKeyspaces.contains(k.name));
 
         // apply the schema mutations
         SchemaKeyspace.applyChanges(mutations);

@@ -39,12 +39,12 @@ public interface SchemaTransformation
      */
     class SchemaTransformationResult
     {
-        public final SharedSchema before;
-        public final SharedSchema after;
+        public final DistributedSchema before;
+        public final DistributedSchema after;
         public final Keyspaces.KeyspacesDiff diff;
         public final Collection<Mutation> mutations;
 
-        public SchemaTransformationResult(SharedSchema before, SharedSchema after, Keyspaces.KeyspacesDiff diff, Collection<Mutation> mutations)
+        public SchemaTransformationResult(DistributedSchema before, DistributedSchema after, Keyspaces.KeyspacesDiff diff, Collection<Mutation> mutations)
         {
             this.before = before;
             this.after = after;
