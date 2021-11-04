@@ -1,10 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,16 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.io;
+package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.LongBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.store.AlreadyClosedException;
 
 /**
- * A guard that is created for every {@link ByteBufferIndexInput} that tries on best effort
+ * A guard that is created for every {@link org.apache.lucene.store.ByteBufferIndexInput} that tries on best effort
  * to reject any access to the {@link ByteBuffer} behind, once it is unmapped. A single instance
  * of this is used for the original and all clones, so once the original is closed and unmapped
  * all clones also throw {@link AlreadyClosedException}, triggered by a {@link NullPointerException}.
@@ -31,14 +33,14 @@ import org.apache.lucene.store.AlreadyClosedException;
  * This code tries to hopefully flush any CPU caches using a store-store barrier. It also yields the
  * current thread to give other threads a chance to finish in-flight requests...
  */
-final class ByteBufferGuard {
+public final class ByteBufferGuard {
   
   /**
    * Pass in an implementation of this interface to cleanup ByteBuffers.
    * MMapDirectory implements this to allow unmapping of bytebuffers with private Java APIs.
    */
   @FunctionalInterface
-  static interface BufferCleaner {
+  public static interface BufferCleaner {
     void freeBuffer(String resourceDescription, ByteBuffer b) throws IOException;
   }
   
@@ -52,7 +54,7 @@ final class ByteBufferGuard {
   private final AtomicInteger barrier = new AtomicInteger();
   
   /**
-   * Creates an instance to be used for a single {@link ByteBufferIndexInput} which
+   * Creates an instance to be used for a single {@link org.apache.lucene.store.ByteBufferIndexInput} which
    * must be shared by all of its clones.
    */
   public ByteBufferGuard(String resourceDescription, BufferCleaner cleaner) {
@@ -134,5 +136,10 @@ final class ByteBufferGuard {
     ensureValid();
     return receiver.getLong(pos);
   }
-    
+
+  public void getLongs(LongBuffer receiver, long[] dst, int offset, int length) {
+    ensureValid();
+    receiver.get(dst, offset, length);
+  }
+
 }

@@ -1,10 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,16 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.io;
+package org.apache.cassandra.index.sai.disk.v2;
 
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.LongBuffer;
 
 import org.apache.lucene.store.AlreadyClosedException;
-import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 
 /**
@@ -37,8 +39,10 @@ import org.apache.lucene.store.RandomAccessInput;
  * For efficiency, this class requires that the buffers
  * are a power-of-two (<code>chunkSizePower</code>).
  */
-abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessInput
+public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements RandomAccessInput
 {
+  private static final LongBuffer EMPTY_LONGBUFFER = LongBuffer.allocate(0);
+
   protected final long length;
   protected final long chunkSizeMask;
   protected final int chunkSizePower;
@@ -47,6 +51,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
   protected ByteBuffer[] buffers;
   protected int curBufIndex = -1;
   protected ByteBuffer curBuf; // redundant for speed: buffers[curBufIndex]
+  private LongBuffer[] curLongBufferViews;
 
   protected boolean isClone = false;
   
@@ -68,7 +73,12 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
     assert chunkSizePower >= 0 && chunkSizePower <= 30;   
     assert (length >>> chunkSizePower) < Integer.MAX_VALUE;
   }
-  
+
+  protected void setCurBuf(ByteBuffer curBuf) {
+    this.curBuf = curBuf;
+    curLongBufferViews = null;
+  }
+
   @Override
   public final byte readByte() throws IOException {
     try {
@@ -79,7 +89,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
         if (curBufIndex >= buffers.length) {
           throw new EOFException("read past EOF: " + this);
         }
-        curBuf = buffers[curBufIndex];
+        setCurBuf(buffers[curBufIndex]);
         curBuf.position(0);
       } while (!curBuf.hasRemaining());
       return guard.getByte(curBuf);
@@ -102,11 +112,49 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
         if (curBufIndex >= buffers.length) {
           throw new EOFException("read past EOF: " + this);
         }
-        curBuf = buffers[curBufIndex];
+        setCurBuf(buffers[curBufIndex]);
         curBuf.position(0);
         curAvail = curBuf.remaining();
       }
       guard.getBytes(curBuf, b, offset, len);
+    } catch (NullPointerException npe) {
+      throw new AlreadyClosedException("Already closed: " + this);
+    }
+  }
+
+  @Override
+  public void readLELongs(long[] dst, int offset, int length) throws IOException {
+    // ByteBuffer#getLong could work but it has some per-long overhead and there
+    // is no ByteBuffer#getLongs to read multiple longs at once. So we use the
+    // below trick in order to be able to leverage LongBuffer#get(long[]) to
+    // read multiple longs at once with as little overhead as possible.
+    if (curLongBufferViews == null) {
+      // readLELongs is only used for postings today, so we compute the long
+      // views lazily so that other data-structures don't have to pay for the
+      // associated initialization/memory overhead.
+      curLongBufferViews = new LongBuffer[Long.BYTES];
+      for (int i = 0; i < Long.BYTES; ++i) {
+        // Compute a view for each possible alignment. We cache these views
+        // because #asLongBuffer() has some cost that we don't want to pay on
+        // each invocation of #readLELongs.
+        if (i < curBuf.limit()) {
+          ByteBuffer dup = curBuf.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+          dup.position(i);
+          curLongBufferViews[i] = dup.asLongBuffer();
+        } else {
+          curLongBufferViews[i] = EMPTY_LONGBUFFER;
+        }
+      }
+    }
+    try {
+      final int position = curBuf.position();
+      LongBuffer longBuffer = curLongBufferViews[position & 0x07];
+      longBuffer.position(position >>> 3);
+      guard.getLongs(longBuffer, dst, offset, length);
+      // if the above call succeeded, then we know the below sum cannot overflow
+      curBuf.position(position + (length << 3));
+    } catch (BufferUnderflowException e) {
+      super.readLELongs(dst, offset, length);
     } catch (NullPointerException npe) {
       throw new AlreadyClosedException("Already closed: " + this);
     }
@@ -167,7 +215,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
         b.position((int) (pos & chunkSizeMask));
         // write values, on exception all is unchanged
         this.curBufIndex = bi;
-        this.curBuf = b;
+        setCurBuf(b);
       }
     } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
       throw new EOFException("seek past EOF: " + this);
@@ -194,7 +242,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
       final ByteBuffer b = buffers[bi];
       b.position((int) (pos & chunkSizeMask));
       this.curBufIndex = bi;
-      this.curBuf = b;
+      setCurBuf(b);
     } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException aioobe) {
       throw new EOFException("seek past EOF: " + this);
     } catch (NullPointerException npe) {
@@ -346,6 +394,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
     buffers = null;
     curBuf = null;
     curBufIndex = 0;
+    curLongBufferViews = null;
   }
   
   /** Optimization of ByteBufferIndexInput for when there is only one buffer */
@@ -354,7 +403,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
     SingleBufferImpl(String resourceDescription, ByteBuffer buffer, long length, int chunkSizePower, ByteBufferGuard guard) {
       super(resourceDescription, new ByteBuffer[] { buffer }, length, chunkSizePower, guard);
       this.curBufIndex = 0;
-      this.curBuf = buffer;
+      setCurBuf(buffer);
       buffer.position(0);
     }
     
@@ -443,6 +492,7 @@ abstract class ByteBufferIndexInput extends IndexInput implements RandomAccessIn
         throw new AlreadyClosedException("Already closed: " + this);
       }
     }
+
   }
   
   /** This class adds offset support to ByteBufferIndexInput, which is needed for slices. */

@@ -52,6 +52,9 @@ import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.NumericValuesMeta;
 import org.apache.cassandra.index.sai.disk.v1.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v1.TrieTermsDictionaryWriter;
+import org.apache.cassandra.index.sai.disk.v2.ByteBufferGuard;
+import org.apache.cassandra.index.sai.disk.v2.ByteBufferIndexInput;
+import org.apache.cassandra.index.sai.disk.v2.Lucene8xIndexInput;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Component;
@@ -65,7 +68,6 @@ import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.SuppressForbidden;
@@ -505,7 +507,7 @@ public class IndexComponents
 
     private boolean useUnmapHack = UNMAP_SUPPORTED;
 
-    public IndexInput openLuceneInput(FileHandle handle) throws IOException
+    public Lucene8xIndexInput openLuceneInput(FileHandle handle) throws IOException
     {
         if (DEFAULT_MAX_CHUNK_SIZE <= 0)
         {
