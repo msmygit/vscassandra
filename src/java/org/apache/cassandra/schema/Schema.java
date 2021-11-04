@@ -55,7 +55,7 @@ public final class Schema implements SchemaProvider
 
     private volatile Keyspaces keyspaces = Keyspaces.none();
 
-    private final TableMetadataRefCache tableMetadataRefCache = new TableMetadataRefCache();
+    private volatile TableMetadataRefCache tableMetadataRefCache = TableMetadataRefCache.EMPTY;
 
     // Keyspace objects, one per keyspace. Only one instance should ever exist for any given keyspace.
     private final Map<String, Keyspace> keyspaceInstances = new NonBlockingHashMap<>();
@@ -147,14 +147,14 @@ public final class Schema implements SchemaProvider
         keyspaces = keyspaces.withAddedOrUpdated(ksm);
     }
 
-    private void loadNew(KeyspaceMetadata ksm)
+    private synchronized void loadNew(KeyspaceMetadata ksm)
     {
-        tableMetadataRefCache.addNewRefs(ksm);
+        this.tableMetadataRefCache = tableMetadataRefCache.withNewRefs(ksm);
 
         SchemaDiagnostics.metadataInitialized(this, ksm);
     }
 
-    private void reload(KeyspaceMetadata previous, KeyspaceMetadata updated)
+    private synchronized void reload(KeyspaceMetadata previous, KeyspaceMetadata updated)
     {
         Keyspace keyspace = getKeyspaceInstance(updated.name);
         if (null != keyspace)
@@ -165,7 +165,7 @@ public final class Schema implements SchemaProvider
 
         MapDifference<String, TableMetadata> indexesDiff = previous.tables.indexesDiff(updated.tables);
 
-        tableMetadataRefCache.updateRefs(previous, updated);
+        this.tableMetadataRefCache = tableMetadataRefCache.withUpdatedRefs(previous, updated);
 
         SchemaDiagnostics.metadataReloaded(this, previous, updated, tablesDiff, viewsDiff, indexesDiff);
     }
@@ -262,7 +262,7 @@ public final class Schema implements SchemaProvider
     {
         keyspaces = keyspaces.without(ksm.name);
 
-        tableMetadataRefCache.removeRefs(ksm);
+        this.tableMetadataRefCache = tableMetadataRefCache.withRemovedRefs(ksm);
 
         SchemaDiagnostics.metadataRemoved(this, ksm);
     }

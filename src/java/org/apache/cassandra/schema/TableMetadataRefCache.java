@@ -18,10 +18,11 @@
 
 package org.apache.cassandra.schema;
 
+import java.util.Collections;
 import java.util.Map;
 
 import com.google.common.collect.MapDifference;
-import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import com.google.common.collect.Maps;
 
 import org.apache.cassandra.utils.Pair;
 
@@ -34,51 +35,65 @@ import org.apache.cassandra.utils.Pair;
  */
 class TableMetadataRefCache
 {
+    public final static TableMetadataRefCache EMPTY = new TableMetadataRefCache(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+
     // UUID -> mutable metadata ref map. We have to update these in place every time a table changes.
-    private final Map<TableId, TableMetadataRef> metadataRefs = new NonBlockingHashMap<>();
+    private final Map<TableId, TableMetadataRef> metadataRefs;
 
     // keyspace and table names -> mutable metadata ref map.
-    private final Map<Pair<String, String>, TableMetadataRef> metadataRefsByName = new NonBlockingHashMap<>();
+    private final Map<Pair<String, String>, TableMetadataRef> metadataRefsByName;
 
     // (keyspace name, index name) -> mutable metadata ref map. We have to update these in place every time an index changes.
-    private final Map<Pair<String, String>, TableMetadataRef> indexMetadataRefs = new NonBlockingHashMap<>();
+    private final Map<Pair<String, String>, TableMetadataRef> indexMetadataRefs;
 
-    /**
-     * Adds the {@link TableMetadataRef} corresponding to the provided keyspace to {@link #metadataRefs} and
-     * {@link #indexMetadataRefs}, assuming the keyspace is new (in the sense of not being tracked by the manager yet).
-     */
-    synchronized void addNewRefs(KeyspaceMetadata ksm)
+    public TableMetadataRefCache(Map<TableId, TableMetadataRef> metadataRefs,
+                                 Map<Pair<String, String>, TableMetadataRef> metadataRefsByName,
+                                 Map<Pair<String, String>, TableMetadataRef> indexMetadataRefs)
     {
-        ksm.tablesAndViews()
-           .forEach(metadata -> putRef(new TableMetadataRef(metadata)));
-
-        ksm.tables.indexTables()
-                  .forEach((name, metadata) -> indexMetadataRefs.put(Pair.create(ksm.name, name), new TableMetadataRef(metadata)));
+        this.metadataRefs = Collections.unmodifiableMap(metadataRefs);
+        this.metadataRefsByName = Collections.unmodifiableMap(metadataRefsByName);
+        this.indexMetadataRefs = Collections.unmodifiableMap(indexMetadataRefs);
     }
 
     /**
-     * Updates the {@link TableMetadataRef} in {@link #metadataRefs} and {@link #indexMetadataRefs}, for an
-     * existing updated keyspace given it's previous and new definition.
+     * Returns cache copy with added the {@link TableMetadataRef} corresponding to the provided keyspace to {@link #metadataRefs} and
+     * {@link #indexMetadataRefs}, assuming the keyspace is new (in the sense of not being tracked by the manager yet).
      */
-    synchronized void updateRefs(KeyspaceMetadata previous, KeyspaceMetadata updated)
+    TableMetadataRefCache withNewRefs(KeyspaceMetadata ksm)
+    {
+        return withUpdatedRefs(ksm.empty(), ksm);
+    }
+
+    /**
+     * Returns cache copy with updated the {@link TableMetadataRef} in {@link #metadataRefs} and {@link #indexMetadataRefs},
+     * for an existing updated keyspace given it's previous and new definition.
+     * <p>
+     * Note that {@link TableMetadataRef} are not duplicated and table metadata is altered in the existing refs.
+     */
+    TableMetadataRefCache withUpdatedRefs(KeyspaceMetadata previous, KeyspaceMetadata updated)
     {
         Tables.TablesDiff tablesDiff = Tables.diff(previous.tables, updated.tables);
         Views.ViewsDiff viewsDiff = Views.diff(previous.views, updated.views);
 
         MapDifference<String, TableMetadata> indexesDiff = previous.tables.indexesDiff(updated.tables);
 
-        // clean up after removed entries
-        tablesDiff.dropped.forEach(this::removeRef);
-        viewsDiff.dropped.forEach(view -> removeRef(view.metadata));
+        boolean hasCreatedOrDroppedTablesOrViews = tablesDiff.created.size() > 0 || tablesDiff.dropped.size() > 0 || viewsDiff.created.size() > 0 || viewsDiff.dropped.size() > 0;
+        boolean hasCreatedOrDroppedIndexes = !indexesDiff.entriesOnlyOnRight().isEmpty() || !indexesDiff.entriesOnlyOnLeft().isEmpty();
 
+        Map<TableId, TableMetadataRef> metadataRefs = hasCreatedOrDroppedTablesOrViews ? Maps.newHashMap(this.metadataRefs) : this.metadataRefs;
+        Map<Pair<String, String>, TableMetadataRef> metadataRefsByName = hasCreatedOrDroppedTablesOrViews ? Maps.newHashMap(this.metadataRefsByName) : this.metadataRefsByName;
+        Map<Pair<String, String>, TableMetadataRef> indexMetadataRefs = hasCreatedOrDroppedIndexes ? Maps.newHashMap(this.indexMetadataRefs) : this.indexMetadataRefs;
+
+        // clean up after removed entries
+        tablesDiff.dropped.forEach(ref -> removeRef(metadataRefs, metadataRefsByName, ref));
+        viewsDiff.dropped.forEach(view -> removeRef(metadataRefs, metadataRefsByName, view.metadata));
         indexesDiff.entriesOnlyOnLeft()
                    .values()
                    .forEach(indexTable -> indexMetadataRefs.remove(Pair.create(indexTable.keyspace, indexTable.indexName().get())));
 
         // load up new entries
-        tablesDiff.created.forEach(table -> putRef(new TableMetadataRef(table)));
-        viewsDiff.created.forEach(view -> putRef(new TableMetadataRef(view.metadata)));
-
+        tablesDiff.created.forEach(table -> putRef(metadataRefs, metadataRefsByName, new TableMetadataRef(table)));
+        viewsDiff.created.forEach(view -> putRef(metadataRefs, metadataRefsByName, new TableMetadataRef(view.metadata)));
         indexesDiff.entriesOnlyOnRight()
                    .values()
                    .forEach(indexTable -> indexMetadataRefs.put(Pair.create(indexTable.keyspace, indexTable.indexName().get()), new TableMetadataRef(indexTable)));
@@ -86,38 +101,38 @@ class TableMetadataRefCache
         // refresh refs to updated ones
         tablesDiff.altered.forEach(diff -> metadataRefs.get(diff.after.id).set(diff.after));
         viewsDiff.altered.forEach(diff -> metadataRefs.get(diff.after.metadata.id).set(diff.after.metadata));
-
         indexesDiff.entriesDiffering()
                    .values()
                    .stream()
                    .map(MapDifference.ValueDifference::rightValue)
                    .forEach(indexTable -> indexMetadataRefs.get(Pair.create(indexTable.keyspace, indexTable.indexName().get())).set(indexTable));
+
+        return new TableMetadataRefCache(metadataRefs, metadataRefsByName, indexMetadataRefs);
     }
 
-    private void putRef(TableMetadataRef ref)
+    private void putRef(Map<TableId, TableMetadataRef> metadataRefs,
+                        Map<Pair<String, String>, TableMetadataRef> metadataRefsByName,
+                        TableMetadataRef ref)
     {
         metadataRefs.put(ref.id, ref);
         metadataRefsByName.put(Pair.create(ref.keyspace, ref.name), ref);
     }
 
-    private void removeRef(TableMetadata tm)
+    private void removeRef(Map<TableId, TableMetadataRef> metadataRefs,
+                           Map<Pair<String, String>, TableMetadataRef> metadataRefsByName,
+                           TableMetadata tm)
     {
         metadataRefs.remove(tm.id);
         metadataRefsByName.remove(Pair.create(tm.keyspace, tm.name));
     }
 
     /**
-     * Removes the {@link TableMetadataRef} from {@link #metadataRefs} and {@link #indexMetadataRefs} for the provided
-     * (dropped) keyspace.
+     * Returns cache copy with removed the {@link TableMetadataRef} from {@link #metadataRefs} and {@link #indexMetadataRefs}
+     * for the provided (dropped) keyspace.
      */
-    synchronized void removeRefs(KeyspaceMetadata ksm)
+    TableMetadataRefCache withRemovedRefs(KeyspaceMetadata ksm)
     {
-        ksm.tablesAndViews()
-           .forEach(this::removeRef);
-
-        ksm.tables.indexTables()
-                  .keySet()
-                  .forEach(name -> indexMetadataRefs.remove(Pair.create(ksm.name, name)));
+        return withUpdatedRefs(ksm, ksm.empty());
     }
 
     public TableMetadataRef getTableMetadataRef(TableId id)
