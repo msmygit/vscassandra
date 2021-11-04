@@ -492,6 +492,7 @@ public class IndexComponents
         try (final FileHandle.Builder builder = new FileHandle.Builder(file.getAbsolutePath()))
         {
             final FileHandle fileHandle = builder.complete();
+            
             final RandomAccessReader randomReader = fileHandle.createReader();
 
             return IndexInputReader.create(randomReader, fileHandle::close);

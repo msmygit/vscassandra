@@ -32,24 +32,21 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
-import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.IntPoint;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
-import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TopFieldCollector;
 import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.store.FSDirectory;
@@ -78,7 +75,7 @@ import org.openjdk.jmh.annotations.Warmup;
 @Fork(value = 1)
 @Threads(1)
 @State(Scope.Benchmark)
-public class SAILuceneQueryTest extends CQLTester
+public class SAILuceneRangeANDRangeQueryTest extends CQLTester
 {
     public static int ROWS = 1_000_000;
 
@@ -106,7 +103,7 @@ public class SAILuceneQueryTest extends CQLTester
 
         execute("USE "+keyspace+";");
         writeStatement = "INSERT INTO "+table+" (key, columnA, columnB) VALUES (?, ?, ?)";
-        readStatement = "SELECT * FROM "+table+" WHERE columnA = ? AND columnB = ? LIMIT 10";
+        readStatement = "SELECT * FROM "+table+" WHERE columnA >= ? AND columnA <= ? AND columnB >= ? AND columnB <= ? LIMIT 10";
 
         cfs = Keyspace.open(keyspace).getColumnFamilyStore(table);
         cfs.disableAutoCompaction();
@@ -114,7 +111,6 @@ public class SAILuceneQueryTest extends CQLTester
         Path luceneDir = Files.createTempDirectory("jmh_lucene_test");
         directory = FSDirectory.open(luceneDir);
         IndexWriterConfig config = new IndexWriterConfig(new KeywordAnalyzer());
-        config.setMergePolicy(NoMergePolicy.INSTANCE);
         config.setRAMBufferSizeMB(1000);
         IndexWriter indexWriter = new IndexWriter(directory, config);
 
@@ -136,6 +132,11 @@ public class SAILuceneQueryTest extends CQLTester
             colBValues[i] = columnBValue;
 
             execute(writeStatement, i, columnAValue, columnBValue);
+
+//            if (i % (ROWS / 10) == 0)
+//            {
+//                flush(keyspace);
+//            }
         }
 
         long saiIndexingDuration = System.currentTimeMillis() - saiIndexStart;
@@ -147,38 +148,36 @@ public class SAILuceneQueryTest extends CQLTester
             int columnAValue = colAValues[i];
             int columnBValue = colBValues[i];
 
-            // using strings here because otherwise we're testing
-            // against lucene's kdtree which uses a bitset
-            // which is not exactly a same same comparison
-            StringField key = new StringField("key", Integer.toString(i), Field.Store.YES);
-            StringField columnA = new StringField("columnA", Integer.toString(columnAValue), Field.Store.YES);
-            StringField columnB = new StringField("columnB", Integer.toString(columnBValue), Field.Store.YES);
-
             document.clear();
-            document.add(key);
-            document.add(columnA);
-            document.add(columnB);
-
+            document.add(new StringField("key", Integer.toString(i), Field.Store.YES));
+            document.add(new IntPoint("columnA", columnAValue));
+            document.add(new IntPoint("columnB", columnBValue));
+            document.add(new StoredField("columnA", columnAValue));
+            document.add(new StoredField("columnB", columnBValue));
             indexWriter.addDocument(document);
 
             // create 100 segments
             // create 100 sstable indexes
-//            if (i % 100_000 == 0)
+
+//            if (i % (ROWS / 10) == 0)
 //            {
 //                indexWriter.flush();
-//                flush(keyspace);
 //            }
         }
 
         long luceneIndexingDuration = System.currentTimeMillis() - luceneIndexingStart;
 
-        System.out.println("saiIndexingDuration="+saiIndexingDuration+" luceneIndexingDuration="+luceneIndexingDuration);
-
-        indexWriter.flush();
+        long luceneMergeStart = System.currentTimeMillis();
         indexWriter.forceMerge(1);
+        long luceneMergeDuration = System.currentTimeMillis() - luceneMergeStart;
+
         indexWriter.close();
 
-        //compact(keyspace);
+        long dbCompactStart = System.currentTimeMillis();
+        compact(keyspace);
+        long dbCompactDuration = System.currentTimeMillis() - dbCompactStart;
+
+        System.out.println("saiIndexingDuration="+saiIndexingDuration+" luceneIndexingDuration="+luceneIndexingDuration+" luceneMergeDuration="+luceneMergeDuration+" dbCompactDuration="+dbCompactDuration);
 
         luceneReader = DirectoryReader.open(directory);
 
@@ -216,16 +215,17 @@ public class SAILuceneQueryTest extends CQLTester
 
     @Benchmark
     @OperationsPerInvocation(1)
-    //@BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
     @BenchmarkMode({ Mode.Throughput})
-    public Object queryExact2ANDLucene() throws Throwable
+    public Object queryRangeANDRangeLucene() throws Throwable
     {
         int columnA = genColumnA();
+        int columnA2 = genColumnA();
         int columnB = genColumnB();
+        int columnB2 = genColumnB();
 
         BooleanQuery.Builder builder = new BooleanQuery.Builder();
-        builder.add(new BooleanClause(new TermQuery(new Term("columnA", new BytesRef(Integer.toString(columnA)))), BooleanClause.Occur.MUST));
-        builder.add(new BooleanClause(new TermQuery(new Term("columnB", new BytesRef(Integer.toString(columnB)))), BooleanClause.Occur.MUST));
+        builder.add(new BooleanClause(IntPoint.newRangeQuery("columnA", Math.min(columnA, columnA2), Math.max(columnA, columnA2)), BooleanClause.Occur.MUST));
+        builder.add(new BooleanClause(IntPoint.newRangeQuery("columnB", Math.min(columnB, columnB2), Math.max(columnB, columnB2)), BooleanClause.Occur.MUST));
         BooleanQuery query = builder.build();
 
         luceneQueryCount++;
@@ -251,14 +251,20 @@ public class SAILuceneQueryTest extends CQLTester
 
     @Benchmark
     @OperationsPerInvocation(1)
-    //@BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
     @BenchmarkMode({ Mode.Throughput})
-    public Object queryExact2ANDSAI() throws Throwable
+    public Object queryRangeANDRangeSAI() throws Throwable
     {
         saiQueryCount++;
         int columnA = genColumnA();
+        int columnA2 = genColumnA();
         int columnB = genColumnB();
-        UntypedResultSet results = execute(readStatement, columnA, columnB);
+        int columnB2 = genColumnB();
+
+        UntypedResultSet results = execute(readStatement,
+                                           Math.min(columnA, columnA2),
+                                           Math.max(columnA, columnA2),
+                                           Math.min(columnB, columnB2),
+                                           Math.max(columnB, columnB2));
         if (results.size() > 0)
         {
             // iterate on each result
