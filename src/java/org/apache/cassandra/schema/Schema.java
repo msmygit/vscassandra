@@ -147,8 +147,7 @@ public final class Schema implements SchemaProvider
     }
 
     /**
-     * load keyspace (keyspace) definitions, but do not initialize the keyspace instances.
-     * Schema version may be updated as the result.
+     * Load keyspaces definitions from local storage, see {@link SchemaUpdateHandler#reset(boolean)}.
      */
     public void loadFromDisk()
     {
