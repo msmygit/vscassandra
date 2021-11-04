@@ -23,57 +23,83 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
+import org.apache.cassandra.index.sai.disk.io.IndexComponents;
+import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
+import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.codecs.MultiLevelSkipListReader;
 import org.apache.lucene.codecs.MultiLevelSkipListWriter;
-import org.apache.lucene.store.ByteBuffersDirectory;
-import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
-public class LuceneSkipTest
+public class LuceneSkipTest extends NdiRandomizedTest
 {
     static final int MAX_SKIP_LEVELS = 10;
 
+    // TODO: add postings file pointers
     @Test
     public void test() throws Exception
     {
-        ByteBuffersDirectory dir = new ByteBuffersDirectory();
+        //ByteBuffersDirectory dir = new ByteBuffersDirectory();
+        IndexComponents comps = newIndexComponents();
 
         int blockSize = 128;
         int df = (128 * 10);
 
-        LuceneSkipWriter skipWriter = new LuceneSkipWriter(blockSize,
-                                                           8,
-                                                           MAX_SKIP_LEVELS,
-                                                           df);
-
         long skipFP = -1;
-        try (IndexOutput output = dir.createOutput("test", IOContext.DEFAULT))
+        //try (IndexOutput output = dir.createOutput("test", IOContext.DEFAULT))
+        try (IndexOutput output = comps.createOutput(comps.termsData);
+             IndexOutput postingsOut = comps.createOutput(comps.postingLists))
         {
+            LuceneSkipWriter skipWriter = new LuceneSkipWriter(blockSize,
+                                                               8,
+                                                               MAX_SKIP_LEVELS,
+                                                               df,
+                                                               postingsOut);
+
             for (int doc = 128; doc < df; doc += 128)
             {
                 System.out.println("bufferSkip doc="+doc);
                 skipWriter.bufferSkip(doc, doc);
+                byte[] fake = new byte[] {99, 100};
+                postingsOut.writeBytes(fake, 0, fake.length);
             }
-
             skipFP = skipWriter.writeSkip(output);
         }
 
-        try (IndexInput input = dir.openInput("test", IOContext.DEFAULT))
+        //try (IndexInput input = dir.openInput("test", IOContext.DEFAULT))
+        try (FileHandle fileHandle = comps.createFileHandle(comps.termsData);
+             IndexInput input = comps.openLuceneInput(fileHandle))
         {
             LuceneSkipReader reader = new LuceneSkipReader(input, MAX_SKIP_LEVELS, blockSize);
             reader.init(skipFP, df);
 
             int skipDoc = reader.skipTo(500) + 1;
-            System.out.println("skipDoc=" + skipDoc);
+
+            System.out.println("skipDoc=" + skipDoc+" lastDocPointer="+reader.lastDocPointer);
         }
     }
 
     public static class LuceneSkipReader extends MultiLevelSkipListReader
     {
+        private final long[] docPointer;
+        private long lastDocPointer;
+
         public LuceneSkipReader(IndexInput skipStream, int maxSkipLevels, int blockSize)
         {
             super(skipStream, maxSkipLevels, blockSize, 8);
+            docPointer = new long[maxSkipLevels];
+        }
+
+        @Override
+        protected void seekChild(int level) throws IOException {
+            super.seekChild(level);
+            docPointer[level] = lastDocPointer;
+        }
+
+        @Override
+        protected void setLastSkipData(int level) {
+            super.setLastSkipData(level);
+            lastDocPointer = docPointer[level];
         }
 
         protected int trim(int df)
@@ -84,12 +110,14 @@ public class LuceneSkipTest
         public void init(long skipPointer, int df) throws IOException
         {
             super.init(skipPointer, trim(df));
+            Arrays.fill(docPointer, 0);
         }
 
         @Override
-        protected int readSkipData(int level, IndexInput skipStream) throws IOException
-        {
-            return skipStream.readVInt();
+        protected int readSkipData(int level, IndexInput skipStream) throws IOException {
+            int delta = skipStream.readVInt();
+            docPointer[level] += skipStream.readVLong();
+            return delta;
         }
     }
 
@@ -97,18 +125,36 @@ public class LuceneSkipTest
     {
         private boolean initialized = false;
         private int curDoc;
+        private long curDocPointer;
         private int[] lastSkipDoc;
+        private long[] lastSkipDocPointer;
+        private long lastDocFP;
 
-        public LuceneSkipWriter(int skipInterval, int skipMultiplier, int maxSkipLevels, int df)
+        private final IndexOutput postingsOut;
+
+        public LuceneSkipWriter(int skipInterval,
+                                int skipMultiplier,
+                                int maxSkipLevels,
+                                int df,
+                                IndexOutput postingsOut)
         {
             super(skipInterval, skipMultiplier, maxSkipLevels, df);
+            this.postingsOut = postingsOut;
             lastSkipDoc = new int[maxSkipLevels];
+            lastSkipDocPointer = new long[maxSkipLevels];
+        }
+
+        @Override
+        public void resetSkip() {
+            lastDocFP = postingsOut.getFilePointer();
+            initialized = false;
         }
 
         public void bufferSkip(int doc, int numDocs) throws IOException
         {
             initSkip();
             this.curDoc = doc;
+            this.curDocPointer = postingsOut.getFilePointer();
             bufferSkip(numDocs);
         }
 
@@ -118,6 +164,7 @@ public class LuceneSkipTest
             {
                 super.resetSkip();
                 Arrays.fill(lastSkipDoc, 0);
+                Arrays.fill(lastSkipDocPointer, lastDocFP);
                 initialized = true;
             }
         }
@@ -128,6 +175,9 @@ public class LuceneSkipTest
             int delta = curDoc - lastSkipDoc[level];
             skipBuffer.writeVInt(delta);
             lastSkipDoc[level] = curDoc;
+
+            skipBuffer.writeVLong(curDocPointer - lastSkipDocPointer[level]);
+            lastSkipDocPointer[level] = curDocPointer;
         }
     }
 }
