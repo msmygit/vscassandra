@@ -18,7 +18,6 @@
 package org.apache.cassandra.schema;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -44,6 +43,8 @@ import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.utils.concurrent.AsyncPromise;
+import org.apache.cassandra.utils.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +77,7 @@ public final class Schema implements SchemaProvider
     // do some nested calls to getOrCreateKeyspaceInstance, also using different threads, and in a blocking manner.
     // This may lead to a deadlock. The documentation of ConcurrentHashMap says that manipulating other keys inside
     // the lambda passed to the computeIfAbsent method is prohibited.
-    private final ConcurrentMap<String, CompletableFuture<Keyspace>> keyspaceInstances = new NonBlockingHashMap<>();
+    private final ConcurrentMap<String, Future<Keyspace>> keyspaceInstances = new NonBlockingHashMap<>();
 
     private volatile UUID version;
 
@@ -209,9 +210,9 @@ public final class Schema implements SchemaProvider
     @Override
     public Keyspace getKeyspaceInstance(String keyspaceName)
     {
-        CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
+        Future<Keyspace> future = keyspaceInstances.get(keyspaceName);
         if (future != null && future.isDone())
-            return future.join();
+            return future.awaitThrowUncheckedOnInterrupt().getNow();
         else
             return null;
     }
@@ -234,10 +235,10 @@ public final class Schema implements SchemaProvider
     @Override
     public Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction)
     {
-        CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
+        Future<Keyspace> future = keyspaceInstances.get(keyspaceName);
         if (future == null)
         {
-            CompletableFuture<Keyspace> empty = new CompletableFuture<>();
+            AsyncPromise<Keyspace> empty = new AsyncPromise<>();
             future = keyspaceInstances.putIfAbsent(keyspaceName, empty);
             if (future == null)
             {
@@ -245,11 +246,11 @@ public final class Schema implements SchemaProvider
                 future = empty;
                 try
                 {
-                    empty.complete(loadFunction.get());
+                    empty.setSuccess(loadFunction.get());
                 }
                 catch (Throwable t)
                 {
-                    empty.completeExceptionally(new Throwable(t));
+                    empty.setFailure(new Throwable(t));
                     // Remove future so that construction can be retried later
                     keyspaceInstances.remove(keyspaceName, future);
                 }
@@ -259,7 +260,7 @@ public final class Schema implements SchemaProvider
 
         // Most of the time the keyspace will be ready and this will complete immediately. If it is being created
         // concurrently, wait for that process to complete.
-        return future.join();
+        return future.awaitThrowUncheckedOnInterrupt().getNow();
     }
 
     /**
@@ -270,17 +271,17 @@ public final class Schema implements SchemaProvider
      */
     private void removeKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
     {
-        CompletableFuture<Keyspace> droppedFuture = new CompletableFuture<>();
-        droppedFuture.completeExceptionally(new KeyspaceNotDefinedException(keyspaceName));
+        AsyncPromise<Keyspace> droppedFuture = new AsyncPromise<>();
+        droppedFuture.setFailure(new KeyspaceNotDefinedException(keyspaceName));
 
-        CompletableFuture<Keyspace> existingFuture = keyspaceInstances.put(keyspaceName, droppedFuture);
-        if (existingFuture == null || existingFuture.isCompletedExceptionally())
+        Future<Keyspace> existingFuture = keyspaceInstances.put(keyspaceName, droppedFuture);
+        if (existingFuture == null || existingFuture.isDone() && !existingFuture.isSuccess())
             return;
 
-        Keyspace instance = existingFuture.join();
+        Keyspace instance = existingFuture.awaitThrowUncheckedOnInterrupt().getNow();
         unloadFunction.accept(instance);
 
-        CompletableFuture<Keyspace> future = keyspaceInstances.remove(keyspaceName);
+        Future<Keyspace> future = keyspaceInstances.remove(keyspaceName);
         assert future == droppedFuture;
     }
 
