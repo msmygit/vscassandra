@@ -88,32 +88,6 @@ public class SchemaTransformations
         };
     }
 
-    /**
-     * Creates a schema transformation that either add the provided type, or "update" (replace really) it to be the
-     * provided type.
-     *
-     * <p>Please note that this usually <b>unsafe</b>: if the type exists, this replace it without any particular check
-     * and so could replace it with an incompatible version. This is used internally however for hard-coded tables
-     * (System ones, including DSE ones) to force the "last version".
-     *
-     * @param type the type to add/update.
-     * @return the created transformation.
-     */
-    public static SchemaTransformation addOrUpdateType(UserType type)
-    {
-        return schema ->
-        {
-            KeyspaceMetadata keyspace = schema.getNullable(type.keyspace);
-            if (null == keyspace)
-                throw invalidRequest("Keyspace '%s' doesn't exist", type.keyspace);
-
-            Types newTypes = keyspace.types.get(type.name).isPresent()
-                             ? keyspace.types.withUpdatedUserType(type)
-                             : keyspace.types.with(type);
-            return schema.withAddedOrUpdated(keyspace.withSwapped(newTypes));
-        };
-    }
-
     public static SchemaTransformation addTypes(Types toAdd, boolean ignoreIfExists)
     {
         return schema ->
