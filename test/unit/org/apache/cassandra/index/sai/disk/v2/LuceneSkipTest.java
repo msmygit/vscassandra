@@ -62,7 +62,7 @@ public class LuceneSkipTest extends NdiRandomizedTest
 
         //try (IndexInput input = dir.openInput("test", IOContext.DEFAULT))
         try (FileHandle fileHandle = comps.createFileHandle(comps.termsData);
-             Lucene8xIndexInput input = comps.openLuceneInput(fileHandle);
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle);
              LuceneSkipReader reader = new LuceneSkipReader(input, MAX_SKIP_LEVELS, blockSize))
         {
             reader.init(skipFP, df);

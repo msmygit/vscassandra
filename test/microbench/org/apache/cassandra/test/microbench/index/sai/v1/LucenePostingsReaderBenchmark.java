@@ -25,7 +25,13 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
+import org.apache.cassandra.index.sai.disk.v2.Lucene8xIndexInput;
+import org.apache.cassandra.index.sai.disk.v2.LuceneMMap;
+import org.apache.cassandra.index.sai.disk.v2.LucenePostingsReader;
+import org.apache.cassandra.index.sai.disk.v2.LucenePostingsWriter;
+import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.LongArray;
+import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -38,6 +44,7 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -55,8 +62,8 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 @Fork(1)
-@Warmup(iterations = 2)
-@Measurement(iterations = 2, timeUnit = TimeUnit.MILLISECONDS)
+@Warmup(iterations = 5)
+@Measurement(iterations = 10, timeUnit = TimeUnit.MILLISECONDS)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Thread)
 public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
@@ -73,6 +80,12 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
     protected PostingsEnum lucenePostings;
     protected DirectoryReader luceneReader;
     protected Directory directory;
+
+    private long lucene8xPostingsFP = -1;
+
+    private FileHandle lucene8xHandle;
+    private Lucene8xIndexInput lucene8xInput;
+    private LucenePostingsReader lucene8xPostingsReader;
 
     @Override
     public int numRows()
@@ -95,12 +108,19 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
             rowIds[i] = i;
         }
 
+        // write lucene 8x postings
+        try (IndexOutput postingsOut = indexComponents.createOutput(indexComponents.kdTreePostingLists))
+        {
+            LucenePostingsWriter postingsWriter = new LucenePostingsWriter(postingsOut, 128, rowIds.length);
+
+            lucene8xPostingsFP = postingsWriter.write(new ArrayPostingList(rowIds));
+        }
+
+        // write lucene 7.5 index
         Path luceneDir = Files.createTempDirectory("jmh_lucene_test");
         directory = FSDirectory.open(luceneDir);
         IndexWriterConfig config = new IndexWriterConfig(new WhitespaceAnalyzer());
         IndexWriter indexWriter = new IndexWriter(directory, config);
-
-        int lastRowID = rowIds[rowIds.length - 1];
 
         StringField field = new StringField("columnA", "value", Field.Store.NO);
         Document document = new Document();
@@ -120,6 +140,14 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
         rowIdToToken = openRowIdToTokenReader();
         reader = openPostingsReader();
 
+        // open lucene 8x postings
+        lucene8xHandle = indexComponents.createFileHandle(indexComponents.kdTreePostingLists);
+        lucene8xInput = LuceneMMap.openLuceneInput(lucene8xHandle);
+        lucene8xPostingsReader = new LucenePostingsReader(lucene8xInput,
+                                                          128,
+                                                          this.lucene8xPostingsFP);
+
+        // open lucene 7.5 postings from the lucene index
         luceneReader = DirectoryReader.open(directory);
         LeafReaderContext context = luceneReader.leaves().get(0);
         lucenePostings = context.reader().postings(new Term("columnA", new BytesRef("value")));
@@ -128,6 +156,8 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
     @Override
     public void afterInvocation() throws Throwable
     {
+        lucene8xInput.close();
+        lucene8xHandle.close();
         rowIdToToken.close();
         reader.close();
         luceneReader.close();
@@ -135,7 +165,28 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
 
     @Benchmark
     @OperationsPerInvocation(NUM_INVOCATIONS)
-    @BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    @BenchmarkMode({ Mode.Throughput})
+    public void advanceLucene8x(Blackhole bh) throws Throwable
+    {
+        int i = 0;
+        while (true)
+        {
+            if (i > rowIds.length - 1) break;
+
+            int rowId = rowIds[i];
+            long advanceRowId = lucene8xPostingsReader.advance(rowId);
+            if (advanceRowId == PostingList.END_OF_STREAM)
+            {
+                break;
+            }
+            bh.consume(advanceRowId);
+            i += skippingDistance;
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(NUM_INVOCATIONS)
+    @BenchmarkMode({ Mode.Throughput})
     public void advanceLucene(Blackhole bh) throws Throwable
     {
         int i = 0;
@@ -156,7 +207,7 @@ public class LucenePostingsReaderBenchmark extends AbstractOnDiskBenchmark
 
     @Benchmark
     @OperationsPerInvocation(NUM_INVOCATIONS)
-    @BenchmarkMode({ Mode.Throughput, Mode.AverageTime })
+    @BenchmarkMode({ Mode.Throughput})
     public void advance(Blackhole bh) throws Throwable
     {
         int i = 0;

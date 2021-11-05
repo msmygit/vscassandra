@@ -51,7 +51,6 @@ public class LuceneSkipWriter extends MultiLevelSkipListWriter
     public void resetSkip()
     {
         lastDocFP = postingsOut.getFilePointer();
-        System.out.println("resetSkip lastDocFP="+lastDocFP);
         initialized = false;
     }
 
@@ -60,7 +59,6 @@ public class LuceneSkipWriter extends MultiLevelSkipListWriter
         initSkip();
         this.curDoc = doc;
         this.curDocPointer = postingsOut.getFilePointer();
-        System.out.println("bufferSkip doc="+doc+" curDocPointer="+curDocPointer);
         bufferSkip(numDocs);
     }
 
@@ -70,7 +68,6 @@ public class LuceneSkipWriter extends MultiLevelSkipListWriter
         {
             super.resetSkip();
             Arrays.fill(lastSkipDoc, 0);
-            System.out.println("fill lastDocFP="+lastDocFP);
             Arrays.fill(lastSkipDocPointer, lastDocFP);
             //Arrays.fill(lastSkipDocPointer, 0); // TODO: broken
             initialized = true;
@@ -85,8 +82,6 @@ public class LuceneSkipWriter extends MultiLevelSkipListWriter
         lastSkipDoc[level] = curDoc;
 
         long fpDelta = curDocPointer - lastSkipDocPointer[level];
-
-        System.out.println("writeSkipData fpDelta="+fpDelta);
 
         skipBuffer.writeVLong(fpDelta);
         lastSkipDocPointer[level] = curDocPointer;

@@ -46,7 +46,7 @@ public class LucenePostingsReader implements PostingList
     private long accum;
     private boolean skipped;
     private long blockUpto;
-    
+
     @VisibleForTesting
     public LucenePostingsReader(Lucene8xIndexInput input,
                                 int blockSize,
@@ -67,7 +67,6 @@ public class LucenePostingsReader implements PostingList
         // start of the FoR delta encoded blocks
         postingsFP = docTermStartFP - skipOffset;
 
-        System.out.println("postingsFP="+postingsFP);
         input.seek(postingsFP);
 
         final ForUtil forUtil = new ForUtil();
@@ -100,8 +99,6 @@ public class LucenePostingsReader implements PostingList
             docBuffer[0] = PostingList.END_OF_STREAM;
             return;
         }
-
-        System.out.println("refillDocs left="+left);
 
         forDeltaUtil.decodeAndPrefixSum(input, accum, docBuffer);
 
@@ -156,7 +153,6 @@ public class LucenePostingsReader implements PostingList
                 docBufferUpto = blockSize;
                 accum = skipReader.getDoc();               // actually, this is just lastSkipEntry
                 long postingsFP = skipReader.getDocPointer();
-                System.out.println("read postingsFP="+postingsFP);
                 input.seek(postingsFP);    // now point to the block we want to search
             }
             // next time we call advance, this is used to

@@ -53,7 +53,7 @@ public abstract class AbstractOnDiskBenchmark
     IndexComponents groupComponents;
     private FileHandle token;
 
-    private IndexComponents indexComponents;
+    protected IndexComponents indexComponents;
     private FileHandle postings;
     private long summaryPosition;
 

@@ -51,19 +51,12 @@ public class LucenePostingsTest extends NdiRandomizedTest
         }
 
         try (FileHandle fileHandle = comps.createFileHandle(comps.postingLists);
-             Lucene8xIndexInput input = comps.openLuceneInput(fileHandle);
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle);
              LucenePostingsReader reader = new LucenePostingsReader(input,
                                                                     blockSize,
                                                                     postingsFP))
         {
             long target = 0;
-            IntArrayList rowids = new IntArrayList();
-
-//            long result = reader.advance(150);
-//
-//            System.out.println("target="+target+" result="+result);
-//
-//            assertEquals(result, target);
 
             while (true)
             {
@@ -71,11 +64,9 @@ public class LucenePostingsTest extends NdiRandomizedTest
 
                 long result = reader.advance(target);
 
-                System.out.println("target="+target+" result="+result);
-
                 assertEquals(result, target);
 
-                target += 20;
+                target += nextInt(1, 1000);
             }
         }
     }
@@ -101,7 +92,7 @@ public class LucenePostingsTest extends NdiRandomizedTest
         }
 
         try (FileHandle fileHandle = comps.createFileHandle(comps.postingLists);
-             Lucene8xIndexInput input = comps.openLuceneInput(fileHandle);
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle);
              LucenePostingsReader reader = new LucenePostingsReader(input,
                                                                     blockSize,
                                                                     postingsFP))
