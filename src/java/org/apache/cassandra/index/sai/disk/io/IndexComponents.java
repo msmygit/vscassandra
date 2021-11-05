@@ -19,21 +19,10 @@ package org.apache.cassandra.index.sai.disk.io;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.CRC32;
@@ -52,9 +41,6 @@ import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.NumericValuesMeta;
 import org.apache.cassandra.index.sai.disk.v1.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v1.TrieTermsDictionaryWriter;
-import org.apache.cassandra.index.sai.disk.v2.ByteBufferGuard;
-import org.apache.cassandra.index.sai.disk.v2.ByteBufferIndexInput;
-import org.apache.cassandra.index.sai.disk.v2.Lucene8xIndexInput;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Component;
@@ -68,18 +54,12 @@ import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.SuppressForbidden;
 import org.apache.lucene.util.bkd.BKDWriter;
 
-import static java.lang.invoke.MethodHandles.constant;
 import static java.lang.invoke.MethodHandles.dropArguments;
-import static java.lang.invoke.MethodHandles.filterReturnValue;
-import static java.lang.invoke.MethodHandles.guardWithTest;
 import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
-import static org.apache.lucene.store.MMapDirectory.DEFAULT_MAX_CHUNK_SIZE;
 
 /**
  * //TODO Need to consider how we handle encryption in OS

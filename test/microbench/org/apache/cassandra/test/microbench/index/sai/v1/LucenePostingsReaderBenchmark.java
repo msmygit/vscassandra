@@ -25,10 +25,10 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.v1.PostingsReader;
-import org.apache.cassandra.index.sai.disk.v2.Lucene8xIndexInput;
-import org.apache.cassandra.index.sai.disk.v2.LuceneMMap;
-import org.apache.cassandra.index.sai.disk.v2.LucenePostingsReader;
-import org.apache.cassandra.index.sai.disk.v2.LucenePostingsWriter;
+import org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.Lucene8xIndexInput;
+import org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.LuceneMMap;
+import org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.LucenePostingsReader;
+import org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.LucenePostingsWriter;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.LongArray;
 import org.apache.cassandra.io.util.FileHandle;

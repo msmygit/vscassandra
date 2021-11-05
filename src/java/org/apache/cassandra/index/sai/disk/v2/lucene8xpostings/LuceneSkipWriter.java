@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v2;
+package org.apache.cassandra.index.sai.disk.v2.lucene8xpostings;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -69,7 +69,6 @@ public class LuceneSkipWriter extends MultiLevelSkipListWriter
             super.resetSkip();
             Arrays.fill(lastSkipDoc, 0);
             Arrays.fill(lastSkipDocPointer, lastDocFP);
-            //Arrays.fill(lastSkipDocPointer, 0); // TODO: broken
             initialized = true;
         }
     }

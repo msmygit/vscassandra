@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v2;
+package org.apache.cassandra.index.sai.disk.v2.lucene8xpostings;
 
 import org.junit.Test;
 
@@ -25,7 +25,7 @@ import org.apache.cassandra.index.sai.utils.NdiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.store.IndexOutput;
 
-import static org.apache.cassandra.index.sai.disk.v2.LuceneSkipWriter.MAX_SKIP_LEVELS;
+import static org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.LuceneSkipWriter.MAX_SKIP_LEVELS;
 
 public class LuceneSkipTest extends NdiRandomizedTest
 {
@@ -33,14 +33,12 @@ public class LuceneSkipTest extends NdiRandomizedTest
     @Test
     public void test() throws Exception
     {
-        //ByteBuffersDirectory dir = new ByteBuffersDirectory();
         IndexComponents comps = newIndexComponents();
 
         int blockSize = 128;
         int df = (128 * 10);
 
         long skipFP = -1;
-        //try (IndexOutput output = dir.createOutput("test", IOContext.DEFAULT))
         try (IndexOutput output = comps.createOutput(comps.termsData);
              IndexOutput postingsOut = comps.createOutput(comps.postingLists))
         {
@@ -60,7 +58,6 @@ public class LuceneSkipTest extends NdiRandomizedTest
             skipFP = skipWriter.writeSkip(output);
         }
 
-        //try (IndexInput input = dir.openInput("test", IOContext.DEFAULT))
         try (FileHandle fileHandle = comps.createFileHandle(comps.termsData);
              Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle);
              LuceneSkipReader reader = new LuceneSkipReader(input, MAX_SKIP_LEVELS, blockSize))

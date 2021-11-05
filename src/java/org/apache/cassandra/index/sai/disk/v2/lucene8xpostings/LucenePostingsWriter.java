@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v2;
+package org.apache.cassandra.index.sai.disk.v2.lucene8xpostings;
 
 
 import java.io.Closeable;
@@ -27,7 +27,7 @@ import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.lucene.store.IndexOutput;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.apache.cassandra.index.sai.disk.v2.LuceneSkipWriter.MAX_SKIP_LEVELS;
+import static org.apache.cassandra.index.sai.disk.v2.lucene8xpostings.LuceneSkipWriter.MAX_SKIP_LEVELS;
 
 @NotThreadSafe
 public class LucenePostingsWriter implements Closeable
@@ -108,6 +108,8 @@ public class LucenePostingsWriter implements Closeable
         checkArgument(postings != null, "Expected non-null posting list.");
         checkArgument(postings.size() > 0, "Expected non-empty posting list.");
 
+        totalPostings = 0;
+        block = 0;
         resetBlockCounters();
         // reset the skip writer
         this.skipWriter.resetSkip();
@@ -137,13 +139,14 @@ public class LucenePostingsWriter implements Closeable
         dataOutput.writeVInt(skipOffset);
 
         skipWriter.writeSkip(dataOutput);
+
         return mainFP;
     }
 
-    public long getTotalPostings()
-    {
-        return totalPostings;
-    }
+//    public long getTotalPostings()
+//    {
+//        return totalPostings;
+//    }
 
     private void writePosting(long segmentRowId) throws IOException
     {
