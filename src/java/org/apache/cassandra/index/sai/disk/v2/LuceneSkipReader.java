@@ -59,10 +59,10 @@ public class LuceneSkipReader extends MultiLevelSkipListReader
         return df % 128 == 0 ? df - 1 : df;
     }
 
-    public void init(long skipPointer, long df) throws IOException
+    public void init(long skipPointer, long docBaseFP, long df) throws IOException
     {
         super.init(skipPointer, trim(df));
-        Arrays.fill(docPointer, 0);
+        Arrays.fill(docPointer, docBaseFP);
     }
 
     @Override

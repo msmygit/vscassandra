@@ -31,7 +31,57 @@ import org.apache.lucene.store.IndexOutput;
 public class LucenePostingsTest extends NdiRandomizedTest
 {
     @Test
-    public void test() throws Exception
+    public void testAdvance() throws Exception
+    {
+        IndexComponents comps = newIndexComponents();
+
+        int blockSize = 128;
+
+        long postingsFP = -1;
+        int[] array = new int[2000];
+        for (int x = 0; x < array.length; x++)
+        {
+            array[x] = x;
+        }
+        try (IndexOutput postingsOut = comps.createOutput(comps.postingLists))
+        {
+            LucenePostingsWriter postingsWriter = new LucenePostingsWriter(postingsOut, blockSize, array.length);
+
+            postingsFP = postingsWriter.write(new ArrayPostingList(array));
+        }
+
+        try (FileHandle fileHandle = comps.createFileHandle(comps.postingLists);
+             Lucene8xIndexInput input = comps.openLuceneInput(fileHandle);
+             LucenePostingsReader reader = new LucenePostingsReader(input,
+                                                                    blockSize,
+                                                                    postingsFP))
+        {
+            long target = 0;
+            IntArrayList rowids = new IntArrayList();
+
+//            long result = reader.advance(150);
+//
+//            System.out.println("target="+target+" result="+result);
+//
+//            assertEquals(result, target);
+
+            while (true)
+            {
+                if (target >= array.length) break;
+
+                long result = reader.advance(target);
+
+                System.out.println("target="+target+" result="+result);
+
+                assertEquals(result, target);
+
+                target += 20;
+            }
+        }
+    }
+
+    @Test
+    public void testNext() throws Exception
     {
         IndexComponents comps = newIndexComponents();
 

@@ -185,10 +185,9 @@ public class LucenePostingsWriter implements Closeable
     {
         assert bufferUpto > 0;
 
-        // skipWriter.bufferSkip(rowIdDeltaBuffer[0], totalPostings);
+        System.out.println("writePostingsBlock dataOutput.getFilePointer="+dataOutput.getFilePointer());
 
         forDeltaUtil.encodeDeltas(rowIdDeltaBuffer, dataOutput);
-
         block++;
     }
 }

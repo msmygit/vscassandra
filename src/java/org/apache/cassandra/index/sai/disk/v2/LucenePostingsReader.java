@@ -34,6 +34,10 @@ public class LucenePostingsReader implements PostingList
     private final long numPostings;
     private final ForDeltaUtil forDeltaUtil;
     private final long[] docBuffer;
+    private final long docTermStartFP;
+    private final int skipOffset;
+    private final long skipFP;
+    private final long postingsFP;
 
     private LuceneSkipReader skipReader;
     private int docBufferUpto = 0;
@@ -42,10 +46,7 @@ public class LucenePostingsReader implements PostingList
     private long accum;
     private boolean skipped;
     private long blockUpto;
-    private final long docTermStartFP;
-    private final int skipOffset;
-    private final long skipFP;
-
+    
     @VisibleForTesting
     public LucenePostingsReader(Lucene8xIndexInput input,
                                 int blockSize,
@@ -64,7 +65,10 @@ public class LucenePostingsReader implements PostingList
         skipFP = input.getFilePointer();
 
         // start of the FoR delta encoded blocks
-        input.seek(docTermStartFP - skipOffset);
+        postingsFP = docTermStartFP - skipOffset;
+
+        System.out.println("postingsFP="+postingsFP);
+        input.seek(postingsFP);
 
         final ForUtil forUtil = new ForUtil();
         this.forDeltaUtil = new ForDeltaUtil(forUtil);
@@ -75,8 +79,6 @@ public class LucenePostingsReader implements PostingList
     @Override
     public long nextPosting() throws IOException
     {
-        //final long left = numPostings - blockUpto;
-
         if (docBufferUpto == blockSize)
         {
             refillDocs();
@@ -134,11 +136,12 @@ public class LucenePostingsReader implements PostingList
                 assert skipOffset != -1;
                 // This is the first time this enum has skipped
                 // since reset() was called; load the skip data:
-                skipReader.init(skipFP, numPostings);
+
+                skipReader.init(skipFP, postingsFP, numPostings);
                 skipped = true;
             }
 
-            // always plus one to fix the result, since skip position in Lucene84SkipReader
+            // always plus one to fix the result, since skip position here
             // is a little different from MultiLevelSkipListReader
             final long newDocUpto = skipReader.skipTo(target) + 1;
 
@@ -146,12 +149,15 @@ public class LucenePostingsReader implements PostingList
             {
                 // Skipper moved
                 assert newDocUpto % blockSize == 0 : "got " + newDocUpto;
+
                 blockUpto = newDocUpto;
 
                 // Force to read next block
                 docBufferUpto = blockSize;
                 accum = skipReader.getDoc();               // actually, this is just lastSkipEntry
-                input.seek(skipReader.getDocPointer());    // now point to the block we want to search
+                long postingsFP = skipReader.getDocPointer();
+                System.out.println("read postingsFP="+postingsFP);
+                input.seek(postingsFP);    // now point to the block we want to search
             }
             // next time we call advance, this is used to
             // foresee whether skipper is necessary.
@@ -180,60 +186,10 @@ public class LucenePostingsReader implements PostingList
                 return this.doc = PostingList.END_OF_STREAM;
             }
         }
-//        position =
-
-//        // Now scan... this is an inlined/pared down version
-//        // of nextDoc():
-//        long doc;
-//        while (true)
-//        {
-//            doc = docBuffer[docBufferUpto];
-//
-//            if (doc >= target)
-//            {
-//                break;
-//            }
-//            ++docBufferUpto;
-//        }
 
         docBufferUpto++;
         return this.doc = doc;
     }
-
-//    @Override
-//    public int advance(int target) throws IOException {
-//        if (target > nextSkipDoc) {
-//            advanceShallow(target);
-//        }
-//        if (docBufferUpto == BLOCK_SIZE) {
-//            if (seekTo >= 0) {
-//                docIn.seek(seekTo);
-//                seekTo = -1;
-//                isFreqsRead = true; // reset isFreqsRead
-//            }
-//            refillDocs();
-//        }
-//
-//        // Now scan:
-//        long doc;
-//        while (true) {
-//            doc = docBuffer[docBufferUpto];
-//            docBufferUpto++;
-//            docUpto++;
-//
-//            if (doc >= target) {
-//                break;
-//            }
-//
-//            if (docBufferUpto == BLOCK_SIZE) {
-//                return this.doc = NO_MORE_DOCS;
-//            }
-//        }
-//        position = 0;
-//        lastStartOffset = 0;
-//
-//        return this.doc = (int) doc;
-//    }
 
     @Override
     public void close() throws IOException
