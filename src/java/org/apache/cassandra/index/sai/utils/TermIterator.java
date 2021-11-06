@@ -61,13 +61,17 @@ public class TermIterator extends RangeIterator
                                      AbstractBounds<PartitionPosition> keyRange,
                                      QueryContext queryContext,
                                      boolean defer,
-                                     Multimap<SSTableReader.UniqueIdentifier, PostingListRangeIterator> sstableRangeIterators)
+                                     Multimap<SSTableReader.UniqueIdentifier, PostingListRangeIterator> sstableRangeIterators,
+                                     List<RangeIterator> memRangeIterators)
     {
         final List<RangeIterator> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
 
         RangeIterator memtableIterator = e.context.searchMemtable(e, keyRange);
         if (memtableIterator != null)
+        {
+            memRangeIterators.add(memtableIterator);
             tokens.add(memtableIterator);
+        }
 
         for (final SSTableIndex index : perSSTableIndexes)
         {

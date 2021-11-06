@@ -35,11 +35,18 @@ public class SimpleQueryTest extends SAITester
         execute("INSERT INTO %s (id, value, value2) VALUES (?, ?, ?)", 1, "1", "1");
         execute("INSERT INTO %s (id, value2) VALUES (?, ?)", 3, "3");
         flush();
+        // partial updates
         execute("INSERT INTO %s (id, value, value2) VALUES (?, ?, ?)", 2, "2", "2");
         execute("INSERT INTO %s (id, value) VALUES (?, ?)", 3, "3");
         flush();
 
         compact();
+        execute("INSERT INTO %s (id, value) VALUES (?, ?)", 4, "4");
+        execute("INSERT INTO %s (id, value2) VALUES (?, ?)", 4, "4");
+        execute("INSERT INTO %s (id, value, value2) VALUES (?, ?, ?)", 5, "5", "5");
+
+        assertEquals(1, execute("SELECT * FROM %s WHERE value = '4' AND value2 = '4'").size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE value = '5' AND value2 = '5'").size());
 
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '1' AND value2 = '1'").size());
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '1' AND value2 = '1'").size());
@@ -47,6 +54,5 @@ public class SimpleQueryTest extends SAITester
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '2' AND value2 = '2'").size());
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '3' AND value2 = '3'").size());
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '3' AND value2 = '3'").size());
-
     }
 }

@@ -210,14 +210,16 @@ public class QueryController
 
         Multimap<SSTableReader.UniqueIdentifier, PostingListRangeIterator> sstableRangeIterators = HashMultimap.create();
         Multimap<SSTableReader.UniqueIdentifier, SSTableIndex> sstableIndexMap = HashMultimap.create();
+        List<RangeIterator> memRangeIterators = new ArrayList<>();
 
         try
         {
             // per column
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> entry : view)
             {
+
                 @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-                TermIterator index = TermIterator.build(entry.getKey(), entry.getValue(), mergeRange, queryContext, defer, sstableRangeIterators);
+                TermIterator index = TermIterator.build(entry.getKey(), entry.getValue(), mergeRange, queryContext, defer, sstableRangeIterators, memRangeIterators);
 
                 for (SSTableIndex ssTableIndex : index.referencedIndexes)
                 {
@@ -229,7 +231,7 @@ public class QueryController
 
             if (op == Operation.OperationType.AND)
             {
-                RangeIterator.Builder andBuilder = RangeUnionIterator.builder();
+                RangeIterator.Builder luceneAndBuilder = RangeUnionIterator.builder();
                 // create per-sstable ConjunctionPostingList's
                 for (Map.Entry<SSTableReader.UniqueIdentifier, Collection<PostingListRangeIterator>> entry : sstableRangeIterators.asMap().entrySet())
                 {
@@ -282,7 +284,7 @@ public class QueryController
                                                                                                              missingContext,
                                                                                                              null,
                                                                                                              -1);
-                                andBuilder.add(missingRangeIterator);
+                                luceneAndBuilder.add(missingRangeIterator);
                             }
                         }
                         else
@@ -299,17 +301,13 @@ public class QueryController
                                 }
 
                                 PostingList missingList = MergePostingList.merge(missingLists);
-
                                 IntArrayList missingrowids = new IntArrayList();
-
                                 ConjunctionPostingList andMissings = new ConjunctionPostingList(Lists.newArrayList(missingList, list));
 
                                 while (true)
                                 {
                                     long rowid = andMissings.nextPosting();
-
                                     if (rowid == PostingList.END_OF_STREAM) break;
-
                                     missingrowids.add((int) rowid);
                                 }
 
@@ -350,7 +348,7 @@ public class QueryController
                                                                                                                  missingContext,
                                                                                                                  null,
                                                                                                                  -1);
-                                    andBuilder.add(missingRangeIterator);
+                                    luceneAndBuilder.add(missingRangeIterator);
                                 }
                             }
                         }
@@ -396,7 +394,7 @@ public class QueryController
                                                                                                          },
                                                                                                          null,
                                                                                                          -1);
-                            andBuilder.add(sstableRangeIterator);
+                            luceneAndBuilder.add(sstableRangeIterator);
                         }
                         else
                         {
@@ -406,7 +404,11 @@ public class QueryController
                         }
                     }
                 }
-                return andBuilder;
+
+                // OR the memory range iterators, row filtering later
+                luceneAndBuilder.add(memRangeIterators);
+
+                return luceneAndBuilder;
             }
         }
         // duplicate code, | doesn't work
@@ -415,7 +417,6 @@ public class QueryController
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
             FileUtils.closeQuietly(builder.ranges());
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
-
             throw new RuntimeException(ioex);
         }
         catch (Throwable t)
@@ -423,7 +424,6 @@ public class QueryController
             // all sstable indexes in view have been referenced, need to clean up when exception is thrown
             FileUtils.closeQuietly(builder.ranges());
             view.forEach(e -> e.getValue().forEach(SSTableIndex::release));
-
             throw t;
         }
         return builder;
