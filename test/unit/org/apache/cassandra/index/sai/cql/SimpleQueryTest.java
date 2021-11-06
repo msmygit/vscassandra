@@ -42,7 +42,11 @@ public class SimpleQueryTest extends SAITester
         compact();
 
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '1' AND value2 = '1'").size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE value = '1' AND value2 = '1'").size());
+
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '2' AND value2 = '2'").size());
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '3' AND value2 = '3'").size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE value = '3' AND value2 = '3'").size());
+
     }
 }

@@ -94,7 +94,7 @@ public class KDTreeIndexSearcher extends IndexSearcher
             final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
             QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
             PostingList postingList = bkdReader.intersect(query, listener, context.queryContext);
-            return toIterator(postingList, null, context, defer);
+            return toIterator(postingList, null, context, defer, -1);
         }
         else
         {

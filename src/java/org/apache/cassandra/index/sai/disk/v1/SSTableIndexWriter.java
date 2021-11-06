@@ -163,6 +163,7 @@ public class SSTableIndexWriter implements PerIndexWriter
             compactSegments();
 
             System.out.println("compact column="+indexContext.getColumnName()+" missingValueInTSRowIdBuilder.size="+missingValueInTSRowIdBuilder.size());
+
             if (missingValueInTSRowIdBuilder.size() > 0)
             {
                 try (IndexOutput missingValuesOut = indexDescriptor.openPerIndexOutput(IndexComponent.MISSING_VALUES, indexContext, true, false))

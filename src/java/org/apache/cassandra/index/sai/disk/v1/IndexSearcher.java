@@ -92,7 +92,8 @@ public abstract class IndexSearcher implements Closeable
     RangeIterator toIterator(PostingList mainPostingList,
                              SupplierWithIO<PostingList> postingListSupplier,
                              SSTableQueryContext queryContext,
-                             boolean defer) throws IOException
+                             boolean defer,
+                             long postingID) throws IOException
     {
         if (mainPostingList == null)
             return RangeIterator.empty();
@@ -106,6 +107,7 @@ public abstract class IndexSearcher implements Closeable
         return new PostingListRangeIterator(indexContext,
                                             primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext),
                                             searcherContext,
-                                            () -> primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext));
+                                            () -> primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext),
+                                            postingID);
     }
 }

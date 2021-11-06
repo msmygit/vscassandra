@@ -72,7 +72,7 @@ public class PostingListRangeIterator extends RangeIterator
     private PrimaryKey skipToToken = null;
     private Closeable toClose;
 
-
+    public final long postingId;
     /**
      * Create a direct PostingListRangeIterator where the underlying PostingList is materialised
      * immediately so the posting list size can be used.
@@ -80,7 +80,8 @@ public class PostingListRangeIterator extends RangeIterator
     public PostingListRangeIterator(IndexContext indexContext,
                                     PrimaryKeyMap primaryKeyMap,
                                     IndexSearcherContext searcherContext,
-                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier)
+                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier,
+                                    long postingId)
     {
         super(searcherContext.minimumKey, searcherContext.maximumKey, searcherContext.count());
 
@@ -90,13 +91,15 @@ public class PostingListRangeIterator extends RangeIterator
         this.searcherContext = searcherContext;
         this.queryContext = this.searcherContext.context;
         this.primaryKeyMapSupplier = primaryKeyMapSupplier;
+        this.postingId = postingId;
     }
 
     public PostingListRangeIterator(IndexContext indexContext,
                                     PrimaryKeyMap primaryKeyMap,
                                     IndexSearcherContext searcherContext,
                                     Closeable toClose,
-                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier)
+                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier,
+                                    long postingId)
     {
         super(searcherContext.minimumKey, searcherContext.maximumKey, searcherContext.count());
 
@@ -107,6 +110,7 @@ public class PostingListRangeIterator extends RangeIterator
         this.queryContext = this.searcherContext.context;
         this.toClose = toClose;
         this.primaryKeyMapSupplier = primaryKeyMapSupplier;
+        this.postingId = postingId;
     }
 
     public IndexSearcherContext getSearcherContext()

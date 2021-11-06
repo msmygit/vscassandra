@@ -70,6 +70,8 @@ import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v2.ArrayPostingList;
 import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
+import org.apache.cassandra.index.sai.disk.v2.postingscache.PostingsCache;
+import org.apache.cassandra.index.sai.disk.v2.postingscache.PostingsKey;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
@@ -195,6 +197,7 @@ public class QueryController
      */
     public RangeIterator.Builder getIndexes(Operation.OperationType op, Collection<Expression> expressions)
     {
+        System.out.println("getIndexes op="+op);
         boolean defer = op == Operation.OperationType.OR || RangeIntersectionIterator.shouldDefer(expressions.size());
 
         RangeIterator.Builder builder = op == Operation.OperationType.OR
@@ -250,48 +253,99 @@ public class QueryController
 
                     for (PostingListRangeIterator rangeIterator : subIterators)
                     {
-                        if (rangeIterator.searcherContext.postingListSupplier != null && missingSuppliers.size() > 0)
+                        PostingsKey postingsKey = new PostingsKey(entry.getKey(), rangeIterator.indexContext.getIndexName(), rangeIterator.postingId, true);
+                        PostingsCache.PostingsFactory postingsFactory = PostingsCache.INSTANCE.get(postingsKey);
+                        System.out.println("postingsFactory="+postingsFactory);
+                        if (postingsFactory != null)
                         {
-                            PostingList list = rangeIterator.searcherContext.postingListSupplier.get();
+                            PostingList list = postingsFactory.postings();
 
-                            List<PostingList> missingLists = new ArrayList<>();
+                            System.out.println("postingsFactory list.size="+list.size());
 
-                            for (SupplierWithIO<PostingList> s : missingSuppliers)
+                            if (list.size() > 0)
                             {
-                                missingLists.add(s.get());
-                            }
-
-                            PostingList missingList = MergePostingList.merge(missingLists);
-
-                            ConjunctionPostingList andMissings = new ConjunctionPostingList(Lists.newArrayList(missingList, list));
-
-                            IntArrayList missingrowids = new IntArrayList();
-
-                            while (true)
-                            {
-                                long rowid = andMissings.nextPosting();
-
-                                if (rowid == PostingList.END_OF_STREAM) break;
-
-                                missingrowids.add((int)rowid);
-                            }
-
-                            // TODO: put the andMissings2 postings in the global postings cache
-
-                            PostingList andMissings2 = new ArrayPostingList(missingrowids.toIntArray());
-
-                            if (missingrowids.size() > 0)
-                            {
-                                IndexSearcherContext missingContext = new IndexSearcherContext(rangeIterator.getMinimum(),
-                                                                                               rangeIterator.getMaximum(),
-                                                                                               queryContext,
-                                                                                               andMissings2,
+                                IndexSearcherContext missingContext = new IndexSearcherContext(rangeIterator.searcherContext.minimumKey,
+                                                                                               rangeIterator.searcherContext.maximumKey,
+                                                                                               rangeIterator.searcherContext.context,
+                                                                                               list,
                                                                                                null);
-                                PostingListRangeIterator missingRangeIterator = new PostingListRangeIterator(indexContext,
+                                PostingListRangeIterator missingRangeIterator = new PostingListRangeIterator(rangeIterator.indexContext,
                                                                                                              rangeIterator.primaryKeyMapSupplier.get(),
                                                                                                              missingContext,
-                                                                                                             null);
+                                                                                                             null,
+                                                                                                             -1);
                                 andBuilder.add(missingRangeIterator);
+                            }
+                        }
+                        else
+                        {
+                            if (rangeIterator.searcherContext.postingListSupplier != null && missingSuppliers.size() > 0)
+                            {
+                                PostingList list = rangeIterator.searcherContext.postingListSupplier.get();
+
+                                List<PostingList> missingLists = new ArrayList<>();
+
+                                for (SupplierWithIO<PostingList> s : missingSuppliers)
+                                {
+                                    missingLists.add(s.get());
+                                }
+
+                                PostingList missingList = MergePostingList.merge(missingLists);
+
+                                IntArrayList missingrowids = new IntArrayList();
+
+                                ConjunctionPostingList andMissings = new ConjunctionPostingList(Lists.newArrayList(missingList, list));
+
+                                while (true)
+                                {
+                                    long rowid = andMissings.nextPosting();
+
+                                    if (rowid == PostingList.END_OF_STREAM) break;
+
+                                    missingrowids.add((int) rowid);
+                                }
+
+                                list.close();
+
+                                for (PostingList l : missingLists)
+                                {
+                                    l.close();
+                                }
+
+                                int[] array = missingrowids.toIntArray();
+                                PostingList andMissings2 = new ArrayPostingList(array);
+
+                                PostingsCache.INSTANCE.put(postingsKey, new PostingsCache.PostingsFactory()
+                                {
+                                    @Override
+                                    public int sizeInBytes()
+                                    {
+                                        return array.length * 4;
+                                    }
+
+                                    @Override
+                                    public PostingList postings()
+                                    {
+                                        return new ArrayPostingList(array);
+                                    }
+                                });
+
+                                // TODO: put the andMissings2 postings in the global postings cache
+
+                                if (missingrowids.size() > 0)
+                                {
+                                    IndexSearcherContext missingContext = new IndexSearcherContext(rangeIterator.getMinimum(),
+                                                                                                   rangeIterator.getMaximum(),
+                                                                                                   queryContext,
+                                                                                                   andMissings2,
+                                                                                                   null);
+                                    PostingListRangeIterator missingRangeIterator = new PostingListRangeIterator(indexContext,
+                                                                                                                 rangeIterator.primaryKeyMapSupplier.get(),
+                                                                                                                 missingContext,
+                                                                                                                 null,
+                                                                                                                 -1);
+                                    andBuilder.add(missingRangeIterator);
+                                }
                             }
                         }
 
@@ -332,16 +386,17 @@ public class QueryController
                                                                                                          sstableContext,
                                                                                                          () -> {
                                                                                                              subIterators.forEach(i -> FileUtils.closeQuietly(i));
-                                                                                                             perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                                                                                                             //perSSTableIndexes.forEach(TermIterator::releaseQuietly);
                                                                                                          },
-                                                                                                         null);
+                                                                                                         null,
+                                                                                                         -1);
                             andBuilder.add(sstableRangeIterator);
                         }
                         else
                         {
                             // there are no matches, close things
                             subIterators.forEach(i -> FileUtils.closeQuietly(i));
-                            perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                            //perSSTableIndexes.forEach(TermIterator::releaseQuietly);
                         }
                     }
                 }

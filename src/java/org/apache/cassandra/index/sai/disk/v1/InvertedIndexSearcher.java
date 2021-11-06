@@ -187,7 +187,7 @@ public class InvertedIndexSearcher extends IndexSearcher
 
         PostingList postingList = postingListCallable.right.get();
 
-        return toIterator(postingList, postingListCallable.right, context, defer);
+        return toIterator(postingList, postingListCallable.right, context, defer, postingListCallable.left);
     }
 
     @Override
