@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import com.carrotsearch.hppc.LongArrayList;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.MemtableTermsIterator;
@@ -38,6 +39,8 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.ImmutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.postings.PackedLongsPostingList;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v1.trie.InvertedIndexWriter;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
@@ -45,6 +48,11 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.util.packed.PackedInts;
+import org.apache.lucene.util.packed.PackedLongValues;
+
+import static org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter.sameTS;
 
 /**
  * Column index writer that flushes indexed data directly from the corresponding Memtable index, without buffering index
@@ -58,6 +66,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     private final IndexContext indexContext;
     private final MemtableIndex memtable;
     private final RowMapping rowMapping;
+    private final PackedLongValues.Builder missingValueInTSRowIdBuilder;
 
     public MemtableIndexWriter(MemtableIndex memtable,
                                IndexDescriptor indexDescriptor,
@@ -70,6 +79,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         this.indexContext = indexContext;
         this.memtable = memtable;
         this.rowMapping = rowMapping;
+        this.missingValueInTSRowIdBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
     }
 
     @Override
@@ -84,6 +94,15 @@ public class MemtableIndexWriter implements PerIndexWriter
         // Memtable indexes are flushed directly to disk with the aid of a mapping between primary
         // keys and row IDs in the flushing SSTable. This writer, therefore, does nothing in
         // response to the flushing of individual rows.
+        boolean sameTS = sameTS(row);
+
+        Cell cell = row.getCell(indexContext.getTarget().left);
+        if (cell == null || !sameTS)
+        {
+//            if (cell == null) System.out.println("cell==null rowid="+key.sstableRowId());
+//            if (!sameTS) System.out.println("sameTS rowid="+key.sstableRowId());
+            missingValueInTSRowIdBuilder.add(key.sstableRowId());
+        }
     }
 
     @Override
@@ -179,6 +198,19 @@ public class MemtableIndexWriter implements PerIndexWriter
         {
             indexDescriptor.deleteColumnIndex(indexContext);
             return 0;
+        }
+
+        System.out.println("column="+indexContext.getColumnName()+" missingValueInTSRowIdBuilder.size="+missingValueInTSRowIdBuilder.size());
+        if (missingValueInTSRowIdBuilder.size() > 0)
+        {
+            try (IndexOutput missingValuesOut = indexDescriptor.openPerIndexOutput(IndexComponent.MISSING_VALUES, indexContext, true, false))
+            {
+                long startFP = missingValuesOut.getFilePointer();
+                PostingsWriter missingValuesWriter = new PostingsWriter(missingValuesOut);
+                long missingValuesFP = missingValuesWriter.write(new PackedLongsPostingList(missingValueInTSRowIdBuilder.build()));
+                long length = missingValuesOut.getFilePointer() - startFP;
+                indexMetas.put(IndexComponent.MISSING_VALUES, 0, missingValuesFP, length);
+            }
         }
 
         // During index memtable flush, the data is sorted based on terms.

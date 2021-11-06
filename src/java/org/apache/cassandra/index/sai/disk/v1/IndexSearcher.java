@@ -27,6 +27,7 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -64,10 +65,13 @@ public abstract class IndexSearcher implements Closeable
                                      IndexDescriptor indexDescriptor,
                                      IndexContext indexContext) throws IOException
     {
+
         return TypeUtil.isLiteral(indexContext.getValidator())
                ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
                : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
+
+    public abstract SupplierWithIO<PostingList> missingValuesPostings();
 
     /**
      * @return memory usage of underlying on-disk data structure
@@ -85,16 +89,23 @@ public abstract class IndexSearcher implements Closeable
      */
     public abstract RangeIterator search(Expression expression, SSTableQueryContext queryContext, boolean defer) throws IOException;
 
-    RangeIterator toIterator(PostingList postingList, SSTableQueryContext queryContext, boolean defer) throws IOException
+    RangeIterator toIterator(PostingList mainPostingList,
+                             SupplierWithIO<PostingList> postingListSupplier,
+                             SSTableQueryContext queryContext,
+                             boolean defer) throws IOException
     {
-        if (postingList == null)
+        if (mainPostingList == null)
             return RangeIterator.empty();
 
         IndexSearcherContext searcherContext = new IndexSearcherContext(metadata.minKey,
                                                                         metadata.maxKey,
                                                                         queryContext,
-                                                                        postingList.peekable());
+                                                                        mainPostingList,
+                                                                        postingListSupplier);
 
-        return  new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext), searcherContext);
+        return new PostingListRangeIterator(indexContext,
+                                            primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext),
+                                            searcherContext,
+                                            () -> primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(queryContext));
     }
 }

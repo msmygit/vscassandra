@@ -85,8 +85,15 @@ public class TermIterator extends RangeIterator
 
                 for (RangeIterator it : keyIterators)
                 {
-                    PostingListRangeIterator postingListRangeIterator = (PostingListRangeIterator)it;
-                    sstableRangeIterators.put(index.getSSTable().instanceId, postingListRangeIterator);
+                    if (it instanceof PostingListRangeIterator)
+                    {
+                        PostingListRangeIterator postingListRangeIterator = (PostingListRangeIterator) it;
+                        sstableRangeIterators.put(index.getSSTable().instanceId, postingListRangeIterator);
+                    }
+                    else
+                    {
+                        assert it instanceof Builder.EmptyRangeIterator;
+                    }
                 }
 
                 tokens.addAll(keyIterators);

@@ -35,6 +35,7 @@ import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.ScanningPostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryReader;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
@@ -119,7 +120,13 @@ public class TermsReader implements Closeable
         return new TermsScanner(segmentOffset);
     }
 
-    public PostingList exactMatch(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
+    public PostingList exactMatch2(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context) throws IOException
+    {
+        perQueryEventListener.onSegmentHit();
+        return new TermQuery(term, perQueryEventListener, context).execute().right.get();
+    }
+
+    public Pair<Long, SupplierWithIO<PostingList>> exactMatch(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
     {
         perQueryEventListener.onSegmentHit();
         return new TermQuery(term, perQueryEventListener, context).execute();
@@ -128,8 +135,8 @@ public class TermsReader implements Closeable
     @VisibleForTesting
     public class TermQuery
     {
-        private final IndexInput postingsInput;
-        private final IndexInput postingsSummaryInput;
+        //private final IndexInput postingsInput;
+        //private final IndexInput postingsSummaryInput;
         private final QueryEventListener.TrieIndexEventListener listener;
         private final long lookupStartTime;
         private final QueryContext context;
@@ -139,29 +146,30 @@ public class TermsReader implements Closeable
         TermQuery(ByteComparable term, QueryEventListener.TrieIndexEventListener listener, QueryContext context)
         {
             this.listener = listener;
-            postingsInput = IndexFileUtils.instance.openInput(postingsFile);
-            postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
+//            postingsInput = IndexFileUtils.instance.openInput(postingsFile);
+//            postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
             this.term = term;
             lookupStartTime = System.nanoTime();
             this.context = context;
         }
 
-        public PostingList execute()
+        public Pair<Long, SupplierWithIO<PostingList>> execute()
         {
             try
             {
                 long postingOffset = lookupTermDictionary(term);
                 if (postingOffset == PostingList.OFFSET_NOT_FOUND)
                 {
-                    FileUtils.closeQuietly(postingsInput);
-                    FileUtils.closeQuietly(postingsSummaryInput);
+//                    FileUtils.closeQuietly(postingsInput);
+//                    FileUtils.closeQuietly(postingsSummaryInput);
                     return null;
                 }
 
                 context.checkpoint();
 
                 // when posting is found, resources will be closed when posting reader is closed.
-                return getPostingReader(postingOffset);
+
+                return Pair.create(postingOffset, () -> getPostingReader(postingOffset));
             }
             catch (Throwable e)
             {
@@ -176,8 +184,8 @@ public class TermsReader implements Closeable
 
         private void closeOnException()
         {
-            FileUtils.closeQuietly(postingsInput);
-            FileUtils.closeQuietly(postingsSummaryInput);
+//            FileUtils.closeQuietly(postingsInput);
+//            FileUtils.closeQuietly(postingsSummaryInput);
         }
 
         public long lookupTermDictionary(ByteComparable term)
@@ -197,6 +205,9 @@ public class TermsReader implements Closeable
 
         public PostingsReader getPostingReader(long offset) throws IOException
         {
+            IndexInput postingsInput = IndexFileUtils.instance.openInput(postingsFile);
+            IndexInput postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
+
             PostingsReader.BlocksSummary header = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
 
             return new PostingsReader(postingsInput, header, listener.postingListEventListener());

@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.LongAdder;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -69,12 +70,12 @@ public class MemtableIndex
         return index.getMaxTerm();
     }
 
-    public long index(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public long index(DecoratedKey key, Clustering clustering, ByteBuffer value, Row row)
     {
         if (value == null || value.remaining() == 0)
             return 0;
 
-        long ram = index.add(key, clustering, value);
+        long ram = index.add(key, clustering, value, row);
         writeCount.increment();
         estimatedMemoryUsed.add(ram);
         return ram;

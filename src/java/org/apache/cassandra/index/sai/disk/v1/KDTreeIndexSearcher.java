@@ -31,6 +31,7 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -70,6 +71,12 @@ public class KDTreeIndexSearcher extends IndexSearcher
     }
 
     @Override
+    public SupplierWithIO<PostingList> missingValuesPostings()
+    {
+        return null;
+    }
+
+    @Override
     public long indexFileCacheSize()
     {
         return bkdReader.memoryUsage();
@@ -87,7 +94,7 @@ public class KDTreeIndexSearcher extends IndexSearcher
             final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
             QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
             PostingList postingList = bkdReader.intersect(query, listener, context.queryContext);
-            return toIterator(postingList, context, defer);
+            return toIterator(postingList, null, context, defer);
         }
         else
         {

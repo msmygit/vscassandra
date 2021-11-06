@@ -21,12 +21,14 @@ package org.apache.cassandra.index.sai.disk;
 import java.io.IOException;
 
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
 public class IndexSearcherContext
 {
     public final SSTableQueryContext context;
     public final PostingList.PeekablePostingList postingList;
+    public final SupplierWithIO<PostingList> postingListSupplier;
 
     public final PrimaryKey minimumKey;
     public final PrimaryKey maximumKey;
@@ -35,10 +37,13 @@ public class IndexSearcherContext
     public IndexSearcherContext(PrimaryKey minimumKey,
                                 PrimaryKey maximumKey,
                                 SSTableQueryContext context,
-                                PostingList.PeekablePostingList postingList) throws IOException
+                                PostingList mainPostingList,
+                                SupplierWithIO<PostingList> postingListSupplier) throws IOException
     {
         this.context = context;
-        this.postingList = postingList;
+        this.postingListSupplier = postingListSupplier;
+
+        this.postingList = mainPostingList.peekable();
 
         this.minimumKey = minimumKey;
 

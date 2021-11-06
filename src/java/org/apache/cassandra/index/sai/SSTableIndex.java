@@ -32,9 +32,11 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.dht.AbstractBounds;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -134,6 +136,11 @@ public class SSTableIndex
     public DecoratedKey maxKey()
     {
         return searchableIndex.maxKey();
+    }
+
+    public SupplierWithIO<PostingList> missingValuesPostings()
+    {
+        return searchableIndex.missingValuesPostings();
     }
 
     public List<RangeIterator> search(Expression expression,

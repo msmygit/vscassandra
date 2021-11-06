@@ -28,6 +28,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -58,6 +59,8 @@ public interface SearchableIndex extends Closeable
     public DecoratedKey minKey();
 
     public DecoratedKey maxKey();
+
+    public SupplierWithIO<PostingList> missingValuesPostings();
 
     public List<RangeIterator> search(Expression expression,
                                       AbstractBounds<PartitionPosition> keyRange,

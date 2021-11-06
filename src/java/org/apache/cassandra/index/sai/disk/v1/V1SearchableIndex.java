@@ -33,7 +33,9 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -104,6 +106,16 @@ public class V1SearchableIndex implements SearchableIndex
             FileUtils.closeQuietly(sstableContext);
             throw Throwables.unchecked(t);
         }
+    }
+
+    @Override
+    public SupplierWithIO<PostingList> missingValuesPostings()
+    {
+        if (segments.size() != 1)
+        {
+            throw new IllegalStateException();
+        }
+        return segments.get(0).missingValuesPostings();
     }
 
     @Override

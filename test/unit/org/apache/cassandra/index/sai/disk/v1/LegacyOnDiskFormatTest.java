@@ -185,7 +185,7 @@ public class LegacyOnDiskFormatTest
         Expression expression = new Expression(indexContext).add(Operator.EQ, UTF8Type.instance.decompose("10"));
         ByteComparable term = ByteComparable.fixedLength(expression.lower.value.encoded);
 
-        PostingList result = termsReader.exactMatch(term, QueryEventListeners.NO_OP_TRIE_LISTENER, new QueryContext());
+        PostingList result = termsReader.exactMatch2(term, QueryEventListeners.NO_OP_TRIE_LISTENER, new QueryContext());
 
         assertEquals(1, result.size());
     }

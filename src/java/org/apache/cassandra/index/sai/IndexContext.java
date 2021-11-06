@@ -192,6 +192,11 @@ public class IndexContext
                                                     Version.LATEST.onDiskFormat().indexFeatureSet());
     }
 
+    public Pair<ColumnMetadata, IndexTarget.Type> getTarget()
+    {
+        return target;
+    }
+
     public AbstractType<?> keyValidator()
     {
         return partitionKeyType;
@@ -244,14 +249,14 @@ public class IndexContext
                 while (bufferIterator.hasNext())
                 {
                     ByteBuffer value = bufferIterator.next();
-                    bytes += target.index(key, row.clustering(), value);
+                    bytes += target.index(key, row.clustering(), value, row);
                 }
             }
         }
         else
         {
             ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
-            target.index(key, row.clustering(), value);
+            target.index(key, row.clustering(), value, row);
         }
         indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         return bytes;

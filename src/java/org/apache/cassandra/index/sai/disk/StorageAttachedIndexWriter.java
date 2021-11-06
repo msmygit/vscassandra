@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.tries.MemtableTrie;
@@ -39,6 +40,9 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
+import org.apache.lucene.util.RoaringDocIdSet;
+import org.apache.lucene.util.packed.PackedInts;
+import org.apache.lucene.util.packed.PackedLongValues;
 
 /**
  * Writes all on-disk index structures attached to a given SSTable.
@@ -60,6 +64,8 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
     private boolean aborted = false;
 
     private long sstableRowId = 0;
+
+    private final PackedLongValues.Builder incongruentTimestampRowIdBuilder;
 
     public StorageAttachedIndexWriter(IndexDescriptor indexDescriptor,
                                       Collection<StorageAttachedIndex> indices,
@@ -86,6 +92,8 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         // If the SSTable components are already being built by another index build then we don't want
         // to build them again so use a null writer
         this.perSSTableWriter = perIndexComponentsOnly ? PerSSTableWriter.NONE : indexDescriptor.newPerSSTableWriter();
+
+        incongruentTimestampRowIdBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
     }
 
     @Override
@@ -239,9 +247,34 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         }
     }
 
+    public static boolean sameTS(Row row)
+    {
+        long lastTS = -1;
+        boolean sameTS = true;
+        for (Cell cell : row.cells())
+        {
+            if (lastTS != -1 && lastTS != cell.timestamp())
+            {
+                sameTS = false;
+                break;
+            }
+            lastTS = cell.timestamp();
+        }
+        return sameTS;
+    }
+
     private void addRow(Row row) throws IOException, MemtableTrie.SpaceExhaustedException
     {
         PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey, row.clustering(), sstableRowId++);
+        primaryKey.row = row;
+
+        boolean sameTS = sameTS(row);
+
+        if (!sameTS)
+        {
+            incongruentTimestampRowIdBuilder.add(primaryKey.sstableRowId());
+        }
+
         perSSTableWriter.nextRow(primaryKey);
         rowMapping.add(primaryKey);
 

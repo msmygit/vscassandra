@@ -24,6 +24,7 @@ import java.util.Iterator;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -45,7 +46,7 @@ public abstract class MemoryIndex
         this.indexContext = indexContext;
     }
 
-    public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value);
+    public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value, Row row);
 
     public abstract RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
 

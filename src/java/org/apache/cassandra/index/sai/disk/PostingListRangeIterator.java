@@ -21,6 +21,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.base.Stopwatch;
@@ -29,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -62,6 +64,8 @@ public class PostingListRangeIterator extends RangeIterator
     public final IndexContext indexContext;
     public final PrimaryKeyMap primaryKeyMap;
 
+    public final SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier;
+
     public final IndexSearcherContext searcherContext;
 
     private boolean needsSkipping = false;
@@ -75,7 +79,8 @@ public class PostingListRangeIterator extends RangeIterator
      */
     public PostingListRangeIterator(IndexContext indexContext,
                                     PrimaryKeyMap primaryKeyMap,
-                                    IndexSearcherContext searcherContext)
+                                    IndexSearcherContext searcherContext,
+                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier)
     {
         super(searcherContext.minimumKey, searcherContext.maximumKey, searcherContext.count());
 
@@ -84,12 +89,14 @@ public class PostingListRangeIterator extends RangeIterator
         this.postingList = searcherContext.postingList;
         this.searcherContext = searcherContext;
         this.queryContext = this.searcherContext.context;
+        this.primaryKeyMapSupplier = primaryKeyMapSupplier;
     }
 
     public PostingListRangeIterator(IndexContext indexContext,
                                     PrimaryKeyMap primaryKeyMap,
                                     IndexSearcherContext searcherContext,
-                                    Closeable toClose)
+                                    Closeable toClose,
+                                    SupplierWithIO<PrimaryKeyMap> primaryKeyMapSupplier)
     {
         super(searcherContext.minimumKey, searcherContext.maximumKey, searcherContext.count());
 
@@ -99,6 +106,7 @@ public class PostingListRangeIterator extends RangeIterator
         this.searcherContext = searcherContext;
         this.queryContext = this.searcherContext.context;
         this.toClose = toClose;
+        this.primaryKeyMapSupplier = primaryKeyMapSupplier;
     }
 
     public IndexSearcherContext getSearcherContext()
@@ -121,7 +129,7 @@ public class PostingListRangeIterator extends RangeIterator
     {
         try
         {
-            queryContext.queryContext.checkpoint();
+            if (queryContext != null) queryContext.queryContext.checkpoint();
 
             // just end the iterator if we don't have a postingList or current segment is skipped
             if (exhausted())
@@ -135,6 +143,7 @@ public class PostingListRangeIterator extends RangeIterator
         }
         catch (Throwable t)
         {
+            t.printStackTrace();
             //TODO We aren't tidying up resources here
             if (!(t instanceof AbortedOperationException))
                 logger.error(indexContext.logMessage("Unable to provide next token!"), t);

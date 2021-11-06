@@ -33,10 +33,13 @@ public class SimpleQueryTest extends SAITester
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
         createIndex("CREATE CUSTOM INDEX ON %s(value2) USING 'StorageAttachedIndex'");
         execute("INSERT INTO %s (id, value, value2) VALUES (?, ?, ?)", 1, "1", "1");
+        execute("INSERT INTO %s (id, value2) VALUES (?, ?)", 3, "3");
         flush();
         execute("INSERT INTO %s (id, value, value2) VALUES (?, ?, ?)", 2, "2", "2");
+        execute("INSERT INTO %s (id, value) VALUES (?, ?)", 3, "3");
         flush();
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '1' AND value2 = '1'").size());
         assertEquals(1, execute("SELECT * FROM %s WHERE value = '2' AND value2 = '2'").size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE value = '3' AND value2 = '3'").size());
     }
 }

@@ -129,7 +129,7 @@ public class TermsReaderTest extends SaiRandomizedTest
             for (Pair<ByteComparable, LongArrayList> pair : termsEnum)
             {
                 final byte[] bytes = ByteSourceInverse.readBytes(pair.left.asComparableBytes(ByteComparable.Version.OSS41));
-                try (PostingList actualPostingList = reader.exactMatch(ByteComparable.fixedLength(bytes),
+                try (PostingList actualPostingList = reader.exactMatch2(ByteComparable.fixedLength(bytes),
                                                                        (QueryEventListener.TrieIndexEventListener)NO_OP_TRIE_LISTENER,
                                                                        new QueryContext()))
                 {
@@ -150,7 +150,7 @@ public class TermsReaderTest extends SaiRandomizedTest
                 }
 
                 // test skipping
-                try (PostingList actualPostingList = reader.exactMatch(ByteComparable.fixedLength(bytes),
+                try (PostingList actualPostingList = reader.exactMatch2(ByteComparable.fixedLength(bytes),
                                                                        (QueryEventListener.TrieIndexEventListener)NO_OP_TRIE_LISTENER,
                                                                        new QueryContext()))
                 {

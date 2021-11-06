@@ -32,6 +32,7 @@ import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
@@ -92,6 +93,8 @@ public class PrimaryKey implements Comparable<PrimaryKey>
     private long sstableRowId;
     private Supplier<DecoratedKey> decoratedKeySupplier;
     private Map<SSTableUniqueIdentifier, Long> sstableRowIdMap = new HashMap<>();
+
+    public Row row;
 
     public static class PrimaryKeyFactory
     {

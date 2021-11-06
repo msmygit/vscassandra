@@ -31,7 +31,9 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.FileUtils;
@@ -98,6 +100,11 @@ public class Segment implements Closeable
         this.maxKey = maxKey;
         this.maxKeyBound = maxKey.maxKeyBound();
         this.index = null;
+    }
+
+    public SupplierWithIO<PostingList> missingValuesPostings()
+    {
+        return this.index.missingValuesPostings();
     }
 
     /**

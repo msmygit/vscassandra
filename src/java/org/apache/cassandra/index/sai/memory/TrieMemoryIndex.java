@@ -40,6 +40,7 @@ import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.tries.MemtableTrie;
 import org.apache.cassandra.db.tries.Trie;
 import org.apache.cassandra.dht.AbstractBounds;
@@ -94,7 +95,7 @@ public class TrieMemoryIndex extends MemoryIndex
     }
 
     @Override
-    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value, Row row)
     {
         synchronized (writeLock)
         {
@@ -104,6 +105,8 @@ public class TrieMemoryIndex extends MemoryIndex
                 value = TypeUtil.encode(value, validator);
                 analyzer.reset(value.duplicate());
                 final PrimaryKey primaryKey = indexContext.keyFactory().createKey(key, clustering);
+                primaryKey.row = row;
+
                 final long initialSizeOnHeap = data.sizeOnHeap();
                 final long initialSizeOffHeap = data.sizeOffHeap();
                 final long reducerHeapSize = primaryKeysReducer.heapAllocations();

@@ -38,6 +38,8 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javafx.geometry.Pos;
+import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DataRange;
 import org.apache.cassandra.db.DecoratedKey;
@@ -65,6 +67,9 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
+import org.apache.cassandra.index.sai.disk.v2.ArrayPostingList;
+import org.apache.cassandra.index.sai.disk.v2.SupplierWithIO;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
@@ -230,10 +235,63 @@ public class QueryController
                     PrimaryKey minKey = null, maxKey = null;
                     SSTableQueryContext queryContext = null;
 
+                    List<SupplierWithIO<PostingList>> missingSuppliers = new ArrayList<>();
+
+                    for (SSTableIndex index : sstableIndexMap.get(entry.getKey()))
+                    {
+                        SupplierWithIO<PostingList> supplier = index.missingValuesPostings();
+                        if (supplier != null)
+                        {
+                            missingSuppliers.add(supplier);
+                        }
+                    }
+
                     List<PostingListRangeIterator> subIterators = new ArrayList<>(entry.getValue());
 
                     for (PostingListRangeIterator rangeIterator : subIterators)
                     {
+                        if (rangeIterator.searcherContext.postingListSupplier != null && missingSuppliers.size() > 0)
+                        {
+                            PostingList list = rangeIterator.searcherContext.postingListSupplier.get();
+
+                            List<PostingList> missingLists = new ArrayList<>();
+
+                            for (SupplierWithIO<PostingList> s : missingSuppliers)
+                            {
+                                missingLists.add(s.get());
+                            }
+
+                            PostingList missingList = MergePostingList.merge(missingLists);
+
+                            ConjunctionPostingList andMissings = new ConjunctionPostingList(Lists.newArrayList(missingList, list));
+
+                            IntArrayList missingrowids = new IntArrayList();
+
+                            while (true)
+                            {
+                                long rowid = andMissings.nextPosting();
+                                System.out.println("and missing rowid=" + rowid);
+                                if (rowid == PostingList.END_OF_STREAM) break;
+                                missingrowids.add((int)rowid);
+                            }
+
+                            PostingList andMissings2 = new ArrayPostingList(missingrowids.toIntArray());
+
+                            if (missingrowids.size() > 0)
+                            {
+                                IndexSearcherContext missingContext = new IndexSearcherContext(rangeIterator.getMinimum(),
+                                                                                               rangeIterator.getMaximum(),
+                                                                                               queryContext,
+                                                                                               andMissings2,
+                                                                                               null);
+                                PostingListRangeIterator missingRangeIterator = new PostingListRangeIterator(indexContext,
+                                                                                                             rangeIterator.primaryKeyMapSupplier.get(),
+                                                                                                             missingContext,
+                                                                                                             null);
+                                andBuilder.add(missingRangeIterator);
+                            }
+                        }
+
                         PostingList.PeekablePostingList postings = rangeIterator.getSearcherContext().postingList;
 
                         andLists.add(postings);
@@ -250,38 +308,50 @@ public class QueryController
                     // PostingListRangeIterator is closed
                     final List<SSTableIndex> perSSTableIndexes = new ArrayList<>(sstableIndexMap.get(entry.getKey()));
 
-                    ConjunctionPostingList conjunctionPostingList = new ConjunctionPostingList(andLists);
+//                    if (andLists.size() <= 1)
+//                    {
+//                        // there are no matches, close things
+//                        subIterators.forEach(i -> FileUtils.closeQuietly(i));
+//                        perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+//
+//                        return andBuilder;
+//                    }
 
-                    PostingList.PeekablePostingList conjunctionPeekable = conjunctionPostingList.peekable();
-
-                    if (conjunctionPeekable.peek() != PostingList.END_OF_STREAM)
+                    if (andLists.size() > 1)
                     {
+                        ConjunctionPostingList conjunctionPostingList = new ConjunctionPostingList(andLists);
 
-                        IndexSearcherContext sstableContext = new IndexSearcherContext(minKey,
-                                                                                       maxKey,
-                                                                                       queryContext,
-                                                                                       conjunctionPeekable);
+                        PostingList.PeekablePostingList conjunctionPeekable = conjunctionPostingList.peekable();
 
-                        // make sure this composite PostingListRangeIterator closes the original PostingListRangeIterator's
-                        // and per sstable SSTableIndex objects
-                        PostingListRangeIterator sstableRangeIterator = new PostingListRangeIterator(indexContext,
-                                                                                                     primaryKeyMap,
-                                                                                                     sstableContext,
-                                                                                                     () -> {
-                                                                                                         subIterators.forEach(i -> FileUtils.closeQuietly(i));
-                                                                                                         perSSTableIndexes.forEach(TermIterator::releaseQuietly);
-                                                                                                     });
-                        andBuilder.add(sstableRangeIterator);
+                        if (conjunctionPeekable.peek() != PostingList.END_OF_STREAM)
+                        {
+                            IndexSearcherContext sstableContext = new IndexSearcherContext(minKey,
+                                                                                           maxKey,
+                                                                                           queryContext,
+                                                                                           conjunctionPeekable,
+                                                                                           null);
+
+                            // make sure this composite PostingListRangeIterator closes the original PostingListRangeIterator's
+                            // and per sstable SSTableIndex objects
+                            PostingListRangeIterator sstableRangeIterator = new PostingListRangeIterator(indexContext,
+                                                                                                         primaryKeyMap,
+                                                                                                         sstableContext,
+                                                                                                         () -> {
+                                                                                                             subIterators.forEach(i -> FileUtils.closeQuietly(i));
+                                                                                                             perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                                                                                                         },
+                                                                                                         null);
+                            andBuilder.add(sstableRangeIterator);
+                        }
+                        else
+                        {
+                            // there are no matches, close things
+                            subIterators.forEach(i -> FileUtils.closeQuietly(i));
+                            perSSTableIndexes.forEach(TermIterator::releaseQuietly);
+                        }
                     }
-                    else
-                    {
-                        // there are not matches, close things
-                        subIterators.forEach(i -> FileUtils.closeQuietly(i));
-                        perSSTableIndexes.forEach(TermIterator::releaseQuietly);
-                    }
-
-                    return andBuilder;
                 }
+                return andBuilder;
             }
         }
         // duplicate code, | doesn't work

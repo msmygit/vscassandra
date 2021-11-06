@@ -37,6 +37,7 @@ public enum IndexComponent
      */
     KD_TREE("KDTree"),
     KD_TREE_POSTING_LISTS("KDTreePostingLists"),
+    MISSING_VALUES("MissingValues"),
     /**
      * Term dictionary written by {@code TrieTermsDictionaryWriter} stores mappings of term and
      * file pointer to posting block on posting file.
