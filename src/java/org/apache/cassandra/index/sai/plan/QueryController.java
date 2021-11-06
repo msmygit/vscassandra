@@ -22,12 +22,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.HashMultimap;
@@ -240,6 +242,8 @@ public class QueryController
 
                     List<SupplierWithIO<PostingList>> missingSuppliers = new ArrayList<>();
 
+                    Set<UUID> missingsstableUUIDs = new HashSet<>();
+
                     for (SSTableIndex index : sstableIndexMap.get(entry.getKey()))
                     {
                         SupplierWithIO<PostingList> supplier = index.missingValuesPostings();
@@ -247,13 +251,14 @@ public class QueryController
                         {
                             missingSuppliers.add(supplier);
                         }
+                        missingsstableUUIDs.add(index.uuid);
                     }
 
                     List<PostingListRangeIterator> subIterators = new ArrayList<>(entry.getValue());
 
                     for (PostingListRangeIterator rangeIterator : subIterators)
                     {
-                        PostingsKey postingsKey = new PostingsKey(entry.getKey(), rangeIterator.indexContext.getIndexName(), rangeIterator.postingId, true);
+                        PostingsKey postingsKey = new PostingsKey(entry.getKey(), rangeIterator.indexContext.getIndexName(), rangeIterator.postingId, missingsstableUUIDs);
                         PostingsCache.PostingsFactory postingsFactory = PostingsCache.INSTANCE.get(postingsKey);
                         System.out.println("postingsFactory="+postingsFactory);
                         if (postingsFactory != null)
@@ -262,6 +267,9 @@ public class QueryController
 
                             System.out.println("postingsFactory list.size="+list.size());
 
+                            // it's important to cache posting lists with size zero
+                            // because then the missing value postings creation
+                            // and intersection is avoided
                             if (list.size() > 0)
                             {
                                 IndexSearcherContext missingContext = new IndexSearcherContext(rangeIterator.searcherContext.minimumKey,
@@ -329,8 +337,6 @@ public class QueryController
                                         return new ArrayPostingList(array);
                                     }
                                 });
-
-                                // TODO: put the andMissings2 postings in the global postings cache
 
                                 if (missingrowids.size() > 0)
                                 {

@@ -18,6 +18,9 @@
 
 package org.apache.cassandra.index.sai.disk.v2.postingscache;
 
+import java.util.Set;
+import java.util.UUID;
+
 import com.google.common.base.Objects;
 
 public class PostingsKey
@@ -25,14 +28,14 @@ public class PostingsKey
     public final Object sstableId;
     public final String indexName;
     public final long sstableIndexId; // file pointer or node id
-    public final boolean incongruentTS;
+    public final Set<UUID> missingSSTableIndexUUIDs;
 
-    public PostingsKey(Object sstableId, String indexName, long sstableIndexId, boolean incongruentTS)
+    public PostingsKey(Object sstableId, String indexName, long sstableIndexId, Set<UUID> missingSSTableIndexUUIDs)
     {
         this.sstableId = sstableId;
         this.indexName = indexName;
         this.sstableIndexId = sstableIndexId;
-        this.incongruentTS = incongruentTS;
+        this.missingSSTableIndexUUIDs = missingSSTableIndexUUIDs;
     }
 
     @Override
@@ -41,12 +44,12 @@ public class PostingsKey
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PostingsKey that = (PostingsKey) o;
-        return sstableIndexId == that.sstableIndexId && incongruentTS == that.incongruentTS && Objects.equal(sstableId, that.sstableId) && Objects.equal(indexName, that.indexName);
+        return sstableIndexId == that.sstableIndexId && Objects.equal(sstableId, that.sstableId) && Objects.equal(indexName, that.indexName) && Objects.equal(missingSSTableIndexUUIDs, that.missingSSTableIndexUUIDs);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hashCode(sstableId, indexName, sstableIndexId, incongruentTS);
+        return Objects.hashCode(sstableId, indexName, sstableIndexId, missingSSTableIndexUUIDs);
     }
 }

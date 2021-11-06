@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -59,6 +60,8 @@ public class SSTableIndex
 
     private final AtomicInteger references = new AtomicInteger(1);
     private final AtomicBoolean obsolete = new AtomicBoolean(false);
+
+    public final UUID uuid = UUID.randomUUID();
 
     public SSTableIndex(SSTableContext sstableContext, IndexContext indexContext)
     {
