@@ -31,17 +31,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.postings.PackedLongsPostingList;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
+import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.util.packed.PackedInts;
+import org.apache.lucene.util.packed.PackedLongValues;
+
+import static org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter.sameTS;
 
 /**
  * Column index writer that accumulates (on-heap) indexed data from a compacted SSTable as it's being flushed to disk.
@@ -73,6 +81,8 @@ public class SSTableIndexWriter implements PerIndexWriter
     private final List<SegmentMetadata> segments = new ArrayList<>();
     private long maxSSTableRowId;
 
+    private final PackedLongValues.Builder missingValueInTSRowIdBuilder;
+
     public SSTableIndexWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, NamedMemoryLimiter limiter, BooleanSupplier isIndexValid)
     {
         this.indexDescriptor = indexDescriptor;
@@ -81,6 +91,7 @@ public class SSTableIndexWriter implements PerIndexWriter
         this.limiter = limiter;
         this.isIndexValid = isIndexValid;
         this.maxTermSize = indexContext.isFrozen() ? MAX_FROZEN_TERM_SIZE : MAX_STRING_TERM_SIZE;
+        this.missingValueInTSRowIdBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
     }
 
     @Override
@@ -114,6 +125,13 @@ public class SSTableIndexWriter implements PerIndexWriter
                 addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, indexContext.getValidator());
         }
         maxSSTableRowId = key.sstableRowId();
+
+        boolean sameTS = sameTS(row);
+        Cell cell = row.getCell(indexContext.getTarget().left);
+        if (cell == null || !sameTS)
+        {
+            missingValueInTSRowIdBuilder.add(key.sstableRowId());
+        }
     }
 
     @Override
@@ -143,6 +161,19 @@ public class SSTableIndexWriter implements PerIndexWriter
             }
 
             compactSegments();
+
+            System.out.println("compact column="+indexContext.getColumnName()+" missingValueInTSRowIdBuilder.size="+missingValueInTSRowIdBuilder.size());
+            if (missingValueInTSRowIdBuilder.size() > 0)
+            {
+                try (IndexOutput missingValuesOut = indexDescriptor.openPerIndexOutput(IndexComponent.MISSING_VALUES, indexContext, true, false))
+                {
+                    long startFP = missingValuesOut.getFilePointer();
+                    PostingsWriter missingValuesWriter = new PostingsWriter(missingValuesOut);
+                    long missingValuesFP = missingValuesWriter.write(new PackedLongsPostingList(missingValueInTSRowIdBuilder.build()));
+                    long length = missingValuesOut.getFilePointer() - startFP;
+                    this.segments.get(0).componentMetadatas.put(IndexComponent.MISSING_VALUES, 0, missingValuesFP, length);
+                }
+            }
 
             writeSegmentsMetadata();
             indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);

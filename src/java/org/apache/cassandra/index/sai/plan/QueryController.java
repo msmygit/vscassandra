@@ -209,10 +209,10 @@ public class QueryController
         try
         {
             // per column
-            for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
+            for (Map.Entry<Expression, NavigableSet<SSTableIndex>> entry : view)
             {
                 @SuppressWarnings("resource") // RangeIterators are closed by releaseIndexes
-                TermIterator index = TermIterator.build(e.getKey(), e.getValue(), mergeRange, queryContext, defer, sstableRangeIterators);
+                TermIterator index = TermIterator.build(entry.getKey(), entry.getValue(), mergeRange, queryContext, defer, sstableRangeIterators);
 
                 for (SSTableIndex ssTableIndex : index.referencedIndexes)
                 {
@@ -270,10 +270,13 @@ public class QueryController
                             while (true)
                             {
                                 long rowid = andMissings.nextPosting();
-                                System.out.println("and missing rowid=" + rowid);
+
                                 if (rowid == PostingList.END_OF_STREAM) break;
+
                                 missingrowids.add((int)rowid);
                             }
+
+                            // TODO: put the andMissings2 postings in the global postings cache
 
                             PostingList andMissings2 = new ArrayPostingList(missingrowids.toIntArray());
 
@@ -307,15 +310,6 @@ public class QueryController
                     // get the SSTableIndex's for this sstable reader to be closed when the
                     // PostingListRangeIterator is closed
                     final List<SSTableIndex> perSSTableIndexes = new ArrayList<>(sstableIndexMap.get(entry.getKey()));
-
-//                    if (andLists.size() <= 1)
-//                    {
-//                        // there are no matches, close things
-//                        subIterators.forEach(i -> FileUtils.closeQuietly(i));
-//                        perSSTableIndexes.forEach(TermIterator::releaseQuietly);
-//
-//                        return andBuilder;
-//                    }
 
                     if (andLists.size() > 1)
                     {

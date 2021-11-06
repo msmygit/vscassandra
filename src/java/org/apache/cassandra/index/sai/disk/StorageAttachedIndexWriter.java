@@ -65,8 +65,6 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
     private long sstableRowId = 0;
 
-    private final PackedLongValues.Builder incongruentTimestampRowIdBuilder;
-
     public StorageAttachedIndexWriter(IndexDescriptor indexDescriptor,
                                       Collection<StorageAttachedIndex> indices,
                                       LifecycleNewTracker lifecycleNewTracker) throws IOException
@@ -92,8 +90,6 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         // If the SSTable components are already being built by another index build then we don't want
         // to build them again so use a null writer
         this.perSSTableWriter = perIndexComponentsOnly ? PerSSTableWriter.NONE : indexDescriptor.newPerSSTableWriter();
-
-        incongruentTimestampRowIdBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
     }
 
     @Override
@@ -267,13 +263,6 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
     {
         PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey, row.clustering(), sstableRowId++);
         primaryKey.row = row;
-
-        boolean sameTS = sameTS(row);
-
-        if (!sameTS)
-        {
-            incongruentTimestampRowIdBuilder.add(primaryKey.sstableRowId());
-        }
 
         perSSTableWriter.nextRow(primaryKey);
         rowMapping.add(primaryKey);
