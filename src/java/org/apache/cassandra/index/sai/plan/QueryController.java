@@ -188,6 +188,8 @@ public class QueryController
 
         Set<Map.Entry<Expression, NavigableSet<SSTableIndex>>> view = referenceAndGetView(op, expressions).entrySet();
 
+//        if (op == Operation.OperationType.AND)
+//            view = reduceByCardinality(view);
         try
         {
             for (Map.Entry<Expression, NavigableSet<SSTableIndex>> e : view)
@@ -266,6 +268,11 @@ public class QueryController
     {
         if (tableQueryMetrics != null) tableQueryMetrics.record(queryContext);
     }
+
+//    private Map<Expression, NavigableSet<SSTableIndex>> reduceByCardinality(Map<Expression, NavigableSet<SSTableIndex>> view)
+//    {
+//
+//    }
 
     /**
      * Try to reference all SSTableIndexes before querying on disk indexes.
