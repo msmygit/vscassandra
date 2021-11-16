@@ -48,8 +48,8 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         private final LongArray.Factory tokenReaderFactory;
         private final SortedTermsReader sortedTermsReader;
         private FileHandle token = null;
-        private IndexInput termsData = null;
         private IndexInput termsDataBlockOffsets = null;
+        private FileHandle termsData = null;
         private FileHandle termsTrie = null;
         private final IPartitioner partitioner;
         private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
@@ -68,7 +68,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
                 token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
                 this.tokenReaderFactory = new BlockPackedReader(token, tokensMeta);
                 SortedTermsMeta sortedTermsMeta = new SortedTermsMeta(metadataSource.get(sortedBytesComponentName));
-                this.termsData = indexDescriptor.openPerSSTableInput(IndexComponent.SORTED_BYTES);
+                this.termsData = indexDescriptor.createPerSSTableFileHandle(IndexComponent.SORTED_BYTES);
                 this.termsDataBlockOffsets = indexDescriptor.openPerSSTableInput(IndexComponent.BLOCK_POINTERS);
                 this.termsTrie = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
                 this.sortedTermsReader = new SortedTermsReader(termsData, termsDataBlockOffsets, termsTrie, sortedTermsMeta);
