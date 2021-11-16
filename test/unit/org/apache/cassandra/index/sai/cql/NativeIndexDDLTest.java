@@ -905,6 +905,9 @@ public class NativeIndexDDLTest extends SAITester
         // that are encryptable unless they have been removed because encrypted components aren't
         // checksum validated.
 
+        if (component == IndexComponent.TRIE_DATA || component == IndexComponent.SORTED_BYTES || component == IndexComponent.BLOCK_POINTERS)
+            return;
+
         if (((component == IndexComponent.GROUP_COMPLETION_MARKER) ||
              (component == IndexComponent.COLUMN_COMPLETION_MARKER)) &&
             (corruptionType != CorruptionType.REMOVED))
@@ -935,7 +938,9 @@ public class NativeIndexDDLTest extends SAITester
         boolean expectedNumericState = !failedNumericIndex || isBuildCompletionMarker(component);
         boolean expectedLiteralState = !failedStringIndex || isBuildCompletionMarker(component);
 
-        assertEquals(expectedNumericState, verifyChecksum(numericIndexContext));
+        assertEquals("Checksum verification for " + component + " should be " + expectedNumericState + " but was " + !expectedNumericState,
+                     expectedNumericState,
+                     verifyChecksum(numericIndexContext));
         assertEquals(expectedLiteralState, verifyChecksum(stringIndexContext));
 
         if (rebuild)

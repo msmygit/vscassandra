@@ -269,7 +269,7 @@ public class V1OnDiskFormat implements OnDiskFormat
         return 2;
     }
 
-    private boolean isBuildCompletionMarker(IndexComponent indexComponent)
+    protected boolean isBuildCompletionMarker(IndexComponent indexComponent)
     {
         return indexComponent == IndexComponent.GROUP_COMPLETION_MARKER ||
                indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER;

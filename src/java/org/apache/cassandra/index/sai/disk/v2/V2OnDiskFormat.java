@@ -36,7 +36,9 @@ import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RowAwarePrimaryKeyFactory;
+import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
+import org.apache.lucene.store.IndexInput;
 
 public class V2OnDiskFormat extends V1OnDiskFormat
 {
@@ -48,6 +50,10 @@ public class V2OnDiskFormat extends V1OnDiskFormat
                                                                                  IndexComponent.TRIE_DATA,
                                                                                  IndexComponent.SORTED_BYTES,
                                                                                  IndexComponent.BLOCK_POINTERS);
+
+    private static final Set<IndexComponent> NON_VALIDATING_COMPONENTS = EnumSet.of(IndexComponent.TRIE_DATA,
+                                                                                    IndexComponent.SORTED_BYTES,
+                                                                                    IndexComponent.BLOCK_POINTERS);
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
 
@@ -85,6 +91,35 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         return new SSTableComponentsWriter(indexDescriptor);
+    }
+
+    @Override
+    public boolean validatePerSSTableComponents(IndexDescriptor indexDescriptor, boolean checksum)
+    {
+        for (IndexComponent indexComponent : perSSTableComponents())
+        {
+            if (isBuildCompletionMarker(indexComponent) || NON_VALIDATING_COMPONENTS.contains(indexComponent))
+                continue;
+            try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
+            {
+                if (checksum)
+                    SAICodecUtils.validateChecksum(input);
+                else
+                    SAICodecUtils.validate(input);
+            }
+            catch (Throwable e)
+            {
+                if (logger.isDebugEnabled())
+                {
+                    logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
+                                 (checksum ? "Checksum validation" : "Validation"),
+                                 indexComponent,
+                                 indexDescriptor.descriptor);
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
