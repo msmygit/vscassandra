@@ -18,6 +18,11 @@
 
 package org.apache.cassandra.index.sai.disk.v2.sortedterms;
 
+import java.io.IOException;
+
+import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.store.IndexOutput;
+
 /**
  * Metadata produced by {@link SortedTermsWriter}, needed by {@link SortedTermsReader}.
  */
@@ -30,6 +35,18 @@ public class SortedTermsMeta
     public final byte[] offsetMetaBytes;
     public final long offsetBlockCount;
 
+    public SortedTermsMeta(IndexInput input) throws IOException
+    {
+        this.trieFP = input.readLong();
+        this.count = input.readLong();
+        this.maxTermLength = input.readInt();
+        int length = input.readVInt();
+        byte[] bytes = new byte[length];
+        input.readBytes(bytes, 0, length);
+        this.offsetMetaBytes = bytes;
+        this.offsetBlockCount = input.readLong();
+    }
+
     public SortedTermsMeta(long trieFP, long count, int maxTermLength, byte[] offsetMetaBytes, long offsetBlockCount)
     {
         this.trieFP = trieFP;
@@ -37,5 +54,15 @@ public class SortedTermsMeta
         this.maxTermLength = maxTermLength;
         this.offsetMetaBytes = offsetMetaBytes;
         this.offsetBlockCount = offsetBlockCount;
+    }
+
+    public void write(IndexOutput output) throws IOException
+    {
+        output.writeLong(trieFP);
+        output.writeLong(count);
+        output.writeInt(maxTermLength);
+        output.writeVInt(offsetMetaBytes.length);
+        output.writeBytes(offsetMetaBytes, 0, offsetMetaBytes.length);
+        output.writeLong(offsetBlockCount);
     }
 }

@@ -32,7 +32,7 @@ public interface PerSSTableWriter
 {
     public static final PerSSTableWriter NONE = (key) -> {};
 
-    default void startPartition(PrimaryKey primaryKey, long position) throws IOException
+    default void startPartition(long position) throws IOException
     {}
 
     void nextRow(PrimaryKey primaryKey) throws IOException;

@@ -94,6 +94,8 @@ public interface PrimaryKey extends Comparable<PrimaryKey>
 
     PrimaryKey withPrimaryKeySupplier(Supplier<PrimaryKey> primaryKeySupplier);
 
+    PrimaryKey withGeneration(SSTableUniqueIdentifier generation);
+
     PrimaryKey loadDeferred();
 
     long sstableRowId();

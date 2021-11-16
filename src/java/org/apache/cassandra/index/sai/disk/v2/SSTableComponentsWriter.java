@@ -15,80 +15,82 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+
+package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
+import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
 import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesWriter;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsMeta;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWriter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.IOUtils;
 
-/**
- * Writes all SSTable-attached index token and offset structures.
- */
 public class SSTableComponentsWriter implements PerSSTableWriter
 {
     protected static final Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
 
     private final IndexDescriptor indexDescriptor;
-    private final NumericValuesWriter tokenWriter;
-    private final NumericValuesWriter offsetWriter;
     private final MetadataWriter metadataWriter;
-
-    private long currentKeyPartitionOffset;
+    private final NumericValuesWriter tokenWriter;
+    private final IndexOutputWriter trieWriter;
+    private final IndexOutputWriter bytesWriter;
+    private final IndexOutputWriter blockFPWriter;
+    private final SortedTermsWriter writer;
 
     public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         this.indexDescriptor = indexDescriptor;
-
         this.metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
-
         this.tokenWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.TOKEN_VALUES, null),
                                                    indexDescriptor.openPerSSTableOutput(IndexComponent.TOKEN_VALUES),
                                                    metadataWriter, false);
-        this.offsetWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.OFFSETS_VALUES, null),
-                                                    indexDescriptor.openPerSSTableOutput(IndexComponent.OFFSETS_VALUES),
-                                                    metadataWriter, true);
-    }
-
-    @Override
-    public void startPartition(long position)
-    {
-        currentKeyPartitionOffset = position;
+        this.trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
+        this.bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.SORTED_BYTES);
+        this.blockFPWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS);
+        this.writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
     }
 
     @Override
     public void nextRow(PrimaryKey primaryKey) throws IOException
     {
-        recordCurrentTokenOffset(primaryKey.token().getLongValue(), currentKeyPartitionOffset);
+        tokenWriter.add(primaryKey.token().getLongValue());
+        writer.add(v -> primaryKey.asComparableBytes(v));
     }
 
     @Override
     public void complete(Stopwatch stopwatch) throws IOException
     {
-        IOUtils.close(tokenWriter, offsetWriter, metadataWriter);
-        indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
+        try
+        {
+            SortedTermsMeta metadata = writer.finish();
+            try (IndexOutput metadataOutput = metadataWriter.builder(indexDescriptor.version.fileNameFormatter().format(IndexComponent.SORTED_BYTES, null)))
+            {
+                metadata.write(metadataOutput);
+            }
+            indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
+        }
+        finally
+        {
+            IOUtils.close(tokenWriter, trieWriter, bytesWriter, blockFPWriter, metadataWriter);
+        }
     }
 
     @Override
     public void abort(Throwable accumulator)
     {
-        logger.debug(indexDescriptor.logMessage("Aborting token/offset writer for {}..."), indexDescriptor.descriptor);
+        logger.debug(indexDescriptor.logMessage("Aborting per-SSTable index component writer for {}..."), indexDescriptor.descriptor);
         indexDescriptor.deletePerSSTableIndexComponents();
-    }
-
-    @VisibleForTesting
-    public void recordCurrentTokenOffset(long tokenValue, long keyOffset) throws IOException
-    {
-        tokenWriter.add(tokenValue);
-        offsetWriter.add(keyOffset);
     }
 }

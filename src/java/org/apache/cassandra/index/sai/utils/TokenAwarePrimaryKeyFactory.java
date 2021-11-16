@@ -26,6 +26,7 @@ import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
@@ -51,6 +52,7 @@ public class TokenAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         private DecoratedKey partitionKey;
         private long sstableRowId = -1;
         private Supplier<PrimaryKey> primaryKeySupplier;
+        private SSTableUniqueIdentifier generation;
 
         private TokenAwarePrimaryKey(Token token, DecoratedKey partitionKey)
         {
@@ -69,6 +71,13 @@ public class TokenAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         public PrimaryKey withPrimaryKeySupplier(Supplier<PrimaryKey> primaryKeySupplier)
         {
             this.primaryKeySupplier = primaryKeySupplier;
+            return this;
+        }
+
+        @Override
+        public PrimaryKey withGeneration(SSTableUniqueIdentifier generation)
+        {
+            this.generation = generation;
             return this;
         }
 
@@ -128,8 +137,14 @@ public class TokenAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         public int compareTo(PrimaryKey o)
         {
             if (partitionKey == null || o.partitionKey() == null)
-                return token().compareTo(o.token());
-            return partitionKey.compareTo(o.partitionKey());
+            {
+                int cmp = token().compareTo(o.token());
+//                System.out.println("comparing(tokens)" + this + " to " + o + " return " + cmp);
+                return cmp;
+            }
+            int cmp = partitionKey.compareTo(o.partitionKey());
+//            System.out.println("comparing(partitions)" + this + " to " + o + " return " + cmp);
+            return cmp;
         }
 
         @Override
@@ -149,7 +164,7 @@ public class TokenAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         @Override
         public String toString()
         {
-            return String.format("TokenAwarePrimaryKey: { token : %s } ", token);
+            return String.format("TokenAwarePrimaryKey: { token: %s, partition: %s, generation: %s } ", token, partitionKey == null ? null : partitionKey, generation);
         }
     }
 }

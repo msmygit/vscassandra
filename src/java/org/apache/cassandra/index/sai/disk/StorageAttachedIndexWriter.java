@@ -102,11 +102,9 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
         
         currentKey = key;
 
-        PrimaryKey primaryKey = primaryKeyFactory.createKey(currentKey.getToken()).withSSTableRowId(sstableRowId);
-
         try
         {
-            perSSTableWriter.startPartition(primaryKey, position);
+            perSSTableWriter.startPartition(position);
         }
         catch (Throwable t)
         {

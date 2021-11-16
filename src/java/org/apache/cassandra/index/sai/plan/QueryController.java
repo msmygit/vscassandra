@@ -34,6 +34,8 @@ import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.Clustering;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DataRange;
 import org.apache.cassandra.db.DecoratedKey;
@@ -43,10 +45,16 @@ import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.ReadExecutionController;
 import org.apache.cassandra.db.SinglePartitionReadCommand;
+import org.apache.cassandra.db.Slice;
+import org.apache.cassandra.db.Slices;
+import org.apache.cassandra.db.filter.AbstractClusteringIndexFilter;
 import org.apache.cassandra.db.filter.ClusteringIndexFilter;
 import org.apache.cassandra.db.filter.ClusteringIndexNamesFilter;
+import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.filter.DataLimits;
 import org.apache.cassandra.db.filter.RowFilter;
+import org.apache.cassandra.db.partitions.CachedPartition;
+import org.apache.cassandra.db.partitions.Partition;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
@@ -56,6 +64,7 @@ import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
+import org.apache.cassandra.index.sai.utils.FilteringClusteringIndexFilter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -213,13 +222,28 @@ public class QueryController
         return indexFeatureSet;
     }
 
+    public boolean selects(PrimaryKey key)
+    {
+        return !indexFeatureSet.isRowAware() ||
+               key.hasEmptyClustering() ||
+               command.clusteringIndexFilter(key.partitionKey()).selects(key.clustering());
+    }
+
     private ClusteringIndexFilter makeFilter(PrimaryKey key)
     {
-        if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())
-            return command.clusteringIndexFilter(key.partitionKey());
-        else
-            return new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(), key.clusteringComparator()), false);
+        ClusteringIndexFilter clusteringIndexFilter = command.clusteringIndexFilter(key.partitionKey());
 
+        if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())
+        {
+//            System.out.println("makeFilter(" + key + ", " + clusteringIndexFilter.toString(cfs.metadata()) + ")");
+            return clusteringIndexFilter;
+        }
+        else
+        {
+            clusteringIndexFilter = new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(), key.clusteringComparator()), clusteringIndexFilter.isReversed());
+//            System.out.println("makeFilter(" + key + ", " + clusteringIndexFilter.toString(cfs.metadata()) + ")");
+            return clusteringIndexFilter;
+        }
     }
 
     private static void releaseQuietly(SSTableIndex index)

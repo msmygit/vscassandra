@@ -31,6 +31,7 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
@@ -65,10 +66,11 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         Token token = partitioner.getTokenFactory().fromComparableBytes(ByteSourceInverse.nextComponentSource(peekable), ByteComparable.Version.OSS41);
         byte[] keyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable));
 
-        DecoratedKey key =  new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
+        DecoratedKey key =  keyBytes == null ? null : new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
 
         Clustering clustering = clusteringComparator.size() == 0 ? Clustering.EMPTY
-                                                                 : clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance, v -> peekable);
+                                                                 : clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance,
+                                                                                                                     v -> ByteSourceInverse.nextComponentSource(peekable));
 
         return new RowAwarePrimaryKey(token, key, clustering);
     }
@@ -80,6 +82,8 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         private Clustering clustering;
         private long sstableRowId = -1;
         private Supplier<PrimaryKey> primaryKeySupplier;
+        private SSTableUniqueIdentifier generation;
+        private boolean deferred = false;
 
         private RowAwarePrimaryKey(Token token, DecoratedKey partitionKey, Clustering clustering)
         {
@@ -98,17 +102,15 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         public DecoratedKey partitionKey()
         {
             if (partitionKey == null && primaryKeySupplier != null)
-            {
-                PrimaryKey primaryKey = primaryKeySupplier.get();
-                partitionKey = primaryKey.partitionKey();
-                clustering = primaryKey.clustering();
-            }
+                loadDeferred();
             return partitionKey;
         }
 
         @Override
         public Clustering clustering()
         {
+            if (clustering == null && primaryKeySupplier != null)
+                loadDeferred();
             return clustering;
         }
 
@@ -129,12 +131,27 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         public PrimaryKey withPrimaryKeySupplier(Supplier<PrimaryKey> primaryKeySupplier)
         {
             this.primaryKeySupplier = primaryKeySupplier;
+            this.deferred = true;
+            return this;
+        }
+
+        @Override
+        public PrimaryKey withGeneration(SSTableUniqueIdentifier generation)
+        {
+            this.generation = generation;
             return this;
         }
 
         @Override
         public PrimaryKey loadDeferred()
         {
+            if (primaryKeySupplier != null && partitionKey == null)
+            {
+                PrimaryKey deferredKey = primaryKeySupplier.get();
+                this.partitionKey = deferredKey.partitionKey();
+                this.clustering = deferredKey.clustering();
+                this.deferred = false;
+            }
             return this;
         }
 
@@ -147,10 +164,11 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         @Override
         public ByteSource asComparableBytes(ByteComparable.Version version)
         {
-            assert partitionKey != null && clustering != null;
             ByteSource tokenComparable = token.asComparableBytes(version);
-            ByteSource keyComparable = ByteSource.of(partitionKey.getKey(), version);
+            ByteSource keyComparable = partitionKey == null ? null
+                                                            : ByteSource.of(partitionKey.getKey(), version);
             ByteSource clusteringComparable = clusteringComparator.size() == 0 ||
+                                              clustering == null ||
                                               clustering.isEmpty() ? null
                                                                    : clusteringComparator.asByteComparable(clustering)
                                                                                          .asComparableBytes(version);
@@ -165,17 +183,26 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         @Override
         public int compareTo(PrimaryKey o)
         {
-            int cmp = token().compareTo(o.token());
-            if (cmp != 0 || partitionKey() == null || o.partitionKey() == null)
+            if ((!deferred && partitionKey == null) || o.partitionKey() == null)
+            {
+                int cmp = token().compareTo(o.token());
+//                System.out.println("comparing(tokens + deferred = " + deferred + ")" + this + " to " + o + " return " + cmp);
                 return cmp;
-            cmp = partitionKey().compareTo(o.partitionKey());
+            }
+            loadDeferred();
+            int cmp = partitionKey().compareTo(o.partitionKey());
             if (cmp != 0 ||
                 clusteringComparator().size() == 0 ||
                 !clusteringComparator().equals(o.clusteringComparator()) ||
-                clustering().isEmpty() ||
-                o.clustering().isEmpty())
+                hasEmptyClustering() ||
+                o.hasEmptyClustering())
+            {
+//                System.out.println("comparing(partitions + deferred = " + deferred + ") " + this + " to " + o + " return " + cmp);
                 return cmp;
-            return clusteringComparator().compare(clustering(), o.clustering());
+            }
+            cmp  = clusteringComparator().compare(clustering(), o.clustering());
+//            System.out.println("comparing(full + deferred = " + deferred + ") " + this + " to " + o + " return " + cmp);
+            return cmp;
         }
 
         @Override
@@ -195,13 +222,14 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         @Override
         public String toString()
         {
-            return String.format("RowAwarePrimaryKey: { token : %s, partition : %s, clustering: %s:%s} ",
+            return String.format("RowAwarePrimaryKey: { token: %s, partition: %s, clustering: %s:%s, generation: %s} ",
                                  token,
                                  partitionKey,
                                  clustering == null ? null : clustering.kind(),
                                  clustering == null ? null :String.join(",", Arrays.stream(clustering.getBufferArray())
                                                                                    .map(ByteBufferUtil::bytesToHex)
-                                                                                   .collect(Collectors.toList())));
+                                                                                   .collect(Collectors.toList())),
+                                 generation);
         }
     }
 }

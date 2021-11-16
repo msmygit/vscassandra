@@ -61,7 +61,7 @@ public enum IndexComponent
     /**
      * Partition key token value for rows including row tombstone and static row. (access key is rowId)
      *
-     * V1
+     * V1 V2
      */
     TOKEN_VALUES("TokenValues"),
     /**
@@ -71,6 +71,10 @@ public enum IndexComponent
      * V1
      */
     OFFSETS_VALUES("OffsetsValues"),
+
+    TRIE_DATA("TrieData"),
+    SORTED_BYTES("SortedBytes"),
+    BLOCK_POINTERS("BlockPointers"),
     /**
      * Stores per-sstable metadata.
      *

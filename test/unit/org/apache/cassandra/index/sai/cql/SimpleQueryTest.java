@@ -37,7 +37,7 @@ import org.apache.lucene.util.BytesRefBuilder;
 import static org.apache.cassandra.index.sai.cql.AbstractQueryTester.INDEX_QUERY_COUNTER;
 import static org.junit.Assert.assertEquals;
 
-@Ignore
+//@Ignore
 public class SimpleQueryTest extends SAITester
 {
     @Test
@@ -112,23 +112,42 @@ public class SimpleQueryTest extends SAITester
         dataModel.createIndexes(executor);
         dataModel.insertRows(executor);
         dataModel.flush(executor);
+        dataModel.insertRows(executor);
+        dataModel.flush(executor);
 
 //        UntypedResultSet result = execute("SELECT abbreviation FROM " + DataModel.KEYSPACE + "." + dataModel.indexedTable() + " WHERE murders_per_year <= 126 AND tiny_murders_per_year <= 9");
 //
 //        System.out.println(result);
 
-//        UntypedResultSet result = execute("SELECT abbreviation FROM " + DataModel.KEYSPACE + "." + dataModel.indexedTable() + " WHERE gdp < ?", 5000000000L);
-//
-//
-//        System.out.println(makeRowStrings(result));
+        UntypedResultSet result = execute("SELECT abbreviation FROM " + DataModel.KEYSPACE + "." + dataModel.indexedTable() + " WHERE gdp < ?", 5000000000L);
 
-        List<Object> result2 = dataModel.executeIndexed(executor, "SELECT abbreviation FROM " +
-                                                                  DataModel.KEYSPACE + "." +
-                                                                  dataModel.indexedTable() +
-                                                                  " WHERE gdp < ?",
-                                                        5 ,
-                                                        5000000000L);
 
-        System.out.println(result2);
+        System.out.println(makeRowStrings(result));
+
+//        List<Object> actual = dataModel.executeIndexed(executor, "SELECT abbreviation FROM " +
+//                                                                 DataModel.KEYSPACE + "." +
+//                                                                 dataModel.indexedTable() +
+//                                                                 " WHERE gdp < ? LIMIT ?",
+//                                                       5 ,
+//                                                       5000000000L,
+//                                                       10);
+//
+//        List<Object> expected = dataModel.executeNonIndexed(executor, "SELECT abbreviation FROM " +
+//                                                                      DataModel.KEYSPACE + "." +
+//                                                                      dataModel.nonIndexedTable() +
+//                                                                      " WHERE gdp < ? LIMIT ? ALLOW FILTERING",
+//                                                            5,
+//                                                            5000000000L,
+//                                                            10);
+//        List<Object> result2 = dataModel.executeIndexed(executor, "SELECT abbreviation FROM " +
+//                                                                  DataModel.KEYSPACE + "." +
+//                                                                  dataModel.indexedTable() +
+//                                                                  " WHERE entered < ?",
+//                                                        5 ,
+//                                                        1845);
+//
+//        System.out.println(expected);
+//        System.out.println(actual);
+//        assertEquals(expected, actual);
     }
 }

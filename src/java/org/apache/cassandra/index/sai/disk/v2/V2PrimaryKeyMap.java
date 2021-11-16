@@ -16,114 +16,109 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.apache.cassandra.dht.IPartitioner;
-import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.LongArray;
+import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.block.BlockPackedReader;
-import org.apache.cassandra.index.sai.disk.v1.block.MonotonicBlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesMeta;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsMeta;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsReader;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.utils.Throwables;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.lucene.store.IndexInput;
 
-public class V1PrimaryKeyMap implements PrimaryKeyMap
+public class V2PrimaryKeyMap implements PrimaryKeyMap
 {
-    public static class V1PrimaryKeyMapFactory implements Factory
+    public static class V2PrimaryKeyMapFactory implements PrimaryKeyMap.Factory
     {
         private final LongArray.Factory tokenReaderFactory;
-        private final LongArray.Factory offsetReaderFactory;
-        private final MetadataSource metadata;
-        private final long size;
-        private final KeyFetcher keyFetcher;
+        private final SortedTermsReader sortedTermsReader;
+        private FileHandle token = null;
+        private IndexInput termsData = null;
+        private IndexInput termsDataBlockOffsets = null;
+        private FileHandle termsTrie = null;
         private final IPartitioner partitioner;
         private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
         private final SSTableUniqueIdentifier generation;
+        private final long size;
 
-        private FileHandle token = null;
-        private FileHandle offset = null;
-
-        public V1PrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable)
+        public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable)
         {
-            String offsetsComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.OFFSETS_VALUES, null);
             String tokensComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.TOKEN_VALUES, null);
+            String sortedBytesComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.SORTED_BYTES, null);
             try
             {
-                this.metadata = MetadataSource.loadGroupMetadata(indexDescriptor);
-                NumericValuesMeta offsetsMeta = new NumericValuesMeta(this.metadata.get(offsetsComponentName));
-                NumericValuesMeta tokensMeta = new NumericValuesMeta(this.metadata.get(tokensComponentName));
-                this.size = offsetsMeta.valueCount;
-
+                MetadataSource metadataSource = MetadataSource.loadGroupMetadata(indexDescriptor);
+                NumericValuesMeta tokensMeta = new NumericValuesMeta(metadataSource.get(tokensComponentName));
+                size = tokensMeta.valueCount;
                 token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
-                offset = indexDescriptor.createPerSSTableFileHandle(IndexComponent.OFFSETS_VALUES);
-
                 this.tokenReaderFactory = new BlockPackedReader(token, tokensMeta);
-                this.offsetReaderFactory = new MonotonicBlockPackedReader(offset, offsetsMeta);
-                this.partitioner = indexDescriptor.partitioner;
-                this.keyFetcher = new KeyFetcher(sstable);
+                SortedTermsMeta sortedTermsMeta = new SortedTermsMeta(metadataSource.get(sortedBytesComponentName));
+                this.termsData = indexDescriptor.openPerSSTableInput(IndexComponent.SORTED_BYTES);
+                this.termsDataBlockOffsets = indexDescriptor.openPerSSTableInput(IndexComponent.BLOCK_POINTERS);
+                this.termsTrie = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
+                this.sortedTermsReader = new SortedTermsReader(termsData, termsDataBlockOffsets, termsTrie, sortedTermsMeta);
+                this.partitioner = sstable.metadata().partitioner;
                 this.primaryKeyFactory = indexDescriptor.primaryKeyFactory;
                 this.generation = indexDescriptor.descriptor.generation;
             }
             catch (Throwable t)
             {
-                throw Throwables.unchecked(Throwables.close(t, token, offset));
+                throw Throwables.unchecked(Throwables.close(t, token, termsData, termsDataBlockOffsets, termsTrie));
             }
         }
 
         @Override
-        public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context)
+        public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));
-            final LongArray rowIdToOffset = new LongArray.DeferredLongArray(() -> offsetReaderFactory.open());
-
-            return new V1PrimaryKeyMap(rowIdToToken, rowIdToOffset, partitioner, keyFetcher, primaryKeyFactory, size, generation);
+            return new V2PrimaryKeyMap(rowIdToToken, sortedTermsReader, partitioner, primaryKeyFactory, generation, size);
         }
 
         @Override
         public void close() throws IOException
         {
-            FileUtils.closeQuietly(token, offset);
+            FileUtils.closeQuietly(token, termsData, termsDataBlockOffsets, termsTrie);
         }
     }
 
     private final LongArray rowIdToToken;
-    private final LongArray rowIdToOffset;
+    private final SortedTermsReader sortedTermsReader;
+    private final SortedTermsReader.Cursor cursor;
     private final IPartitioner partitioner;
-    private final KeyFetcher keyFetcher;
-    private final RandomAccessReader reader;
     private final PrimaryKey.PrimaryKeyFactory primaryKeyFactory;
-    private final long size;
     private final SSTableUniqueIdentifier generation;
+    private final long size;
     private final ByteBuffer tokenBuffer = ByteBuffer.allocate(Long.BYTES);
 
-    private V1PrimaryKeyMap(LongArray rowIdToToken,
-                            LongArray rowIdToOffset,
+    private V2PrimaryKeyMap(LongArray rowIdToToken,
+                            SortedTermsReader sortedTermsReader,
                             IPartitioner partitioner,
-                            KeyFetcher keyFetcher,
                             PrimaryKey.PrimaryKeyFactory primaryKeyFactory,
-                            long size,
-                            SSTableUniqueIdentifier generation)
+                            SSTableUniqueIdentifier generation,
+                            long size) throws IOException
     {
         this.rowIdToToken = rowIdToToken;
-        this.rowIdToOffset = rowIdToOffset;
+        this.sortedTermsReader = sortedTermsReader;
+        this.cursor = sortedTermsReader.openCursor();
         this.partitioner = partitioner;
-        this.keyFetcher = keyFetcher;
-        this.reader = keyFetcher.createReader();
         this.primaryKeyFactory = primaryKeyFactory;
-        this.size = size;
         this.generation = generation;
+        this.size = size;
     }
 
     @Override
@@ -140,7 +135,7 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
         PrimaryKey key = primaryKeyFactory.createKey(partitioner.getTokenFactory().fromByteArray(tokenBuffer))
                                 .withSSTableRowId(sstableRowId)
                                 .withPrimaryKeySupplier(() -> supplier(sstableRowId))
-                                .withGeneration(generation);
+                                          .withGeneration(generation);
 //        System.out.println("primaryKeyFromRowId(rowId = " + sstableRowId + ", generation = " + generation + ") " + key);
         return key;
     }
@@ -148,7 +143,7 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public long rowIdFromPrimaryKey(PrimaryKey key) throws IOException
     {
-        return rowIdToToken.findTokenRowID(key.token().getLongValue());
+        return sortedTermsReader.getPointId(v -> key.asComparableBytes(v));
     }
 
     @Override
@@ -160,15 +155,21 @@ public class V1PrimaryKeyMap implements PrimaryKeyMap
     @Override
     public void close() throws IOException
     {
-        FileUtils.closeQuietly(rowIdToToken, rowIdToOffset, reader);
+        FileUtils.closeQuietly(cursor, rowIdToToken);
     }
 
     private PrimaryKey supplier(long sstableRowId)
     {
-//        System.out.println("supplier(" + sstableRowId + ")");
-
-        return primaryKeyFactory.createKey(keyFetcher.apply(reader,
-                                                            rowIdToOffset.get(sstableRowId)))
-                                .withSSTableRowId(sstableRowId);
+        try
+        {
+//            System.out.println("supplier(" + sstableRowId + ")");
+            cursor.seekToPointId(sstableRowId);
+            return primaryKeyFactory.createKey(cursor.term().asPeekableBytes(ByteComparable.Version.OSS41))
+                                    .withSSTableRowId(sstableRowId);
+        }
+        catch (IOException e)
+        {
+            throw Throwables.cleaned(e);
+        }
     }
 }
