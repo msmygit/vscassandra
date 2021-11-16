@@ -68,9 +68,10 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
 
         DecoratedKey key =  keyBytes == null ? null : new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
 
-        Clustering clustering = clusteringComparator.size() == 0 ? Clustering.EMPTY
-                                                                 : clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance,
-                                                                                                                     v -> ByteSourceInverse.nextComponentSource(peekable));
+        Clustering clustering = clusteringComparator.size() == 0
+                                ? Clustering.EMPTY
+                                : clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance,
+                                                                                    v -> ByteSourceInverse.nextComponentSource(peekable));
 
         return new RowAwarePrimaryKey(token, key, clustering);
     }
@@ -183,26 +184,23 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         @Override
         public int compareTo(PrimaryKey o)
         {
+            // If this key has no deferred loader and it's partition key is null
+            // or the other partition key is null then one or both of the keys
+            // are token only so we can only compare tokens
             if ((!deferred && partitionKey == null) || o.partitionKey() == null)
-            {
-                int cmp = token().compareTo(o.token());
-//                System.out.println("comparing(tokens + deferred = " + deferred + ")" + this + " to " + o + " return " + cmp);
-                return cmp;
-            }
-            loadDeferred();
+                return token().compareTo(o.token());
+            // Next compare the partition keys. If they are not equal or
+            // this is a single row partition key or there are no
+            // clusterings then we can return the result of this without
+            // needing to compare the clusterings
             int cmp = partitionKey().compareTo(o.partitionKey());
             if (cmp != 0 ||
                 clusteringComparator().size() == 0 ||
                 !clusteringComparator().equals(o.clusteringComparator()) ||
                 hasEmptyClustering() ||
                 o.hasEmptyClustering())
-            {
-//                System.out.println("comparing(partitions + deferred = " + deferred + ") " + this + " to " + o + " return " + cmp);
                 return cmp;
-            }
-            cmp  = clusteringComparator().compare(clustering(), o.clustering());
-//            System.out.println("comparing(full + deferred = " + deferred + ") " + this + " to " + o + " return " + cmp);
-            return cmp;
+            return clusteringComparator().compare(clustering(), o.clustering());
         }
 
         @Override

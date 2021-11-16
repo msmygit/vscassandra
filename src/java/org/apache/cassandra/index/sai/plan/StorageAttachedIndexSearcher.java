@@ -107,7 +107,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) throws RequestTimeoutException
     {
-//        System.out.println("StorageAttachedIndexSearcher.search");
         return new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, queryContext, keyFactory);
     }
 
@@ -172,7 +171,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             //TODO These ought to take the decorated keys in which case we ought to be able to
             //be able to get a sstable row id for them from the primary key map
             this.startPrimaryKey = keyFactory.createKey(controller.mergeRange().left.getToken());
-//            System.out.println("startPrimaryKey = " + this.startPrimaryKey);
             this.lastPrimaryKey = keyFactory.createKey(controller.mergeRange().right.getToken());
         }
 
@@ -200,10 +198,8 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                 {
                     if (current.contains(currentKey.partitionKey()))
                     {
-//                        System.out.println("current.contains(" + currentKey + ")");
                         if (controller.selects(currentKey))
                         {
-//                            System.out.println("controller.selects(" + currentKey + ")");
                             UnfilteredRowIterator partition = apply(currentKey);
                             if (partition != null)
                                 return partition;
@@ -240,8 +236,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             if (key.equals(lastKey))
                 return null;
 
-//            System.out.println("applying " + key);
-
             lastKey = key;
 
             try (UnfilteredRowIterator partition = controller.getPartition(key, executionController))
@@ -261,7 +255,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             {
                 Unfiltered row = partition.next();
 
-//                System.out.println("applyIndexFilter to " + row);
                 queryContext.rowsFiltered++;
                 if (tree.isSatisfiedBy(key.partitionKey(), row, staticRow))
                 {

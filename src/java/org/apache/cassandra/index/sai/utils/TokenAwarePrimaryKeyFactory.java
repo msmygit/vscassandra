@@ -137,14 +137,8 @@ public class TokenAwarePrimaryKeyFactory implements PrimaryKey.PrimaryKeyFactory
         public int compareTo(PrimaryKey o)
         {
             if (partitionKey == null || o.partitionKey() == null)
-            {
-                int cmp = token().compareTo(o.token());
-//                System.out.println("comparing(tokens)" + this + " to " + o + " return " + cmp);
-                return cmp;
-            }
-            int cmp = partitionKey.compareTo(o.partitionKey());
-//            System.out.println("comparing(partitions)" + this + " to " + o + " return " + cmp);
-            return cmp;
+                return token().compareTo(o.token());
+            return partitionKey.compareTo(o.partitionKey());
         }
 
         @Override

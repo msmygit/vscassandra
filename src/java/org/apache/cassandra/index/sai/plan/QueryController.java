@@ -64,7 +64,6 @@ import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
-import org.apache.cassandra.index.sai.utils.FilteringClusteringIndexFilter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -234,16 +233,11 @@ public class QueryController
         ClusteringIndexFilter clusteringIndexFilter = command.clusteringIndexFilter(key.partitionKey());
 
         if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())
-        {
-//            System.out.println("makeFilter(" + key + ", " + clusteringIndexFilter.toString(cfs.metadata()) + ")");
             return clusteringIndexFilter;
-        }
         else
-        {
-            clusteringIndexFilter = new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(), key.clusteringComparator()), clusteringIndexFilter.isReversed());
-//            System.out.println("makeFilter(" + key + ", " + clusteringIndexFilter.toString(cfs.metadata()) + ")");
-            return clusteringIndexFilter;
-        }
+            return new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(),
+                                                                        key.clusteringComparator()),
+                                                  clusteringIndexFilter.isReversed());
     }
 
     private static void releaseQuietly(SSTableIndex index)

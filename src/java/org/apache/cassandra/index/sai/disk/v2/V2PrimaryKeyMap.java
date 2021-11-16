@@ -132,12 +132,10 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     {
         tokenBuffer.putLong(rowIdToToken.get(sstableRowId));
         tokenBuffer.rewind();
-        PrimaryKey key = primaryKeyFactory.createKey(partitioner.getTokenFactory().fromByteArray(tokenBuffer))
+        return primaryKeyFactory.createKey(partitioner.getTokenFactory().fromByteArray(tokenBuffer))
                                 .withSSTableRowId(sstableRowId)
                                 .withPrimaryKeySupplier(() -> supplier(sstableRowId))
-                                          .withGeneration(generation);
-//        System.out.println("primaryKeyFromRowId(rowId = " + sstableRowId + ", generation = " + generation + ") " + key);
-        return key;
+                                .withGeneration(generation);
     }
 
     @Override
@@ -162,7 +160,6 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     {
         try
         {
-//            System.out.println("supplier(" + sstableRowId + ")");
             cursor.seekToPointId(sstableRowId);
             return primaryKeyFactory.createKey(cursor.term().asPeekableBytes(ByteComparable.Version.OSS41))
                                     .withSSTableRowId(sstableRowId);
