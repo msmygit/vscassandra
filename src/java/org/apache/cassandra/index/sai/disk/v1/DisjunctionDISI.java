@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 import javax.annotation.Nonnull;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.io.util.FileUtils;
@@ -31,6 +32,7 @@ import org.apache.cassandra.io.util.FileUtils;
  *
  * Copied and modified from Lucene 7.5
  */
+@NotThreadSafe
 public class DisjunctionDISI implements PostingList
 {
     private final DisiPriorityQueue subIterators;
@@ -58,12 +60,12 @@ public class DisjunctionDISI implements PostingList
         }
     }
 
-    public static PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings)
+    public static @Nonnull PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings)
     {
         return create(postings, null);
     }
 
-    public static PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings, Closeable onClose)
+    public static @Nonnull PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings, Closeable onClose)
     {
         DisiPriorityQueue queue = new DisiPriorityQueue(postings.size());
         for (PostingList list : postings)
@@ -73,7 +75,7 @@ public class DisjunctionDISI implements PostingList
         return new DisjunctionDISI(queue, onClose);
     }
 
-    public static PostingList create(@Nonnull List<PostingList> postings, Closeable onClose)
+    public static @Nonnull PostingList create(@Nonnull List<PostingList> postings, Closeable onClose)
     {
         DisiPriorityQueue queue = new DisiPriorityQueue(postings.size());
         for (PostingList list : postings)

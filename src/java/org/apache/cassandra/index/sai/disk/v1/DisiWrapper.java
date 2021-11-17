@@ -18,6 +18,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 
 import javax.annotation.Nonnull;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.lucene.search.DisiPriorityQueue;
@@ -27,6 +28,7 @@ import org.apache.lucene.search.DisiPriorityQueue;
  *
  * Copied and modified from Lucene 7.5
  */
+@NotThreadSafe
 public class DisiWrapper
 {
     final PostingList iterator;

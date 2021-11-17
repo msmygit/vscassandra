@@ -19,8 +19,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.util.Arrays;
 import java.util.Iterator;
-
-import org.apache.lucene.util.PriorityQueue;
+import javax.annotation.concurrent.NotThreadSafe;
 
 
 /**
@@ -28,6 +27,7 @@ import org.apache.lucene.util.PriorityQueue;
  *
  * Copied and modified from Lucene 7.5
  */
+@NotThreadSafe
 public final class DisiPriorityQueue implements Iterable<DisiWrapper>
 {
     static int leftNode(int node)
