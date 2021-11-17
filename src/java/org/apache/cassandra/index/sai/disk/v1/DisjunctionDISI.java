@@ -21,16 +21,23 @@ import java.io.IOException;
 import java.util.List;
 import java.util.PriorityQueue;
 
+import javax.annotation.Nonnull;
+
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.io.util.FileUtils;
 
+/**
+ * Disjunction posting list over sub posting lists.
+ *
+ * Copied and modified from Lucene 7.5
+ */
 public class DisjunctionDISI implements PostingList
 {
-    final DisiPriorityQueue subIterators;
-    final long cost;
-    final Closeable onClose;
+    private final DisiPriorityQueue subIterators;
+    private final long cost;
+    private final Closeable onClose;
 
-    private DisjunctionDISI(DisiPriorityQueue subIterators, Closeable onClose)
+    private DisjunctionDISI(@Nonnull DisiPriorityQueue subIterators, Closeable onClose)
     {
         this.subIterators = subIterators;
         this.onClose = onClose;
@@ -51,12 +58,12 @@ public class DisjunctionDISI implements PostingList
         }
     }
 
-    public static PostingList create(PriorityQueue<PeekablePostingList> postings)
+    public static PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings)
     {
         return create(postings, null);
     }
 
-    public static PostingList create(PriorityQueue<PeekablePostingList> postings, Closeable onClose)
+    public static PostingList create(@Nonnull PriorityQueue<PeekablePostingList> postings, Closeable onClose)
     {
         DisiPriorityQueue queue = new DisiPriorityQueue(postings.size());
         for (PostingList list : postings)
@@ -66,7 +73,7 @@ public class DisjunctionDISI implements PostingList
         return new DisjunctionDISI(queue, onClose);
     }
 
-    public static PostingList create(List<PostingList> postings, Closeable onClose)
+    public static PostingList create(@Nonnull List<PostingList> postings, Closeable onClose)
     {
         DisiPriorityQueue queue = new DisiPriorityQueue(postings.size());
         for (PostingList list : postings)
@@ -81,12 +88,6 @@ public class DisjunctionDISI implements PostingList
     {
         return cost;
     }
-
-//    @Override
-//    public long currentPosting()
-//    {
-//        return subIterators.top().doc;
-//    }
 
     @Override
     public long nextPosting() throws IOException

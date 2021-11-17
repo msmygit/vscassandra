@@ -23,6 +23,11 @@ import java.util.Iterator;
 import org.apache.lucene.util.PriorityQueue;
 
 
+/**
+ * PriorityQueue for {@link DisjunctionDISI}
+ *
+ * Copied and modified from Lucene 7.5
+ */
 public final class DisiPriorityQueue implements Iterable<DisiWrapper>
 {
     static int leftNode(int node)

@@ -17,20 +17,24 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 
+import javax.annotation.Nonnull;
+
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.lucene.search.DisiPriorityQueue;
 
 /**
  * Wrapper used in {@link DisiPriorityQueue}.
+ *
+ * Copied and modified from Lucene 7.5
  */
 public class DisiWrapper
 {
-    public final PostingList iterator;
-    public final long cost;
-    public long doc; // the current doc, used for comparison
-    public DisiWrapper next; // reference to a next element, see #topList
+    final PostingList iterator;
+    final long cost;
+    long doc; // the current doc, used for comparison
+    DisiWrapper next; // reference to a next element, see #topList
 
-    public DisiWrapper(PostingList iterator)
+    public DisiWrapper(@Nonnull PostingList iterator)
     {
         this.iterator = iterator;
         this.cost = iterator.size();
