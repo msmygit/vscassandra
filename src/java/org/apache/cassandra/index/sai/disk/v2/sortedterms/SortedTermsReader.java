@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk.v2.sortedterms;
 import java.io.IOException;
 import java.util.Iterator;
 
+import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.Pair;
@@ -38,6 +39,9 @@ import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
 
 import com.google.common.base.Preconditions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWriter.DIRECT_MONOTONIC_BLOCK_SHIFT;
 import static org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWriter.TERMS_DICT_BLOCK_MASK;
@@ -73,6 +77,7 @@ import static org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWrit
 @ThreadSafe
 public class SortedTermsReader
 {
+    private static final Logger logger = LoggerFactory.getLogger(SortedTermsReader.class);
     private final FileHandle termsData;
     private final SortedTermsMeta meta;
     private final FileHandle termsTrie;
@@ -241,7 +246,16 @@ public class SortedTermsReader
                     suffixLength += termsData.readVInt();
             }
 
-            assert prefixLength + suffixLength <= meta.maxTermLength : "prefixLength = " + prefixLength + ", suffixLength = " + suffixLength + ", maxTermLength = " + meta.maxTermLength;
+            assert prefixLength + suffixLength <= meta.maxTermLength : "prefixLength = " +
+                                                                       prefixLength +
+                                                                       ", suffixLength = " +
+                                                                       suffixLength +
+                                                                       ", meta.maxTermLength = " +
+                                                                       meta.maxTermLength +
+                                                                       ", pointId = " +
+                                                                       pointId +
+                                                                       ", meta.count = "+
+                                                                       meta.count;
             currentTerm.length = prefixLength + suffixLength;
             termsData.readBytes(currentTerm.bytes, prefixLength, suffixLength);
             return true;
