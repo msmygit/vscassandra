@@ -241,7 +241,7 @@ public class SortedTermsReader
                     suffixLength += termsData.readVInt();
             }
 
-            assert prefixLength + suffixLength <= meta.maxTermLength;
+            assert prefixLength + suffixLength <= meta.maxTermLength : "prefixLength = " + prefixLength + ", suffixLength = " + suffixLength + ", maxTermLength = " + meta.maxTermLength;
             currentTerm.length = prefixLength + suffixLength;
             termsData.readBytes(currentTerm.bytes, prefixLength, suffixLength);
             return true;
@@ -295,7 +295,7 @@ public class SortedTermsReader
         @Override
         public void close() throws IOException
         {
-//            this.termsData.close();
+            this.termsData.close();
         }
 
     }

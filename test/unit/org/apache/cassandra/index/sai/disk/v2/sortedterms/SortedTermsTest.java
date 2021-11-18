@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
@@ -52,9 +53,9 @@ public class SortedTermsTest extends SaiRandomizedTest
     {
         IndexDescriptor descriptor = newIndexDescriptor();
 
-        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.KD_TREE);
+        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
              IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.KD_TREE_POSTING_LISTS))
+             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
         {
             SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter
             );
@@ -264,11 +265,58 @@ public class SortedTermsTest extends SaiRandomizedTest
         });
     }
 
+    @Test
+    public void testRandomLengthTerms() throws Exception
+    {
+        IndexDescriptor descriptor = newIndexDescriptor();
+
+        List<String> terms = new ArrayList<>();
+        SortedTermsMeta meta = writeMixedLengthTerms(descriptor, terms);
+
+        // iterate ascending
+        withSortedTermsCursor(descriptor, meta, cursor ->
+        {
+            for (int x = 0; x < terms.size(); x++)
+            {
+                cursor.seekToPointId(x);
+
+                String term = UTF8Type.instance.compose(UTF8Type.instance.fromComparableBytes(cursor.term().asPeekableBytes(ByteComparable.Version.OSS41),
+                                                                                              ByteComparable.Version.OSS41));
+                assertEquals(terms.get(x), term);
+            }
+        });
+
+        // iterate descending
+        withSortedTermsCursor(descriptor, meta, cursor ->
+        {
+            for (int x = terms.size() - 1; x >= 0; x--)
+            {
+                cursor.seekToPointId(x);
+                String term = UTF8Type.instance.compose(UTF8Type.instance.fromComparableBytes(cursor.term().asPeekableBytes(ByteComparable.Version.OSS41),
+                                                                                              ByteComparable.Version.OSS41));
+                assertEquals(terms.get(x), term);
+            }
+        });
+
+        // iterate randomly
+        withSortedTermsCursor(descriptor, meta, cursor ->
+        {
+            for (int x = 0; x < terms.size(); x++)
+            {
+                int target = nextInt(0, terms.size());
+                cursor.seekToPointId(target);
+                String term = UTF8Type.instance.compose(UTF8Type.instance.fromComparableBytes(cursor.term().asPeekableBytes(ByteComparable.Version.OSS41),
+                                                                                              ByteComparable.Version.OSS41));
+                assertEquals(terms.get(target), term);
+            }
+        });
+    }
+
     private SortedTermsMeta writeTerms(IndexDescriptor descriptor, List<byte[]> terms) throws IOException
     {
-        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.KD_TREE);
+        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
              IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.KD_TREE_POSTING_LISTS))
+             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
         {
             SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
 
@@ -286,6 +334,28 @@ public class SortedTermsTest extends SaiRandomizedTest
         }
     }
 
+    private SortedTermsMeta writeMixedLengthTerms(IndexDescriptor descriptor, List<String> terms) throws IOException
+    {
+        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
+             IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
+             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
+        {
+            SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
+
+            for (int x = 0; x < 64000 * 4; x++)
+            {
+                terms.add(randomSimpleString(8, 256));
+            }
+            terms.sort(String::compareTo);
+            for (String term : terms)
+            {
+                writer.add(v -> UTF8Type.instance.asComparableBytes(UTF8Type.instance.decompose(term), v));
+            }
+
+            return writer.finish();
+        }
+    }
+
     @FunctionalInterface
     public interface ThrowingConsumer<T> {
         void accept(T t) throws IOException;
@@ -295,9 +365,9 @@ public class SortedTermsTest extends SaiRandomizedTest
                                        SortedTermsMeta meta,
                                        ThrowingConsumer<SortedTermsReader> testCode) throws IOException
     {
-        try (FileHandle trieHandle = descriptor.createPerSSTableFileHandle(IndexComponent.KD_TREE);
+        try (FileHandle trieHandle = descriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
              FileHandle termsData = descriptor.createPerSSTableFileHandle(IndexComponent.TERMS_DATA);
-             IndexInput blockFPInput = descriptor.openPerSSTableInput(IndexComponent.KD_TREE_POSTING_LISTS))
+             IndexInput blockFPInput = descriptor.openPerSSTableInput(IndexComponent.BLOCK_POINTERS))
         {
             SortedTermsReader reader = new SortedTermsReader(termsData, blockFPInput, trieHandle, meta);
             testCode.accept(reader);
