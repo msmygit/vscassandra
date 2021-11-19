@@ -29,6 +29,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.block.BlockPackedReader;
+import org.apache.cassandra.index.sai.disk.v1.block.MonotonicBlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesMeta;
 import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsMeta;
 import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsReader;
@@ -39,16 +40,16 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.lucene.store.IndexInput;
 
 public class V2PrimaryKeyMap implements PrimaryKeyMap
 {
     public static class V2PrimaryKeyMapFactory implements PrimaryKeyMap.Factory
     {
         private final LongArray.Factory tokenReaderFactory;
+        private final LongArray.Factory blockOffsetsReaderFactory;
         private final SortedTermsReader sortedTermsReader;
         private FileHandle token = null;
-        private IndexInput termsDataBlockOffsets = null;
+        private FileHandle termsDataBlockOffsets = null;
         private FileHandle termsData = null;
         private FileHandle termsTrie = null;
         private final IPartitioner partitioner;
@@ -59,19 +60,22 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public V2PrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable)
         {
             String tokensComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.TOKEN_VALUES, null);
+            String blockPointersComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null);
             String sortedBytesComponentName = indexDescriptor.version.fileNameFormatter().format(IndexComponent.SORTED_BYTES, null);
             try
             {
                 MetadataSource metadataSource = MetadataSource.loadGroupMetadata(indexDescriptor);
                 NumericValuesMeta tokensMeta = new NumericValuesMeta(metadataSource.get(tokensComponentName));
-                size = tokensMeta.valueCount;
-                token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
+                this.size = tokensMeta.valueCount;
+                this.token = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TOKEN_VALUES);
                 this.tokenReaderFactory = new BlockPackedReader(token, tokensMeta);
+                NumericValuesMeta blockPointersMeta = new NumericValuesMeta(metadataSource.get(blockPointersComponentName));
+                this.termsDataBlockOffsets = indexDescriptor.createPerSSTableFileHandle(IndexComponent.BLOCK_OFFSETS);
+                this.blockOffsetsReaderFactory = new MonotonicBlockPackedReader(termsDataBlockOffsets, blockPointersMeta);
                 SortedTermsMeta sortedTermsMeta = new SortedTermsMeta(metadataSource.get(sortedBytesComponentName));
                 this.termsData = indexDescriptor.createPerSSTableFileHandle(IndexComponent.SORTED_BYTES);
-                this.termsDataBlockOffsets = indexDescriptor.openPerSSTableInput(IndexComponent.BLOCK_POINTERS);
                 this.termsTrie = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
-                this.sortedTermsReader = new SortedTermsReader(termsData, termsDataBlockOffsets, termsTrie, sortedTermsMeta);
+                this.sortedTermsReader = new SortedTermsReader(termsData, blockOffsetsReaderFactory, termsTrie, sortedTermsMeta);
                 this.partitioner = sstable.metadata().partitioner;
                 this.primaryKeyFactory = indexDescriptor.primaryKeyFactory;
                 this.generation = indexDescriptor.descriptor.generation;
@@ -86,7 +90,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));
-            return new V2PrimaryKeyMap(rowIdToToken, sortedTermsReader, partitioner, primaryKeyFactory, generation, size);
+            return new V2PrimaryKeyMap(rowIdToToken, sortedTermsReader, sortedTermsReader.openCursor(context), partitioner, primaryKeyFactory, generation, size);
         }
 
         @Override
@@ -107,6 +111,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
 
     private V2PrimaryKeyMap(LongArray rowIdToToken,
                             SortedTermsReader sortedTermsReader,
+                            SortedTermsReader.Cursor cursor,
                             IPartitioner partitioner,
                             PrimaryKey.PrimaryKeyFactory primaryKeyFactory,
                             SSTableUniqueIdentifier generation,
@@ -114,7 +119,7 @@ public class V2PrimaryKeyMap implements PrimaryKeyMap
     {
         this.rowIdToToken = rowIdToToken;
         this.sortedTermsReader = sortedTermsReader;
-        this.cursor = sortedTermsReader.openCursor();
+        this.cursor = cursor;
         this.partitioner = partitioner;
         this.primaryKeyFactory = primaryKeyFactory;
         this.generation = generation;

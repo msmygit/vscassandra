@@ -49,11 +49,11 @@ public class V2OnDiskFormat extends V1OnDiskFormat
                                                                                  IndexComponent.TOKEN_VALUES,
                                                                                  IndexComponent.TRIE_DATA,
                                                                                  IndexComponent.SORTED_BYTES,
-                                                                                 IndexComponent.BLOCK_POINTERS);
+                                                                                 IndexComponent.BLOCK_OFFSETS);
 
     private static final Set<IndexComponent> NON_VALIDATING_COMPONENTS = EnumSet.of(IndexComponent.TRIE_DATA,
                                                                                     IndexComponent.SORTED_BYTES,
-                                                                                    IndexComponent.BLOCK_POINTERS);
+                                                                                    IndexComponent.BLOCK_OFFSETS);
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
 

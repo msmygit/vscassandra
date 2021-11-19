@@ -905,7 +905,7 @@ public class NativeIndexDDLTest extends SAITester
         // that are encryptable unless they have been removed because encrypted components aren't
         // checksum validated.
 
-        if (component == IndexComponent.TRIE_DATA || component == IndexComponent.SORTED_BYTES || component == IndexComponent.BLOCK_POINTERS)
+        if (component == IndexComponent.TRIE_DATA || component == IndexComponent.SORTED_BYTES || component == IndexComponent.BLOCK_OFFSETS)
             return;
 
         if (((component == IndexComponent.GROUP_COMPLETION_MARKER) ||

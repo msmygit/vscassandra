@@ -110,45 +110,45 @@ public class SortedTermsBenchmark extends AbstractOnDiskBenchmark
     @Setup(Level.Trial)
     public void perTrialSetup2() throws IOException
     {
-        try (IndexOutputWriter trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.KD_TREE);
-             IndexOutputWriter bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.KD_TREE_POSTING_LISTS))
-        {
-            SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter
-            );
-
-            for (int x = 0; x < NUM_ROWS; x++)
-            {
-                ByteBuffer buffer = Int32Type.instance.decompose(x);
-                ByteSource byteSource = Int32Type.instance.asComparableBytes(buffer, ByteComparable.Version.OSS41);
-                byte[] bytes = ByteSourceInverse.readBytes(byteSource);
-                bcIntBytes[x] = bytes;
-                writer.add(ByteComparable.fixedLength(bytes));
-            }
-
-            meta = writer.finish();
-        }
-
-        // create the lucene index
-        luceneDir = Files.createTempDirectory("jmh_lucene_test");
-        directory = FSDirectory.open(luceneDir);
-        IndexWriterConfig config = new IndexWriterConfig(new WhitespaceAnalyzer());
-        IndexWriter indexWriter = new IndexWriter(directory, config);
-
-        Document document = new Document();
-
-        int i = 0;
-        for (int x = 0; x < NUM_ROWS; x++)
-        {
-            document.clear();
-            byte[] bytes = new byte[4];
-            NumericUtils.intToSortableBytes(x, bytes, 0);
-            document.add(new SortedDocValuesField("columnA", new BytesRef(bytes)));
-            indexWriter.addDocument(document);
-            luceneBytes[x] = bytes;
-        }
-        indexWriter.forceMerge(1);
-        indexWriter.close();
+//        try (IndexOutputWriter trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.KD_TREE);
+//             IndexOutputWriter bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
+//             IndexOutputWriter blockFPWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.KD_TREE_POSTING_LISTS))
+//        {
+//            SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter
+//            );
+//
+//            for (int x = 0; x < NUM_ROWS; x++)
+//            {
+//                ByteBuffer buffer = Int32Type.instance.decompose(x);
+//                ByteSource byteSource = Int32Type.instance.asComparableBytes(buffer, ByteComparable.Version.OSS41);
+//                byte[] bytes = ByteSourceInverse.readBytes(byteSource);
+//                bcIntBytes[x] = bytes;
+//                writer.add(ByteComparable.fixedLength(bytes));
+//            }
+//
+//            meta = writer.finish();
+//        }
+//
+//        // create the lucene index
+//        luceneDir = Files.createTempDirectory("jmh_lucene_test");
+//        directory = FSDirectory.open(luceneDir);
+//        IndexWriterConfig config = new IndexWriterConfig(new WhitespaceAnalyzer());
+//        IndexWriter indexWriter = new IndexWriter(directory, config);
+//
+//        Document document = new Document();
+//
+//        int i = 0;
+//        for (int x = 0; x < NUM_ROWS; x++)
+//        {
+//            document.clear();
+//            byte[] bytes = new byte[4];
+//            NumericUtils.intToSortableBytes(x, bytes, 0);
+//            document.add(new SortedDocValuesField("columnA", new BytesRef(bytes)));
+//            indexWriter.addDocument(document);
+//            luceneBytes[x] = bytes;
+//        }
+//        indexWriter.forceMerge(1);
+//        indexWriter.close();
     }
 
     byte[][] luceneBytes = new byte[NUM_ROWS][];
@@ -156,24 +156,24 @@ public class SortedTermsBenchmark extends AbstractOnDiskBenchmark
     @Override
     public void beforeInvocation() throws Throwable
     {
-        // rowIdToToken.findTokenRowID keeps track of last position, so it must be per-benchmark-method-invocation.
-        rowIdToToken = openRowIdToTokenReader();
-
-        rowIds = new int[NUM_ROWS];
-        tokenValues = new long[NUM_ROWS];
-
-        trieFile = indexDescriptor.createPerSSTableFileHandle(IndexComponent.KD_TREE);
-        termsData = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TERMS_DATA);
-        blockFPInput = indexDescriptor.openPerSSTableInput(IndexComponent.KD_TREE_POSTING_LISTS);
-
-        sortedTermsReader = new SortedTermsReader(termsData,
-                                                  blockFPInput, trieFile, meta
-        );
-
-        luceneReader = DirectoryReader.open(directory);
-        LeafReaderContext context = luceneReader.leaves().get(0);
-
-        columnASortedDocValues = context.reader().getSortedDocValues("columnA");
+//        // rowIdToToken.findTokenRowID keeps track of last position, so it must be per-benchmark-method-invocation.
+//        rowIdToToken = openRowIdToTokenReader();
+//
+//        rowIds = new int[NUM_ROWS];
+//        tokenValues = new long[NUM_ROWS];
+//
+//        trieFile = indexDescriptor.createPerSSTableFileHandle(IndexComponent.KD_TREE);
+//        termsData = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TERMS_DATA);
+//        blockFPInput = indexDescriptor.openPerSSTableInput(IndexComponent.KD_TREE_POSTING_LISTS);
+//
+//        sortedTermsReader = new SortedTermsReader(termsData,
+//                                                  blockFPInput, trieFile, meta
+//        );
+//
+//        luceneReader = DirectoryReader.open(directory);
+//        LeafReaderContext context = luceneReader.leaves().get(0);
+//
+//        columnASortedDocValues = context.reader().getSortedDocValues("columnA");
     }
 
     @Override
@@ -214,14 +214,14 @@ public class SortedTermsBenchmark extends AbstractOnDiskBenchmark
     @BenchmarkMode({ Mode.Throughput})
     public void advance(Blackhole bh) throws IOException
     {
-        try (SortedTermsReader.Cursor cursor = sortedTermsReader.openCursor())
-        {
-            for (int i = 0; i < NUM_INVOCATIONS; i++)
-            {
-                cursor.advance();
-                bh.consume(cursor.term());
-            }
-        }
+//        try (SortedTermsReader.Cursor cursor = sortedTermsReader.openCursor())
+//        {
+//            for (int i = 0; i < NUM_INVOCATIONS; i++)
+//            {
+//                cursor.advance();
+//                bh.consume(cursor.term());
+//            }
+//        }
     }
 
     @Benchmark
@@ -229,14 +229,14 @@ public class SortedTermsBenchmark extends AbstractOnDiskBenchmark
     @BenchmarkMode({ Mode.Throughput})
     public void seekToPointID(Blackhole bh) throws IOException
     {
-        try (SortedTermsReader.Cursor cursor = sortedTermsReader.openCursor())
-        {
-            for (int i = 0; i < NUM_INVOCATIONS; i++)
-            {
-                cursor.seekToPointId((long) i * skippingDistance);
-                bh.consume(cursor.term());
-            }
-        }
+//        try (SortedTermsReader.Cursor cursor = sortedTermsReader.openCursor())
+//        {
+//            for (int i = 0; i < NUM_INVOCATIONS; i++)
+//            {
+//                cursor.seekToPointId((long) i * skippingDistance);
+//                bh.consume(cursor.term());
+//            }
+//        }
     }
 
     @Benchmark

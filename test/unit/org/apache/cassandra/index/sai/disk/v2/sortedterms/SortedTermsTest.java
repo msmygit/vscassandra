@@ -24,8 +24,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.LongArray;
+import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
+import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
+import org.apache.cassandra.index.sai.disk.v1.block.MonotonicBlockPackedReader;
+import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesMeta;
+import org.apache.cassandra.index.sai.disk.v1.block.NumericValuesWriter;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.junit.Test;
 
@@ -51,11 +58,14 @@ public class SortedTermsTest extends SaiRandomizedTest
     @Test
     public void testLexicographicException() throws Exception
     {
-        IndexDescriptor descriptor = newIndexDescriptor();
+        IndexDescriptor indexDescriptor = newIndexDescriptor();
 
-        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
-             IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
+        try (IndexOutputWriter trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
+             IndexOutputWriter bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
+             MetadataWriter metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
+             NumericValuesWriter blockFPWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null),
+                                                                         indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_OFFSETS),
+                                                                         metadataWriter, true))
         {
             SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter
             );
@@ -312,11 +322,14 @@ public class SortedTermsTest extends SaiRandomizedTest
         });
     }
 
-    private SortedTermsMeta writeTerms(IndexDescriptor descriptor, List<byte[]> terms) throws IOException
+    private SortedTermsMeta writeTerms(IndexDescriptor indexDescriptor, List<byte[]> terms) throws IOException
     {
-        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
-             IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
+        try (IndexOutputWriter trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
+             IndexOutputWriter bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
+             MetadataWriter metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
+             NumericValuesWriter blockFPWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null),
+                                                                         indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_OFFSETS),
+                                                                         metadataWriter, true))
         {
             SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
 
@@ -334,15 +347,18 @@ public class SortedTermsTest extends SaiRandomizedTest
         }
     }
 
-    private SortedTermsMeta writeMixedLengthTerms(IndexDescriptor descriptor, List<String> terms) throws IOException
+    private SortedTermsMeta writeMixedLengthTerms(IndexDescriptor indexDescriptor, List<String> terms) throws IOException
     {
-        try (IndexOutputWriter trieWriter = descriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
-             IndexOutputWriter bytesWriter = descriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
-             IndexOutputWriter blockFPWriter = descriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS))
+        try (IndexOutputWriter trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
+             IndexOutputWriter bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TERMS_DATA);
+             MetadataWriter metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
+             NumericValuesWriter blockFPWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null),
+                                                                         indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_OFFSETS),
+                                                                         metadataWriter, true))
         {
             SortedTermsWriter writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
 
-            for (int x = 0; x < 64000 * 4; x++)
+            for (int x = 0; x < 1000 * 4; x++)
             {
                 terms.add(randomSimpleString(8, 256));
             }
@@ -361,15 +377,19 @@ public class SortedTermsTest extends SaiRandomizedTest
         void accept(T t) throws IOException;
     }
 
-    private void withSortedTermsReader(IndexDescriptor descriptor,
+    private void withSortedTermsReader(IndexDescriptor indexDescriptor,
                                        SortedTermsMeta meta,
                                        ThrowingConsumer<SortedTermsReader> testCode) throws IOException
     {
-        try (FileHandle trieHandle = descriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
-             FileHandle termsData = descriptor.createPerSSTableFileHandle(IndexComponent.TERMS_DATA);
-             IndexInput blockFPInput = descriptor.openPerSSTableInput(IndexComponent.BLOCK_POINTERS))
+        MetadataSource metadataSource = MetadataSource.loadGroupMetadata(indexDescriptor);
+        NumericValuesMeta blockPointersMeta = new NumericValuesMeta(metadataSource.get(indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null)));
+
+        try (FileHandle trieHandle = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TRIE_DATA);
+             FileHandle termsData = indexDescriptor.createPerSSTableFileHandle(IndexComponent.TERMS_DATA);
+             FileHandle blockOffsets = indexDescriptor.createPerSSTableFileHandle(IndexComponent.BLOCK_OFFSETS))
         {
-            SortedTermsReader reader = new SortedTermsReader(termsData, blockFPInput, trieHandle, meta);
+            LongArray.Factory blockOffsetsReaderFactory = new MonotonicBlockPackedReader(blockOffsets, blockPointersMeta);
+            SortedTermsReader reader = new SortedTermsReader(termsData, blockOffsetsReaderFactory, trieHandle, meta);
             testCode.accept(reader);
         }
     }
@@ -380,7 +400,7 @@ public class SortedTermsTest extends SaiRandomizedTest
     {
         withSortedTermsReader(descriptor, meta, reader ->
         {
-            try (SortedTermsReader.Cursor cursor = reader.openCursor())
+            try (SortedTermsReader.Cursor cursor = reader.openCursor(SSTableQueryContext.forTest()))
             {
                 testCode.accept(cursor);
             }

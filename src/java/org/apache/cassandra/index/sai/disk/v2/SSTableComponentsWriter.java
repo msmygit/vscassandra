@@ -46,7 +46,7 @@ public class SSTableComponentsWriter implements PerSSTableWriter
     private final NumericValuesWriter tokenWriter;
     private final IndexOutputWriter trieWriter;
     private final IndexOutputWriter bytesWriter;
-    private final IndexOutputWriter blockFPWriter;
+    private final NumericValuesWriter blockFPWriter;
     private final SortedTermsWriter writer;
 
     public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
@@ -58,7 +58,9 @@ public class SSTableComponentsWriter implements PerSSTableWriter
                                                    metadataWriter, false);
         this.trieWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.TRIE_DATA);
         this.bytesWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.SORTED_BYTES);
-        this.blockFPWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_POINTERS);
+        this.blockFPWriter = new NumericValuesWriter(indexDescriptor.version.fileNameFormatter().format(IndexComponent.BLOCK_OFFSETS, null),
+                                                     indexDescriptor.openPerSSTableOutput(IndexComponent.BLOCK_OFFSETS),
+                                                     metadataWriter, true);
         this.writer = new SortedTermsWriter(bytesWriter, blockFPWriter, trieWriter);
     }
 

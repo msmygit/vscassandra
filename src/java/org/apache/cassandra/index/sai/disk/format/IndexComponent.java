@@ -74,7 +74,7 @@ public enum IndexComponent
 
     TRIE_DATA("TrieData"),
     SORTED_BYTES("SortedBytes"),
-    BLOCK_POINTERS("BlockPointers"),
+    BLOCK_OFFSETS("BlockOffsets"),
     /**
      * Stores per-sstable metadata.
      *
