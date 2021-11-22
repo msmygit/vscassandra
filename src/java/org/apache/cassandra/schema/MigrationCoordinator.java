@@ -448,7 +448,7 @@ public class MigrationCoordinator
             {
                 return true;
             }
-        })).andThenAsync(ignored -> result);
+        })).flatMap(ignored -> result);
     }
 
     Future<Collection<Mutation>> pullSchemaFromAnyNode()

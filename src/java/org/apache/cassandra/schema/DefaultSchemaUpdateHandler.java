@@ -260,7 +260,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
         return local
                ? reload()
                : migrationCoordinator.pullSchemaFromAnyNode()
-                                     .andThenAsync(mutations -> ImmediateFuture.success(applyMutations(mutations)))
+                                     .flatMap(mutations -> ImmediateFuture.success(applyMutations(mutations)))
                                      .awaitThrowUncheckedOnInterrupt()
                                      .getNow();
     }

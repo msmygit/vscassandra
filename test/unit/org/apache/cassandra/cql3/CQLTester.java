@@ -477,7 +477,7 @@ public abstract class CQLTester
         };
 
         DatabaseDescriptor.setRoleManager(roleManager);
-        MigrationManager.announceNewKeyspace(AuthKeyspace.metadata(), true);
+        SchemaTestUtil.addOrUpdateKeyspace(AuthKeyspace.metadata(), true);
         DatabaseDescriptor.getRoleManager().setup();
         DatabaseDescriptor.getAuthenticator().setup();
         DatabaseDescriptor.getAuthorizer().setup();
