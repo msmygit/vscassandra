@@ -42,7 +42,6 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
-import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.concurrent.AsyncPromise;
 import org.apache.cassandra.utils.concurrent.Future;
 
@@ -125,37 +124,6 @@ public final class Schema implements SchemaProvider
     {
         logger.debug("Waiting for update handler to be ready...");
         return updateHandler.waitUntilReady(timeout);
-    }
-
-    /**
-     * Add entries to system_schema.* for the hardcoded system keyspaces
-     *
-     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
-     */
-    public synchronized void saveSystemKeyspace()
-    {
-        SchemaKeyspace.saveSystemKeyspacesSchema();
-    }
-
-    /**
-     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
-     */
-    public synchronized void truncateSchemaKeyspace()
-    {
-        SchemaKeyspace.truncate();
-    }
-
-    /**
-     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
-     */
-    public synchronized Collection<Mutation> schemaKeyspaceAsMutations()
-    {
-        return SchemaKeyspace.convertSchemaToMutations();
-    }
-
-    public static KeyspaceMetadata getSystemKeyspaceMetadata()
-    {
-        return SchemaKeyspace.metadata();
     }
 
     /**

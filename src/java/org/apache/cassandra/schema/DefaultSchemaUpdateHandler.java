@@ -98,6 +98,9 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
     {
         if (StorageService.instance.isReplacing())
             onRemove(DatabaseDescriptor.getReplaceAddress());
+
+        SchemaKeyspace.saveSystemKeyspacesSchema();
+
         migrationCoordinator.start();
     }
 
