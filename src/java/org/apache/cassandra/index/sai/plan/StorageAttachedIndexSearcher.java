@@ -173,11 +173,11 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         public UnfilteredRowIterator computeNext()
         {
             if (operation == null)
-                return endOfData();
+                return complete();
 
             operation.skipTo(startPrimaryKey);
             if (!operation.hasNext())
-                return endOfData();
+                return complete();
             currentKey = operation.next().loadDeferred();
 
             // IMPORTANT: The correctness of the entire query pipeline relies on the fact that we consume a token
@@ -187,7 +187,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             while (true)
             {
                 if (!lastPrimaryKey.token().isMinimum() && lastPrimaryKey.compareTo(currentKey) < 0)
-                    return endOfData();
+                    return complete();
 
                 while (current != null)
                 {
@@ -209,7 +209,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                         if (keyRanges.hasNext())
                             current = keyRanges.next().keyRange();
                         else
-                            return endOfData();
+                            return complete();
                     }
                     // smaller than current range
                     else
@@ -222,12 +222,24 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                     }
                 }
                 if (!operation.hasNext())
-                    return endOfData();
+                    return complete();
                 currentKey = operation.next().loadDeferred();
             }
         }
 
-        public UnfilteredRowIterator apply(PrimaryKey key)
+        private UnfilteredRowIterator complete()
+        {
+            UnfilteredRowIterator partition = controller.complete(executionController);
+            if (partition != null)
+            {
+                queryContext.partitionsRead++;
+
+                return applyIndexFilter(partition, filterTree, queryContext);
+            }
+            return endOfData();
+        }
+
+        private UnfilteredRowIterator apply(PrimaryKey key)
         {
             // Key reads are lazy, delayed all the way to this point. Skip if we've already seen this one:
             if (key.equals(lastKey))
@@ -235,15 +247,18 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
 
             lastKey = key;
 
-            try (UnfilteredRowIterator partition = controller.getPartition(key, executionController))
+            if (controller.addToBatch(key))
+                return null;
+
+            try (UnfilteredRowIterator partition = controller.readFromSSTable(key, executionController))
             {
                 queryContext.partitionsRead++;
 
-                return applyIndexFilter(key, partition, filterTree, queryContext);
+                return applyIndexFilter(partition, filterTree, queryContext);
             }
         }
 
-        private static UnfilteredRowIterator applyIndexFilter(PrimaryKey key, UnfilteredRowIterator partition, FilterTree tree, QueryContext queryContext)
+        private static UnfilteredRowIterator applyIndexFilter(UnfilteredRowIterator partition, FilterTree tree, QueryContext queryContext)
         {
             Row staticRow = partition.staticRow();
             List<Unfiltered> clusters = new ArrayList<>();
@@ -253,7 +268,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                 Unfiltered row = partition.next();
 
                 queryContext.rowsFiltered++;
-                if (tree.isSatisfiedBy(key.partitionKey(), row, staticRow))
+                if (tree.isSatisfiedBy(partition.partitionKey(), row, staticRow))
                 {
                     clusters.add(row);
                 }
@@ -262,7 +277,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             if (clusters.isEmpty())
             {
                 queryContext.rowsFiltered++;
-                if (tree.isSatisfiedBy(key.partitionKey(), staticRow, staticRow))
+                if (tree.isSatisfiedBy(partition.partitionKey(), staticRow, staticRow))
                 {
                     clusters.add(staticRow);
                 }

@@ -34,6 +34,7 @@ import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DataRange;
 import org.apache.cassandra.db.DecoratedKey;
@@ -66,13 +67,14 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.tracing.Tracing;
-import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.concurrent.Ref;
 
 public class QueryController
 {
     private static final Logger logger = LoggerFactory.getLogger(QueryController.class);
+
+    private static final int PARTITION_BATCH_SIZE = Integer.getInteger("cassandra.sai.partition.batch.size", 1024);
 
     private final ColumnFamilyStore cfs;
     private final ReadCommand command;
@@ -82,6 +84,8 @@ public class QueryController
     private final IndexFeatureSet indexFeatureSet;
     private final List<DataRange> ranges;
     private final AbstractBounds<PartitionPosition> mergeRange;
+    private final NavigableSet<Clustering<?>> batchedClusterings;
+    private DecoratedKey batchedPartitionKey = null;
 
     public QueryController(ColumnFamilyStore cfs,
                            ReadCommand command,
@@ -100,6 +104,7 @@ public class QueryController
         DataRange first = ranges.get(0);
         DataRange last = ranges.get(ranges.size() - 1);
         this.mergeRange = ranges.size() == 1 ? first.keyRange() : first.keyRange().withNewRight(last.keyRange().right);
+        this.batchedClusterings = new TreeSet<>(cfs.metadata().comparator);
     }
 
     public TableMetadata metadata()
@@ -146,10 +151,29 @@ public class QueryController
         return cfs.indexManager.getBestIndexFor(expression, StorageAttachedIndex.class).orElse(null);
     }
 
-    public UnfilteredRowIterator getPartition(PrimaryKey key, ReadExecutionController executionController)
+    public boolean addToBatch(PrimaryKey primaryKey)
+    {
+        if (indexFeatureSet.isRowAware() &&
+            !primaryKey.hasEmptyClustering() &&
+            (batchedPartitionKey == null ||
+             batchedPartitionKey.equals(primaryKey.partitionKey())) &&
+            batchedClusterings.size() < PARTITION_BATCH_SIZE)
+        {
+            batchedPartitionKey = primaryKey.partitionKey();
+            batchedClusterings.add(primaryKey.clustering());
+            return true;
+        }
+        return false;
+    }
+
+    public UnfilteredRowIterator readFromSSTable(PrimaryKey key, ReadExecutionController executionController)
     {
         if (key == null)
             throw new IllegalArgumentException("non-null key required");
+
+        DecoratedKey partitionKey = batchedPartitionKey != null ? batchedPartitionKey : key.partitionKey();
+        ClusteringIndexFilter clusteringIndexFilter = batchedPartitionKey != null ? makeFilter(batchedPartitionKey, batchedClusterings)
+                                                                                  : command.clusteringIndexFilter(key.partitionKey());
 
         try
         {
@@ -158,15 +182,45 @@ public class QueryController
                                                                                      command.columnFilter(),
                                                                                      RowFilter.NONE,
                                                                                      DataLimits.NONE,
-                                                                                     key.partitionKey(),
-                                                                                     makeFilter(key));
+                                                                                     partitionKey,
+                                                                                     clusteringIndexFilter);
 
             return partition.queryMemtableAndDisk(cfs, executionController);
         }
         finally
         {
             queryContext.checkpoint();
+            if (batchedPartitionKey != null)
+            {
+                batchedPartitionKey = key.partitionKey();
+                batchedClusterings.clear();
+                batchedClusterings.add(key.clustering());
+            }
         }
+    }
+
+    public UnfilteredRowIterator complete(ReadExecutionController executionController)
+    {
+        if (batchedPartitionKey != null)
+        {
+            try
+            {
+                SinglePartitionReadCommand partition = SinglePartitionReadCommand.create(cfs.metadata(),
+                                                                                         command.nowInSec(),
+                                                                                         command.columnFilter(),
+                                                                                         RowFilter.NONE,
+                                                                                         DataLimits.NONE,
+                                                                                         batchedPartitionKey,
+                                                                                         makeFilter(batchedPartitionKey, batchedClusterings));
+
+                return partition.queryMemtableAndDisk(cfs, executionController);
+            }
+            finally
+            {
+                batchedPartitionKey = null;
+            }
+        }
+        return null;
     }
 
     /**
@@ -236,15 +290,11 @@ public class QueryController
 
     // Note: This method assumes that the selects method has already been called for the
     // key to avoid having to (potentially) call selects twice
-    private ClusteringIndexFilter makeFilter(PrimaryKey key)
+    private ClusteringIndexFilter makeFilter(DecoratedKey partitionKey, NavigableSet<Clustering<?>> clusterings)
     {
-        ClusteringIndexFilter clusteringIndexFilter = command.clusteringIndexFilter(key.partitionKey());
+        ClusteringIndexFilter clusteringIndexFilter = command.clusteringIndexFilter(partitionKey);
 
-        if (!indexFeatureSet.isRowAware() || key.hasEmptyClustering())
-            return clusteringIndexFilter;
-        else
-            return new ClusteringIndexNamesFilter(FBUtilities.singleton(key.clustering(), cfs.metadata().comparator),
-                                                  clusteringIndexFilter.isReversed());
+        return new ClusteringIndexNamesFilter(clusterings, clusteringIndexFilter.isReversed());
     }
 
     private static void releaseQuietly(SSTableIndex index)
