@@ -84,7 +84,7 @@ public class QueryController
     private final IndexFeatureSet indexFeatureSet;
     private final List<DataRange> ranges;
     private final AbstractBounds<PartitionPosition> mergeRange;
-    private final NavigableSet<Clustering<?>> batchedClusterings;
+    private NavigableSet<Clustering<?>> batchedClusterings;
     private DecoratedKey batchedPartitionKey = null;
 
     public QueryController(ColumnFamilyStore cfs,
@@ -193,7 +193,7 @@ public class QueryController
             if (batchedPartitionKey != null)
             {
                 batchedPartitionKey = key.partitionKey();
-                batchedClusterings.clear();
+                batchedClusterings = new TreeSet<>(cfs.metadata().comparator);
                 batchedClusterings.add(key.clustering());
             }
         }
