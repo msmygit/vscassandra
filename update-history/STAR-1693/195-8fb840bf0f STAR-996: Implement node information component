@@ -1,0 +1,52 @@
+--- a/src/java/org/apache/cassandra/service/StorageService.java
++++ b/src/java/org/apache/cassandra/service/StorageService.java
+@@ -2026,49 +2026,7 @@
+      */
+     public String getNativeAddress(InetAddressAndPort endpoint, boolean withPort)
+     {
+-<<<<<<<
+-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+-            return FBUtilities.getBroadcastNativeAddressAndPort().getHostAddress(withPort);
+-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
+-        {
+-            try
+-            {
+-                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
+-                return address.getHostAddress(withPort);
+-            }
+-            catch (UnknownHostException e)
+-            {
+-                throw new RuntimeException(e);
+-            }
+-        }
+-        else
+-        {
+-             final String ipAddress;
+-             // If RPC_ADDRESS present in gossip for this endpoint use it.  This is expected for 3.x nodes.
+-             if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) != null)
+-             {
+-                 ipAddress = Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value;
+-             }
+-             else
+-             {
+-                 // otherwise just use the IP of the endpoint itself.
+-                 ipAddress = endpoint.getHostAddress(false);
+-             }
+-
+-             // include the configured native_transport_port.
+-             try
+-             {
+-                 InetAddressAndPort address = InetAddressAndPort.getByNameOverrideDefaults(ipAddress, DatabaseDescriptor.getNativeTransportPort());
+-                 return address.getHostAddress(withPort);
+-             }
+-             catch (UnknownHostException e)
+-             {
+-                 throw new RuntimeException(e);
+-             }
+-         }
+-=======
+         return getNativeAddressAndPort(endpoint).getHostAddress(withPort);
+->>>>>>>
+     }
+ 
+     public Map<List<String>, List<String>> getRangeToRpcaddressMap(String keyspace)
