@@ -74,7 +74,7 @@ public class QueryController
 {
     private static final Logger logger = LoggerFactory.getLogger(QueryController.class);
 
-    private static final int PARTITION_BATCH_SIZE = Integer.getInteger("cassandra.sai.partition.batch.size", 1024);
+    private static final int PARTITION_BATCH_SIZE = Integer.getInteger("cassandra.sai.partition.batch.size", 4096);
 
     private final ColumnFamilyStore cfs;
     private final ReadCommand command;
@@ -218,6 +218,7 @@ public class QueryController
             finally
             {
                 batchedPartitionKey = null;
+                batchedClusterings = new TreeSet<>(cfs.metadata().comparator);
             }
         }
         return null;
