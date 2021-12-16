@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.memory;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongConsumer;
 
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
@@ -28,6 +29,8 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.PrimaryKeys;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Pair;
@@ -44,7 +47,11 @@ public abstract class MemoryIndex
         this.indexContext = indexContext;
     }
 
-    public abstract long add(DecoratedKey key, Clustering clustering, ByteBuffer value);
+    public abstract void add(DecoratedKey key,
+                             Clustering clustering,
+                             ByteBuffer value,
+                             LongConsumer onHeapAllocationsTracker,
+                             LongConsumer offHeapAllocationsTracker);
 
     public abstract RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange);
 

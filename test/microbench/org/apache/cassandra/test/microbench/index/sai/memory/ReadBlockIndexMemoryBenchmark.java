@@ -81,9 +81,9 @@ public class ReadBlockIndexMemoryBenchmark extends AbstractTrieMemoryIndexBenchm
         int keyCount = 0;
         for (int i = 0; i < numberOfTerms; i++)
         {
-            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, integerTerms[i]);
+            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, integerTerms[i], bytes -> {}, bytes -> {});
 
-            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, integerTerms[i]);
+            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, integerTerms[i], bytes -> {}, bytes -> {});
 
             if (++rowCount == rowsPerPartition)
             {

@@ -22,8 +22,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongConsumer;
 import javax.annotation.concurrent.ThreadSafe;
 
 import org.apache.commons.lang3.mutable.MutableInt;
@@ -79,7 +81,7 @@ public class MultiBlockIndex extends MemoryIndex
      * @return Bytes memory used
      */
     @Override
-    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public void add(DecoratedKey key, Clustering clustering, ByteBuffer value, LongConsumer onHeapAllocationsTracker, LongConsumer offHeapAllocationsTracker)
     {
         synchronized (writeLock)
         {
@@ -88,7 +90,7 @@ public class MultiBlockIndex extends MemoryIndex
             if (currentIndex == null)
                 current.lazySet(currentIndex = new BlockIndex(indexContext, this));
 
-            final long bytesUsed = currentIndex.add(key, clustering, value);
+            currentIndex.add(key, clustering, value, onHeapAllocationsTracker, offHeapAllocationsTracker);
 
             // the count may go over the block size from tokenized values
             if (currentIndex.count() >= BLOCK_SIZE)
@@ -96,7 +98,6 @@ public class MultiBlockIndex extends MemoryIndex
                 existingBlocks.add(currentIndex);
                 current.lazySet(null);
             }
-            return bytesUsed;
         }
     }
 
@@ -166,7 +167,21 @@ public class MultiBlockIndex extends MemoryIndex
             maxLength = Math.max(maxLength, blockIndex.maxTermLength());
         }
 
-        assert maxLength > 0;
+        if (maxLength == 0)
+            return new Iterator<Pair<ByteComparable, Iterable<ByteComparable>>>()
+            {
+                @Override
+                public boolean hasNext()
+                {
+                    return false;
+                }
+
+                @Override
+                public Pair<ByteComparable, Iterable<ByteComparable>> next()
+                {
+                    throw new NoSuchElementException();
+                }
+            };
 
         assert index.intValue() == totalSize;
 

@@ -75,6 +75,7 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.concurrent.OpOrder;
 
 /**
  * Manage metadata for each column index.
@@ -95,6 +96,7 @@ public class IndexContext
     private final String table;
     private final Pair<ColumnMetadata, IndexTarget.Type> target;
     private final AbstractType<?> validator;
+    private final Memtable.Owner owner;
 
     // Config can be null if the column context is "fake" (i.e. created for a filtering expression).
     private final IndexMetadata config;
@@ -112,7 +114,7 @@ public class IndexContext
 
     private final boolean segmentCompactionEnabled;
 
-    public IndexContext(TableMetadata tableMeta, IndexMetadata config)
+    public IndexContext(TableMetadata tableMeta, IndexMetadata config, Memtable.Owner owner)
     {
         assert config != null;
 
@@ -126,6 +128,7 @@ public class IndexContext
         this.viewManager = new IndexViewManager(this);
         this.indexMetrics = new IndexMetrics(this, tableMeta);
         this.validator = TypeUtil.cellValueType(target);
+        this.owner = owner;
 
         String fullIndexName = String.format("%s.%s.%s", this.keyspace, this.table, this.config.name);
         this.indexWriterConfig = IndexWriterConfig.fromOptions(fullIndexName, validator, config.options);
@@ -177,6 +180,7 @@ public class IndexContext
                                     ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), options)
                                     : this.analyzerFactory;
         this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(clusteringComparator);
+        this.owner = null;
         this.segmentCompactionEnabled = segmentCompactionEnabled;
     }
 
@@ -201,6 +205,7 @@ public class IndexContext
                                     : this.analyzerFactory;
         this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(clusteringComparator);
         this.segmentCompactionEnabled = true;
+        this.owner = null;
     }
 
     public IPartitioner partitioner()
@@ -238,15 +243,20 @@ public class IndexContext
         return table;
     }
 
-    public long index(DecoratedKey key, Row row, Memtable mt)
+    public Memtable.Owner owner()
     {
-        MemtableIndex current = liveMemtables.get(mt);
+        return this.owner;
+    }
+
+    public void index(DecoratedKey key, Row row, Memtable memtable, OpOrder.Group opGroup)
+    {
+        MemtableIndex current = liveMemtables.get(memtable);
 
         // We expect the relevant IndexMemtable to be present most of the time, so only make the
         // call to computeIfAbsent() if it's not. (see https://bugs.openjdk.java.net/browse/JDK-8161372)
         MemtableIndex target = (current != null)
                                ? current
-                               : liveMemtables.computeIfAbsent(mt, memtable -> new MemtableIndex(this));
+                               : liveMemtables.computeIfAbsent(memtable, mt -> new MemtableIndex(this));
 
         long start = System.nanoTime();
 
@@ -260,17 +270,16 @@ public class IndexContext
                 while (bufferIterator.hasNext())
                 {
                     ByteBuffer value = bufferIterator.next();
-                    bytes += target.index(key, row.clustering(), value);
+                    target.index(key, row.clustering(), value, memtable, opGroup);
                 }
             }
         }
         else
         {
             ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
-            target.index(key, row.clustering(), value);
+            target.index(key, row.clustering(), value, memtable, opGroup);
         }
         indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-        return bytes;
     }
 
     public void renewMemtable(Memtable renewed)
@@ -323,9 +332,14 @@ public class IndexContext
         return liveMemtables.values().stream().mapToLong(MemtableIndex::writeCount).sum();
     }
 
-    public long estimatedMemIndexMemoryUsed()
+    public long estimatedOnHeapMemIndexMemoryUsed()
     {
-        return liveMemtables.values().stream().mapToLong(MemtableIndex::estimatedMemoryUsed).sum();
+        return liveMemtables.values().stream().mapToLong(MemtableIndex::estimatedOnHeapMemoryUsed).sum();
+    }
+
+    public long estimatedOffHeapMemIndexMemoryUsed()
+    {
+        return liveMemtables.values().stream().mapToLong(MemtableIndex::estimatedOffHeapMemoryUsed).sum();
     }
 
     /**

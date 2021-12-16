@@ -44,6 +44,7 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
+import org.apache.cassandra.schema.MockSchema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Pair;
@@ -110,7 +111,7 @@ public class TrieMemoryIndexTest
         final TrieMemoryIndex index = newTrieMemoryIndex(Int32Type.instance);
         for (int i = 0; i < 99; ++i)
         {
-            index.add(key, Clustering.EMPTY, Int32Type.instance.decompose(i));
+            index.add(key, Clustering.EMPTY, Int32Type.instance.decompose(i), bytes -> {}, bytes -> {});
         }
 
         final Iterator<Pair<ByteComparable, Iterable<ByteComparable>>> iterator = index.iterator();
@@ -139,7 +140,7 @@ public class TrieMemoryIndexTest
         final TrieMemoryIndex index = newTrieMemoryIndex(type);
         for (int i = 0; i < 99; ++i)
         {
-            index.add(key, Clustering.EMPTY, decompose.apply(i));
+            index.add(key, Clustering.EMPTY, decompose.apply(i), bytes -> {}, bytes -> {});
         }
 
         final Iterator<Pair<ByteComparable, Iterable<ByteComparable>>> iterator = index.iterator();
@@ -176,7 +177,7 @@ public class TrieMemoryIndexTest
         options.put("target", REG_COL);
 
         IndexMetadata indexMetadata = IndexMetadata.fromSchemaMetadata("col_index", IndexMetadata.Kind.CUSTOM, options);
-        IndexContext ci = new IndexContext(metadata, indexMetadata);
+        IndexContext ci = new IndexContext(metadata, indexMetadata, MockSchema.newCFS(metadata));
         return new TrieMemoryIndex(ci);
     }
 }

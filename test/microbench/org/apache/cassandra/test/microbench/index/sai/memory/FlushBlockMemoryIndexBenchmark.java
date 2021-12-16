@@ -77,8 +77,8 @@ public class FlushBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
         int keyCount = 0;
         for (ByteBuffer term : integerTerms)
         {
-            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term);
-            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term);
+            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term, bytes -> {}, bytes -> {});
+            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term, bytes -> {}, bytes -> {});
             if (++rowCount == rowsPerPartition)
             {
                 rowCount = 0;

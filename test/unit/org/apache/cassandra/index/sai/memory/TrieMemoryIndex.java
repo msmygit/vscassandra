@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.SortedSet;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.LongConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +85,7 @@ public class TrieMemoryIndex extends MemoryIndex
     }
 
     @Override
-    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public void add(DecoratedKey key, Clustering clustering, ByteBuffer value, LongConsumer onHeapAllocationsTracker, LongConsumer offHeapAllocationsTracker)
     {
         synchronized (writeLock)
         {
@@ -124,7 +125,7 @@ public class TrieMemoryIndex extends MemoryIndex
                     }
                 }
 
-                return (data.sizeOnHeap() - initialSizeOnHeap) + (data.sizeOffHeap() - initialSizeOffHeap) + (primaryKeysReducer.heapAllocations() - reducerHeapSize);
+                onHeapAllocationsTracker.accept((data.sizeOnHeap() - initialSizeOnHeap) + (data.sizeOffHeap() - initialSizeOffHeap) + (primaryKeysReducer.heapAllocations() - reducerHeapSize));
             }
             finally
             {

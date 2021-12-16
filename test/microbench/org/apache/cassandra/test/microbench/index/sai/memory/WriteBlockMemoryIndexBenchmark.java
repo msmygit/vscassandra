@@ -77,7 +77,7 @@ public class WriteBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
         int keyCount = 0;
         for (ByteBuffer term : integerTerms)
         {
-            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term);
+            integerBlockIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term, bytes -> {}, bytes -> {});
             if (++rowCount == rowsPerPartition)
             {
                 rowCount = 0;
@@ -96,7 +96,7 @@ public class WriteBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
         int keyCount = 0;
         for (ByteBuffer term : integerTerms)
         {
-            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term);
+            integerIndex.add(partitionKeys[keyCount], Clustering.EMPTY, term, bytes -> {}, bytes -> {});
             if (++rowCount == rowsPerPartition)
             {
                 rowCount = 0;

@@ -53,6 +53,7 @@ import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.IndexMetadata;
+import org.apache.cassandra.schema.MockSchema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -331,8 +332,8 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
-            trieIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
+            trieIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         for (int x = 0; x < 6000; x++)
@@ -375,7 +376,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         // ensure 2 blocks are present
@@ -417,7 +418,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         Expression expression = new Expression(indexContext);
@@ -449,9 +450,9 @@ public class BlockIndexTest extends SaiRandomizedTest
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(valuei));
 
             ByteBuffer value = Int32Type.instance.decompose(valuei);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
 
-            trieIndex.add(key, Clustering.EMPTY, value);
+            trieIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         Iterator<Pair<ByteComparable, Iterable<ByteComparable>>> blockIterator = blockIndex.iterator();
@@ -496,7 +497,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         Iterator<Pair<ByteComparable, Iterable<ByteComparable>>> iterator = blockIndex.iterator();
@@ -520,7 +521,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         Expression expression = new Expression(indexContext);
@@ -558,7 +559,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockIndex.add(key, Clustering.EMPTY, value, bytes -> {}, bytes -> {});
         }
 
         Expression expression = new Expression(indexContext);
@@ -596,7 +597,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         options.put(IndexTarget.CUSTOM_INDEX_OPTION_NAME, StorageAttachedIndex.class.getCanonicalName());
         options.put("target", REG_COL);
         IndexMetadata indexMetadata = IndexMetadata.fromSchemaMetadata("col_index", IndexMetadata.Kind.CUSTOM, options);
-        return new IndexContext(metadata, indexMetadata);
+        return new IndexContext(metadata, indexMetadata, MockSchema.newCFS(metadata));
     }
 
     public static int countHits(Expression expression, MultiBlockIndex blockIndex)

@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongConsumer;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -165,7 +166,7 @@ class BlockIndex extends MemoryIndex
      * @return Bytes memory used
      */
     @Override
-    public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
+    public void add(DecoratedKey key, Clustering clustering, ByteBuffer value, LongConsumer onHeapAllocationsTracker, LongConsumer offHeapAllocationsTracker)
     {
         if (this.parent != null && !Thread.holdsLock(this.parent.writeLock))
             throw new IllegalStateException("The add method must have a lock.");
@@ -219,7 +220,7 @@ class BlockIndex extends MemoryIndex
                 count.incrementAndGet();
             }
 
-            return valueBytesUsed + key.getKeyLength() + clustering.dataSize() + 64;
+            onHeapAllocationsTracker.accept(valueBytesUsed + key.getKeyLength() + clustering.dataSize() + 64);
         }
         finally
         {
