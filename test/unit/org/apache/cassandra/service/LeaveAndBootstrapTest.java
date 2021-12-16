@@ -34,6 +34,7 @@ import org.apache.cassandra.Util;
 import org.apache.cassandra.Util.PartitionerSwitcher;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.nodes.Nodes;
 import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.dht.IPartitioner;
@@ -686,8 +687,8 @@ public class LeaveAndBootstrapTest
         Util.createInitialRing(ss, partitioner, endpointTokens, new ArrayList<Token>(), hosts, new ArrayList<UUID>(), 2);
 
         InetAddressAndPort toRemove = hosts.get(1);
-        SystemKeyspace.updatePeerInfo(toRemove, "data_center", "dc42");
-        SystemKeyspace.updatePeerInfo(toRemove, "rack", "rack42");
+        Nodes.peers().update(toRemove, info -> info.setDataCenter("dc42"), false);
+        Nodes.peers().update(toRemove, info -> info.setRack("rack42"), false);
         assertEquals("rack42", SystemKeyspace.loadDcRackInfo().get(toRemove).get("rack"));
 
         // mark the node as removed
