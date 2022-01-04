@@ -131,12 +131,12 @@ public class LoadingMap<K, V>
     }
 
     @VisibleForTesting
-    Future<V> get(K key)
+    Future<V> getUnsafe(K key)
     {
         return internalMap.get(key);
     }
 
-    public V getIfReady(K key)
+    public V get(K key)
     {
         while (true)
         {
@@ -156,6 +156,6 @@ public class LoadingMap<K, V>
 
     public Stream<V> values()
     {
-        return internalMap.keySet().stream().map(this::getIfReady).filter(Objects::nonNull);
+        return internalMap.keySet().stream().map(this::get).filter(Objects::nonNull);
     }
 }

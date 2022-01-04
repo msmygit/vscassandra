@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.util.concurrent.Uninterruptibles;
-import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,8 +84,8 @@ public class LoadingMapTest
         f2 = submitLoad(2, "two", b2, null);
         await().untilAsserted(() -> assertThat(b2.getNumberWaiting()).isGreaterThan(0)); // wait until we enter loading function
 
-        assertThat(map.get(1)).isNotNull().isNotDone();
-        assertThat(map.get(2)).isNotNull().isNotDone();
+        assertThat(map.getUnsafe(1)).isNotNull().isNotDone();
+        assertThat(map.getUnsafe(2)).isNotNull().isNotDone();
         assertThat(f1).isNotDone();
         assertThat(f2).isNotDone();
 
@@ -100,8 +99,8 @@ public class LoadingMapTest
         b1.await();
         assertFuture(f1, "one");
 
-        assertThat(map.getIfReady(1)).isEqualTo("one");
-        assertThat(map.getIfReady(2)).isEqualTo("two");
+        assertThat(map.get(1)).isEqualTo("one");
+        assertThat(map.get(2)).isEqualTo("two");
     }
 
     @Test
@@ -114,8 +113,8 @@ public class LoadingMapTest
 
         assertThat(v).isEqualTo("one");
 
-        assertThat(map.getIfReady(1)).isEqualTo("one");
-        assertThat(map.getIfReady(2)).isEqualTo("two");
+        assertThat(map.get(1)).isEqualTo("one");
+        assertThat(map.get(2)).isEqualTo("two");
     }
 
     @Test
@@ -129,8 +128,8 @@ public class LoadingMapTest
         f2 = submitUnload(2, "two", b2, null);
         await().untilAsserted(() -> assertThat(b2.getNumberWaiting()).isGreaterThan(0)); // wait until we enter unloading function
 
-        assertThat(map.get(1)).isNotNull().isNotDone();
-        assertThat(map.get(2)).isNotNull().isNotDone();
+        assertThat(map.getUnsafe(1)).isNotNull().isNotDone();
+        assertThat(map.getUnsafe(2)).isNotNull().isNotDone();
         assertThat(f1).isNotDone();
         assertThat(f2).isNotDone();
 
@@ -144,8 +143,8 @@ public class LoadingMapTest
         b1.await();
         assertFuture(f1, "one");
 
-        assertThat(map.get(1)).isNull();
-        assertThat(map.get(2)).isNull();
+        assertThat(map.getUnsafe(1)).isNull();
+        assertThat(map.getUnsafe(2)).isNull();
     }
 
     @Test
@@ -159,12 +158,12 @@ public class LoadingMapTest
             if (v1 == null)
                 return null;
 
-            assertThat(map.get(1)).isNotDone();
+            assertThat(map.getUnsafe(1)).isNotDone();
             assertThat(map.compute(2, (ignoredKey2, v2) -> {
                 if (v2 == null)
                     return null;
 
-                assertThat(map.get(2)).isNotDone();
+                assertThat(map.getUnsafe(2)).isNotDone();
                 removed2.set(v2);
                 return null;
             })).isNull();
@@ -175,8 +174,8 @@ public class LoadingMapTest
 
         assertThat(removed1.get()).isEqualTo("one");
 
-        assertThat(map.get(1)).isNull();
-        assertThat(map.get(2)).isNull();
+        assertThat(map.getUnsafe(1)).isNull();
+        assertThat(map.getUnsafe(2)).isNull();
     }
 
     @Test
@@ -194,7 +193,7 @@ public class LoadingMapTest
         b1.await();
 
         assertFutures("one", "one");
-        assertThat(map.getIfReady(1)).isEqualTo("one");
+        assertThat(map.get(1)).isEqualTo("one");
         assertThat(b2.getNumberWaiting()).isZero();
     }
 
@@ -211,7 +210,7 @@ public class LoadingMapTest
         b1.await(); // let f1 continue
         assertFuture(f1, "one");
 
-        assertThat(map.getIfReady(1)).isNull();
+        assertThat(map.get(1)).isNull();
         assertThat(b2.getNumberWaiting()).isZero();
     }
 
@@ -232,7 +231,7 @@ public class LoadingMapTest
         b1.await();
 
         assertFutures("one", "two");
-        assertThat(map.getIfReady(1)).isEqualTo("two");
+        assertThat(map.get(1)).isEqualTo("two");
     }
 
     @Test
@@ -250,7 +249,7 @@ public class LoadingMapTest
         b1.await();
 
         assertFutures("one", "one");
-        assertThat(map.getIfReady(1)).isNull();
+        assertThat(map.get(1)).isNull();
     }
 
     @Test
@@ -281,8 +280,8 @@ public class LoadingMapTest
                                                            .withCauseInstanceOf(RuntimeException.class)
                                                            .withMessageContaining("abc");
 
-        assertThat(map.get(1)).isNull();
-        assertThat(map.get(2)).isNull();
+        assertThat(map.getUnsafe(1)).isNull();
+        assertThat(map.getUnsafe(2)).isNull();
     }
 
     @Test
@@ -298,8 +297,8 @@ public class LoadingMapTest
                                                            .withCauseInstanceOf(RuntimeException.class)
                                                            .withMessageContaining("abc");
 
-        assertThat(map.getIfReady(1)).isEqualTo("one");
-        assertThat(map.getIfReady(2)).isEqualTo("two");
+        assertThat(map.get(1)).isEqualTo("one");
+        assertThat(map.get(2)).isEqualTo("two");
     }
 
     @Test
@@ -449,8 +448,8 @@ public class LoadingMapTest
         map.compute(1, (ignoredKey, ignoredValue) -> "one");
         map.compute(2, (ignoredKey, ignoredValue) -> "two");
 
-        assertThat(map.getIfReady(1)).isEqualTo("one");
-        assertThat(map.getIfReady(2)).isEqualTo("two");
+        assertThat(map.get(1)).isEqualTo("one");
+        assertThat(map.get(2)).isEqualTo("two");
     }
 
     private ConditionFactory await()

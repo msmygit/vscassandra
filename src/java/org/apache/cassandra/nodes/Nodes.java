@@ -225,7 +225,7 @@ public class Nodes
          */
         public PeerInfo get(InetAddressAndPort peer)
         {
-            PeerInfo info = internalMap.getIfReady(peer);
+            PeerInfo info = internalMap.get(peer);
             return info != null ? info.duplicate() : null;
         }
 
@@ -317,7 +317,7 @@ public class Nodes
          */
         public LocalInfo get()
         {
-            LocalInfo info = internalMap.getIfReady(local);
+            LocalInfo info = internalMap.get(local);
             return info != null ? info.duplicate() : null;
         }
 
