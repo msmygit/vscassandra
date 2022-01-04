@@ -18,42 +18,52 @@
 
 package org.apache.cassandra.nodes;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ForkJoinTask;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
-import com.google.common.util.concurrent.Uninterruptibles;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.awaitility.Awaitility;
-import org.awaitility.core.ConditionFactory;
 import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 public class NodesTest
 {
+    private final ExecutorService executor = mock(ExecutorService.class);
+    private final INodesPersistence persistence = mock(INodesPersistence.class);
+    private final Future<?> promise = mock(Future.class);
+
+    private final UUID newHostId = UUID.randomUUID();
+    private final UUID id1 = UUID.randomUUID();
+    private final UUID id2 = UUID.randomUUID();
+    private final UUID id3 = UUID.randomUUID();
+
     private Nodes nodes;
-    private INodesPersistence persistence = mock(INodesPersistence.class);
-
-
     private static InetAddressAndPort addr1;
     private static InetAddressAndPort addr2;
     private static InetAddressAndPort addr3;
-    private CyclicBarrier barrier;
-    private ArgumentCaptor<LocalInfo> localInfoCaptor;
-    private AtomicReference<LocalInfo> localInfoRef;
-    private ArgumentCaptor<PeerInfo> peerInfoCaptor;
-    private AtomicReference<PeerInfo> peerInfoRef;
+    private ArgumentCaptor<Runnable> taskCaptor;
+    private AtomicReference<NodeInfo<?>> infoRef;
 
     @BeforeClass
     public static void beforeClass() throws Exception
@@ -66,13 +76,19 @@ public class NodesTest
     @Before
     public void beforeTest()
     {
-        reset(persistence);
-        nodes = new Nodes(persistence);
-        barrier = new CyclicBarrier(2);
-        localInfoCaptor = ArgumentCaptor.forClass(LocalInfo.class);
-        localInfoRef = new AtomicReference<>();
-        peerInfoCaptor = ArgumentCaptor.forClass(PeerInfo.class);
-        peerInfoRef = new AtomicReference<>();
+        reset(persistence, executor, promise);
+        nodes = new Nodes(persistence, executor);
+        infoRef = new AtomicReference<>();
+        taskCaptor = ArgumentCaptor.forClass(Runnable.class);
+        when(executor.submit(taskCaptor.capture())).thenAnswer(inv -> promise);
+    }
+
+    @After
+    public void afterTest()
+    {
+        verify(persistence, atMostOnce()).loadLocal();
+        verify(persistence, atMostOnce()).loadPeers();
+        verifyNoMoreInteractions(executor, persistence, promise);
     }
 
     @Test
@@ -90,153 +106,242 @@ public class NodesTest
     }
 
     @Test
+    public void loadLocal()
+    {
+        when(persistence.loadLocal()).thenReturn(new LocalInfo().setHostId(newHostId));
+        clearInvocations(persistence);
+        nodes = new Nodes(persistence, executor);
+
+        LocalInfo r = nodes.getLocal().get();
+        verify(persistence).loadLocal();
+        assertThat(r.getHostId()).isEqualTo(newHostId);
+    }
+
+    @Test
+    public void loadPeers()
+    {
+        List<PeerInfo> peers = Arrays.asList(new PeerInfo().setPeerAddressAndPort(addr1).setHostId(id1),
+                                             new PeerInfo().setPeerAddressAndPort(addr2).setHostId(id2),
+                                             new PeerInfo().setPeerAddressAndPort(addr3).setHostId(id3));
+        when(persistence.loadPeers()).thenReturn(peers.stream());
+        clearInvocations(persistence);
+        nodes = new Nodes(persistence, executor);
+
+        Set<PeerInfo> r = nodes.getPeers().get().collect(Collectors.toSet());
+        assertThat(r).containsExactlyInAnyOrderElementsOf(peers);
+        verify(persistence).loadPeers();
+
+        clearInvocations(executor);
+    }
+
+    @Test
     public void updateLocalNoChanges() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        nodes.getLocal().update(current -> current.setHostId(hostId), true, true);
+        nodes.getLocal().update(current -> current.setHostId(newHostId), false, false);
+        clearInvocations(persistence, executor, promise);
 
-        ForkJoinTask<LocalInfo> r = updateLocalInfo(hostId, false, false);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(barrier.getNumberWaiting()).isZero(); // force == false and we did not change anything
-        assertThat(localInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getLocal().get()); // mutation on duplicate should not have effect on live object
+        LocalInfo r = updateLocalInfo(newHostId, false, false);
+
+        checkLiveObject(r, () -> nodes.getLocal().get(), newHostId);
     }
 
     @Test
     public void updateLocalWithSomeChange() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        ForkJoinTask<LocalInfo> r = updateLocalInfo(hostId, false, false);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        assertThat(localInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getLocal().get()); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getLocal().get().getHostId()).isEqualTo(hostId);
-        barrier.reset();
+        LocalInfo r = updateLocalInfo(newHostId, false, false);
+
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).saveLocal(argThat(info -> info.getHostId().equals(newHostId)));
+
+        checkLiveObject(r, () -> nodes.getLocal().get(), newHostId);
     }
 
     @Test
     public void updateLocalWithSomeChangeBlocking() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        ForkJoinTask<LocalInfo> r = updateLocalInfo(hostId, true, false);
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
-        assertThat(r).isNotDone();
-        barrier.await();
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(localInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getLocal().get()); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getLocal().get().getHostId()).isEqualTo(hostId);
+        LocalInfo r = updateLocalInfo(newHostId, true, false);
+
+        verify(executor).submit(any(Runnable.class));
+        verify(promise).get();
+
+        taskCaptor.getValue().run();
+        verify(persistence).saveLocal(argThat(info -> info.getHostId().equals(newHostId)));
+        verify(persistence).syncLocal();
+
+        checkLiveObject(r, () -> nodes.getLocal().get(), newHostId);
     }
 
     @Test
     public void updateLocalWithForce() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        nodes.getLocal().update(current -> current.setHostId(hostId), true, true);
-        ForkJoinTask<LocalInfo> r = updateLocalInfo(hostId, false, true);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        barrier.await();
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(localInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getLocal().get()); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getLocal().get().getHostId()).isEqualTo(hostId);
+        nodes.getLocal().update(current -> current.setHostId(newHostId), false, false);
+        clearInvocations(persistence, executor, promise);
+
+        LocalInfo r = updateLocalInfo(newHostId, false, true);
+
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).saveLocal(argThat(info -> info.getHostId().equals(newHostId)));
+
+        checkLiveObject(r, () -> nodes.getLocal().get(), newHostId);
     }
 
     @Test
-    public void updatePeerNoChanges() throws Exception
+    public void updatePeersNoChanges() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        nodes.getPeers().update(addr1, current -> current.setHostId(hostId), true, true);
+        nodes.getPeers().update(addr1, current -> current.setHostId(newHostId), false, false);
+        clearInvocations(persistence, executor, promise);
 
-        ForkJoinTask<PeerInfo> r = updatePeerInfo(hostId, false, false);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(barrier.getNumberWaiting()).isZero(); // force == false and we did not change anything
-        assertThat(peerInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getPeers().get(addr1)); // mutation on duplicate should not have effect on live object
+        PeerInfo r = updatePeerInfo(newHostId, false, false);
+
+        checkLiveObject(r, () -> nodes.getPeers().get(addr1), newHostId);
     }
 
     @Test
-    public void updatePeerWithSomeChange() throws Exception
+    public void updatePeersWithSomeChange() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        ForkJoinTask<PeerInfo> r = updatePeerInfo(hostId, false, false);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        assertThat(peerInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getPeers().get(addr1)); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getPeers().get(addr1).getHostId()).isEqualTo(hostId);
-        barrier.reset();
+        PeerInfo r = updatePeerInfo(newHostId, false, false);
+
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).savePeer(argThat(info -> info.getHostId().equals(newHostId)));
+
+        checkLiveObject(r, () -> nodes.getPeers().get(addr1), newHostId);
     }
 
     @Test
-    public void updatePeerWithSomeChangeBlocking() throws Exception
+    public void updatePeersWithSomeChangeBlocking() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        ForkJoinTask<PeerInfo> r = updatePeerInfo(hostId, true, false);
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
-        assertThat(r).isNotDone();
-        barrier.await();
-        await().untilAsserted(() -> assertThat(r).isDone());
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(peerInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getPeers().get(addr1)); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getPeers().get(addr1).getHostId()).isEqualTo(hostId);
+        PeerInfo r = updatePeerInfo(newHostId, true, false);
+
+        verify(executor).submit(any(Runnable.class));
+        verify(promise).get();
+
+        taskCaptor.getValue().run();
+        verify(persistence).savePeer(argThat(info -> info.getHostId().equals(newHostId)));
+        verify(persistence).syncPeers();
+
+        checkLiveObject(r, () -> nodes.getPeers().get(addr1), newHostId);
     }
 
     @Test
-    public void updatePeerWithForce() throws Exception
+    public void updatePeersWithForce() throws Exception
     {
-        UUID hostId = UUID.randomUUID();
-        nodes.getPeers().update(addr1, current -> current.setHostId(hostId), true, true);
-        ForkJoinTask<PeerInfo> r = updatePeerInfo(hostId, false, true);
-        await().untilAsserted(() -> assertThat(r).isDone());
-        await().untilAsserted(() -> assertThat(barrier.getNumberWaiting()).isOne());
-        barrier.await();
-        assertThat(r.get().getHostId()).isEqualTo(hostId);
-        assertThat(peerInfoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
-        assertThat(r.get().setHostId(UUID.randomUUID())).isNotEqualTo(nodes.getPeers().get()); // mutation on duplicate should not have effect on live object
-        assertThat(nodes.getPeers().get(addr1).getHostId()).isEqualTo(hostId);
+        nodes.getPeers().update(addr1, current -> current.setHostId(newHostId), false, false);
+        clearInvocations(persistence, executor, promise);
+
+        PeerInfo r = updatePeerInfo(newHostId, false, true);
+
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).savePeer(argThat(info -> info.getHostId().equals(newHostId)));
+
+        checkLiveObject(r, () -> nodes.getPeers().get(addr1), newHostId);
     }
 
-    private ConditionFactory await()
+    @Test
+    public void getAllPeers()
     {
-        return Awaitility.await().pollDelay(10, TimeUnit.MILLISECONDS).atMost(5, TimeUnit.SECONDS);
+        PeerInfo p1 = nodes.getPeers().update(addr1, current -> current.setHostId(id1));
+        PeerInfo p2 = nodes.getPeers().update(addr2, current -> current.setHostId(id2));
+        PeerInfo p3 = nodes.getPeers().update(addr3, current -> current.setHostId(id3));
+
+        Set<PeerInfo> peers = nodes.getPeers().get().collect(Collectors.toSet());
+        assertThat(peers).containsExactlyInAnyOrder(p1, p2, p3);
+
+        clearInvocations(executor);
     }
 
-    private ForkJoinTask<LocalInfo> updateLocalInfo(UUID hostId, boolean blocking, boolean force)
+    @Test
+    public void removePeer() throws Exception
     {
-        doAnswer(inv -> {
-            barrier.await();
-            return null;
-        }).when(persistence).saveLocal(localInfoCaptor.capture());
+        PeerInfo p1 = nodes.getPeers().update(addr1, current -> current.setHostId(id1));
+        PeerInfo p2 = nodes.getPeers().update(addr2, current -> current.setHostId(id2));
 
-        return ForkJoinPool.commonPool().submit(() -> nodes.getLocal().update(previous -> {
-            localInfoRef.set(previous);
+        clearInvocations(executor);
+
+        PeerInfo r = nodes.getPeers().remove(addr2, false);
+        assertThat(r).isEqualTo(p2);
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).deletePeer(addr2);
+
+        Set<PeerInfo> peers = nodes.getPeers().get().collect(Collectors.toSet());
+        assertThat(peers).containsExactlyInAnyOrder(p1);
+    }
+
+    @Test
+    public void removePeerBlocking() throws Exception
+    {
+        PeerInfo p1 = nodes.getPeers().update(addr1, current -> current.setHostId(id1));
+        PeerInfo p2 = nodes.getPeers().update(addr2, current -> current.setHostId(id2));
+
+        clearInvocations(executor);
+
+        PeerInfo r = nodes.getPeers().remove(addr2, true);
+        assertThat(r).isEqualTo(p2);
+        verify(executor).submit(any(Runnable.class));
+        verify(promise).get();
+
+        taskCaptor.getValue().run();
+        verify(persistence).deletePeer(addr2);
+        verify(persistence).syncPeers();
+
+        Set<PeerInfo> peers = nodes.getPeers().get().collect(Collectors.toSet());
+        assertThat(peers).containsExactlyInAnyOrder(p1);
+    }
+
+    @Test
+    public void removeMissingPeer()
+    {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+
+        PeerInfo r1 = nodes.getPeers().update(addr1, current -> current.setHostId(id1));
+        PeerInfo r2 = nodes.getPeers().update(addr2, current -> current.setHostId(id2));
+
+        clearInvocations(executor);
+
+        PeerInfo r = nodes.getPeers().remove(addr3, false);
+        assertThat(r).isNull();
+        verify(executor).submit(any(Runnable.class));
+
+        taskCaptor.getValue().run();
+        verify(persistence).deletePeer(addr3);
+
+        Set<PeerInfo> peers = nodes.getPeers().get().collect(Collectors.toSet());
+        assertThat(peers).containsExactlyInAnyOrder(r1, r2);
+    }
+
+    private void checkLiveObject(NodeInfo<?> r, Callable<NodeInfo<?>> currentSupplier, UUID hostId) throws Exception
+    {
+        assertThat(r.getHostId()).isEqualTo(hostId);
+        assertThat(infoRef.get()).isNotNull().isNotSameAs(r); // r should be a duplicate while updatedInfo should be a live object
+        assertThat(r.setHostId(UUID.randomUUID())).isNotEqualTo(currentSupplier.call()); // mutation on duplicate should not have effect on live object
+        assertThat(currentSupplier.call().getHostId()).isEqualTo(hostId);
+    }
+
+    private LocalInfo updateLocalInfo(UUID hostId, boolean blocking, boolean force)
+    {
+        return nodes.getLocal().update(previous -> {
+            infoRef.set(previous);
             previous.setHostId(hostId);
             return previous;
-        }, blocking, force));
+        }, blocking, force);
     }
 
-    private ForkJoinTask<PeerInfo> updatePeerInfo(UUID hostId, boolean blocking, boolean force)
+    private PeerInfo updatePeerInfo(UUID hostId, boolean blocking, boolean force)
     {
-        doAnswer(inv -> {
-            barrier.await();
-            return null;
-        }).when(persistence).savePeer(peerInfoCaptor.capture());
-
-        return ForkJoinPool.commonPool().submit(() -> nodes.getPeers().update(addr1, previous -> {
-            peerInfoRef.set(previous);
+        return nodes.getPeers().update(addr1, previous -> {
+            infoRef.set(previous);
             previous.setHostId(hostId);
             return previous;
-        }, blocking, force));
+        }, blocking, force);
     }
 }

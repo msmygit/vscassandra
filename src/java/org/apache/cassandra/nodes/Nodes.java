@@ -45,10 +45,10 @@ import org.apache.cassandra.utils.concurrent.LoadingMap;
 public class Nodes
 {
     private final static Logger logger = LoggerFactory.getLogger(Nodes.class);
-    private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
-                                                                                     .setNameFormat("nodes-info-persistence-")
-                                                                                     .setUncaughtExceptionHandler((t, e) -> logger.error("Uncaught exception in nodes information persisting thread", e))
-                                                                                     .build());
+
+    @VisibleForTesting
+    private final ExecutorService updateExecutor;
+
     private final INodesPersistence nodesPersistence;
 
     private final Peers peers;
@@ -142,12 +142,16 @@ public class Nodes
     {
         this(!DatabaseDescriptor.isDaemonInitialized() || Boolean.getBoolean("cassandra.nodes.disablePersitingToSystemKeyspace")
              ? INodesPersistence.NO_NODES_PERSISTENCE
-             : new NodesPersistence());
+             : new NodesPersistence(),
+             Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("nodes-info-persistence-")
+                                                                         .setUncaughtExceptionHandler((t, e) -> logger.error("Uncaught exception in nodes information persisting thread", e))
+                                                                         .build()));
     }
 
     @VisibleForTesting
-    public Nodes(INodesPersistence nodesPersistence)
+    public Nodes(INodesPersistence nodesPersistence, ExecutorService updateExecutor)
     {
+        this.updateExecutor = updateExecutor;
         this.nodesPersistence = nodesPersistence;
         this.local = new Local().load();
         this.peers = new Peers().load();
@@ -255,7 +259,11 @@ public class Nodes
 
         private void delete(InetAddressAndPort peer, boolean blocking)
         {
-            Future<?> f = updateExecutor.submit(() -> nodesPersistence.deletePeer(peer));
+            Future<?> f = updateExecutor.submit(() -> {
+                nodesPersistence.deletePeer(peer);
+                if (blocking)
+                    nodesPersistence.syncPeers();
+            });
 
             if (blocking)
                 FBUtilities.waitOnFuture(f);
