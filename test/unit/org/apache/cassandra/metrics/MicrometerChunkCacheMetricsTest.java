@@ -33,7 +33,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.assertj.core.api.Assertions;
 import org.mockito.Mockito;
 
-import static org.apache.cassandra.metrics.MicrometerChunkCacheMetrics.hitRateUpdateInterval;
+import static org.apache.cassandra.metrics.MicrometerCacheMetrics.hitRateUpdateInterval;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;

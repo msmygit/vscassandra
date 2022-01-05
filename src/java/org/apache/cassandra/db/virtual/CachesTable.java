@@ -58,14 +58,14 @@ final class CachesTable extends AbstractVirtualTable
     private void addRow(SimpleDataSet result, String name, CacheMetrics metrics)
     {
         result.row(name)
-              .column(CAPACITY_BYTES, metrics.capacity.getValue())
-              .column(SIZE_BYTES, metrics.size.getValue())
-              .column(ENTRY_COUNT, metrics.entries.getValue())
-              .column(REQUEST_COUNT, metrics.requests.getCount())
-              .column(HIT_COUNT, metrics.hits.getCount())
-              .column(HIT_RATIO, metrics.hitRate.getValue())
-              .column(RECENT_REQUEST_RATE_PER_SECOND, (long) metrics.requests.getFifteenMinuteRate())
-              .column(RECENT_HIT_RATE_PER_SECOND, (long) metrics.hits.getFifteenMinuteRate());
+              .column(CAPACITY_BYTES, metrics.capacity())
+              .column(SIZE_BYTES, metrics.size())
+              .column(ENTRY_COUNT, metrics.entries())
+              .column(REQUEST_COUNT, metrics.requests())
+              .column(HIT_COUNT, metrics.hits())
+              .column(HIT_RATIO, metrics.hitRate())
+              .column(RECENT_REQUEST_RATE_PER_SECOND, (long) metrics.fifteenMinuteRequestRate())
+              .column(RECENT_HIT_RATE_PER_SECOND, (long) metrics.fifteenMinuteHitRate());
     }
 
     private void addRow(SimpleDataSet result, String name, ChunkCacheMetrics metrics)

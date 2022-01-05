@@ -30,7 +30,7 @@ import org.apache.cassandra.cache.ChunkCache;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.USE_MICROMETER;
 
-public interface ChunkCacheMetrics extends StatsCounter
+public interface ChunkCacheMetrics extends StatsCounter, CacheMetrics
 {
     static ChunkCacheMetrics create(ChunkCache cache)
     {
@@ -52,20 +52,8 @@ public interface ChunkCacheMetrics extends StatsCounter
     @Override
     void recordEviction();
 
-    double hitRate();
-
-    long requests();
-
-    long misses();
-
-    long hits();
-
     double missLatency();
 
-    long capacity();
-
-    long size();
-    
     long entries();
 
     long requestsFifteenMinuteRate();

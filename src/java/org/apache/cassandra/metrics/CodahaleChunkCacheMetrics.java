@@ -33,7 +33,7 @@ import org.apache.cassandra.utils.FBUtilities;
 public class CodahaleChunkCacheMetrics implements ChunkCacheMetrics
 {
     /** Metrics in common with ICache implementations */
-    private final CacheMetrics metrics;
+    private final CodahaleCacheMetrics metrics;
 
     /** Latency of misses */
     public final Timer missLatency;
@@ -45,7 +45,7 @@ public class CodahaleChunkCacheMetrics implements ChunkCacheMetrics
      */
     CodahaleChunkCacheMetrics(ChunkCache cache)
     {
-        metrics = new CacheMetrics("ChunkCache", cache);
+        metrics = new CodahaleCacheMetrics("ChunkCache", cache);
         missLatency = metrics.registerTimer("MissLatency");
     }
 
@@ -124,7 +124,7 @@ public class CodahaleChunkCacheMetrics implements ChunkCacheMetrics
     @Override
     public long entries()
     {
-        return metrics.entries.getValue();
+        return metrics.entries();
     }
 
     public long requestsFifteenMinuteRate()
