@@ -35,6 +35,7 @@ public class ImmutableUtilsTest
 
         assertThat(m1).containsEntry("a", 1).doesNotContainKey("b");
         assertThat(m2).containsEntry("a", 1).containsEntry("b", 2).doesNotContainKey("c");
+        assertThat(m2).isEqualTo(m0);
     }
 
     @Test

@@ -28,10 +28,10 @@ import java.util.stream.Stream;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.concurrent.NamedThreadFactory;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.utils.FBUtilities;
@@ -143,9 +143,7 @@ public class Nodes
         this(!DatabaseDescriptor.isDaemonInitialized() || Boolean.getBoolean("cassandra.nodes.disablePersitingToSystemKeyspace")
              ? INodesPersistence.NO_NODES_PERSISTENCE
              : new NodesPersistence(),
-             Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("nodes-info-persistence-")
-                                                                         .setUncaughtExceptionHandler((t, e) -> logger.error("Uncaught exception in nodes information persisting thread", e))
-                                                                         .build()));
+             Executors.newSingleThreadExecutor(new NamedThreadFactory("nodes-info-persistence")));
     }
 
     @VisibleForTesting
@@ -165,6 +163,21 @@ public class Nodes
     public Local getLocal()
     {
         return local;
+    }
+
+    private Runnable wrapPersistenceTask(String name, Runnable task)
+    {
+        return () -> {
+            try
+            {
+                task.run();
+            }
+            catch (RuntimeException ex)
+            {
+                logger.error("Unexpected exception - " + name, ex);
+                throw ex;
+            }
+        };
     }
 
     public class Peers
@@ -242,11 +255,11 @@ public class Nodes
             if (!force && Objects.equals(previousInfo, newInfo))
                 return;
 
-            Future<?> f = updateExecutor.submit(() -> {
+            Future<?> f = updateExecutor.submit(wrapPersistenceTask("saving peer information: " + newInfo, () -> {
                 nodesPersistence.savePeer(newInfo);
                 if (blocking)
                     nodesPersistence.syncPeers();
-            });
+            }));
             if (blocking)
                 FBUtilities.waitOnFuture(f);
         }
@@ -259,11 +272,11 @@ public class Nodes
 
         private void delete(InetAddressAndPort peer, boolean blocking)
         {
-            Future<?> f = updateExecutor.submit(() -> {
+            Future<?> f = updateExecutor.submit(wrapPersistenceTask("deleting peer information: " + peer, () -> {
                 nodesPersistence.deletePeer(peer);
                 if (blocking)
                     nodesPersistence.syncPeers();
-            });
+            }));
 
             if (blocking)
                 FBUtilities.waitOnFuture(f);
@@ -299,7 +312,7 @@ public class Nodes
          *                 copy and return it
          * @param blocking if set, the method will block until the changes are persisted
          * @param force    the update will be persisted even if no changes are made
-         * @return the updated object
+         * @return a copy of updated object
          */
         public LocalInfo update(UnaryOperator<LocalInfo> update, boolean blocking, boolean force)
         {
@@ -326,11 +339,11 @@ public class Nodes
             if (!force && Objects.equals(previousInfo, newInfo))
                 return;
 
-            Future<?> f = updateExecutor.submit(() -> {
+            Future<?> f = updateExecutor.submit(wrapPersistenceTask("saving local node information: " + newInfo, () -> {
                 nodesPersistence.saveLocal(newInfo);
                 if (blocking)
                     nodesPersistence.syncLocal();
-            });
+            }));
 
             if (blocking)
                 FBUtilities.waitOnFuture(f);

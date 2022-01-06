@@ -410,13 +410,13 @@ public class LoadingMapTest
             if (existing != null)
                 return existing;
 
-            Throwable a = null;
+            Throwable t = null;
             if (extraAction != null)
-                a = Throwables.perform(a, extraAction);
+                t = Throwables.perform(t, extraAction);
             if (b != null)
-                a = Throwables.perform(a, b::await);
-            if (a != null)
-                throw Throwables.unchecked(a);
+                t = Throwables.perform(t, b::await);
+            if (t != null)
+                throw Throwables.unchecked(t);
             return value;
         }));
     }
@@ -430,13 +430,13 @@ public class LoadingMapTest
                     return null;
                 removedValue.set(v);
                 assertThat(v).isEqualTo(expectedValue);
-                Throwable a = null;
+                Throwable t = null;
                 if (extraAction != null)
-                    a = Throwables.perform(a, extraAction);
+                    t = Throwables.perform(t, extraAction);
                 if (b != null)
-                    a = Throwables.perform(a, b::await);
-                if (a != null)
-                    throw Throwables.unchecked(a);
+                    t = Throwables.perform(t, b::await);
+                if (t != null)
+                    throw Throwables.unchecked(t);
                 return null;
             });
             return removedValue.get();

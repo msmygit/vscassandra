@@ -103,16 +103,7 @@ public final class LocalInfo extends NodeInfo<LocalInfo>
 
     public LocalInfo setListenAddressOnly(InetAddress address, int defaultPort)
     {
-        if (address == null)
-        {
-            setListenAddressAndPort(null);
-        }
-        else
-        {
-            InetAddressAndPort cur = getListenAddressAndPort();
-            int port = cur != null && cur.port > 0 ? cur.port : defaultPort;
-            setNativeTransportAddressAndPort(InetAddressAndPort.getByAddressOverrideDefaults(address, port));
-        }
+        this.listenAddressAndPort = getAddressAndPort(getListenAddressAndPort(), address, defaultPort);
         return this;
     }
 

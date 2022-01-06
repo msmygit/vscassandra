@@ -2299,20 +2299,24 @@ public class Gossiper implements IFailureDetectionEventListener, GossiperMBean
             state.maybeSetUpdater(update -> Nodes.updateLocalOrPeer(endpoint, update, false));
 
         EndpointState prev = endpointStateMap.putIfAbsent(endpoint, state);
-        if (prev != null && prev != state && state != null)
-            state.maybeRemoveUpdater();
-        else if (state != null)
-            state.maybeUpdate();
+
+        if (state != null)
+        {
+            if (prev != null && prev != state)
+                state.maybeRemoveUpdater();
+            else
+                state.maybeUpdate();
+        }
 
         return prev;
     }
 
     private EndpointState removeEndpointState(InetAddressAndPort endpoint)
     {
-        EndpointState state = endpointStateMap.remove(endpoint);
-        if (state != null)
-            state.maybeRemoveUpdater();
-        return state;
+        EndpointState removedState = endpointStateMap.remove(endpoint);
+        if (removedState != null)
+            removedState.maybeRemoveUpdater();
+        return removedState;
     }
 
 }

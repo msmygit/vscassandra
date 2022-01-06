@@ -126,17 +126,21 @@ public abstract class NodeInfo<T extends NodeInfo<T>> implements Cloneable
 
     public T setNativeTransportAddressOnly(InetAddress address, int defaultPort)
     {
-        if (address == null)
+        this.nativeTransportAddressAndPort = getAddressAndPort(getNativeTransportAddressAndPort(), address, defaultPort);
+        return (T) this;
+    }
+
+    InetAddressAndPort getAddressAndPort(InetAddressAndPort current, InetAddress newAddress, int defaultPort)
+    {
+        if (newAddress == null)
         {
-            setNativeTransportAddressAndPort(null);
+            return null;
         }
         else
         {
-            InetAddressAndPort cur = getNativeTransportAddressAndPort();
-            int port = cur != null && cur.port > 0 ? cur.port : defaultPort;
-            setNativeTransportAddressAndPort(InetAddressAndPort.getByAddressOverrideDefaults(address, port));
+            int port = current != null && current.port > 0 ? current.port : defaultPort;
+            return InetAddressAndPort.getByAddressOverrideDefaults(newAddress, port);
         }
-        return (T) this;
     }
 
     public abstract T duplicate();

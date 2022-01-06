@@ -826,7 +826,6 @@ public final class SystemKeyspace
 
             // no system files.  this is a new node.
             return;
-
         }
         if (!DatabaseDescriptor.getClusterName().equals(savedClusterName))
             throw new ConfigurationException("Saved cluster name " + savedClusterName + " != configured name " + DatabaseDescriptor.getClusterName());
