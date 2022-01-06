@@ -70,6 +70,12 @@ public class V2OnDiskFormat extends V1OnDiskFormat
         {
             return true;
         }
+
+        @Override
+        public boolean canEstimateCardinality()
+        {
+            return true;
+        }
     };
 
     protected V2OnDiskFormat()
