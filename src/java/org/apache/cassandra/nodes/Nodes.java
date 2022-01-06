@@ -225,7 +225,7 @@ public class Nodes
         public PeerInfo remove(InetAddressAndPort peer, boolean blocking)
         {
             AtomicReference<PeerInfo> removed = new AtomicReference<>();
-            internalMap.compute(peer, (key, existingPeerInfo) -> {
+            internalMap.computeIfPresent(peer, (key, existingPeerInfo) -> {
                 delete(peer, blocking);
                 removed.set(existingPeerInfo);
                 return null;
@@ -247,7 +247,7 @@ public class Nodes
          */
         public Stream<PeerInfo> get()
         {
-            return internalMap.values().map(PeerInfo::duplicate);
+            return internalMap.valuesStream().map(PeerInfo::duplicate);
         }
 
         private void save(PeerInfo previousInfo, PeerInfo newInfo, boolean blocking, boolean force)
@@ -285,7 +285,7 @@ public class Nodes
 
     public class Local
     {
-        private final LoadingMap<InetAddressAndPort, LocalInfo> internalMap = new LoadingMap<>();
+        private final LoadingMap<InetAddressAndPort, LocalInfo> internalMap = new LoadingMap<>(1);
         private final InetAddressAndPort local = FBUtilities.getBroadcastAddressAndPort();
 
         /**

@@ -18,12 +18,13 @@
 
 package org.apache.cassandra.utils.concurrent;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -49,7 +50,17 @@ public class LoadingMap<K, V>
     // trying to access that key recevies an incomplete future and needs to wait until the computation is done.
     // This way we can achieve serial execution for each key while different keys can be processed concurrently.
     // It also ensures exactly-once semantics for the update operation.
-    private final ConcurrentMap<K, CompletableFuture<V>> internalMap = new NonBlockingHashMap<>();
+    private final Map<K, CompletableFuture<V>> internalMap;
+
+    public LoadingMap()
+    {
+        this.internalMap = new NonBlockingHashMap<>();
+    }
+
+    public LoadingMap(int initialSize)
+    {
+        this.internalMap = new NonBlockingHashMap<>(initialSize);
+    }
 
     /**
      * Recomputes the given object in the map in a thread-safe way.
@@ -67,11 +78,61 @@ public class LoadingMap<K, V>
     public V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
     {
         CompletableFuture<V> newEntry = new CompletableFuture<>();
+        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, false, false);
+        return updateOrRemoveEntry(key, remappingFunction, previousEntry, newEntry);
+    }
+
+    /**
+     * Similar to {@link #compute(Object, BiFunction)} but the mapping function is applied only if there is no existing
+     * entry in the map. Thus, the mapping function will be applied at-most-once.
+     */
+    public V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction)
+    {
+        CompletableFuture<V> newEntry = new CompletableFuture<>();
+        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, false, true);
+        if (previousEntry != null)
+            return previousEntry.join();
+
+        return updateOrRemoveEntry(key, (k, v) -> mappingFunction.apply(k), previousEntry, newEntry);
+    }
+
+    /**
+     * Similar to {@link #compute(Object, BiFunction)} but the remapping function is applied only if there is existing
+     * item in the map. Thus, the remapping function will be applied at-most-once and the value parameter will never be
+     * {@code null}.
+     */
+    public V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
+    {
+        CompletableFuture<V> newEntry = new CompletableFuture<>();
+        CompletableFuture<V> previousEntry = replaceEntry(key, newEntry, true, false);
+        if (previousEntry == null)
+            return null;
+
+        return updateOrRemoveEntry(key, remappingFunction, previousEntry, newEntry);
+    }
+
+    /**
+     * Safely replaces the future entry in the internal map, reattempting if the existing entry resolves to {@code null},
+     *
+     * @param key           key for which the entry is to be replaced
+     * @param newEntry      new entry to be put into the map
+     * @param skipIfMissing if set, the entry will be replaced only if there is an existing entry in the map
+     *                      (which resolves to a non-null value); otherwise, the method returns {@code null}
+     * @param skipIfExists  if set, the entry will be put into the map only if there is no existing entry (which resolves
+     *                      to a non-null value); otherwise, the method returns the existing entry
+     * @return the existing entry or {@code null} if there was no entry in the map
+     */
+    private CompletableFuture<V> replaceEntry(K key, CompletableFuture<V> newEntry, boolean skipIfMissing, boolean skipIfExists)
+    {
         CompletableFuture<V> previousEntry;
-        V previousValue = null;
+        V previousValue;
         do
         {
             previousEntry = internalMap.get(key);
+
+            if (previousEntry == null && skipIfMissing)
+                // break fast if we are aiming to remove the entry - if it does not exist, there is nothing to do
+                return null;
 
             if (previousEntry == null && internalMap.putIfAbsent(key, newEntry) == null)
                 // there were no entry for the provided key, so we put a promise there and break
@@ -80,6 +141,11 @@ public class LoadingMap<K, V>
             if (previousEntry != null)
             {
                 previousValue = previousEntry.join();
+
+                if (previousValue != null && skipIfExists)
+                    // break fast if we are aiming to compute a new entry only if it is missing
+                    return previousEntry;
+
                 if (previousValue != null && internalMap.replace(key, previousEntry, newEntry))
                     // there was a legitmate entry with a non-null value - we replace it with a promise and break
                     break;
@@ -88,6 +154,24 @@ public class LoadingMap<K, V>
                 // to try again because yet another thread might have attempted to do something for that key
             }
         } while (true);
+
+        return previousEntry;
+    }
+
+    /**
+     * Applies the transformation on entry in a safe way. If the transformation throws an exception, the previous state
+     * is recovered.
+     *
+     * @param key               key for which we process entries
+     * @param remappingFunction remapping function which gets the key, the current entry value and is expected to return
+     *                          a new value or null if the entry is to be removed
+     * @param previousEntry     previous entry, which is no longer in the map but its value is already resolved and non-null
+     * @param newEntry          new entry, which is already in the map and is a non-completed promise
+     * @return the resolved value of the new entry
+     */
+    private V updateOrRemoveEntry(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction, CompletableFuture<V> previousEntry, CompletableFuture<V> newEntry)
+    {
+        V previousValue = previousEntry != null ? previousEntry.join() : null;
 
         try
         {
@@ -154,7 +238,7 @@ public class LoadingMap<K, V>
         }
     }
 
-    public Stream<V> values()
+    public Stream<V> valuesStream()
     {
         return internalMap.keySet().stream().map(this::get).filter(Objects::nonNull);
     }

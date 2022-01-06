@@ -20,6 +20,7 @@ package org.apache.cassandra.utils.concurrent;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -29,6 +30,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.junit.After;
@@ -42,6 +45,7 @@ import org.awaitility.core.ConditionFactory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.Assert.fail;
 
 public class LoadingMapTest
 {
@@ -73,6 +77,104 @@ public class LoadingMapTest
         b1.reset();
         b2.reset();
         f1 = f2 = null;
+    }
+
+    @Test
+    public void compute()
+    {
+        assertThat(map.compute(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isNull();
+            return "one";
+        })).isEqualTo("one");
+        assertThat(map.get(1)).isEqualTo("one");
+
+        assertThat(map.compute(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isEqualTo("one");
+            return "1";
+        })).isEqualTo("1");
+        assertThat(map.get(1)).isEqualTo("1");
+
+        assertThat(map.compute(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isEqualTo("1");
+            return null;
+        })).isNull();
+        assertThat(map.get(1)).isNull();
+
+        assertThat(map.compute(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isNull();
+            return null;
+        })).isNull();
+        assertThat(map.get(1)).isNull();
+    }
+
+    @Test
+    public void computeIfAbsentOrIfMissing()
+    {
+        assertThat(map.computeIfPresent(1, (k, v) -> {
+            fail();
+            return "one";
+        })).isNull();
+        assertThat(map.get(1)).isNull();
+
+        assertThat(map.computeIfAbsent(1, k -> {
+            assertThat(k).isEqualTo(1);
+            return "one";
+        })).isEqualTo("one");
+        assertThat(map.get(1)).isEqualTo("one");
+
+        assertThat(map.computeIfAbsent(1, k -> {
+            fail();
+            return "1";
+        })).isEqualTo("one");
+        assertThat(map.get(1)).isEqualTo("one");
+
+        assertThat(map.computeIfPresent(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isEqualTo("one");
+            return "1";
+        })).isEqualTo("1");
+        assertThat(map.get(1)).isEqualTo("1");
+
+        assertThat(map.computeIfPresent(1, (k, v) -> {
+            assertThat(k).isEqualTo(1);
+            assertThat(v).isEqualTo("1");
+            return null;
+        })).isNull();
+        assertThat(map.get(1)).isNull();
+
+        assertThat(map.computeIfPresent(1, (k, v) -> {
+            fail();
+            return "one";
+        })).isNull();
+        assertThat(map.get(1)).isNull();
+    }
+
+    @Test
+    public void values() throws Exception
+    {
+        map.computeIfAbsent(1, ignored -> "one");
+        map.computeIfAbsent(2, ignored -> "two");
+        map.computeIfAbsent(3, ignored -> "three");
+        executor.submit(() -> map.compute(2, (k, v) -> {
+            Throwables.maybeFail(b1::await);
+            return "2";
+        }));
+        executor.submit(() -> map.compute(3, (k, v) -> {
+            Throwables.maybeFail(b2::await);
+            return null;
+        }));
+
+        Stream<String> s = map.valuesStream(); // we should not need to wait for the stream
+        Future<Set<String>> f = executor.submit(() -> s.collect(Collectors.toSet()));
+        assertThat(f).isNotDone();
+        b1.await();
+        assertThat(f).isNotDone();
+        b2.await();
+        await().untilAsserted(() -> assertThat(f.get()).containsExactlyInAnyOrder("one", "2"));
     }
 
     @Test
