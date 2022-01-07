@@ -130,32 +130,29 @@ public class LoadingMap<K, V>
         {
             previousEntry = internalMap.get(key);
 
-            if (previousEntry == null && skipIfMissing)
-                // break fast if we are aiming to remove the entry - if it does not exist, there is nothing to do
-                return null;
-
-            if (previousEntry == null && internalMap.putIfAbsent(key, newEntry) == null)
-                // there were no entry for the provided key, so we put a promise there and break
-                break;
-
-            if (previousEntry != null)
+            if (previousEntry == null)
+            {
+                if (skipIfMissing || internalMap.putIfAbsent(key, newEntry) == null)
+                    // skip-if-missing: break fast if we are aiming to remove the entry - if it does not exist, there is nothing to do
+                    // put-if-abset: there were no entry for the provided key, so we put a promise there and break
+                    return null;
+            }
+            else
             {
                 previousValue = previousEntry.join();
 
-                if (previousValue != null && skipIfExists)
-                    // break fast if we are aiming to compute a new entry only if it is missing
-                    return previousEntry;
-
-                if (previousValue != null && internalMap.replace(key, previousEntry, newEntry))
-                    // there was a legitmate entry with a non-null value - we replace it with a promise and break
-                    break;
+                if (previousValue != null)
+                {
+                    if (skipIfExists || internalMap.replace(key, previousEntry, newEntry))
+                        // skip-if-exist: break fast if we are aiming to compute a new entry only if it is missing
+                        // replace: there was a legitmate entry with a non-null value - we replace it with a promise and break
+                        return previousEntry;
+                }
 
                 // otherwise, if previousValue == null, some other thread deleted the entry in the meantime; we need
                 // to try again because yet another thread might have attempted to do something for that key
             }
         } while (true);
-
-        return previousEntry;
     }
 
     /**

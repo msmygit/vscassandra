@@ -44,7 +44,7 @@ import org.apache.cassandra.utils.concurrent.LoadingMap;
  */
 public class Nodes
 {
-    private final static Logger logger = LoggerFactory.getLogger(Nodes.class);
+    private static final Logger logger = LoggerFactory.getLogger(Nodes.class);
 
     @VisibleForTesting
     private final ExecutorService updateExecutor;
@@ -286,7 +286,7 @@ public class Nodes
     public class Local
     {
         private final LoadingMap<InetAddressAndPort, LocalInfo> internalMap = new LoadingMap<>(1);
-        private final InetAddressAndPort local = FBUtilities.getBroadcastAddressAndPort();
+        private final InetAddressAndPort localInfoKey = FBUtilities.getBroadcastAddressAndPort();
 
         /**
          * @see #update(UnaryOperator, boolean, boolean)
@@ -316,7 +316,7 @@ public class Nodes
          */
         public LocalInfo update(UnaryOperator<LocalInfo> update, boolean blocking, boolean force)
         {
-            return internalMap.compute(local, (key, existingLocalInfo) -> {
+            return internalMap.compute(localInfoKey, (key, existingLocalInfo) -> {
                 LocalInfo updated = existingLocalInfo == null
                                     ? update.apply(new LocalInfo())
                                     : update.apply(existingLocalInfo.duplicate()); // since we operate on mutable objects, we don't want to let the update function to operate on the live object
@@ -330,7 +330,7 @@ public class Nodes
          */
         public LocalInfo get()
         {
-            LocalInfo info = internalMap.get(local);
+            LocalInfo info = internalMap.get(localInfoKey);
             return info != null ? info.duplicate() : null;
         }
 
@@ -351,7 +351,7 @@ public class Nodes
 
         private Local load()
         {
-            internalMap.compute(local, (key, existingLocalInfo) -> {
+            internalMap.compute(localInfoKey, (key, existingLocalInfo) -> {
                 LocalInfo info = nodesPersistence.loadLocal();
                 return info != null ? info : new LocalInfo();
             });

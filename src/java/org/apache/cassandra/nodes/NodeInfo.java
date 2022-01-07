@@ -149,8 +149,8 @@ public abstract class NodeInfo<T extends NodeInfo<T>> implements Cloneable
     public boolean equals(Object o)
     {
         if (this == o) return true;
-        if (!(o instanceof NodeInfo)) return false;
-        NodeInfo nodeInfo = (NodeInfo) o;
+        if (!(o instanceof NodeInfo<?>)) return false;
+        NodeInfo<?> nodeInfo = (NodeInfo<?>) o;
         return Objects.equals(getHostId(), nodeInfo.getHostId())
                && Objects.equals(getDataCenter(), nodeInfo.getDataCenter())
                && Objects.equals(getRack(), nodeInfo.getRack())

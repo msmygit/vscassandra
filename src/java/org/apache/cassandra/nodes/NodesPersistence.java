@@ -66,58 +66,58 @@ import static org.apache.cassandra.db.SystemKeyspace.forceBlockingFlush;
 
 public class NodesPersistence implements INodesPersistence
 {
-    private static final List<String> commonColumns = ImmutableList.of("data_center",
-                                                                       "rack",
-                                                                       "host_id",
-                                                                       "release_version",
-                                                                       "schema_version",
-                                                                       "tokens");
+    private static final List<String> COMMON_COLUMNS = ImmutableList.of("data_center",
+                                                                        "rack",
+                                                                        "host_id",
+                                                                        "release_version",
+                                                                        "schema_version",
+                                                                        "tokens");
 
-    private static final String insertLocalStmtString = format("INSERT INTO system.%s (" +
-                                                               "     key, " +
-                                                               "     bootstrapped, " +
-                                                               "     broadcast_address, " +
-                                                               "     broadcast_port, " +
-                                                               "     cluster_name, " +
-                                                               "     cql_version, " +
-                                                               "     listen_address, " +
-                                                               "     listen_port, " +
-                                                               "     native_protocol_version, " +
-                                                               "     partitioner, " +
-                                                               "     rpc_address, " +
-                                                               "     rpc_port, " +
-                                                               "     truncated_at, " +
-                                                               "     %s) " +
-                                                               "VALUES (%s)", LOCAL,
-                                                               StringUtils.join(commonColumns, ", "),
-                                                               StringUtils.repeat("?", ", ", 13 + commonColumns.size()));
+    private static final String INSERT_LOCAL_STMT = format("INSERT INTO system.%s (" +
+                                                           "     key, " +
+                                                           "     bootstrapped, " +
+                                                           "     broadcast_address, " +
+                                                           "     broadcast_port, " +
+                                                           "     cluster_name, " +
+                                                           "     cql_version, " +
+                                                           "     listen_address, " +
+                                                           "     listen_port, " +
+                                                           "     native_protocol_version, " +
+                                                           "     partitioner, " +
+                                                           "     rpc_address, " +
+                                                           "     rpc_port, " +
+                                                           "     truncated_at, " +
+                                                           "     %s) " +
+                                                           "VALUES (%s)", LOCAL,
+                                                           StringUtils.join(COMMON_COLUMNS, ", "),
+                                                           StringUtils.repeat("?", ", ", 13 + COMMON_COLUMNS.size()));
 
-    private static final String insertPeerStmtString = format("INSERT INTO system.%s (" +
-                                                              "     peer, " +
-                                                              "     peer_port, " +
-                                                              "     preferred_ip, " +
-                                                              "     preferred_port, " +
-                                                              "     native_address, " +
-                                                              "     native_port, " +
-                                                              "     %s) " +
-                                                              "VALUES (%s)", PEERS_V2,
-                                                              StringUtils.join(commonColumns, ", "),
-                                                              StringUtils.repeat("?", ", ", 6 + commonColumns.size()));
+    private static final String INSERT_PEER_STMT = format("INSERT INTO system.%s (" +
+                                                          "     peer, " +
+                                                          "     peer_port, " +
+                                                          "     preferred_ip, " +
+                                                          "     preferred_port, " +
+                                                          "     native_address, " +
+                                                          "     native_port, " +
+                                                          "     %s) " +
+                                                          "VALUES (%s)", PEERS_V2,
+                                                          StringUtils.join(COMMON_COLUMNS, ", "),
+                                                          StringUtils.repeat("?", ", ", 6 + COMMON_COLUMNS.size()));
 
-    private static final String insertLegacyPeerStmtString = format("INSERT INTO system.%s (" +
-                                                                    "     peer, " +
-                                                                    "     preferred_ip, " +
-                                                                    "     rpc_address, " +
-                                                                    "     %s) " +
-                                                                    "VALUES (%s)", LEGACY_PEERS,
-                                                                    StringUtils.join(commonColumns, ", "),
-                                                                    StringUtils.repeat("?", ", ", 3 + commonColumns.size()));
+    private static final String INSERT_LEGACY_PEER_STMT = format("INSERT INTO system.%s (" +
+                                                                 "     peer, " +
+                                                                 "     preferred_ip, " +
+                                                                 "     rpc_address, " +
+                                                                 "     %s) " +
+                                                                 "VALUES (%s)", LEGACY_PEERS,
+                                                                 StringUtils.join(COMMON_COLUMNS, ", "),
+                                                                 StringUtils.repeat("?", ", ", 3 + COMMON_COLUMNS.size()));
 
-    private static final String deletePeerStmtString = format("DELETE FROM system.%s " +
-                                                              "WHERE peer = ? AND peer_port = ?", PEERS_V2);
+    private static final String DELETE_PEER_STMT = format("DELETE FROM system.%s " +
+                                                          "WHERE peer = ? AND peer_port = ?", PEERS_V2);
 
-    private static final String deleteLegacyPeerStmtString = format("DELETE FROM system.%s " +
-                                                                    "WHERE peer = ?", LEGACY_PEERS);
+    private static final String DELETE_LEGACY_PEER_STMT = format("DELETE FROM system.%s " +
+                                                                 "WHERE peer = ?", LEGACY_PEERS);
 
 
     @Override
@@ -157,7 +157,7 @@ public class NodesPersistence implements INodesPersistence
                                                           serializePort(info.getNativeTransportAddressAndPort()),
                                                           serializeTruncationRecords(info.getTruncationRecords()) }, serializeCommonInfo(info));
 
-        QueryProcessor.executeInternal(insertLocalStmtString, values);
+        QueryProcessor.executeInternal(INSERT_LOCAL_STMT, values);
     }
 
     private String serializeProtocolVersion(ProtocolVersion protocolVersion)
@@ -194,21 +194,21 @@ public class NodesPersistence implements INodesPersistence
                                                                serializeAddress(info.getNativeTransportAddressAndPort()),
                                                                serializePort(info.getNativeTransportAddressAndPort()),
                                                                }, serializeCommonInfo(info));
-        QueryProcessor.executeInternal(insertPeerStmtString, peersValues);
+        QueryProcessor.executeInternal(INSERT_PEER_STMT, peersValues);
 
         Object[] legacyPeersValues = ArrayUtils.addAll(new Object[]{ serializeAddress(info.getPeerAddressAndPort()),
                                                                      serializeAddress(info.getPreferredAddressAndPort()),
                                                                      serializeAddress(info.getNativeTransportAddressAndPort()),
                                                                      }, serializeCommonInfo(info));
 
-        QueryProcessor.executeInternal(insertLegacyPeerStmtString, legacyPeersValues);
+        QueryProcessor.executeInternal(INSERT_LEGACY_PEER_STMT, legacyPeersValues);
     }
 
     @Override
     public void deletePeer(InetAddressAndPort endpoint)
     {
-        QueryProcessor.executeInternal(deletePeerStmtString, serializeAddress(endpoint), serializePort(endpoint));
-        QueryProcessor.executeInternal(deleteLegacyPeerStmtString, serializeAddress(endpoint));
+        QueryProcessor.executeInternal(DELETE_PEER_STMT, serializeAddress(endpoint), serializePort(endpoint));
+        QueryProcessor.executeInternal(DELETE_LEGACY_PEER_STMT, serializeAddress(endpoint));
     }
 
     @Override
@@ -307,7 +307,7 @@ public class NodesPersistence implements INodesPersistence
         }
         catch (IOException e)
         {
-            throw new RuntimeException(e);
+            throw Throwables.unchecked(e);
         }
     }
 
@@ -357,7 +357,7 @@ public class NodesPersistence implements INodesPersistence
         }
         catch (IOException e)
         {
-            throw new RuntimeException(e);
+            throw Throwables.unchecked(e);
         }
     }
 

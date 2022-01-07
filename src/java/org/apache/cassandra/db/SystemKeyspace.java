@@ -624,10 +624,7 @@ public final class SystemKeyspace
 
     public static void saveTruncationRecord(TableId tableId, long truncatedAt, CommitLogPosition position)
     {
-        Nodes.local().update(info -> {
-            // TODO maybe optimize saving truncation records
-            return info.addTruncationRecord(tableId.asUUID(), new TruncationRecord(position, truncatedAt));
-        }, true);
+        Nodes.local().update(info -> info.addTruncationRecord(tableId.asUUID(), new TruncationRecord(position, truncatedAt)), true);
     }
 
     /**
@@ -635,10 +632,7 @@ public final class SystemKeyspace
      */
     public static void removeTruncationRecord(TableId id)
     {
-        Nodes.local().update(info -> {
-            // TODO maybe optimize saving truncation records
-            return info.removeTruncationRecord(id.asUUID());
-        }, true);
+        Nodes.local().update(info -> info.removeTruncationRecord(id.asUUID()), true);
     }
 
     public static CommitLogPosition getTruncatedPosition(TableId id)
@@ -664,12 +658,12 @@ public final class SystemKeyspace
         Nodes.peers().update(ep, peer -> peer.setTokens(tokens), false);
     }
 
-    public static boolean updatePreferredIP(InetAddressAndPort ep, InetAddressAndPort preferred_ip)
+    public static boolean updatePreferredIP(InetAddressAndPort ep, InetAddressAndPort preferredIP)
     {
-        if (preferred_ip.equals(getPreferredIP(ep)))
+        if (preferredIP.equals(getPreferredIP(ep)))
             return false;
 
-        Nodes.peers().update(ep, info -> info.setPreferredAddressAndPort(preferred_ip), true);
+        Nodes.peers().update(ep, info -> info.setPreferredAddressAndPort(preferredIP), true);
         return true;
     }
 

@@ -24,7 +24,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 
 public interface INodesPersistence
 {
-    public final static INodesPersistence NO_NODES_PERSISTENCE = new INodesPersistence()
+    public static final INodesPersistence NO_NODES_PERSISTENCE = new INodesPersistence()
     {
         @Override
         public LocalInfo loadLocal()

@@ -42,6 +42,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -310,10 +311,6 @@ public class NodesTest
 
         PeerInfo r = nodes.getPeers().remove(addr3, false);
         assertThat(r).isNull();
-        verify(executor).submit(any(Runnable.class));
-
-        taskCaptor.getValue().run();
-        verify(persistence).deletePeer(addr3);
 
         Set<PeerInfo> peers = nodes.getPeers().get().collect(Collectors.toSet());
         assertThat(peers).containsExactlyInAnyOrder(r1, r2);
