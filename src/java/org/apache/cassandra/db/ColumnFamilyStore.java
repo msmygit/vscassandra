@@ -592,6 +592,11 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         return dataPaths;
     }
 
+    public StorageHandler getStorageHandler()
+    {
+        return storageHandler;
+    }
+
     public boolean writesShouldSkipCommitLog()
     {
         return memtableFactory.writesShouldSkipCommitLog();
