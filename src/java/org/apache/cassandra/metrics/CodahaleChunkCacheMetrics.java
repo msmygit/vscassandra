@@ -86,6 +86,30 @@ public class CodahaleChunkCacheMetrics implements ChunkCacheMetrics
     }
 
     @Override
+    public double oneMinuteHitRate()
+    {
+        return Double.NaN;
+    }
+
+    @Override
+    public double fiveMinuteHitRate()
+    {
+        return Double.NaN;
+    }
+
+    @Override
+    public double fifteenMinuteHitRate()
+    {
+        return Double.NaN;
+    }
+
+    @Override
+    public double fifteenMinuteRequestRate()
+    {
+        return Double.NaN;
+    }
+
+    @Override
     public long requests()
     {
         return metrics.requests.getCount();
