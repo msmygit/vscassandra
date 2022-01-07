@@ -74,8 +74,6 @@ public class QueryController
 {
     private static final Logger logger = LoggerFactory.getLogger(QueryController.class);
 
-    private static final int PARTITION_BATCH_SIZE = Integer.getInteger("cassandra.sai.partition.batch.size", 4096);
-
     private final ColumnFamilyStore cfs;
     private final ReadCommand command;
     private final QueryContext queryContext;
@@ -84,8 +82,10 @@ public class QueryController
     private final IndexFeatureSet indexFeatureSet;
     private final List<DataRange> ranges;
     private final AbstractBounds<PartitionPosition> mergeRange;
+    private final long rowsPerPartition;
     private NavigableSet<Clustering<?>> batchedClusterings;
     private DecoratedKey batchedPartitionKey = null;
+    private DecoratedKey cachedPartitionKey = null;
 
     public QueryController(ColumnFamilyStore cfs,
                            ReadCommand command,
@@ -104,6 +104,7 @@ public class QueryController
         DataRange first = ranges.get(0);
         DataRange last = ranges.get(ranges.size() - 1);
         this.mergeRange = ranges.size() == 1 ? first.keyRange() : first.keyRange().withNewRight(last.keyRange().right);
+        this.rowsPerPartition = Math.max(1, cfs.getMeanEstimatedCellPerPartitionCount() / cfs.metadata().regularColumns().size());
         this.batchedClusterings = new TreeSet<>(cfs.metadata().comparator);
     }
 
@@ -153,11 +154,23 @@ public class QueryController
 
     public boolean addToBatch(PrimaryKey primaryKey)
     {
-        if (indexFeatureSet.isRowAware() &&
-            !primaryKey.hasEmptyClustering() &&
-            (batchedPartitionKey == null ||
+        if (!indexFeatureSet.isRowAware() || primaryKey.hasEmptyClustering())
+            return false;
+
+        if (cachedPartitionKey != null && primaryKey.partitionKey().equals(cachedPartitionKey))
+            return true;
+
+        cachedPartitionKey = null;
+
+        if (rowsPerPartition < 500 && filterOperation.isDisjunction())
+        {
+            cachedPartitionKey = primaryKey.partitionKey();
+            return false;
+        }
+
+        if ((batchedPartitionKey == null ||
              batchedPartitionKey.equals(primaryKey.partitionKey())) &&
-            batchedClusterings.size() < PARTITION_BATCH_SIZE)
+            batchedClusterings.size() < rowsPerPartition)
         {
             batchedPartitionKey = primaryKey.partitionKey();
             batchedClusterings.add(primaryKey.clustering());
