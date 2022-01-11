@@ -36,7 +36,7 @@ public class BKDTreeRamBuffer implements Accountable
 {
     private final Counter bytesUsed;
     private final ByteBlockPool bytes;
-    private final int pointDimensionCount, pointNumBytes;
+    private final int pointNumBytes;
     private final int packedBytesLength;
     private final byte[] packedValue;
     private final PackedLongValues.Builder docIDsBuilder;
@@ -45,16 +45,15 @@ public class BKDTreeRamBuffer implements Accountable
     private int lastSegmentRowID = -1;
     private boolean closed = false;
 
-    public BKDTreeRamBuffer(int pointDimensionCount, int pointNumBytes)
+    public BKDTreeRamBuffer(int pointNumBytes)
     {
         this.bytesUsed = Counter.newCounter();
-        this.pointDimensionCount = pointDimensionCount;
         this.pointNumBytes = pointNumBytes;
 
         this.bytes = new ByteBlockPool(new ByteBlockPool.DirectTrackingAllocator(bytesUsed));
 
-        packedValue = new byte[pointDimensionCount * pointNumBytes];
-        packedBytesLength = pointDimensionCount * pointNumBytes;
+        packedValue = new byte[pointNumBytes];
+        packedBytesLength = pointNumBytes;
 
         docIDsBuilder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
         bytesUsed.addAndGet(docIDsBuilder.ramBytesUsed());
@@ -77,7 +76,7 @@ public class BKDTreeRamBuffer implements Accountable
         
         if (value.length != packedBytesLength)
         {
-            throw new IllegalArgumentException("The value has length=" + value.length + " but should be " + pointDimensionCount * pointNumBytes);
+            throw new IllegalArgumentException("The value has length=" + value.length + " but should be " + pointNumBytes);
         }
 
         long startingBytesUsed = bytesUsed.get();
@@ -163,7 +162,7 @@ public class BKDTreeRamBuffer implements Accountable
             @Override
             public int getNumDimensions()
             {
-                return pointDimensionCount;
+                return 1;
             }
 
             @Override

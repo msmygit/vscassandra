@@ -67,6 +67,11 @@ public class RAMIndexOutput extends IndexOutput
         externalOut.writeBytes(out.getBytes(), 0, out.getPosition());
     }
 
+    public void writeTo(byte[] bytes)
+    {
+        System.arraycopy(out.getBytes(), 0, bytes, 0, bytes.length);
+    }
+
     public void reset()
     {
         out.reset();

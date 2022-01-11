@@ -189,7 +189,7 @@ public class BKDReaderTest extends SaiRandomizedTest
 
     private BKDReader createReader(int numRows) throws IOException
     {
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < numRows; docID++)
         {
@@ -202,7 +202,7 @@ public class BKDReaderTest extends SaiRandomizedTest
     private void doTestInts1D() throws IOException
     {
         final int numRows = between(100, 400);
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
 
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < numRows; docID++)
@@ -277,7 +277,7 @@ public class BKDReaderTest extends SaiRandomizedTest
     private void doTestAdvance(boolean crypto) throws IOException
     {
         final int numRows = between(1000, 2000);
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
 
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < numRows; docID++)
@@ -311,7 +311,7 @@ public class BKDReaderTest extends SaiRandomizedTest
     @Test
     public void testResourcesReleaseWhenQueryDoesntMatchAnything() throws Exception
     {
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
         byte[] scratch = new byte[4];
         for (int docID = 0; docID < 1000; docID++)
         {

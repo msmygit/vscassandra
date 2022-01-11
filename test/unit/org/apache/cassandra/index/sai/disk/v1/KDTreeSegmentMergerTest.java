@@ -122,7 +122,7 @@ public class KDTreeSegmentMergerTest extends SAITester
 
         for (int segment = 0; segment < segments; segment++)
         {
-            BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+            BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
 
             for (int docID = segmentSize * segment; docID < (segmentSize * segment) + segmentSize; docID++)
             {
@@ -173,7 +173,7 @@ public class KDTreeSegmentMergerTest extends SAITester
 
         for (int segment = 0; segment < segments; segment++)
         {
-            BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+            BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
 
             for (int docID = segmentSize * segment; docID < (segmentSize * segment) + segmentSize; docID++)
             {

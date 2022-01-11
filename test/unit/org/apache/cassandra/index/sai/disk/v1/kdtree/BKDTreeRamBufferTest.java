@@ -30,7 +30,7 @@ public class BKDTreeRamBufferTest
     @Test
     public void shouldKeepInsertionOrder()
     {
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
         int currentValue = 202;
         for (int i = 0; i < 100; ++i)
         {
@@ -54,7 +54,7 @@ public class BKDTreeRamBufferTest
     @Test
     public void shouldBeSortable()
     {
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
         int value = 301;
         for (int i = 0; i < 100; ++i)
         {

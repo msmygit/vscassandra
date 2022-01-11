@@ -45,16 +45,6 @@ import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.Sorter;
 import org.apache.lucene.util.bkd.MutablePointsReaderUtils;
 
-// TODO
-//   - allow variable length byte[] (across docs and dims), but this is quite a bit more hairy
-//   - we could also index "auto-prefix terms" here, and use better compression, and maybe only use for the "fully contained" case so we'd
-//     only index docIDs
-//   - the index could be efficiently encoded as an FST, so we don't have wasteful
-//     (monotonic) long[] leafBlockFPs; or we could use MonotonicLongValues ... but then
-//     the index is already plenty small: 60M OSM points --> 1.1 MB with 128 points
-//     per leaf, and you can reduce that by putting more points per leaf
-//   - we could use threads while building; the higher nodes are very parallelizable
-
 /**
  * Recursively builds a block KD-tree to assign all incoming points in N-dim space to smaller
  * and smaller N-dim rectangles (cells) until the number of points in a given
@@ -63,7 +53,7 @@ import org.apache.lucene.util.bkd.MutablePointsReaderUtils;
  * the requested <code>maxPointsInLeafNode</code>.  Values that fall exactly
  * on a cell boundary may be in either cell.
  *
- * <p>The number of dimensions can be 1 to 8, but every byte[] value is fixed length.
+ * <p>The number of dimensions can only be 1, but every byte[] value is fixed length.
  *
  * <p>
  * See <a href="https://www.cs.duke.edu/~pankaj/publications/papers/bkd-sstd.pdf">this paper</a> for details.
@@ -79,20 +69,8 @@ import org.apache.lucene.util.bkd.MutablePointsReaderUtils;
 
 public class BKDWriter implements Closeable
 {
-    /** How many bytes each docs takes in the fixed-width offline format */
-    private final int bytesPerDoc;
-
     /** Default maximum number of point in each leaf block */
     public static final int DEFAULT_MAX_POINTS_IN_LEAF_NODE = 1024;
-
-    /** Default maximum heap to use, before spilling to (slower) disk */
-    public static final float DEFAULT_MAX_MB_SORT_IN_HEAP = 16.0f;
-
-    /** Maximum number of dimensions */
-    public static final int MAX_DIMS = 8;
-
-    /** How many dimensions we are indexing */
-    protected final int numDims;
 
     /** How many bytes each value in each dimension takes. */
     protected final int bytesPerDim;
@@ -101,12 +79,10 @@ public class BKDWriter implements Closeable
     protected final int packedBytesLength;
 
     final BytesRef scratchBytesRef1 = new BytesRef();
-    final int[] commonPrefixLengths;
 
     protected final LongBitSet docsSeen;
 
     protected final int maxPointsInLeafNode;
-    private final int maxPointsSortInHeap;
 
     /** Minimum per-dim values, packed */
     protected final byte[] minPackedValue;
@@ -114,108 +90,28 @@ public class BKDWriter implements Closeable
     /** Maximum per-dim values, packed */
     protected final byte[] maxPackedValue;
 
-    protected long pointCount;
+    int commonPrefixLength;
 
-    /** true if we have so many values that we must write ords using long (8 bytes) instead of int (4 bytes) */
-    protected final boolean longOrds;
+    protected long pointCount;
 
     /** An upper bound on how many points the caller will add (includes deletions) */
     private final long totalPointCount;
 
     private final long maxDoc;
 
-    private final ICompressor compressor;
-
-    public BKDWriter(long maxDoc, int numDims, int bytesPerDim,
-            int maxPointsInLeafNode, double maxMBSortInHeap, long totalPointCount, boolean singleValuePerDoc,
-            ICompressor compressor) throws IOException
+    public BKDWriter(long maxDoc, int bytesPerDim, int maxPointsInLeafNode, long totalPointCount)
     {
-        this(maxDoc, numDims, bytesPerDim, maxPointsInLeafNode, maxMBSortInHeap, totalPointCount, singleValuePerDoc,
-             totalPointCount > Integer.MAX_VALUE, compressor);
-    }
+        verifyParams(maxPointsInLeafNode, totalPointCount);
 
-    protected BKDWriter(long maxDoc, int numDims, int bytesPerDim,
-                        int maxPointsInLeafNode, double maxMBSortInHeap, long totalPointCount,
-                        boolean singleValuePerDoc, boolean longOrds, ICompressor compressor) throws IOException
-    {
-        verifyParams(numDims, maxPointsInLeafNode, maxMBSortInHeap, totalPointCount);
-        // We use tracking dir to deal with removing files on exception, so each place that
-        // creates temp files doesn't need crazy try/finally/sucess logic:
         this.maxPointsInLeafNode = maxPointsInLeafNode;
-        this.numDims = numDims;
         this.bytesPerDim = bytesPerDim;
         this.totalPointCount = totalPointCount;
         this.maxDoc = maxDoc;
-        this.compressor = compressor;
         docsSeen = new LongBitSet(maxDoc);
-        packedBytesLength = numDims * bytesPerDim;
-
-        commonPrefixLengths = new int[numDims];
+        packedBytesLength = bytesPerDim;
 
         minPackedValue = new byte[packedBytesLength];
         maxPackedValue = new byte[packedBytesLength];
-
-        // If we may have more than 1+Integer.MAX_VALUE values, then we must encode ords with long (8 bytes), else we can use int (4 bytes).
-        this.longOrds = longOrds;
-
-        // dimensional values (numDims * bytesPerDim) + ord (int or long) + docID (int)
-        if (singleValuePerDoc)
-        {
-            // Lucene only supports up to 2.1 docs, so we better not need longOrds in this case:
-            assert longOrds == false;
-            bytesPerDoc = packedBytesLength + Integer.BYTES;
-        }
-        else if (longOrds)
-        {
-            bytesPerDoc = packedBytesLength + Long.BYTES + Integer.BYTES;
-        }
-        else
-        {
-            bytesPerDoc = packedBytesLength + Integer.BYTES + Integer.BYTES;
-        }
-
-        // As we recurse, we compute temporary partitions of the data, halving the
-        // number of points at each recursion.  Once there are few enough points,
-        // we can switch to sorting in heap instead of offline (on disk).  At any
-        // time in the recursion, we hold the number of points at that level, plus
-        // all recursive halves (i.e. 16 + 8 + 4 + 2) so the memory usage is 2X
-        // what that level would consume, so we multiply by 0.5 to convert from
-        // bytes to points here.  Each dimension has its own sorted partition, so
-        // we must divide by numDims as wel.
-
-        maxPointsSortInHeap = (int) (0.5 * (maxMBSortInHeap * 1024 * 1024) / (bytesPerDoc * numDims));
-
-        // Finally, we must be able to hold at least the leaf node in heap during build:
-        if (maxPointsSortInHeap < maxPointsInLeafNode)
-        {
-            throw new IllegalArgumentException("maxMBSortInHeap=" + maxMBSortInHeap + " only allows for maxPointsSortInHeap=" + maxPointsSortInHeap + ", but this is less than maxPointsInLeafNode=" + maxPointsInLeafNode + "; either increase maxMBSortInHeap or decrease maxPointsInLeafNode");
-        }
-    }
-
-    public static void verifyParams(int numDims, int maxPointsInLeafNode, double maxMBSortInHeap, long totalPointCount)
-    {
-        // We encode dim in a single byte in the splitPackedValues, but we only expose 4 bits for it now, in case we want to use
-        // remaining 4 bits for another purpose later
-        if (numDims < 1 || numDims > MAX_DIMS)
-        {
-            throw new IllegalArgumentException("numDims must be 1 .. " + MAX_DIMS + " (got: " + numDims + ")");
-        }
-        if (maxPointsInLeafNode <= 0)
-        {
-            throw new IllegalArgumentException("maxPointsInLeafNode must be > 0; got " + maxPointsInLeafNode);
-        }
-        if (maxPointsInLeafNode > ArrayUtil.MAX_ARRAY_LENGTH)
-        {
-            throw new IllegalArgumentException("maxPointsInLeafNode must be <= ArrayUtil.MAX_ARRAY_LENGTH (= " + ArrayUtil.MAX_ARRAY_LENGTH + "); got " + maxPointsInLeafNode);
-        }
-        if (maxMBSortInHeap < 0.0)
-        {
-            throw new IllegalArgumentException("maxMBSortInHeap must be >= 0.0 (got: " + maxMBSortInHeap + ")");
-        }
-        if (totalPointCount < 0)
-        {
-            throw new IllegalArgumentException("totalPointCount must be >=0 (got: " + totalPointCount + ")");
-        }
     }
 
     /** How many points have been added so far */
@@ -230,28 +126,10 @@ public class BKDWriter implements Closeable
      * there is opportunity for reordering points before writing them to
      * disk. This method does not use transient disk in order to reorder points.
      */
-    public long writeField(IndexOutput out, MutableOneDimPointValues reader,
-                           final OneDimensionBKDWriterCallback callback) throws IOException
+    public long writeField(IndexOutput out, MutableOneDimPointValues reader, final OneDimensionBKDWriterCallback callback) throws IOException
     {
-        if (numDims == 1)
-        {
-            SAICodecUtils.writeHeader(out);
-            final long fp = writeField1Dim(out, reader, callback);
-            SAICodecUtils.writeFooter(out);
-            return fp;
-        }
-        else
-        {
-            throw new IllegalArgumentException("Only 1 dimension is supported.");
-        }
-    }
+        SAICodecUtils.writeHeader(out);
 
-    /* In the 1D case, we can simply sort points in ascending order and use the
-     * same writing logic as we use at merge time. */
-    private long writeField1Dim(IndexOutput out, MutableOneDimPointValues reader,
-                                OneDimensionBKDWriterCallback callback) throws IOException
-    {
-        // TODO: cast to int
         if (reader.size() > 1)
             MutablePointsReaderUtils.sort(Math.toIntExact(maxDoc), packedBytesLength, reader, 0, Math.toIntExact(reader.size()));
 
@@ -259,7 +137,30 @@ public class BKDWriter implements Closeable
 
         reader.intersect((docID, packedValue) -> oneDimWriter.add(packedValue, docID));
 
-        return oneDimWriter.finish();
+        final long fp = oneDimWriter.finish();
+
+        SAICodecUtils.writeFooter(out);
+        return fp;
+    }
+
+    private void verifyParams(int maxPointsInLeafNode, long totalPointCount)
+    {
+        if (maxPointsInLeafNode <= 0)
+        {
+            throw new IllegalArgumentException("maxPointsInLeafNode must be > 0; got " + maxPointsInLeafNode);
+        }
+        if (maxPointsInLeafNode > ArrayUtil.MAX_ARRAY_LENGTH)
+        {
+            throw new IllegalArgumentException("maxPointsInLeafNode must be <= ArrayUtil.MAX_ARRAY_LENGTH (= " + ArrayUtil.MAX_ARRAY_LENGTH + "); got " + maxPointsInLeafNode);
+        }
+        if (totalPointCount < 0)
+        {
+            throw new IllegalArgumentException("totalPointCount must be >=0 (got: " + totalPointCount + ")");
+        }
+        if (totalPointCount > Integer.MAX_VALUE)
+        {
+            throw new IllegalArgumentException("totalPointCount cannot exceed " + Integer.MAX_VALUE);
+        }
     }
 
     // reused when writing leaf blocks
@@ -300,23 +201,20 @@ public class BKDWriter implements Closeable
         final RowIDAndIndex[] rowIDAndIndexes = new RowIDAndIndex[maxPointsInLeafNode];
         final int[] orderIndex = new int[maxPointsInLeafNode];
         final OneDimensionBKDWriterCallback callback;
-
-        {
-            for (int x = 0; x < rowIDAndIndexes.length; x++)
-            {
-                rowIDAndIndexes[x] = new RowIDAndIndex();
-            }
-        }
+        // for asserts
+        final byte[] lastPackedValue;
+        private long lastDocID;
 
         OneDimensionBKDWriter(IndexOutput out, OneDimensionBKDWriterCallback callback)
         {
-            if (numDims != 1)
-            {
-                throw new UnsupportedOperationException("numDims must be 1 but got " + numDims);
-            }
             if (pointCount != 0)
             {
                 throw new IllegalStateException("cannot mix add and merge");
+            }
+
+            for (int x = 0; x < this.rowIDAndIndexes.length; x++)
+            {
+                this.rowIDAndIndexes[x] = new RowIDAndIndex();
             }
 
             this.out = out;
@@ -325,14 +223,9 @@ public class BKDWriter implements Closeable
             lastPackedValue = new byte[packedBytesLength];
         }
 
-        // for asserts
-        final byte[] lastPackedValue;
-        private long lastDocID;
-
         void add(byte[] packedValue, long docID) throws IOException
         {
-            assert valueInOrder(valueCount + leafCount,
-                                0, lastPackedValue, packedValue, 0, docID, lastDocID);
+            assert valueInOrder(valueCount + leafCount, lastPackedValue, packedValue, 0, docID, lastDocID);
 
             System.arraycopy(packedValue, 0, leafValues, leafCount * packedBytesLength, packedBytesLength);
             leafDocs[leafCount] = docID;
@@ -373,8 +266,6 @@ public class BKDWriter implements Closeable
             long indexFP = out.getFilePointer();
 
             int numInnerNodes = leafBlockStartValues.size();
-
-            //System.out.println("BKDW: now rotate numInnerNodes=" + numInnerNodes + " leafBlockStarts=" + leafBlockStartValues.size());
 
             byte[] index = new byte[(1 + numInnerNodes) * (1 + bytesPerDim)];
             rotateToTree(1, 0, numInnerNodes, index, leafBlockStartValues);
@@ -418,7 +309,7 @@ public class BKDWriter implements Closeable
                 }
             }
 
-            commonPrefixLengths[0] = prefix;
+            commonPrefixLength = prefix;
 
             assert scratchOut.getPosition() == 0;
 
@@ -475,7 +366,7 @@ public class BKDWriter implements Closeable
 
             if (callback != null) callback.writeLeafDocs(leafBlockFPs.size() - 1, rowIDAndIndexes, 0, leafCount);
 
-            writeCommonPrefixes(scratchOut, commonPrefixLengths, leafValues);
+            writeCommonPrefixes(scratchOut, leafValues);
 
             scratchBytesRef1.length = packedBytesLength;
             scratchBytesRef1.bytes = leafValues;
@@ -484,35 +375,24 @@ public class BKDWriter implements Closeable
                     scratchBytesRef1.offset = packedBytesLength * i;
                     return scratchBytesRef1;
             };
-            assert valuesInOrderAndBounds(leafCount, 0, ArrayUtil.copyOfSubArray(leafValues, 0, packedBytesLength),
+            assert valuesInOrderAndBounds(leafCount, ArrayUtil.copyOfSubArray(leafValues, 0, packedBytesLength),
                                           ArrayUtil.copyOfSubArray(leafValues, (leafCount - 1) * packedBytesLength, leafCount * packedBytesLength),
                                           packedValues, leafDocs, 0);
 
-            writeLeafBlockPackedValues(scratchOut, commonPrefixLengths, leafCount, 0, packedValues);
+            writeLeafBlockPackedValues(scratchOut, leafCount, packedValues);
 
-            if (compressor == null)
-            {
-                out.writeBytes(scratchOut.getBytes(), 0, scratchOut.getPosition());
-            }
-            else
-            {
-                CryptoUtils.compress(new BytesRef(scratchOut.getBytes(), 0, scratchOut.getPosition()), scratchBytesRef, out, compressor);
-            }
+            out.writeBytes(scratchOut.getBytes(), 0, scratchOut.getPosition());
+
             scratchOut.reset();
         }
     }
 
-    private final BytesRef scratchBytesRef = new BytesRef(new byte[128]);
-
     // TODO: there must be a simpler way?
     private void rotateToTree(int nodeID, int offset, int count, byte[] index, List<byte[]> leafBlockStartValues)
     {
-        //System.out.println("ROTATE: nodeID=" + nodeID + " offset=" + offset + " count=" + count + " bpd=" + bytesPerDim + " index.length=" + index.length);
         if (count == 1)
         {
             // Leaf index node
-            //System.out.println("  leaf index node");
-            //System.out.println("  index[" + nodeID + "] = blockStartValues[" + offset + "]");
             System.arraycopy(leafBlockStartValues.get(offset), 0, index, nodeID * (1 + bytesPerDim) + 1, bytesPerDim);
         }
         else if (count > 1)
@@ -523,7 +403,6 @@ public class BKDWriter implements Closeable
             while (true)
             {
                 int countLeft = count - totalCount;
-                //System.out.println("    cycle countLeft=" + countLeft + " coutAtLevel=" + countAtLevel);
                 if (countLeft <= countAtLevel)
                 {
                     // This is the last level, possibly partially filled:
@@ -532,17 +411,11 @@ public class BKDWriter implements Closeable
                     int leftHalf = (totalCount - 1) / 2 + lastLeftCount;
 
                     int rootOffset = offset + leftHalf;
-          /*
-          System.out.println("  last left count " + lastLeftCount);
-          System.out.println("  leftHalf " + leftHalf + " rightHalf=" + (count-leftHalf-1));
-          System.out.println("  rootOffset=" + rootOffset);
-          */
 
                     System.arraycopy(leafBlockStartValues.get(rootOffset), 0, index, nodeID * (1 + bytesPerDim) + 1, bytesPerDim);
-                    //System.out.println("  index[" + nodeID + "] = blockStartValues[" + rootOffset + "]");
 
                     // TODO: we could optimize/specialize, when we know it's simply fully balanced binary tree
-                    // under here, to save this while loop on each recursion
+                    //  under here, to save this while loop on each recursion
 
                     // Recurse left
                     rotateToTree(2 * nodeID, offset, leftHalf, index, leafBlockStartValues);
@@ -561,24 +434,6 @@ public class BKDWriter implements Closeable
         }
     }
 
-    // useful for debugging:
-  /*
-  private void printPathSlice(String desc, PathSlice slice, int dim) throws IOException {
-    System.out.println("    " + desc + " dim=" + dim + " count=" + slice.count + ":");    
-    try(PointReader r = slice.writer.getReader(slice.start, slice.count)) {
-      int count = 0;
-      while (r.next()) {
-        byte[] v = r.packedValue();
-        System.out.println("      " + count + ": " + new BytesRef(v, dim*bytesPerDim, bytesPerDim));
-        count++;
-        if (count == slice.count) {
-          break;
-        }
-      }
-    }
-  }
-  */
-
     private void checkMaxLeafNodeCount(int numLeaves)
     {
         if ((1 + bytesPerDim) * (long) numLeaves > ArrayUtil.MAX_ARRAY_LENGTH)
@@ -587,17 +442,16 @@ public class BKDWriter implements Closeable
         }
     }
 
-    /** Packs the two arrays, representing a balanced binary tree, into a compact byte[] structure. */
+    /** Packs the two arrays, representing a balanced binary tree, into a list of byte[] blocks. */
     @SuppressWarnings("resource")
-    private byte[] packIndex(long[] leafBlockFPs, byte[] splitPackedValues) throws IOException
+    private int packIndex(long[] leafBlockFPs, byte[] splitPackedValues, List<byte[]> packedIndex) throws IOException
     {
-
         int numLeaves = leafBlockFPs.length;
 
         // Possibly rotate the leaf block FPs, if the index not fully balanced binary tree (only happens
         // if it was created by OneDimensionBKDWriter).  In this case the leaf nodes may straddle the two bottom
         // levels of the binary tree:
-        if (numDims == 1 && numLeaves > 1)
+        if (numLeaves > 1)
         {
             int levelCount = 2;
             while (true)
@@ -623,34 +477,18 @@ public class BKDWriter implements Closeable
         }
 
         /** Reused while packing the index */
-        // TODO: replace with RAMIndexOutput because RAMOutputStream has synchronized/monitor locks
-        RAMOutputStream writeBuffer = new RAMOutputStream();
+        RAMIndexOutput writeBuffer = new RAMIndexOutput("");
 
-        // This is the "file" we append the byte[] to:
-        List<byte[]> blocks = new ArrayList<>();
-        byte[] lastSplitValues = new byte[bytesPerDim * numDims];
-        //System.out.println("\npack index");
-        int totalSize = recursePackIndex(writeBuffer, leafBlockFPs, splitPackedValues, 0l, blocks, 1, lastSplitValues, new boolean[numDims], false);
-
-        // Compact the byte[] blocks into single byte index:
-        byte[] index = new byte[totalSize];
-        int upto = 0;
-        for (byte[] block : blocks)
-        {
-            System.arraycopy(block, 0, index, upto, block.length);
-            upto += block.length;
-        }
-        assert upto == totalSize;
-
-        return index;
+        byte[] lastSplitValues = new byte[bytesPerDim];
+        return recursePackIndex(writeBuffer, leafBlockFPs, splitPackedValues, 0l, packedIndex, 1, lastSplitValues, new boolean[1], false);
     }
 
     /** Appends the current contents of writeBuffer as another block on the growing in-memory file */
-    private int appendBlock(RAMOutputStream writeBuffer, List<byte[]> blocks) throws IOException
+    private int appendBlock(RAMIndexOutput writeBuffer, List<byte[]> blocks) throws IOException
     {
         int pos = Math.toIntExact(writeBuffer.getFilePointer());
         byte[] bytes = new byte[pos];
-        writeBuffer.writeTo(bytes, 0);
+        writeBuffer.writeTo(bytes);
         writeBuffer.reset();
         blocks.add(bytes);
         return pos;
@@ -660,13 +498,12 @@ public class BKDWriter implements Closeable
      * lastSplitValues is per-dimension split value previously seen; we use this to prefix-code the split byte[] on each
      * inner node
      */
-    private int recursePackIndex(RAMOutputStream writeBuffer, long[] leafBlockFPs, byte[] splitPackedValues, long minBlockFP, List<byte[]> blocks,
+    private int recursePackIndex(RAMIndexOutput writeBuffer, long[] leafBlockFPs, byte[] splitPackedValues, long minBlockFP, List<byte[]> blocks,
                                  int nodeID, byte[] lastSplitValues, boolean[] negativeDeltas, boolean isLeft) throws IOException
     {
         if (nodeID >= leafBlockFPs.length)
         {
             int leafID = nodeID - leafBlockFPs.length;
-            //System.out.println("recursePack leaf nodeID=" + nodeID);
 
             // In the unbalanced case it's possible the left most node only has one child:
             if (leafID < leafBlockFPs.length)
@@ -708,8 +545,6 @@ public class BKDWriter implements Closeable
             int address = nodeID * (1 + bytesPerDim);
             int splitDim = splitPackedValues[address++] & 0xff;
 
-            //System.out.println("recursePack inner nodeID=" + nodeID + " splitDim=" + splitDim + " splitValue=" + new BytesRef(splitPackedValues, address, bytesPerDim));
-
             // find common prefix with last split value in this dim:
             int prefix = 0;
             for (; prefix < bytesPerDim; prefix++)
@@ -720,18 +555,14 @@ public class BKDWriter implements Closeable
                 }
             }
 
-            //System.out.println("writeNodeData nodeID=" + nodeID + " splitDim=" + splitDim + " numDims=" + numDims + " bytesPerDim=" + bytesPerDim + " prefix=" + prefix);
-
             int firstDiffByteDelta;
             if (prefix < bytesPerDim)
             {
-                //System.out.println("  delta byte cur=" + Integer.toHexString(splitPackedValues[address+prefix]&0xFF) + " prev=" + Integer.toHexString(lastSplitValues[splitDim * bytesPerDim + prefix]&0xFF) + " negated?=" + negativeDeltas[splitDim]);
                 firstDiffByteDelta = (splitPackedValues[address + prefix] & 0xFF) - (lastSplitValues[splitDim * bytesPerDim + prefix] & 0xFF);
                 if (negativeDeltas[splitDim])
                 {
                     firstDiffByteDelta = -firstDiffByteDelta;
                 }
-                //System.out.println("  delta=" + firstDiffByteDelta);
                 assert firstDiffByteDelta > 0;
             }
             else
@@ -740,10 +571,7 @@ public class BKDWriter implements Closeable
             }
 
             // pack the prefix, splitDim and delta first diff byte into a single vInt:
-            int code = (firstDiffByteDelta * (1 + bytesPerDim) + prefix) * numDims + splitDim;
-
-            //System.out.println("  code=" + code);
-            //System.out.println("  splitValue=" + new BytesRef(splitPackedValues, address, bytesPerDim));
+            int code = (firstDiffByteDelta * (1 + bytesPerDim) + prefix) + splitDim;
 
             writeBuffer.writeVInt(code);
 
@@ -784,7 +612,7 @@ public class BKDWriter implements Closeable
             }
             int numBytes2 = Math.toIntExact(writeBuffer.getFilePointer());
             byte[] bytes2 = new byte[numBytes2];
-            writeBuffer.writeTo(bytes2, 0);
+            writeBuffer.writeTo(bytes2);
             writeBuffer.reset();
             // replace our placeholder:
             blocks.set(idxSav, bytes2);
@@ -826,64 +654,44 @@ public class BKDWriter implements Closeable
 
     private void writeIndex(IndexOutput out, int countPerLeaf, long[] leafBlockFPs, byte[] splitPackedValues) throws IOException
     {
-        byte[] packedIndex = packIndex(leafBlockFPs, splitPackedValues);
-        writeIndex(out, countPerLeaf, leafBlockFPs.length, packedIndex);
+        List<byte[]> packedIndex = new ArrayList<>();
+        int totalSize = packIndex(leafBlockFPs, splitPackedValues, packedIndex);
+        writeIndex(out, countPerLeaf, leafBlockFPs.length, packedIndex, totalSize);
     }
 
-    private void writeIndex(IndexOutput out, int countPerLeaf, int numLeaves, byte[] packedIndex) throws IOException
+    private void writeIndex(IndexOutput out, int countPerLeaf, int numLeaves, List<byte[]> packedIndex, int totalSize) throws IOException
     {
-        out.writeVInt(numDims);
+        out.writeVInt(1);
         out.writeVInt(countPerLeaf);
         out.writeVInt(bytesPerDim);
 
         assert numLeaves > 0;
         out.writeVInt(numLeaves);
 
-        if (compressor != null)
-        {
-            RAMIndexOutput ramOut = new RAMIndexOutput("");
-            ramOut.writeBytes(minPackedValue, 0, packedBytesLength);
-            ramOut.writeBytes(maxPackedValue, 0, packedBytesLength);
-
-            CryptoUtils.compress(new BytesRef(ramOut.getBytes(), 0, (int)ramOut.getFilePointer()), out, compressor);
-        }
-        else
-        {
-            out.writeBytes(minPackedValue, 0, packedBytesLength);
-            out.writeBytes(maxPackedValue, 0, packedBytesLength);
-        }
+        out.writeBytes(minPackedValue, 0, packedBytesLength);
+        out.writeBytes(maxPackedValue, 0, packedBytesLength);
 
         out.writeVLong(pointCount);
-        //TODO Changing disk format
         out.writeVLong(docsSeen.cardinality());
 
-        if (compressor != null)
-        {
-            CryptoUtils.compress(new BytesRef(packedIndex, 0, packedIndex.length), out, compressor);
-        }
-        else
-        {
-            out.writeVInt(packedIndex.length);
-            out.writeBytes(packedIndex, 0, packedIndex.length);
-        }
+        out.writeVInt(totalSize);
+        for (byte[] block : packedIndex)
+            out.writeBytes(block, 0, block.length);
     }
 
-    private void writeLeafBlockPackedValues(DataOutput out, int[] commonPrefixLengths, int count, int sortedDim, IntFunction<BytesRef> packedValues) throws IOException
+    private void writeLeafBlockPackedValues(DataOutput out, int count, IntFunction<BytesRef> packedValues) throws IOException
     {
-        int prefixLenSum = Arrays.stream(commonPrefixLengths).sum();
-        if (prefixLenSum == packedBytesLength)
+        if (commonPrefixLength == packedBytesLength)
         {
             // all values in this block are equal
             out.writeByte((byte) -1);
         }
         else
         {
-            assert numDims == 1;
-
-            assert commonPrefixLengths[sortedDim] < bytesPerDim;
-            out.writeByte((byte) sortedDim);
-            int compressedByteOffset = sortedDim * bytesPerDim + commonPrefixLengths[sortedDim];
-            commonPrefixLengths[sortedDim]++;
+            assert commonPrefixLength < bytesPerDim;
+            out.writeByte((byte) 0);
+            int compressedByteOffset = commonPrefixLength;
+            commonPrefixLength++;
             for (int i = 0; i < count; )
             {
                 // do run-length compression on the byte at compressedByteOffset
@@ -893,52 +701,21 @@ public class BKDWriter implements Closeable
                 byte prefixByte = first.bytes[first.offset + compressedByteOffset];
                 out.writeByte(prefixByte);
                 out.writeByte((byte) runLen);
-                writeLeafBlockPackedValuesRange(out, commonPrefixLengths, i, i + runLen, packedValues);
+                writeLeafBlockPackedValuesRange(out, commonPrefixLength, i, i + runLen, packedValues);
                 i += runLen;
                 assert i <= count;
             }
         }
     }
 
-    /**
-     * Return an array that contains the min and max values for the [offset, offset+length] interval
-     * of the given {@link BytesRef}s.
-     */
-    private static BytesRef[] computeMinMax(int count, IntFunction<BytesRef> packedValues, int offset, int length)
-    {
-        assert length > 0;
-        BytesRefBuilder min = new BytesRefBuilder();
-        BytesRefBuilder max = new BytesRefBuilder();
-        BytesRef first = packedValues.apply(0);
-        min.copyBytes(first.bytes, first.offset + offset, length);
-        max.copyBytes(first.bytes, first.offset + offset, length);
-        for (int i = 1; i < count; ++i)
-        {
-            BytesRef candidate = packedValues.apply(i);
-            if (FutureArrays.compareUnsigned(min.bytes(), 0, length, candidate.bytes, candidate.offset + offset, candidate.offset + offset + length) > 0)
-            {
-                min.copyBytes(candidate.bytes, candidate.offset + offset, length);
-            }
-            else if (FutureArrays.compareUnsigned(max.bytes(), 0, length, candidate.bytes, candidate.offset + offset, candidate.offset + offset + length) < 0)
-            {
-                max.copyBytes(candidate.bytes, candidate.offset + offset, length);
-            }
-        }
-        return new BytesRef[]{ min.get(), max.get() };
-    }
-
-    private void writeLeafBlockPackedValuesRange(DataOutput out, int[] commonPrefixLengths, int start, int end, IntFunction<BytesRef> packedValues) throws IOException
+    private void writeLeafBlockPackedValuesRange(DataOutput out, int commonPrefixLength, int start, int end, IntFunction<BytesRef> packedValues) throws IOException
     {
         for (int i = start; i < end; ++i)
         {
             BytesRef ref = packedValues.apply(i);
             assert ref.length == packedBytesLength;
 
-            for (int dim = 0; dim < numDims; dim++)
-            {
-                int prefix = commonPrefixLengths[dim];
-                out.writeBytes(ref.bytes, ref.offset + dim * bytesPerDim + prefix, bytesPerDim - prefix);
-            }
+            out.writeBytes(ref.bytes, ref.offset + commonPrefixLength, bytesPerDim - commonPrefixLength);
         }
     }
 
@@ -959,43 +736,34 @@ public class BKDWriter implements Closeable
         return end - start;
     }
 
-    private void writeCommonPrefixes(DataOutput out, int[] commonPrefixes, byte[] packedValue) throws IOException
+    private void writeCommonPrefixes(DataOutput out, byte[] packedValue) throws IOException
     {
-        for (int dim = 0; dim < numDims; dim++)
-        {
-            out.writeVInt(commonPrefixes[dim]);
-            //System.out.println(commonPrefixes[dim] + " of " + bytesPerDim);
-            out.writeBytes(packedValue, dim * bytesPerDim, commonPrefixes[dim]);
-        }
+        out.writeVInt(commonPrefixLength);
+        out.writeBytes(packedValue, 0, commonPrefixLength);
     }
 
     @Override
     public void close() throws IOException
     {
-
     }
 
     /** Called only in assert */
     private boolean valueInBounds(BytesRef packedValue, byte[] minPackedValue, byte[] maxPackedValue)
     {
-        for (int dim = 0; dim < numDims; dim++)
+        if (FutureArrays.compareUnsigned(packedValue.bytes, packedValue.offset, packedValue.offset + bytesPerDim, minPackedValue, 0, bytesPerDim) < 0)
         {
-            int offset = bytesPerDim * dim;
-            if (FutureArrays.compareUnsigned(packedValue.bytes, packedValue.offset + offset, packedValue.offset + offset + bytesPerDim, minPackedValue, offset, offset + bytesPerDim) < 0)
-            {
-                return false;
-            }
-            if (FutureArrays.compareUnsigned(packedValue.bytes, packedValue.offset + offset, packedValue.offset + offset + bytesPerDim, maxPackedValue, offset, offset + bytesPerDim) > 0)
-            {
-                return false;
-            }
+            return false;
+        }
+        if (FutureArrays.compareUnsigned(packedValue.bytes, packedValue.offset, packedValue.offset + bytesPerDim, maxPackedValue, 0, bytesPerDim) > 0)
+        {
+            return false;
         }
 
         return true;
     }
 
     // only called from assert
-    private boolean valuesInOrderAndBounds(int count, int sortedDim, byte[] minPackedValue, byte[] maxPackedValue,
+    private boolean valuesInOrderAndBounds(int count, byte[] minPackedValue, byte[] maxPackedValue,
                                            IntFunction<BytesRef> values, long[] docs, int docsOffset) throws IOException
     {
         byte[] lastPackedValue = new byte[packedBytesLength];
@@ -1004,8 +772,7 @@ public class BKDWriter implements Closeable
         {
             BytesRef packedValue = values.apply(i);
             assert packedValue.length == packedBytesLength;
-            assert valueInOrder(i, sortedDim, lastPackedValue, packedValue.bytes, packedValue.offset,
-                                docs[docsOffset + i], lastDoc);
+            assert valueInOrder(i, lastPackedValue, packedValue.bytes, packedValue.offset, docs[docsOffset + i], lastDoc);
             lastDoc = docs[docsOffset + i];
 
             // Make sure this value does in fact fall within this leaf cell:
@@ -1015,13 +782,11 @@ public class BKDWriter implements Closeable
     }
 
     // only called from assert
-    private boolean valueInOrder(long ord, int sortedDim, byte[] lastPackedValue, byte[] packedValue, int packedValueOffset,
-                                 long doc, long lastDoc)
+    private boolean valueInOrder(long ord, byte[] lastPackedValue, byte[] packedValue, int packedValueOffset, long doc, long lastDoc)
     {
-        int dimOffset = sortedDim * bytesPerDim;
         if (ord > 0)
         {
-            int cmp = FutureArrays.compareUnsigned(lastPackedValue, dimOffset, dimOffset + bytesPerDim, packedValue, packedValueOffset + dimOffset, packedValueOffset + dimOffset + bytesPerDim);
+            int cmp = FutureArrays.compareUnsigned(lastPackedValue, 0, bytesPerDim, packedValue, packedValueOffset, packedValueOffset + bytesPerDim);
             if (cmp > 0)
             {
                 throw new AssertionError("values out of order: last value=" + new BytesRef(lastPackedValue) + " current value=" + new BytesRef(packedValue, packedValueOffset, packedBytesLength) + " ord=" + ord);

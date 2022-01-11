@@ -68,7 +68,7 @@ public class NumericIndexWriter implements Closeable
                               long maxSegmentRowId,
                               long numRows,
                               IndexWriterConfig config,
-                              boolean segmented) throws IOException
+                              boolean segmented)
     {
         this(indexDescriptor, indexContext, MAX_POINTS_IN_LEAF_NODE, bytesPerDim, maxSegmentRowId, numRows, config, segmented);
     }
@@ -80,7 +80,7 @@ public class NumericIndexWriter implements Closeable
                               long maxSegmentRowId,
                               long numRows,
                               IndexWriterConfig config,
-                              boolean segmented) throws IOException
+                              boolean segmented)
     {
         checkArgument(maxSegmentRowId >= 0,
                       "[%s] maxRowId must be non-negative value, but got %s",
@@ -94,13 +94,7 @@ public class NumericIndexWriter implements Closeable
         this.indexContext = indexContext;
         this.bytesPerDim = bytesPerDim;
         this.config = config;
-        this.writer = new BKDWriter(maxSegmentRowId + 1,
-                                    1,
-                                    bytesPerDim,
-                                    maxPointsInLeafNode,
-                                    BKDWriter.DEFAULT_MAX_MB_SORT_IN_HEAP,
-                                    numRows,
-                                    true, null);
+        this.writer = new BKDWriter(maxSegmentRowId + 1, bytesPerDim, maxPointsInLeafNode, numRows);
         this.segmented = segmented;
     }
 
@@ -174,7 +168,7 @@ public class NumericIndexWriter implements Closeable
             attributes.put("num_leaves", Integer.toString(leafCallback.numLeaves()));
             attributes.put("num_points", Long.toString(writer.pointCount));
             attributes.put("bytes_per_dim", Long.toString(writer.bytesPerDim));
-            attributes.put("num_dims", Long.toString(writer.numDims));
+            attributes.put("num_dims", Long.toString(1));
 
             components.put(IndexComponent.KD_TREE, bkdPosition, bkdOffset, bkdLength, attributes);
         }
