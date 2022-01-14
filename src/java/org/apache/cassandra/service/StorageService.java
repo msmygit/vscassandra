@@ -107,8 +107,8 @@ import org.apache.cassandra.repair.messages.RepairOption;
 import org.apache.cassandra.schema.CompactionParams.TombstoneOption;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.SchemaTransformations;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
@@ -1930,9 +1930,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public InetAddressAndPort getNativeAddressAndPort(InetAddressAndPort endpoint)
     {
-        NodeInfo<?> info = Nodes.localOrPeerInfo(endpoint);
-        if (info != null && info.getNativeTransportAddressAndPort() != null)
-            return info.getNativeTransportAddressAndPort();
+        InetAddressAndPort addr = Nodes.getNativeTransportAddressAndPort(endpoint, null);
+        if (addr != null)
+            return addr;
 
         if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
             return FBUtilities.getBroadcastNativeAddressAndPort();
@@ -2450,11 +2450,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     private Collection<Token> getTokensFor(InetAddressAndPort endpoint)
     {
-        NodeInfo<?> info = Nodes.localOrPeerInfo(endpoint);
-        if (info == null)
-            return Collections.emptyList();
-
-        return info.getTokens();
+        return Nodes.getTokens(endpoint, Collections.emptyList());
     }
 
     /**
@@ -2614,7 +2610,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             return isReplacingSameAddress() &&
                     Gossiper.instance.getEndpointStateForEndpoint(DatabaseDescriptor.getReplaceAddress()) != null
-                    && Objects.equals(hostId, Nodes.localOrPeerInfoOpt(DatabaseDescriptor.getReplaceAddress()).map(NodeInfo::getHostId).orElse(null));
+                    && Objects.equals(hostId, Nodes.getHostId(DatabaseDescriptor.getReplaceAddress(), null));
         }
         catch (RuntimeException ex)
         {
@@ -2681,7 +2677,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
 
         // Order Matters, TM.updateHostID() should be called before TM.updateNormalToken(), (see CASSANDRA-4300).
-        UUID hostId = Objects.requireNonNull(Nodes.localOrPeerInfo(endpoint)).getHostId();
+        UUID hostId = Nodes.getHostId(endpoint, null);
         InetAddressAndPort existing = getTokenMetadata().getEndpointForHostId(hostId);
         if (replacing && isReplacingSameHostAddressAndHostId(hostId))
         {
