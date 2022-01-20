@@ -1,0 +1,16 @@
+--- a/src/java/org/apache/cassandra/locator/NetworkTopologyStrategy.java
++++ b/src/java/org/apache/cassandra/locator/NetworkTopologyStrategy.java
+@@ -321,12 +321,7 @@
+     {
+         if (!SchemaConstants.isSystemKeyspace(keyspaceName))
+         {
+-<<<<<<<
+-            ImmutableMultimap<String, InetAddressAndPort> dcsNodes = Multimaps.index(StorageService.instance.getTokenMetadata().getAllMembers(), snitch::getDatacenter);
+-=======
+-            ImmutableMultimap<String, InetAddressAndPort> dcsNodes = StorageService.instance.getTokenMetadataForKeyspace(keyspaceName)
+-                                                                                            .getDC2AllEndpoints(snitch);
+->>>>>>>
++            ImmutableMultimap<String, InetAddressAndPort> dcsNodes = Multimaps.index(StorageService.instance.getTokenMetadataForKeyspace(keyspaceName).getAllMembers(), snitch::getDatacenter);
+             for (Entry<String, String> e : this.configOptions.entrySet())
+             {
+ 
