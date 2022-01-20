@@ -227,7 +227,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         List<Range<Token>> ranges = new ArrayList<>();
         for (Replica r : keyspace.getReplicationStrategy().getAddressReplicas(broadcastAddress))
             ranges.add(r.range());
-        for (Replica r : getTokenMetadata().getPendingRanges(ks, broadcastAddress))
+        for (Replica r : getTokenMetadataForKeyspace(ks).getPendingRanges(ks, broadcastAddress))
             ranges.add(r.range());
         return ranges;
     }
@@ -1902,6 +1902,11 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return TokenMetadataProvider.instance.getTokenMetadata();
     }
 
+    public TokenMetadata getTokenMetadataForKeyspace(String keyspaceName)
+    {
+        return TokenMetadataProvider.instance.getTokenMetadataForKeyspace(keyspaceName);
+    }
+
     public Map<List<String>, List<String>> getRangeToEndpointMap(String keyspace)
     {
         return getRangeToEndpointMap(keyspace, false);
@@ -2008,7 +2013,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public EndpointsByRange getRangeToAddressMap(String keyspace)
     {
-        return getRangeToAddressMap(keyspace, getTokenMetadata().sortedTokens());
+        return getRangeToAddressMap(keyspace, getTokenMetadataForKeyspace(keyspace).sortedTokens());
     }
 
     public EndpointsByRange getRangeToAddressMapInLocalDC(String keyspace)
@@ -4077,7 +4082,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         AbstractReplicationStrategy strategy = Keyspace.open(keyspace).getReplicationStrategy();
         Collection<Range<Token>> primaryRanges = new HashSet<>();
-        TokenMetadata metadata = getTokenMetadata().cloneOnlyTokenMap();
+        TokenMetadata metadata = strategy.getTokenMetadata().cloneOnlyTokenMap();
         for (Token token : metadata.sortedTokens())
         {
             EndpointsForRange replicas = strategy.calculateNaturalReplicas(token, metadata);
@@ -4100,10 +4105,10 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      */
     public Collection<Range<Token>> getPrimaryRangeForEndpointWithinDC(String keyspace, InetAddressAndPort referenceEndpoint)
     {
-        TokenMetadata metadata = getTokenMetadata().cloneOnlyTokenMap();
+        AbstractReplicationStrategy strategy = Keyspace.open(keyspace).getReplicationStrategy();
+        TokenMetadata metadata = strategy.getTokenMetadata().cloneOnlyTokenMap();
         String localDC = DatabaseDescriptor.getEndpointSnitch().getDatacenter(referenceEndpoint);
         Collection<InetAddressAndPort> localDcNodes = metadata.getTopology().getDatacenterEndpoints().get(localDC);
-        AbstractReplicationStrategy strategy = Keyspace.open(keyspace).getReplicationStrategy();
 
         Collection<Range<Token>> localDCPrimaryRanges = new HashSet<>();
         for (Token token : metadata.sortedTokens())
