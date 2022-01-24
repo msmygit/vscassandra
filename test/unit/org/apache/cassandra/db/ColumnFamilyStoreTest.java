@@ -32,10 +32,12 @@ import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.googlecode.concurrenttrees.common.Iterables;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -263,12 +265,15 @@ public class ColumnFamilyStoreTest
         new RowUpdateBuilder(cfs.metadata(), 0, ByteBufferUtil.bytes("key2")).clustering("Column1").add("val", "asdf").build().applyUnsafe();
         cfs.forceBlockingFlush();
 
-        for (int version = 1; version <= 2; ++version)
+        for (SSTableReader liveSSTable : cfs.getLiveSSTables())
         {
-            Descriptor existing = new Descriptor(cfs.getDirectories().getDirectoryForNewSSTables(), KEYSPACE2, CF_STANDARD1, version,
-                                                 SSTableFormat.Type.BIG);
-            Descriptor desc = new Descriptor(Directories.getBackupsDirectory(existing), KEYSPACE2, CF_STANDARD1, version, SSTableFormat.Type.BIG);
-            for (Component c : new Component[]{ Component.DATA, Component.PRIMARY_INDEX, Component.FILTER, Component.STATS })
+            Descriptor existing = liveSSTable.descriptor;
+            Descriptor desc = new Descriptor(Directories.getBackupsDirectory(existing),
+                                             KEYSPACE2,
+                                             CF_STANDARD1,
+                                             liveSSTable.descriptor.id,
+                                             liveSSTable.descriptor.formatType);
+            for (Component c : liveSSTable.getComponents())
                 assertTrue("Cannot find backed-up file:" + desc.filenameFor(c), new File(desc.filenameFor(c)).exists());
         }
     }
@@ -455,9 +460,15 @@ public class ColumnFamilyStoreTest
         // Snapshot of the secondary index is stored in the subfolder with the same file name
         String baseTableFile = (String) files.get(0);
         String indexTableFile = (String) files.get(1);
-        assert !baseTableFile.equals(indexTableFile);
-        assert Directories.isSecondaryIndexFolder(new File(indexTableFile).getParentFile());
-        assert indexTableFile.endsWith(baseTableFile);
+        assertThat(baseTableFile).isNotEqualTo(indexTableFile);
+        assertThat(Directories.isSecondaryIndexFolder(new File(indexTableFile).getParentFile())).isTrue();
+
+        Set<String> originalFiles = new HashSet<>();
+        Iterables.toList(cfs.concatWithIndexes()).stream()
+                 .flatMap(c -> c.getLiveSSTables().stream().map(t -> t.descriptor.filenameFor(Component.DATA)))
+                 .forEach(originalFiles::add);
+        assertThat(originalFiles.stream().anyMatch(f -> f.endsWith(indexTableFile))).isTrue();
+        assertThat(originalFiles.stream().anyMatch(f -> f.endsWith(baseTableFile))).isTrue();
     }
 
     @Test

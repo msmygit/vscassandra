@@ -22,6 +22,10 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiPredicate;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -1132,6 +1136,24 @@ public class Directories
                 result.add(dataDirectory);
         }
         return result;
+    }
+
+    /**
+     * Initializes the sstable unique identifier generator using a provided builder for this instance of directories.
+     * If the id builder needs that, sstables in these directories are listed to provide the existing identifiers to
+     * the builder. The listing is done lazily so if the builder does not require that, listing is skipped.
+     */
+    public <T extends SSTableId> Supplier<T> getUIDGenerator(SSTableId.Builder<T> builder)
+    {
+        // this stream is evaluated lazily - if the generator does not need the existing ids, we do not even call #sstableLister
+        Stream<SSTableId> curIds = StreamSupport.stream(() -> sstableLister(Directories.OnTxnErr.IGNORE)
+                                                              .includeBackups(true)
+                                                              .list()
+                                                              .keySet()
+                                                              .spliterator(), Spliterator.DISTINCT, false)
+                                                .map(d -> d.id);
+
+        return builder.generator(curIds);
     }
 
     private static File getOrCreate(File base, String... subdirs)
