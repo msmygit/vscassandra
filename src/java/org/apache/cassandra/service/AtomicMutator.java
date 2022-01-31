@@ -25,7 +25,7 @@ import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.exceptions.OverloadedException;
 import org.apache.cassandra.exceptions.UnavailableException;
 import org.apache.cassandra.exceptions.WriteTimeoutException;
-import org.apache.cassandra.metrics.CoordinatorClientRequestMetrics;
+import org.apache.cassandra.metrics.ClientRequestsMetrics;
 
 public interface AtomicMutator
 {
@@ -33,7 +33,7 @@ public interface AtomicMutator
             ConsistencyLevel consistencyLevel,
             boolean requireQuorumForRemove,
             long queryStartNanoTime,
-            CoordinatorClientRequestMetrics metrics,
+            ClientRequestsMetrics metrics,
             ClientState clientState)
             throws UnavailableException, OverloadedException, WriteTimeoutException;
 }

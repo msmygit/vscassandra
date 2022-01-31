@@ -18,8 +18,16 @@
 package org.apache.cassandra.schema;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -29,13 +37,21 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MapDifference;
 import org.apache.commons.lang3.ObjectUtils;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.cql3.functions.*;
-import org.apache.cassandra.db.*;
+import org.apache.cassandra.cql3.functions.Function;
+import org.apache.cassandra.cql3.functions.FunctionName;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.KeyspaceNotDefinedException;
+import org.apache.cassandra.db.Mutation;
+import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.exceptions.UnknownKeyspaceException;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.LocalStrategy;
@@ -43,13 +59,9 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
-import org.apache.cassandra.service.StorageService;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static java.lang.String.format;
 import static com.google.common.collect.Iterables.size;
+import static java.lang.String.format;
 import static org.apache.cassandra.config.DatabaseDescriptor.isDaemonInitialized;
 import static org.apache.cassandra.config.DatabaseDescriptor.isToolInitialized;
 
@@ -65,7 +77,7 @@ import static org.apache.cassandra.config.DatabaseDescriptor.isToolInitialized;
  * notifications are sent to the registered listeners.
  * When the schema change is applied by the update handler (regardless it is initiated locally or received from outside),
  * the registered callback is executed which performs the remaining updates for tables metadata refs and keyspace
- * instances (see {@link #mergeAndUpdateVersion(SchemaTransformationResult)}).
+ * instances (see {@link #mergeAndUpdateVersion(SchemaTransformationResult, boolean)}).
  */
 public final class SchemaManager implements SchemaProvider
 {
@@ -233,7 +245,7 @@ public final class SchemaManager implements SchemaProvider
     }
 
     @Override
-    public Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction)
+    public Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction) throws UnknownKeyspaceException
     {
         CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
         if (future == null)
@@ -250,7 +262,7 @@ public final class SchemaManager implements SchemaProvider
                 }
                 catch (Throwable t)
                 {
-                    empty.completeExceptionally(new Throwable(t));
+                    empty.completeExceptionally(t);
                     // Remove future so that construction can be retried later
                     keyspaceInstances.remove(keyspaceName, future);
                 }
@@ -258,9 +270,20 @@ public final class SchemaManager implements SchemaProvider
             // Else some other thread beat us to it, but we now have the reference to the future which we can wait for.
         }
 
-        // Most of the time the keyspace will be ready and this will complete immediately. If it is being created
-        // concurrently, wait for that process to complete.
-        return future.join();
+        try
+        {
+            // Most of the time the keyspace will be ready and this will complete immediately. If it is being created
+            // concurrently, wait for that process to complete.
+            return future.join();
+        }
+        catch (CompletionException ex)
+        {
+            if (ex.getCause() instanceof UnknownKeyspaceException)
+            {
+                throw (UnknownKeyspaceException) ex.getCause();
+            }
+            throw ex;
+        }
     }
 
     /**
@@ -334,7 +357,6 @@ public final class SchemaManager implements SchemaProvider
      * Get metadata about keyspace by its name
      *
      * @param keyspaceName The name of the keyspace
-     *
      * @return The keyspace metadata or null if it wasn't found
      */
     @Override
@@ -348,6 +370,7 @@ public final class SchemaManager implements SchemaProvider
     /**
      * Returns all non-local keyspaces, that is, all but {@link SchemaConstants#LOCAL_SYSTEM_KEYSPACE_NAMES}
      * or virtual keyspaces.
+     *
      * @deprecated use {@link #sharedKeyspaces()}
      */
     @Deprecated
@@ -644,13 +667,13 @@ public final class SchemaManager implements SchemaProvider
      *
      * @throws ConfigurationException If one of metadata attributes has invalid value
      */
-    private synchronized void mergeAndUpdateVersion(SchemaTransformationResult result)
+    private synchronized void mergeAndUpdateVersion(SchemaTransformationResult result, boolean dropData)
     {
         if (online)
             SystemKeyspace.updateSchemaVersion(result.after.getVersion());
         result = localDiff(result);
         schemaChangeNotifier.notifyPreChanges(result);
-        merge(result.diff);
+        merge(result.diff, dropData);
         updateVersion(result.after.getVersion());
     }
 
@@ -680,14 +703,14 @@ public final class SchemaManager implements SchemaProvider
         logger.info("Local schema reset is complete.");
     }
 
-    private void merge(KeyspacesDiff diff)
+    private void merge(KeyspacesDiff diff, boolean removeData)
     {
-        diff.dropped.forEach(this::dropKeyspace);
+        diff.dropped.forEach(keyspace -> dropKeyspace(keyspace, removeData));
         diff.created.forEach(this::createKeyspace);
-        diff.altered.forEach(this::alterKeyspace);
+        diff.altered.forEach(delta -> alterKeyspace(delta, removeData));
     }
 
-    private void alterKeyspace(KeyspaceDiff delta)
+    private void alterKeyspace(KeyspaceDiff delta, boolean dropData)
     {
         SchemaDiagnostics.keyspaceAltering(this, delta);
 
@@ -700,8 +723,8 @@ public final class SchemaManager implements SchemaProvider
             assert delta.before.name.equals(delta.after.name);
 
             // drop tables and views
-            delta.views.dropped.forEach(v -> dropView(keyspace, v));
-            delta.tables.dropped.forEach(t -> dropTable(keyspace, t));
+            delta.views.dropped.forEach(v -> dropView(keyspace, v, dropData));
+            delta.tables.dropped.forEach(t -> dropTable(keyspace, t, dropData));
         }
 
         load(delta.after);
@@ -737,7 +760,7 @@ public final class SchemaManager implements SchemaProvider
         SchemaDiagnostics.keyspaceCreated(this, keyspace);
     }
 
-    private void dropKeyspace(KeyspaceMetadata keyspace)
+    private void dropKeyspace(KeyspaceMetadata keyspace, boolean dropData)
     {
         SchemaDiagnostics.keyspaceDropping(this, keyspace);
 
@@ -748,11 +771,11 @@ public final class SchemaManager implements SchemaProvider
             if (ks == null)
                 return;
 
-            keyspace.views.forEach(v -> dropView(ks, v));
-            keyspace.tables.forEach(t -> dropTable(ks, t));
+            keyspace.views.forEach(v -> dropView(ks, v, dropData));
+            keyspace.tables.forEach(t -> dropTable(ks, t, dropData));
 
             // remove the keyspace from the static instances
-            removeKeyspaceInstance(keyspace.name, Keyspace::unload);
+            removeKeyspaceInstance(keyspace.name, instance -> instance.unload(dropData));
         }
 
         unload(keyspace);
@@ -766,21 +789,16 @@ public final class SchemaManager implements SchemaProvider
         SchemaDiagnostics.keyspaceDropped(this, keyspace);
     }
 
-    private void dropView(Keyspace keyspace, ViewMetadata metadata)
+    private void dropView(Keyspace keyspace, ViewMetadata metadata, boolean dropData)
     {
         keyspace.viewManager.dropView(metadata.name());
-        dropTable(keyspace, metadata.metadata);
+        dropTable(keyspace, metadata.metadata, dropData);
     }
 
-    /**
-     *
-     * @param keyspace
-     * @param metadata
-     */
-    private void dropTable(Keyspace keyspace, TableMetadata metadata)
+    private void dropTable(Keyspace keyspace, TableMetadata metadata, boolean dropData)
     {
         SchemaDiagnostics.tableDropping(this, metadata);
-        keyspace.dropCf(metadata.id);
+        keyspace.dropCf(metadata.id, dropData);
         SchemaDiagnostics.tableDropped(this, metadata);
     }
 
