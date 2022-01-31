@@ -15,22 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.cassandra.exceptions;
 
-package org.apache.cassandra.schema;
-
-import java.util.function.BiConsumer;
-
-import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
-
-public class DefaultSchemaUpdateHandlerFactory implements SchemaUpdateHandlerFactory
+public class UnknownKeyspaceException extends RuntimeException implements InternalRequestExecutionException
 {
-    public static final SchemaUpdateHandlerFactory instance = new DefaultSchemaUpdateHandlerFactory();
+    public final String keyspaceName;
+
+    public UnknownKeyspaceException(String keyspaceName)
+    {
+        super("Could not find a keyspace " + keyspaceName);
+        this.keyspaceName = keyspaceName;
+    }
 
     @Override
-    public SchemaUpdateHandler getSchemaUpdateHandler(boolean online, BiConsumer<SchemaTransformationResult, Boolean> updateSchemaCallback)
+    public RequestFailureReason getReason()
     {
-        return online
-               ? new DefaultSchemaUpdateHandler(updateSchemaCallback)
-               : new OfflineSchemaUpdateHandler(updateSchemaCallback);
+        return RequestFailureReason.INCOMPATIBLE_SCHEMA;
     }
 }

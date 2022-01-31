@@ -38,7 +38,7 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.repair.messages.RepairOption;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTransformations;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -82,7 +82,7 @@ public class RepairProgressReporterTest extends CQLTester
     public static void init()
     {
         // required to access distributed keyspace
-        SchemaManager.instance.transform(SchemaTransformations.updateSystemKeyspace(SystemDistributedKeyspace.metadata(), SystemDistributedKeyspace.GENERATION));
+        Schema.instance.transform(SchemaTransformations.updateSystemKeyspace(SystemDistributedKeyspace.metadata(), SystemDistributedKeyspace.GENERATION));
         StorageService.instance.getTokenMetadata().updateNormalToken(t(1), FBUtilities.getBroadcastAddressAndPort());
     }
 
