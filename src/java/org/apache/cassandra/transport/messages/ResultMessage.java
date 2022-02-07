@@ -103,10 +103,7 @@ public abstract class ResultMessage extends Message.Response
      * @param overrideKeyspace function to update keyspace name
      * @return new result message with overridden keyspace name.
      */
-    public ResultMessage overrideKeyspace(Function<String, String> overrideKeyspace)
-    {
-        return this;
-    }
+    public abstract ResultMessage overrideKeyspace(Function<String, String> overrideKeyspace);
 
     public static class Void extends ResultMessage
     {
@@ -115,6 +112,12 @@ public abstract class ResultMessage extends Message.Response
         public Void()
         {
             super(Kind.VOID);
+        }
+
+        @Override
+        public Void overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            return this;
         }
 
         public static final Message.Codec<ResultMessage> subcodec = new Message.Codec<ResultMessage>()
