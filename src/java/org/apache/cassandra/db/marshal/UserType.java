@@ -19,6 +19,7 @@ package org.apache.cassandra.db.marshal;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Objects;
@@ -96,6 +97,19 @@ public class UserType extends TupleType implements SchemaElement
         }
 
         return new UserType(keyspace, name, columnNames, columnTypes, true);
+    }
+
+    @Override
+    public UserType overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        String newKeyspace = overrideKeyspace.apply(keyspace);
+        if (newKeyspace.equals(keyspace))
+            return this;
+
+        List<AbstractType<?>> newSubTypes = subTypes().stream()
+                                                      .map(t -> t.overrideKeyspace(overrideKeyspace))
+                                                      .collect(Collectors.toList());
+        return new UserType(newKeyspace, name, fieldNames, newSubTypes, isMultiCell());
     }
 
     @Override

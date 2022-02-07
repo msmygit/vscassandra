@@ -20,6 +20,7 @@ package org.apache.cassandra.db.marshal;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import org.apache.cassandra.cql3.Json;
 import org.apache.cassandra.cql3.Sets;
@@ -67,6 +68,17 @@ public class SetType<T> extends CollectionType<Set<T>>
         this.elements = elements;
         this.serializer = SetSerializer.getInstance(elements.getSerializer(), elements.comparatorSet);
         this.isMultiCell = isMultiCell;
+    }
+
+    @Override
+    public SetType<T> overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        List<AbstractType<?>> subTypes = subTypes();
+        AbstractType<?> newType = subTypes.get(0).overrideKeyspace(overrideKeyspace);
+        if (newType == subTypes.get(0))
+            return this;
+
+        return new SetType<>((AbstractType<T>) newType, isMultiCell());
     }
 
     @Override

@@ -18,6 +18,8 @@
 package org.apache.cassandra.transport.messages;
 
 
+import java.util.function.Function;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import io.netty.buffer.ByteBuf;
@@ -97,6 +99,15 @@ public abstract class ResultMessage extends Message.Response
         this.kind = kind;
     }
 
+    /**
+     * @param overrideKeyspace function to update keyspace name
+     * @return new result message with overridden keyspace name.
+     */
+    public ResultMessage overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return this;
+    }
+
     public static class Void extends ResultMessage
     {
         // Even though we have no specific information here, don't make a
@@ -139,6 +150,16 @@ public abstract class ResultMessage extends Message.Response
         {
             super(Kind.SET_KEYSPACE);
             this.keyspace = keyspace;
+        }
+
+        @Override
+        public ResultMessage overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            // this isn't necessary as tenant-encoded prefix is not added to UseStatement, but let's make it future-proof.
+            SetKeyspace setKeyspace = new SetKeyspace(overrideKeyspace.apply(keyspace));
+            setKeyspace.tracingId = tracingId;
+            setKeyspace.warnings = warnings;
+            return setKeyspace;
         }
 
         public static final Message.Codec<ResultMessage> subcodec = new Message.Codec<ResultMessage>()
@@ -199,6 +220,16 @@ public abstract class ResultMessage extends Message.Response
         {
             super(Kind.ROWS);
             this.result = result;
+        }
+
+        @Override
+        public Rows overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            ResultSet newResultSet = result.overrideKeyspace(overrideKeyspace);
+            Rows rows = new Rows(newResultSet);
+            rows.tracingId = tracingId;
+            rows.warnings = warnings;
+            return rows;
         }
 
         @Override
@@ -277,6 +308,15 @@ public abstract class ResultMessage extends Message.Response
             this.resultMetadata = resultMetadata;
         }
 
+        @Override
+        public Prepared overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            Prepared prepared = new Prepared(statementId, resultMetadataId, metadata.overrideKeyspace(overrideKeyspace), resultMetadata.overrideKeyspace(overrideKeyspace));
+            prepared.tracingId = tracingId;
+            prepared.warnings = warnings;
+            return prepared;
+        }
+
         @VisibleForTesting
         public Prepared withResultMetadata(ResultSet.ResultMetadata resultMetadata)
         {
@@ -298,6 +338,17 @@ public abstract class ResultMessage extends Message.Response
         {
             super(Kind.SCHEMA_CHANGE);
             this.change = change;
+        }
+
+        @Override
+        public SchemaChange overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            String newKeyspace = overrideKeyspace.apply(change.keyspace);
+            Event.SchemaChange newChange = new Event.SchemaChange(change.change, change.target, newKeyspace, change.name, change.argTypes);
+            SchemaChange schemaChange = new SchemaChange(newChange);
+            schemaChange.tracingId = tracingId;
+            schemaChange.warnings = warnings;
+            return schemaChange;
         }
 
         public static final Message.Codec<ResultMessage> subcodec = new Message.Codec<ResultMessage>()

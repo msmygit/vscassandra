@@ -23,6 +23,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -140,6 +142,14 @@ public class CompositeType extends AbstractCompositeType
     protected CompositeType(List<AbstractType<?>> types)
     {
         this.types = ImmutableList.copyOf(types);
+    }
+
+    @Override
+    public CompositeType overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return new CompositeType(subTypes().stream()
+                                           .map(t -> t.overrideKeyspace(overrideKeyspace))
+                                           .collect(Collectors.toList()));
     }
 
     protected <V> AbstractType<?> getComparator(int i, V value, ValueAccessor<V> accessor, int offset)

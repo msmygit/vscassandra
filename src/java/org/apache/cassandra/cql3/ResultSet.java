@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -57,6 +59,11 @@ public class ResultSet
     {
         this.metadata = resultMetadata;
         this.rows = rows;
+    }
+
+    public ResultSet overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return new ResultSet(metadata.overrideKeyspace(overrideKeyspace), rows);
     }
 
     public int size()
@@ -235,6 +242,20 @@ public class ResultSet
             this.names = names;
             this.columnCount = columnCount;
             this.pagingState = pagingState;
+        }
+
+        /**
+         * @param overrideKeyspace function to update keyspace name
+         * @return new result metadata with overridden keyspace name.
+         */
+        public ResultMetadata overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            if (names == null)
+                return this;
+
+            List<ColumnSpecification> newColumns = names.stream().map(c -> c.overrideKeyspace(overrideKeyspace)).collect(Collectors.toList());
+            // resultMetadataId should not be recomputed as it's used in {@link ExecuteMessage} to check if server metadata which is tenant-encoded has changed
+            return new ResultMetadata(resultMetadataId, EnumSet.copyOf(flags), newColumns, columnCount, pagingState);
         }
 
         public ResultMetadata copy()
@@ -520,6 +541,16 @@ public class ResultSet
             this.flags = flags;
             this.names = names;
             this.partitionKeyBindIndexes = partitionKeyBindIndexes;
+        }
+
+        /**
+         * @param overrideKeyspace function to update keyspace name
+         * @return new prepared metadata with overridden keyspace name.
+         */
+        public PreparedMetadata overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            List<ColumnSpecification> newColumns = names.stream().map(c -> c.overrideKeyspace(overrideKeyspace)).collect(Collectors.toList());
+            return new PreparedMetadata(EnumSet.copyOf(flags), newColumns, partitionKeyBindIndexes);
         }
 
         public PreparedMetadata copy()

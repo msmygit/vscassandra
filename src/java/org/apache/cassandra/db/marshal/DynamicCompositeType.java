@@ -26,6 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
@@ -98,6 +100,14 @@ public class DynamicCompositeType extends AbstractCompositeType
         this.inverseMapping = new HashMap<>();
         for (Map.Entry<Byte, AbstractType<?>> en : aliases.entrySet())
             this.inverseMapping.put(en.getValue(), en.getKey());
+    }
+
+    @Override
+    public DynamicCompositeType overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return new DynamicCompositeType(aliases.entrySet().stream()
+                                               .collect(Collectors.toMap(Map.Entry::getKey,
+                                                                         e -> e.getValue().overrideKeyspace(overrideKeyspace))));
     }
 
     protected <V> boolean readIsStatic(V value, ValueAccessor<V> accessor)
@@ -593,6 +603,12 @@ public class DynamicCompositeType extends AbstractCompositeType
         {
             super(ComparisonType.CUSTOM);
             this.cmp = cmp;
+        }
+
+        @Override
+        public AbstractType<Void> overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            return this;
         }
 
         public <VL, VR> int compareCustom(VL left, ValueAccessor<VL> accessorL, VR right, ValueAccessor<VR> accessorR)

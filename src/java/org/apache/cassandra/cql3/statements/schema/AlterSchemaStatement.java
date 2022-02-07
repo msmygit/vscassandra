@@ -18,6 +18,7 @@
 package org.apache.cassandra.cql3.statements.schema;
 
 import java.util.Set;
+import java.util.function.Function;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -36,11 +37,20 @@ import org.apache.cassandra.transport.messages.ResultMessage;
 
 abstract class AlterSchemaStatement implements CQLStatement, SchemaTransformation
 {
-    protected final String keyspaceName; // name of the keyspace affected by the statement
+    protected String keyspaceName; // name of the keyspace affected by the statement
 
     protected AlterSchemaStatement(String keyspaceName)
     {
         this.keyspaceName = keyspaceName;
+    }
+
+    /**
+     * Replaces the default keyspace with an override.
+     * CNDB uses this to prefix the default keyspace
+     */
+    public void overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        this.keyspaceName = overrideKeyspace.apply(keyspaceName);
     }
 
     @Override

@@ -25,6 +25,7 @@ import org.apache.cassandra.db.marshal.ReversedType;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.function.Function;
 
 public class ColumnSpecification
 {
@@ -39,6 +40,15 @@ public class ColumnSpecification
         this.cfName = cfName;
         this.name = name;
         this.type = type;
+    }
+
+    /**
+     * @param overrideKeyspace function to update keyspace name
+     * @return new column specification with overridden keyspace name.
+     */
+    public ColumnSpecification overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return new ColumnSpecification(overrideKeyspace.apply(ksName), cfName, name, type.overrideKeyspace(overrideKeyspace));
     }
 
     /**

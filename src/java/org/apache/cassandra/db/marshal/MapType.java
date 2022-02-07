@@ -20,6 +20,7 @@ package org.apache.cassandra.db.marshal;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import org.apache.cassandra.cql3.Json;
 import org.apache.cassandra.cql3.Maps;
@@ -75,6 +76,18 @@ public class MapType<K, V> extends CollectionType<Map<K, V>>
                                                     values.getSerializer(),
                                                     keys.comparatorSet);
         this.isMultiCell = isMultiCell;
+    }
+
+    @Override
+    public MapType<K,V> overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        List<AbstractType<?>> subTypes = subTypes();
+        AbstractType<?> newKeyType = subTypes.get(0).overrideKeyspace(overrideKeyspace);
+        AbstractType<?> newValueType = subTypes.get(1).overrideKeyspace(overrideKeyspace);
+        if (newKeyType == subTypes.get(0) && newValueType == subTypes.get(1))
+            return this;
+
+        return new MapType<>((AbstractType<K>) newKeyType, (AbstractType<V>) newValueType, isMultiCell());
     }
 
     @Override

@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import org.apache.cassandra.cql3.Json;
 import org.apache.cassandra.cql3.Lists;
@@ -74,6 +75,17 @@ public class ListType<T> extends CollectionType<List<T>>
         this.elements = elements;
         this.serializer = ListSerializer.getInstance(elements.getSerializer());
         this.isMultiCell = isMultiCell;
+    }
+
+    @Override
+    public ListType<T> overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        List<AbstractType<?>> subTypes = subTypes();
+        AbstractType<?> newType = subTypes.get(0).overrideKeyspace(overrideKeyspace);
+        if (newType == subTypes.get(0))
+            return this;
+
+        return new ListType<>((AbstractType<T>) newType, isMultiCell());
     }
 
     @Override

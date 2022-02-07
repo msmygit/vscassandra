@@ -19,6 +19,7 @@ package org.apache.cassandra.schema;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -210,6 +211,15 @@ public final class ColumnMetadata extends ColumnSpecification implements Selecta
         this.asymmetricCellPathComparator = cellPathComparator == null ? null : (a, b) -> cellPathComparator.compare(((Cell<?>)a).path(), (CellPath) b);
         this.comparisonOrder = comparisonOrder(kind, isComplex(), Math.max(0, position), name);
         this.isDropped = isDropped;
+    }
+
+    /**
+     * @param overrideKeyspace function to update keyspace name
+     * @return new column specification with overridden keyspace name.
+     */
+    public ColumnSpecification overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return new ColumnSpecification(overrideKeyspace.apply(ksName), cfName, name, type);
     }
 
     private static Comparator<CellPath> makeCellPathComparator(Kind kind, AbstractType<?> type)

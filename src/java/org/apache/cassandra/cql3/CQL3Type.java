@@ -20,6 +20,7 @@ package org.apache.cassandra.cql3;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -542,6 +543,8 @@ public interface CQL3Type
             return null;
         }
 
+        public abstract void overrideKeyspace(Function<String, String> overrideKeyspace);
+
         public Raw freeze()
         {
             String message = String.format("frozen<> is only allowed on collections, tuples, and user-defined types (got %s)", this);
@@ -608,6 +611,12 @@ public interface CQL3Type
                 this.type = type;
             }
 
+            @Override
+            public void overrideKeyspace(Function<String, String> overrideKeyspace)
+            {
+                // no-op
+            }
+
             public CQL3Type prepare(String keyspace, Types udts) throws InvalidRequestException
             {
                 return type;
@@ -647,6 +656,16 @@ public interface CQL3Type
                 this.kind = kind;
                 this.keys = keys;
                 this.values = values;
+            }
+
+            @Override
+            public void overrideKeyspace(Function<String, String> overrideKeyspace)
+            {
+                if (keys != null)
+                    keys.overrideKeyspace(overrideKeyspace);
+
+                if (values != null)
+                    values.overrideKeyspace(overrideKeyspace);
             }
 
             @Override
@@ -763,6 +782,14 @@ public interface CQL3Type
                 this.name = name;
             }
 
+            @Override
+            public void overrideKeyspace(Function<String, String> overrideKeyspace)
+            {
+                // apply CNDB tenant prefix if keyspace is provided, otherwise keyspace will be set in {@link #prepare}
+                if (name.hasKeyspace())
+                    name.setKeyspace(overrideKeyspace.apply(name.getKeyspace()));
+            }
+
             public String keyspace()
             {
                 return name.getKeyspace();
@@ -834,6 +861,12 @@ public interface CQL3Type
                 this.types = types.stream()
                                   .map(t -> t.supportsFreezing() ? t.freeze() : t)
                                   .collect(toList());
+            }
+
+            @Override
+            public void overrideKeyspace(Function<String, String> overrideKeyspace)
+            {
+                types.forEach(raw -> raw.overrideKeyspace(overrideKeyspace));
             }
 
             public boolean supportsFreezing()

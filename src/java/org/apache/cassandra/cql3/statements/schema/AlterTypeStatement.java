@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.apache.cassandra.audit.AuditLogContext;
 import org.apache.cassandra.audit.AuditLogEntryType;
@@ -106,6 +107,13 @@ public abstract class AlterTypeStatement extends AlterSchemaStatement
             super(keyspaceName, typeName);
             this.fieldName = fieldName;
             this.type = type;
+        }
+
+        @Override
+        public void overrideKeyspace(Function<String, String> overrideKeyspace)
+        {
+            super.overrideKeyspace(overrideKeyspace);
+            type.overrideKeyspace(overrideKeyspace);
         }
 
         @Override

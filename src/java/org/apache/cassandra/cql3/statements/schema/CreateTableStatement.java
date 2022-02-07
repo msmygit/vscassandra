@@ -18,6 +18,7 @@
 package org.apache.cassandra.cql3.statements.schema;
 
 import java.util.*;
+import java.util.function.Function;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -92,6 +93,14 @@ public final class CreateTableStatement extends AlterSchemaStatement
 
         this.ifNotExists = ifNotExists;
         this.useCompactStorage = useCompactStorage;
+    }
+
+    @Override
+    public void overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        super.overrideKeyspace(overrideKeyspace);
+
+        rawColumns.values().forEach(r -> r.overrideKeyspace(overrideKeyspace));
     }
 
     @Override
