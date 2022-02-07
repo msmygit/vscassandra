@@ -151,8 +151,16 @@ public abstract class AbstractType<T> implements Comparator<ByteBuffer>, Assignm
 
     /**
      * To override keyspace name in {@link UserType}
+     *
+     * We're provicing the default implementation risking that some type may not override
+     * it properly, because the only known type that actually needs to override is the {@link UserType}
+     * This looks like a lesser evil than changing class hierarchy (to make UserType special)
+     * or adding "return this" to ~20 type classes.
      */
-    public abstract AbstractType<T> overrideKeyspace(Function<String, String> overrideKeyspace);
+    public AbstractType<T> overrideKeyspace(Function<String, String> overrideKeyspace)
+    {
+        return this;
+    }
 
     public final String getString(ByteBuffer bytes)
     {
