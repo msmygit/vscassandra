@@ -18,6 +18,12 @@
 package org.apache.cassandra.index.sai.disk.v1.bitpack;
 
 import java.io.IOException;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+import com.google.common.collect.ImmutableList;
 
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
@@ -27,6 +33,24 @@ public class NumericValuesMeta
     public final long valueCount;
     public final int blockSize;
     public final long blockMetaOffset;
+
+    public static Collection<String> attrNames = ImmutableList.of("valueCount", "blockSize", "blockMetaOffset");
+
+    public NumericValuesMeta(Map<String, String> map)
+    {
+        valueCount = Long.parseLong(map.get("valueCount"));
+        blockSize = Integer.parseInt(map.get("blockSize"));
+        blockMetaOffset = Long.parseLong(map.get("blockMetaOffset"));
+    }
+
+    public Map<String, String> stringMap()
+    {
+        Map<String, String> map = new HashMap<>();
+        map.put("valueCount", Long.toString(valueCount));
+        map.put("blockSize", Integer.toString(blockSize));
+        map.put("blockMetaOffset", Long.toString(blockMetaOffset));
+        return map;
+    }
 
     public NumericValuesMeta(IndexInput input) throws IOException
     {

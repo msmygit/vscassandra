@@ -21,6 +21,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 
 public class TinySegmentFlushingFailureTest extends SegmentFlushingFailureTest
 {

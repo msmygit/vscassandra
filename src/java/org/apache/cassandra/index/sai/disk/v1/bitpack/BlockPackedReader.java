@@ -49,6 +49,11 @@ public class BlockPackedReader implements LongArray.Factory
     private final long[] blockOffsets;
     private final long[] minValues;
 
+    public long memoryUsage()
+    {
+        return blockBitsPerValue.length + (blockOffsets.length * 8) + (minValues.length * 8);
+    }
+
     @SuppressWarnings("resource")
     public BlockPackedReader(FileHandle file, NumericValuesMeta meta) throws IOException
     {

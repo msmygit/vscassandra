@@ -29,12 +29,14 @@ import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 
 import static org.apache.cassandra.inject.InvokePointBuilder.newInvokePoint;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@RequiresVersion(version="ba")
 public class QueryTimeoutTest extends SAITester
 {
     private static final int TIMEOUT = 5000;

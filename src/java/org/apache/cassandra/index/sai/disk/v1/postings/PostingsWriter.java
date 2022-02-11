@@ -116,7 +116,7 @@ public class PostingsWriter implements Closeable
         this(indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext, true, segmented), blockSize);
     }
 
-    private PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
+    public PostingsWriter(IndexOutput dataOutput, int blockSize) throws IOException
     {
         this.blockSize = blockSize;
         this.dataOutput = dataOutput;
@@ -191,9 +191,42 @@ public class PostingsWriter implements Closeable
         return summaryOffset;
     }
 
+    public void add(long segmentRowId) throws IOException
+    {
+        writePosting(segmentRowId);
+        totalPostings++;
+        size++;
+    }
+
+    private int size = 0;
+
+    public long finishPostings() throws IOException
+    {
+        if (size == 0)
+            return -1;
+
+        finish();
+
+        final long summaryOffset = dataOutput.getFilePointer();
+        writeSummary(size);
+
+        size = 0;
+
+        startPostings(); // clear for next
+
+        return summaryOffset;
+    }
+
     public long getTotalPostings()
     {
         return totalPostings;
+    }
+
+    private void startPostings() throws IOException
+    {
+        resetBlockCounters();
+        blockOffsets.clear();
+        blockMaxIDs.clear();
     }
 
     private void writePosting(long segmentRowId) throws IOException
@@ -289,24 +322,6 @@ public class PostingsWriter implements Closeable
             for (int i = 0; i < values.size(); ++i)
             {
                 writer.add(values.getLong(i));
-            }
-            writer.finish();
-        }
-    }
-
-    private void writeSortedFoRBlock(IntArrayList values, IndexOutput output) throws IOException
-    {
-        final int maxValue = values.getInt(values.size() - 1);
-
-        assert values.size() > 0;
-        final int bitsPerValue = maxValue == 0 ? 0 : DirectWriter.unsignedBitsRequired(maxValue);
-        output.writeByte((byte) bitsPerValue);
-        if (bitsPerValue > 0)
-        {
-            final DirectWriter writer = DirectWriter.getInstance(output, values.size(), bitsPerValue);
-            for (int i = 0; i < values.size(); ++i)
-            {
-                writer.add(values.getInt(i));
             }
             writer.finish();
         }

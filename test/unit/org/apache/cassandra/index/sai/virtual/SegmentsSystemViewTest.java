@@ -40,6 +40,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -52,6 +53,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests the virtual table exposing SSTable index segment metadata.
  */
+@RequiresVersion(version="ba")
 public class SegmentsSystemViewTest extends SAITester
 {
     private static final String SELECT = String.format("SELECT %s, %s, %s, %s " +

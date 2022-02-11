@@ -70,6 +70,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.utils.LatestVersionManager;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.ResourceLeakDetector;
@@ -198,7 +199,10 @@ public class SAITester extends CQLTester
     }
 
     @Rule
-    public TestRule testRules = new ResourceLeakDetector();
+    public TestRule resourceLeakRule = new ResourceLeakDetector();
+
+    @Rule
+    public TestRule versionRule = new LatestVersionManager();
 
     @After
     public void removeAllInjections()
@@ -512,7 +516,7 @@ public class SAITester extends CQLTester
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(literalCompletionMarkers, stringIndexFiles.size());
                 else
-                    assertEquals(stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
+                    assertEquals( "literalFiles="+literalFiles+" stringIndexFiles="+stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
             }
         }
 
@@ -527,7 +531,7 @@ public class SAITester extends CQLTester
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(numericCompletionMarkers, numericIndexFiles.size());
                 else
-                    assertEquals(numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
+                    assertEquals("indexComponent="+indexComponent+" numericIndexFiles="+numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
             }
         }
     }

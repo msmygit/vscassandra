@@ -165,7 +165,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
 
         try (PerIndexFiles indexFiles = new PerIndexFiles(indexDescriptor, indexContext, false))
         {
-            final IndexSearcher searcher = IndexSearcher.open(KDTreeIndexBuilder.TEST_PRIMARY_KEY_MAP_FACTORY,
+            final IndexSearcher searcher = Segment.open(KDTreeIndexBuilder.TEST_PRIMARY_KEY_MAP_FACTORY,
                                                               indexFiles,
                                                               segmentMetadata,
                                                               indexDescriptor,
