@@ -19,6 +19,7 @@ package org.apache.cassandra.cql3.statements;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.UnaryOperator;
 
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Iterables;
@@ -892,7 +893,7 @@ public abstract class ModificationStatement implements CQLStatement.SingleKeyspa
         return builder.build();
     }
 
-    public static abstract class Parsed extends QualifiedStatement
+    public static abstract class Parsed extends QualifiedStatement<ModificationStatement>
     {
         protected final StatementType type;
         private final Attributes.Raw attrs;
@@ -915,16 +916,19 @@ public abstract class ModificationStatement implements CQLStatement.SingleKeyspa
             this.ifExists = ifExists;
         }
 
-        public ModificationStatement prepare(ClientState state)
+        @Override
+        public ModificationStatement prepare(ClientState state, UnaryOperator<String> keyspaceMapper)
         {
-            return prepare(bindVariables);
+            setKeyspace(state);
+            return prepare(bindVariables, keyspaceMapper);
         }
 
-        public ModificationStatement prepare(VariableSpecifications bindVariables)
+        public ModificationStatement prepare(VariableSpecifications bindVariables, UnaryOperator<String> keyspaceMapper)
         {
-            TableMetadata metadata = SchemaManager.instance.validateTable(keyspace(), name());
+            String ks = keyspaceMapper.apply(keyspace());
+            TableMetadata metadata = SchemaManager.instance.validateTable(ks, name());
 
-            Attributes preparedAttributes = attrs.prepare(keyspace(), name());
+            Attributes preparedAttributes = attrs.prepare(ks, name());
             preparedAttributes.collectMarkerSpecification(bindVariables);
 
             Conditions preparedConditions = prepareConditions(metadata, bindVariables);
