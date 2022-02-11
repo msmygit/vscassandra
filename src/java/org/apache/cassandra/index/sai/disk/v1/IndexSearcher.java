@@ -39,13 +39,13 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
  */
 public abstract class IndexSearcher implements Closeable
 {
-    final PrimaryKeyMap.Factory primaryKeyMapFactory;
-    final PerIndexFiles indexFiles;
-    final SegmentMetadata metadata;
-    final IndexDescriptor indexDescriptor;
-    final IndexContext indexContext;
+    protected final PrimaryKeyMap.Factory primaryKeyMapFactory;
+    protected final PerIndexFiles indexFiles;
+    protected final SegmentMetadata metadata;
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
 
-    IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+    public IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
                   PerIndexFiles perIndexFiles,
                   SegmentMetadata segmentMetadata,
                   IndexDescriptor indexDescriptor,
@@ -56,17 +56,6 @@ public abstract class IndexSearcher implements Closeable
         this.metadata = segmentMetadata;
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
-    }
-
-    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                                     PerIndexFiles indexFiles,
-                                     SegmentMetadata segmentMetadata,
-                                     IndexDescriptor indexDescriptor,
-                                     IndexContext indexContext) throws IOException
-    {
-        return TypeUtil.isLiteral(indexContext.getValidator())
-               ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
-               : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
 
     /**
@@ -85,7 +74,7 @@ public abstract class IndexSearcher implements Closeable
      */
     public abstract RangeIterator search(Expression expression, SSTableQueryContext queryContext, boolean defer) throws IOException;
 
-    RangeIterator toIterator(PostingList postingList, SSTableQueryContext queryContext, boolean defer) throws IOException
+    public RangeIterator toIterator(PostingList postingList, SSTableQueryContext queryContext, boolean defer) throws IOException
     {
         if (postingList == null)
             return RangeIterator.empty();

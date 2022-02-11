@@ -70,6 +70,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
+import org.apache.cassandra.index.sai.utils.LatestVersionManager;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.ResourceLeakDetector;
@@ -167,7 +168,21 @@ public class SAITester extends CQLTester
                     public void corrupt(File file) throws IOException
                     {
                         // header length is not fixed, use footer length to navigate a given data position
-                        FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(file.length() - CodecUtil.footerLength() - 2).close();
+                        try
+                        {
+                            long truncateLen = file.length() - CodecUtil.footerLength() - 2;
+                            if (truncateLen < 0)
+                            {
+                                truncateLen = 0;
+                            }
+                            FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(truncateLen).close();
+                        }
+                        catch (IllegalArgumentException ex)
+                        {
+                            System.out.println("file.length="+file.length()+" CodecUtil.footerLength="+CodecUtil.footerLength());
+                            ex.printStackTrace();
+                            throw Throwables.unchecked(ex);
+                        }
                     }
                 },
         TRUNCATED_FOOTER
@@ -198,7 +213,10 @@ public class SAITester extends CQLTester
     }
 
     @Rule
-    public TestRule testRules = new ResourceLeakDetector();
+    public TestRule resourceLeakRule = new ResourceLeakDetector();
+
+    @Rule
+    public TestRule versionRule = new LatestVersionManager();
 
     @After
     public void removeAllInjections()
@@ -271,6 +289,11 @@ public class SAITester extends CQLTester
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
             File file = IndexDescriptor.create(sstable).fileFor(indexComponent, indexContext);
+
+            System.out.println("corruptIndexComponent corruptionType="+corruptionType+" length="+file.length()+" exists="+file.exists()+" file="+file.absolutePath());
+
+            assert file.exists();
+
             corruptionType.corrupt(file);
         }
     }
@@ -367,7 +390,7 @@ public class SAITester extends CQLTester
 
     public void waitForIndexQueryable(String keyspace, String table)
     {
-        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, table)), 60, TimeUnit.SECONDS);
+        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, table)), 60 * 10, TimeUnit.SECONDS);
     }
 
     protected void startCompaction() throws Throwable
@@ -512,7 +535,7 @@ public class SAITester extends CQLTester
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(literalCompletionMarkers, stringIndexFiles.size());
                 else
-                    assertEquals(stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
+                    assertEquals( "literalFiles="+literalFiles+" stringIndexFiles="+stringIndexFiles.toString(), literalFiles, stringIndexFiles.size());
             }
         }
 
@@ -527,7 +550,7 @@ public class SAITester extends CQLTester
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(numericCompletionMarkers, numericIndexFiles.size());
                 else
-                    assertEquals(numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
+                    assertEquals("indexFiles="+indexFiles+" indexComponent="+indexComponent+" numericIndexFiles="+numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
             }
         }
     }

@@ -94,7 +94,7 @@ public class BKDQueries
         }
     }
 
-    private static class Bound
+    public static class Bound
     {
         private final byte[] bound;
         private final boolean exclusive;
@@ -116,12 +116,12 @@ public class BKDQueries
         }
     }
 
-    private static class RangeQueryVisitor extends RangeQuery
+    public static class RangeQueryVisitor extends RangeQuery
     {
         private final Bound lower;
         private final Bound upper;
 
-        private RangeQueryVisitor(int numDims, int bytesPerDim, Bound lower, Bound upper)
+        public RangeQueryVisitor(int numDims, int bytesPerDim, Bound lower, Bound upper)
         {
             super(numDims, bytesPerDim);
             this.lower = lower;

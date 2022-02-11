@@ -34,7 +34,9 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SSTableComponentsWriter;
 import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v3.V3SSTableIndexWriter;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 
@@ -95,6 +97,9 @@ public abstract class SegmentFlushingFailureTest extends SAITester
 
     private static final Injection kdTreeSegmentFlushFailure =
             newFailureOnEntry("kdTreeSegmentFlushFailure", SegmentBuilder.KDTreeSegmentBuilder.class, "flushInternal", IOException.class);
+
+    private static final Injection v3SegmentFlushFailure =
+    newFailureOnEntry("v3SegmentFlushFailure", V3SSTableIndexWriter.V3RAMStringSegmentBuilder.class, "flushInternal", IOException.class);
 
     @After
     public void resetCounters()
@@ -185,6 +190,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void shouldZeroMemoryAfterOneOfTwoIndexesFail() throws Throwable
     {
         createTable(CREATE_TABLE_TEMPLATE);
@@ -205,6 +211,30 @@ public abstract class SegmentFlushingFailureTest extends SAITester
 
         assertThatThrownBy(() -> executeNet("SELECT * FROM %s WHERE V1 = 0"))
                 .isInstanceOf(ReadFailureException.class);
+    }
+
+    @Test
+    @RequiresVersion(version="ca")
+    public void shouldZeroMemoryAfterOneOfTwoIndexesFailIndexVersion3() throws Throwable
+    {
+        createTable(CREATE_TABLE_TEMPLATE);
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
+
+        assertEquals(expectedBytesLimit(), getSegmentBufferSpaceLimit());
+        assertEquals("Segment buffer memory tracker should start at zero!", 0L, getSegmentBufferUsedBytes());
+        assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
+
+        execute("INSERT INTO %s (id1, v1, v2) VALUES ('0', 0, '0')");
+        flush();
+        execute("INSERT INTO %s (id1, v1, v2) VALUES ('1', 1, '1')");
+        flush();
+
+        // Verify that we abort both indices and zero the memory tracker:
+        verifyCompactionIndexBuilds(2, v3SegmentFlushFailure, currentTable());
+
+        assertThatThrownBy(() -> executeNet("SELECT * FROM %s WHERE V1 = 0"))
+        .isInstanceOf(ReadFailureException.class);
     }
 
     @Test
@@ -240,6 +270,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void shouldLeaveOnlyFailedIndexNonQueryable() throws Throwable
     {
         String table1 = createTable(CREATE_TABLE_TEMPLATE);
@@ -269,6 +300,39 @@ public abstract class SegmentFlushingFailureTest extends SAITester
 
         ResultSet rows = executeNet(String.format("SELECT * FROM %s WHERE v2 = '0'", KEYSPACE + "." + table2));
         assertEquals(1, rows.all().size());
+    }
+
+    @Test
+    @RequiresVersion(version="ca")
+    public void shouldLeaveOnlyFailedIndexNonQueryableIndexVersion3() throws Throwable
+    {
+        String table1 = createTable(CREATE_TABLE_TEMPLATE);
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
+        String table2 = createTable(CREATE_TABLE_TEMPLATE);
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
+
+        assertEquals(expectedBytesLimit(), getSegmentBufferSpaceLimit());
+        assertEquals("Segment buffer memory tracker should start at zero!", 0L, getSegmentBufferUsedBytes());
+        assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
+
+        execute("INSERT INTO " + KEYSPACE + "." + table1 + "(id1, v1, v2) VALUES ('0', 0, '0')");
+        flush(KEYSPACE, table1);
+        execute("INSERT INTO " + KEYSPACE + "." + table1 + "(id1, v1, v2) VALUES ('1', 1, '1')");
+        flush(KEYSPACE, table1);
+
+        execute("INSERT INTO " + KEYSPACE + "." + table2 + "(id1, v1, v2) VALUES ('0', 0, '0')");
+        flush(KEYSPACE, table2);
+        execute("INSERT INTO " + KEYSPACE + "." + table2 + "(id1, v1, v2) VALUES ('1', 1, '1')");
+        flush(KEYSPACE, table2);
+
+        // Start compaction against both tables/indexes, and verify the indexes are aborted:
+        verifyCompactionIndexBuilds(2, v3SegmentFlushFailure, table1, table2);
+
+        assertThatThrownBy(() -> executeNet(String.format("SELECT * FROM %s WHERE v1 = 0", KEYSPACE + "." + table1)))
+        .isInstanceOf(ReadFailureException.class);
+
+        assertThatThrownBy(() -> executeNet(String.format("SELECT * FROM %s WHERE v2 = '0'", KEYSPACE + "." + table2)))
+        .isInstanceOf(ReadFailureException.class);
     }
 
     private void verifyCompactionIndexBuilds(int aborts, Injection failure, String... tables) throws Throwable

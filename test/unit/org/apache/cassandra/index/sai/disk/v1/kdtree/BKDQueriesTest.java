@@ -27,6 +27,7 @@ import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.lucene.index.PointValues;
 
 import static org.apache.lucene.index.PointValues.Relation.CELL_CROSSES_QUERY;
 import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
@@ -48,6 +49,29 @@ public class BKDQueriesTest extends SaiRandomizedTest
         assertEquals(CELL_OUTSIDE_QUERY, query.compare(toSortableBytes(lowerBound - 2), toSortableBytes(lowerBound - 1)));
         assertEquals(CELL_INSIDE_QUERY, query.compare(toSortableBytes(lowerBound), toSortableBytes(lowerBound + 1)));
         assertEquals(CELL_CROSSES_QUERY, query.compare(toSortableBytes(lowerBound - 1), toSortableBytes(lowerBound)));
+    }
+
+    @Test
+    public void testExclusiveLowerBound2()
+    {
+        final int lowerBound = between(-10, 10);
+        final Expression expression = buildExpression(Operator.GT, lowerBound);
+        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+
+        assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
+        assertFalse(query.visit(toSortableBytes(lowerBound)));
+        assertTrue(query.visit(toSortableBytes(lowerBound + 1)));
+
+        PointValues.Relation relation = query.compare(toSortableBytes(lowerBound - 1), toSortableBytes(lowerBound - 1));
+        System.out.println("relation="+relation);
+
+        PointValues.Relation relation2 = query.compare(toSortableBytes(lowerBound + 1), toSortableBytes(lowerBound + 1));
+        System.out.println("relation2="+relation2);
+
+
+//        assertEquals(CELL_OUTSIDE_QUERY, query.compare(toSortableBytes(lowerBound - 1), toSortableBytes(lowerBound)));
+//        assertEquals(CELL_INSIDE_QUERY, query.compare(toSortableBytes(lowerBound + 1), toSortableBytes(lowerBound + 2)));
+//        assertEquals(CELL_CROSSES_QUERY, query.compare(toSortableBytes(lowerBound), toSortableBytes(lowerBound + 1)));
     }
 
     @Test

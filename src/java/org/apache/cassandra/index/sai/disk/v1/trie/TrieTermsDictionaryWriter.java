@@ -45,7 +45,7 @@ public class TrieTermsDictionaryWriter implements Closeable
     private final IndexOutputWriter termDictionaryOutput;
     private final long startOffset;
 
-    TrieTermsDictionaryWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
+    public TrieTermsDictionaryWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {
         termDictionaryOutput = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext, true, segmented);
         startOffset = termDictionaryOutput.getFilePointer();

@@ -19,20 +19,24 @@
 package org.apache.cassandra.index.sai.functional;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
+import org.apache.commons.lang.StringUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.google.monitoring.runtime.instrumentation.common.collect.Sets;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -102,7 +106,51 @@ public class GroupComponentsTest extends SAITester
 
         Set<Component> components = group.getLiveComponents(sstables.iterator().next(), getIndexesFromGroup(group));
 
-        assertEquals(Version.LATEST.onDiskFormat().perSSTableComponents().size() +
+        System.out.println("components="+components);
+
+        Set<IndexComponent> comps = Version.LATEST.onDiskFormat().perIndexComponents(indexContext);
+        Set<IndexComponent> comps2 = Version.LATEST.onDiskFormat().perSSTableComponents();
+
+        Set<IndexComponent> total = new HashSet<>();
+        total.addAll(comps);
+        total.addAll(comps2);
+
+        Set<String> reps = total.stream().map(comp -> comp.representation).collect(Collectors.toSet());
+
+        for (String rep : reps)
+        {
+            boolean found = false;
+            for (Component comp : components)
+            {
+                if (StringUtils.contains(comp.name, rep))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                System.out.println("not found rep="+rep);
+            }
+        }
+
+//        for (Component comp : components)
+//        {
+//            boolean found = false;
+//
+//                if (!StringUtils.contains(comp.name, rep))
+//                {
+//
+//                }
+//            }
+//        }
+
+
+        // Set<Object> diff = Sets.difference(total, components);
+
+        //System.out.println("diff="+diff);
+
+        assertEquals(components.toString(), Version.LATEST.onDiskFormat().perSSTableComponents().size() +
                      Version.LATEST.onDiskFormat().perIndexComponents(indexContext).size(),
                      components.size());
     }
