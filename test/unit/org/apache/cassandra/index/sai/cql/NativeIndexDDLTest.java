@@ -60,6 +60,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.NumericValuesWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.index.sai.utils.SuppressLeakCheck;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
@@ -853,6 +854,7 @@ public class NativeIndexDDLTest extends SAITester
         assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
     }
 
+    @RequiresVersion(version="ba")
     @Test
     public void verifyRebuildCorruptedFiles() throws Throwable
     {

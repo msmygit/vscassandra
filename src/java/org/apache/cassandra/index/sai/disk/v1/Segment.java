@@ -49,13 +49,13 @@ public class Segment implements Closeable
     private final Token.KeyBound maxKeyBound;
 
     // per sstable
-    final PrimaryKeyMap.Factory primaryKeyMapFactory;
+    protected final PrimaryKeyMap.Factory primaryKeyMapFactory;
     // per-index
     public final PerIndexFiles indexFiles;
     // per-segment
     public final SegmentMetadata metadata;
 
-    private final IndexSearcher index;
+    protected final IndexSearcher index;
 
     public Segment(IndexContext indexContext, SSTableContext sstableContext, PerIndexFiles indexFiles, SegmentMetadata metadata) throws IOException
     {
@@ -68,7 +68,12 @@ public class Segment implements Closeable
         this.indexFiles = indexFiles;
         this.metadata = metadata;
 
-        this.index = IndexSearcher.open(primaryKeyMapFactory, indexFiles, metadata, sstableContext.indexDescriptor, indexContext);
+        this. index = openIndex(indexContext, sstableContext);
+    }
+
+    protected IndexSearcher openIndex(IndexContext indexContext, SSTableContext sstableContext) throws IOException
+    {
+        return IndexSearcher.open(primaryKeyMapFactory, indexFiles, metadata, sstableContext.indexDescriptor, indexContext);
     }
 
     @VisibleForTesting

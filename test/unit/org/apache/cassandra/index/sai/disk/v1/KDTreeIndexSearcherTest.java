@@ -26,6 +26,8 @@ import java.util.stream.LongStream;
 
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.DecimalType;
@@ -36,6 +38,7 @@ import org.apache.cassandra.db.marshal.NumberType;
 import org.apache.cassandra.db.marshal.ShortType;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexBuilder;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -48,6 +51,18 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
 
     private static final short RANGE_TEST_LOWER_BOUND_INCLUSIVE = 0;
     private static final short RANGE_TEST_UPPER_BOUND_EXCLUSIVE = 10;
+
+    @Before
+    public void setFormat()
+    {
+        System.setProperty("cassandra.sai.latest.version", "ba");
+    }
+
+    @After
+    public void unsetFormat()
+    {
+        System.setProperty("cassandra.sai.latest.version", "ca");
+    }
 
     @Test
     public void testRangeQueriesAgainstInt32Index() throws Exception

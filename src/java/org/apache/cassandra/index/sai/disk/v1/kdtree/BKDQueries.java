@@ -94,7 +94,7 @@ public class BKDQueries
         }
     }
 
-    private static class Bound
+    public static class Bound
     {
         private final byte[] bound;
         private final boolean exclusive;
