@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -110,8 +112,6 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         this.maxTerm = maxTerm;
         this.componentMetadatas = componentMetadatas;
     }
-
-    private static final Logger logger = LoggerFactory.getLogger(SegmentMetadata.class);
 
     @SuppressWarnings("resource")
     private SegmentMetadata(IndexInput input, PrimaryKey.Factory primaryKeyFactory) throws IOException
@@ -210,7 +210,7 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         }
     }
 
-    long getIndexRoot(IndexComponent indexComponent)
+    public long getIndexRoot(IndexComponent indexComponent)
     {
         return componentMetadatas.get(indexComponent).root;
     }
@@ -323,7 +323,7 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
             this.attributes = Collections.emptyMap();
         }
 
-        ComponentMetadata(long root, long offset, long length, Map<String, String> attributes)
+        public ComponentMetadata(long root, long offset, long length, Map<String, String> attributes)
         {
             this.root = root;
             this.offset = offset;

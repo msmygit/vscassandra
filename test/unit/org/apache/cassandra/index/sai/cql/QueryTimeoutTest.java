@@ -29,6 +29,7 @@ import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 
@@ -83,12 +84,31 @@ public class QueryTimeoutTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void delayDuringKDTreeIntersectionShouldProvokeTimeoutInReader() throws Throwable
     {
         Injection kdtree_intersection_delay = Injections.newPause("kdtree_intersection_delay", DELAY)
                                                         .add(newInvokePoint().onClass("org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader$Intersection")
                                                                                    .onMethod("collectPostingLists")
                                                                                    .at("INVOKE QueryContext.checkpoint"))
+
+                                                        .build();
+
+        Injections.inject(kdtree_intersection_delay);
+
+        assertThatThrownBy(() -> executeNet("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 10000")).isInstanceOf(ReadTimeoutException.class);
+
+        waitForEquals(queryCountName, queryTimeoutsName);
+    }
+
+    @Test
+    @RequiresVersion(version="ca")
+    public void delayDuringKDTreeIntersectionShouldProvokeTimeoutInReaderVersion3() throws Throwable
+    {
+        Injection kdtree_intersection_delay = Injections.newPause("blockterms_intersection_delay", DELAY)
+                                                        .add(newInvokePoint().onClass("org.apache.cassandra.index.sai.disk.v3.BlockTermsReader$Intersection")
+                                                                             .onMethod("collectPostingLists")
+                                                                             .at("INVOKE QueryContext.checkpoint"))
 
                                                         .build();
 

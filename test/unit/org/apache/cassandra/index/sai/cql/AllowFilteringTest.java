@@ -367,21 +367,6 @@ public class AllowFilteringTest extends SAITester
         execute("INSERT INTO %s (a, b, c, d) VALUES ('Test2', 'Test2', 'Test2', 'Test2')");
         execute("INSERT INTO %s (a, b, c, d) VALUES ('Test3', 'Test3', 'Test3', 'Test3')");
 
-        // Single restriction
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "b"), "SELECT * FROM %s WHERE b > 'Test'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "c"), "SELECT * FROM %s WHERE c > 'Test'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "d"), "SELECT * FROM %s WHERE d > 'Test'");
-
-        // Supported and unsupported restriction
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "b"), "SELECT * FROM %s WHERE b > 'Test' AND c = 'Test1'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "c"), "SELECT * FROM %s WHERE c > 'Test' AND d = 'Test1'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "d"), "SELECT * FROM %s WHERE d > 'Test' AND b = 'Test1'");
-
-        // Two unsupported restrictions
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_SINGLE, "b"), "SELECT * FROM %s WHERE b > 'Test' AND b < 'Test3'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_MULTI, "[b, c]"), "SELECT * FROM %s WHERE c > 'Test' AND b < 'Test3'");
-        assertInvalidMessage(String.format(StatementRestrictions.HAS_UNSUPPORTED_INDEX_RESTRICTION_MESSAGE_MULTI, "[b, d]"), "SELECT * FROM %s WHERE d > 'Test' AND b < 'Test3'");
-
         // The same queries with ALLOW FILTERING should work
 
         // Single restriction
@@ -407,19 +392,5 @@ public class AllowFilteringTest extends SAITester
                                                                                                                     row("Test2", "Test2", "Test2", "Test2"));
         assertRowsIgnoringOrder(execute("SELECT * FROM %s WHERE d > 'Test' AND b < 'Test3' ALLOW FILTERING"), row("Test1", "Test1", "Test1", "Test1"),
                                                                                                                     row("Test2", "Test2", "Test2", "Test2"));
-    }
-
-    @Test
-    public void testIndexedColumnDoesNotSupportLikeRestriction() throws Throwable
-    {
-        createTable("CREATE TABLE %s (a text, b text, c text, d text, PRIMARY KEY (a, b))");
-        createIndex(String.format("CREATE CUSTOM INDEX ON %%s(b) USING '%s'", StorageAttachedIndex.class.getName()));
-        createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", StorageAttachedIndex.class.getName()));
-        createIndex(String.format("CREATE CUSTOM INDEX ON %%s(d) USING '%s'", StorageAttachedIndex.class.getName()));
-
-        // LIKE restriction
-        assertInvalidMessage(String.format(StatementRestrictions.INDEX_DOES_NOT_SUPPORT_LIKE_MESSAGE, "b"), "SELECT * FROM %s WHERE b LIKE 'Test'");
-        assertInvalidMessage(String.format(StatementRestrictions.INDEX_DOES_NOT_SUPPORT_LIKE_MESSAGE, "c"), "SELECT * FROM %s WHERE c LIKE 'Test'");
-        assertInvalidMessage(String.format(StatementRestrictions.INDEX_DOES_NOT_SUPPORT_LIKE_MESSAGE, "d"), "SELECT * FROM %s WHERE d LIKE 'Test'");
     }
 }

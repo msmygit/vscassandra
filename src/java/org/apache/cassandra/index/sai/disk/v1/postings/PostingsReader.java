@@ -62,7 +62,6 @@ public class PostingsReader implements OrdinalPostingList
     private DirectReaders.Reader currentFORValues;
     private long postingsDecoded = 0;
 
-    @VisibleForTesting
     public PostingsReader(IndexInput input, long summaryOffset, QueryEventListener.PostingListEventListener listener) throws IOException
     {
         this(input, new BlocksSummary(input, summaryOffset, () -> {}), listener);

@@ -154,7 +154,7 @@ public class OneDimBKDPostingsWriterTest extends SaiRandomizedTest
                                   new ArrayPostingList(postings));
     }
 
-    private void assertPostingReaderEquals(IndexInput input, long offset, PostingList expected) throws IOException
+    public static void assertPostingReaderEquals(IndexInput input, long offset, PostingList expected) throws IOException
     {
         try (PostingsReader reader = new PostingsReader(input, offset, NO_OP_POSTINGS_LISTENER))
         {
@@ -162,7 +162,7 @@ public class OneDimBKDPostingsWriterTest extends SaiRandomizedTest
         }
     }
 
-    private PackedLongValues postings(int... postings)
+    public static PackedLongValues postings(int... postings)
     {
         final PackedLongValues.Builder builder = PackedLongValues.deltaPackedBuilder(PackedInts.COMPACT);
         for (int posting : postings)
@@ -172,7 +172,7 @@ public class OneDimBKDPostingsWriterTest extends SaiRandomizedTest
         return builder.build();
     }
 
-    private IntArrayList pathToRoot(int... nodes)
+    public static IntArrayList pathToRoot(int... nodes)
     {
         final IntArrayList path = new IntArrayList();
         for (int node : nodes)

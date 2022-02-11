@@ -448,12 +448,12 @@ public class TTLTest extends CQLTester
         }
     }
 
-    private static File getTableDir(String table, boolean simple, boolean clustering)
+    public static File getTableDir(String table, boolean simple, boolean clustering)
     {
         return new File(String.format(NEGATIVE_LOCAL_EXPIRATION_TEST_DIR, getTableName(simple, clustering)));
     }
 
-    private static void copyFile(File src, File dest) throws IOException
+    public static void copyFile(File src, File dest) throws IOException
     {
         byte[] buf = new byte[65536];
         if (src.isFile())

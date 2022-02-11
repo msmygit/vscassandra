@@ -32,6 +32,7 @@ import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -44,6 +45,7 @@ import static org.apache.cassandra.inject.InvokePointBuilder.newInvokePoint;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+@RequiresVersion(version="ba")
 public class SegmentMergerTest extends SAITester
 {
     protected static final Injections.Counter SEGMENT_BUILD_COUNTER = Injections.newCounter("SegmentBuildCounter")
@@ -141,7 +143,7 @@ public class SegmentMergerTest extends SAITester
         waitForIndexQueryable();
 
         // All we are interested in is that before the segment compaction there were more than 1 segment created
-        assertTrue(SEGMENT_BUILD_COUNTER.get() > 1);
+        assertTrue("SEGMENT_BUILD_COUNTER="+SEGMENT_BUILD_COUNTER.get(), SEGMENT_BUILD_COUNTER.get() > 1);
 
         List<SegmentMetadata> segments = getSegments(indexName);
 
@@ -249,7 +251,6 @@ public class SegmentMergerTest extends SAITester
             assertEquals("Postings comparison failed for term = " + value, expectedPostings, actualPostings);
         }
     }
-
 
     private List<SegmentMetadata> getSegments(String indexName) throws Throwable
     {

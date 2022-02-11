@@ -27,6 +27,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.concurrent.LightweightRecycler;
 import org.apache.cassandra.utils.concurrent.ThreadLocals;
+import org.apache.lucene.util.BytesRefBuilder;
 
 /**
  * Helper base class for incremental trie builders.
@@ -37,6 +38,7 @@ implements IncrementalTrieWriter<VALUE>
     protected final Deque<NODE> stack = new ArrayDeque<>();
     protected final TrieSerializer<VALUE, ? super DEST> serializer;
     protected final DEST dest;
+    protected final BytesRefBuilder prevBuilder = new BytesRefBuilder();
     protected ByteComparable prev = null;
     long count = 0;
 
@@ -94,7 +96,17 @@ implements IncrementalTrieWriter<VALUE>
                                          prev,
                                          prev.byteComparableAsString(Walker.BYTE_COMPARABLE_VERSION));
         }
-        prev = next;
+
+        int data;
+        // hacked in here because swapping the prev pointers doesn't work if the underlying byte array is reused
+        prevBuilder.clear();
+        ByteSource byteSource = next.asComparableBytes(ByteComparable.Version.OSS41);
+        while ((data = byteSource.next()) != ByteSource.END_OF_STREAM)
+        {
+            prevBuilder.append((byte)data);
+        }
+
+        prev = ByteComparable.fixedLength(prevBuilder.get().bytes, prevBuilder.get().offset, prevBuilder.get().length);
 
         while (stack.size() > stackpos + 1)
             completeLast();

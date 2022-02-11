@@ -63,7 +63,7 @@ public abstract class ColumnQueryMetrics extends AbstractMetrics
         }
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener triePostingListEventListener()
         {
             return postingsListener;
         }
@@ -118,7 +118,7 @@ public abstract class ColumnQueryMetrics extends AbstractMetrics
         public void onSegmentHit() { }
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener bkdPostingListEventListener()
         {
             return postingsListener;
         }

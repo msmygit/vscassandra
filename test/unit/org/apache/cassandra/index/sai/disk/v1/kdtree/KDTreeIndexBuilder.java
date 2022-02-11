@@ -49,6 +49,7 @@ import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.KDTreeIndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.AbstractIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -139,7 +140,7 @@ public class KDTreeIndexBuilder
 
         try (PerIndexFiles indexFiles = new PerIndexFiles(indexDescriptor, SAITester.createIndexContext("test", Int32Type.instance), false))
         {
-            IndexSearcher searcher = IndexSearcher.open(TEST_PRIMARY_KEY_MAP_FACTORY, indexFiles, metadata, indexDescriptor, columnContext);
+            IndexSearcher searcher = Segment.open(TEST_PRIMARY_KEY_MAP_FACTORY, indexFiles, metadata, indexDescriptor, columnContext);
             assertThat(searcher, is(instanceOf(KDTreeIndexSearcher.class)));
             return (KDTreeIndexSearcher) searcher;
         }

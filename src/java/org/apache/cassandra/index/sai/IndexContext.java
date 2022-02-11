@@ -57,6 +57,7 @@ import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v3.V3ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
@@ -83,9 +84,7 @@ public class IndexContext
 
     private static final Set<AbstractType<?>> EQ_ONLY_TYPES =
             ImmutableSet.of(UTF8Type.instance, AsciiType.instance, BooleanType.instance, UUIDType.instance);
-
     public static final String ENABLE_SEGMENT_COMPACTION_OPTION_NAME = "enable_segment_compaction";
-
     private final AbstractType<?> partitionKeyType;
     private final ClusteringComparator clusteringComparator;
 
@@ -108,7 +107,6 @@ public class IndexContext
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
     private final AbstractAnalyzer.AnalyzerFactory queryAnalyzerFactory;
     private final PrimaryKey.Factory primaryKeyFactory;
-
     private final boolean segmentCompactionEnabled;
 
     public IndexContext(@Nonnull String keyspace,
@@ -132,8 +130,11 @@ public class IndexContext
         this.validator = TypeUtil.cellValueType(column, indexType);
         this.owner = owner;
 
-        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(keyspace, table, getIndexName())
-                                              : new ColumnQueryMetrics.BKDIndexMetrics(keyspace, table, getIndexName());
+        if (Version.LATEST.equals(Version.CA))
+            this.columnQueryMetrics = new V3ColumnQueryMetrics(keyspace, table, getIndexName());
+        else
+            this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(keyspace, table, getIndexName())
+                                                  : new ColumnQueryMetrics.BKDIndexMetrics(keyspace, table, getIndexName());
 
         this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(clusteringComparator);
 
@@ -394,8 +395,6 @@ public class IndexContext
 
     public boolean supports(Operator op)
     {
-        if (op.isLike() || op == Operator.LIKE) return false;
-
         Expression.Op operator = Expression.Op.valueOf(op);
 
         if (isNonFrozenCollection())
@@ -408,15 +407,7 @@ public class IndexContext
         if (indexType == IndexTarget.Type.FULL)
             return operator == Expression.Op.EQ;
 
-        AbstractType<?> validator = getValidator();
-
-        if (operator == Expression.Op.IN)
-            return true;
-
-        if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
-
-        // RANGE only applicable to non-literal indexes
-        return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
+        return true;
     }
 
     public ByteBuffer getValueOf(DecoratedKey key, Row row, int nowInSecs)

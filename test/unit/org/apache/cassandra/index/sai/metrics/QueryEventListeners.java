@@ -46,7 +46,7 @@ public class QueryEventListeners
         {}
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener triePostingListEventListener()
         {
             return NO_OP_POSTINGS_LISTENER;
         }
@@ -76,7 +76,7 @@ public class QueryEventListeners
         {}
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener bkdPostingListEventListener()
         {
             return NO_OP_POSTINGS_LISTENER;
         }

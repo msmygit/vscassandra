@@ -314,6 +314,21 @@ public class NativeIndexDDLTest extends SAITester
     }
 
     @Test
+    public void shouldEnableCaseInsensitiveSearch2() throws Throwable
+    {
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, val text)");
+
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex' WITH OPTIONS = { 'case_sensitive' : false }");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (id, val) VALUES ('1', 'BaGtAg1')");
+
+        flush();
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 'bagtag1'").size());
+    }
+
+    @Test
     public void shouldBeNonNormalizedByDefault() throws Throwable
     {
         createTable("CREATE TABLE %s (id text PRIMARY KEY, val text)");

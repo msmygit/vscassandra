@@ -199,7 +199,7 @@ public class TermsReader implements Closeable
         {
             PostingsReader.BlocksSummary header = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
 
-            return new PostingsReader(postingsInput, header, listener.postingListEventListener());
+            return new PostingsReader(postingsInput, header, listener.triePostingListEventListener());
         }
     }
 

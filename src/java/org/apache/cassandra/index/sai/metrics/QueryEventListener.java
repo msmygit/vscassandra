@@ -62,7 +62,7 @@ public interface QueryEventListener
         /**
          * Returns events listener for bkd postings.
          */
-        PostingListEventListener postingListEventListener();
+        PostingListEventListener bkdPostingListEventListener();
     }
 
     interface TrieIndexEventListener
@@ -80,7 +80,7 @@ public interface QueryEventListener
         /**
          * Returns events listener for trie postings.
          */
-        PostingListEventListener postingListEventListener();
+        PostingListEventListener triePostingListEventListener();
     }
 
     /**

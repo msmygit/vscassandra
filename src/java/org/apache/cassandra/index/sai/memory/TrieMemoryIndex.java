@@ -29,6 +29,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.SortedSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.LongConsumer;
 
@@ -50,11 +51,15 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.compress.BufferType;
+import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
+
+import static org.apache.cassandra.index.sai.disk.v3.BlockTerms.prefixMaxTerm;
 
 public class TrieMemoryIndex extends MemoryIndex
 {
@@ -67,6 +72,7 @@ public class TrieMemoryIndex extends MemoryIndex
 
     private ByteBuffer minTerm;
     private ByteBuffer maxTerm;
+    private final AtomicInteger maxLength = new AtomicInteger(0);
 
     private static final FastThreadLocal<Integer> lastQueueSize = new FastThreadLocal<Integer>()
     {
@@ -83,11 +89,11 @@ public class TrieMemoryIndex extends MemoryIndex
         this.primaryKeysReducer = new PrimaryKeysReducer();
     }
 
-    public synchronized void add(DecoratedKey key,
-                                 Clustering clustering,
-                                 ByteBuffer value,
-                                 LongConsumer onHeapAllocationsTracker,
-                                 LongConsumer offHeapAllocationsTracker)
+    public void add(DecoratedKey key,
+                    Clustering clustering,
+                    ByteBuffer value,
+                    LongConsumer onHeapAllocationsTracker,
+                    LongConsumer offHeapAllocationsTracker)
     {
         AbstractAnalyzer analyzer = indexContext.getAnalyzerFactory().create();
         try
@@ -106,6 +112,9 @@ public class TrieMemoryIndex extends MemoryIndex
                 setMinMaxTerm(term.duplicate());
 
                 final ByteComparable encodedTerm = encode(term.duplicate());
+
+                int termLength = ByteComparable.length(encodedTerm, ByteComparable.Version.OSS41);
+                maxLength.accumulateAndGet(termLength, Math::max);
 
                 try
                 {
@@ -168,6 +177,7 @@ public class TrieMemoryIndex extends MemoryIndex
             case CONTAINS_KEY:
             case CONTAINS_VALUE:
                 return exactMatch(expression, keyRange);
+            case PREFIX:
             case RANGE:
                 return rangeMatch(expression, keyRange);
             default:
@@ -184,45 +194,6 @@ public class TrieMemoryIndex extends MemoryIndex
             return RangeIterator.empty();
         }
         return new FilteringKeyRangeIterator(primaryKeys.keys(), keyRange);
-    }
-
-    private RangeIterator rangeMatch(Expression expression, AbstractBounds<PartitionPosition> keyRange)
-    {
-        ByteComparable lowerBound, upperBound;
-        boolean lowerInclusive, upperInclusive;
-        if (expression.lower != null)
-        {
-            lowerBound = encode(expression.lower.value.encoded);
-            lowerInclusive = expression.lower.inclusive;
-        }
-        else
-        {
-            lowerBound = ByteComparable.EMPTY;
-            lowerInclusive = false;
-        }
-
-        if (expression.upper != null)
-        {
-            upperBound = encode(expression.upper.value.encoded);
-            upperInclusive = expression.upper.inclusive;
-        }
-        else
-        {
-            upperBound = null;
-            upperInclusive = false;
-        }
-
-        Collector cd = new Collector(keyRange);
-
-        data.subtrie(lowerBound, lowerInclusive, upperBound, upperInclusive).values().forEach(cd::processContent);
-
-        if (cd.mergedKeys.isEmpty())
-        {
-            return RangeIterator.empty();
-        }
-
-        lastQueueSize.set(Math.max(MINIMUM_QUEUE_SIZE, cd.mergedKeys.size()));
-        return new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys);
     }
 
     public ByteBuffer getMinTerm()
@@ -303,7 +274,6 @@ public class TrieMemoryIndex extends MemoryIndex
         PrimaryKey minimumKey = null;
         PrimaryKey maximumKey = null;
         PriorityQueue<PrimaryKey> mergedKeys = new PriorityQueue<>(lastQueueSize.get());
-
         AbstractBounds<PartitionPosition> keyRange;
 
         public Collector(AbstractBounds<PartitionPosition> keyRange)
@@ -349,5 +319,51 @@ public class TrieMemoryIndex extends MemoryIndex
                 }
             }
         }
+    }
+
+    private RangeIterator rangeMatch(Expression expression, AbstractBounds<PartitionPosition> keyRange)
+    {
+        ByteComparable lowerBound, upperBound;
+        boolean lowerInclusive, upperInclusive;
+        if (expression.lower != null)
+        {
+            lowerBound = encode(expression.lower.value.encoded);
+            lowerInclusive = expression.lower.inclusive;
+        }
+        else
+        {
+            lowerBound = ByteComparable.EMPTY;
+            lowerInclusive = false;
+        }
+
+        if (expression.getOp().equals(Expression.Op.PREFIX))
+        {
+            byte[] prefixBytes = ByteBufferUtil.getArray(expression.lower.value.encoded);
+            byte[] prefixMaxTerm = prefixMaxTerm(prefixBytes, maxLength.get());
+            // we don't append the terminator that encode does, not sure if it matters
+            // calling encode on prefixMaxTerm removes the unsigned 255's
+            upperBound = ByteComparable.fixedLength(ByteBuffer.wrap(prefixMaxTerm));
+            upperInclusive = true;
+        }
+        else if (expression.upper != null)
+        {
+            upperBound = encode(expression.upper.value.encoded);
+            upperInclusive = expression.upper.inclusive;
+        }
+        else
+        {
+            upperBound = null;
+            upperInclusive = false;
+        }
+
+        Collector cd = new Collector(keyRange);
+
+        data.subtrie(lowerBound, lowerInclusive, upperBound, upperInclusive).values().forEach(pk -> cd.processContent(pk));
+
+        if (cd.mergedKeys.isEmpty())
+            return RangeIterator.empty();
+
+        lastQueueSize.set(Math.max(MINIMUM_QUEUE_SIZE, cd.mergedKeys.size()));
+        return new KeyRangeIterator(cd.minimumKey, cd.maximumKey, cd.mergedKeys);
     }
 }

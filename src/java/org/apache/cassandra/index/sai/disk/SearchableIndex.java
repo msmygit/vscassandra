@@ -43,26 +43,26 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
  */
 public interface SearchableIndex extends Closeable
 {
-    public long indexFileCacheSize();
+    long indexFileCacheSize();
 
-    public long getRowCount();
+    long getRowCount();
 
-    public long minSSTableRowId();
+    long minSSTableRowId();
 
-    public long maxSSTableRowId();
+    long maxSSTableRowId();
 
-    public ByteBuffer minTerm();
+    ByteBuffer minTerm();
 
-    public ByteBuffer maxTerm();
+    ByteBuffer maxTerm();
 
-    public DecoratedKey minKey();
+    DecoratedKey minKey();
 
-    public DecoratedKey maxKey();
+    DecoratedKey maxKey();
 
-    public List<RangeIterator> search(Expression expression,
+    List<RangeIterator> search(Expression expression,
                                       AbstractBounds<PartitionPosition> keyRange,
                                       SSTableQueryContext context,
                                       boolean defer) throws IOException;
 
-    public void populateSystemView(SimpleDataSet dataSet, SSTableReader sstable);
+    void populateSystemView(SimpleDataSet dataSet, SSTableReader sstable);
 }

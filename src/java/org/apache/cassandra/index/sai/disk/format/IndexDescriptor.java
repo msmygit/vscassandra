@@ -435,6 +435,14 @@ public class IndexDescriptor
         return createPerIndexFileHandle(indexComponent, indexContext, false);
     }
 
+    public boolean componentExists(IndexComponent indexComponent, IndexContext indexContext, boolean temporary)
+    {
+        final File file = temporary ? tmpFileFor(indexComponent, indexContext)
+                                    : fileFor(indexComponent, indexContext);
+
+        return file.exists();
+    }
+
     public FileHandle createPerIndexFileHandle(IndexComponent indexComponent, IndexContext indexContext, boolean temporary)
     {
         final File file = temporary ? tmpFileFor(indexComponent, indexContext)

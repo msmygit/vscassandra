@@ -90,6 +90,18 @@ public enum IndexComponent
      */
     PRIMARY_KEY_BLOCK_OFFSETS("PrimaryKeyBlockOffsets"),
     /**
+     * V3 Block Terms Index Format Files and Meta options
+     */
+    BLOCK_BITPACKED("BlockBitPacked"), // block terms offsets, block posting offsets, order map offsets
+    BLOCK_TERMS_DATA("BlockTermsData"), // Prefix encoded random access bytes
+    BLOCK_TERMS_INDEX("BlockTermsIndex"), // Posting block min terms trie
+    BLOCK_POSTINGS("BlockPostings"), // Posting block postings
+    BLOCK_UPPER_POSTINGS("BlockUpperPostings"), // Upper levels postings
+    BLOCK_ORDERMAP("BlockOrderMap"), // Posting block order maps
+    BLOCK_TERMS_OFFSETS("BlockTermsOffsets"), // used for numeric values meta only
+    BLOCK_POSTINGS_OFFSETS("BlockPostingsOffsets"), // used for numeric values meta meta only
+
+    /**
      * Stores per-sstable metadata.
      *
      * V1
