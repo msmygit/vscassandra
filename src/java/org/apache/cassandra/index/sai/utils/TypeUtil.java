@@ -34,12 +34,16 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.BooleanType;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+import org.apache.cassandra.db.marshal.ByteType;
 import org.apache.cassandra.db.marshal.CollectionType;
 import org.apache.cassandra.db.marshal.CompositeType;
 import org.apache.cassandra.db.marshal.DecimalType;
 import org.apache.cassandra.db.marshal.InetAddressType;
 import org.apache.cassandra.db.marshal.IntegerType;
 import org.apache.cassandra.db.marshal.ReversedType;
+import org.apache.cassandra.db.marshal.ShortType;
+import org.apache.cassandra.db.marshal.SimpleDateType;
+import org.apache.cassandra.db.marshal.TimeType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.ComplexColumnData;
@@ -138,6 +142,15 @@ public class TypeUtil
      */
     public static int fixedSizeOf(AbstractType<?> type)
     {
+        // TODO: add valueLengthIfFixed to these 4 types?
+        if (type instanceof ByteType)
+            return 1;
+        if (type instanceof ShortType)
+            return 2;
+        if (type instanceof SimpleDateType)
+            return 4;
+        if (type instanceof TimeType)
+            return 8;
         if (type.isValueLengthFixed())
             return type.valueLengthIfFixed();
         else if (isInetAddress(type))
@@ -146,7 +159,7 @@ public class TypeUtil
             return 20;
         else if (type instanceof DecimalType)
             return DECIMAL_APPROXIMATION_BYTES;
-        return 16;
+        throw new IllegalStateException("Unknown type="+type.getClass());
     }
 
     public static AbstractType<?> cellValueType(Pair<ColumnMetadata, IndexTarget.Type> target)

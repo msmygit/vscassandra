@@ -65,13 +65,11 @@ public class SortedTermsWriter implements Closeable
     // Terms data are organized in blocks of (2 ^ TERMS_DICT_BLOCK_SHIFT) terms.
     // The blocks should not be too small because they allow prefix compression of
     // the terms except the first term in a block.
-    // The blocks should not be too large because we can't just ranfomly jump to the term inside the block,
+    // The blocks should not be too large because we can't just randomly jump to the term inside the block,
     // but we have to iterate through all the terms from the start of the block.
-    static final int TERMS_DICT_BLOCK_SHIFT = 4;
+    public static final int TERMS_DICT_BLOCK_SHIFT = 4;
     static final int TERMS_DICT_BLOCK_SIZE = 1 << TERMS_DICT_BLOCK_SHIFT;
-    static final int TERMS_DICT_BLOCK_MASK = TERMS_DICT_BLOCK_SIZE - 1;
-
-    static final int DIRECT_MONOTONIC_BLOCK_SHIFT = 16;
+    public static final int TERMS_DICT_BLOCK_MASK = TERMS_DICT_BLOCK_SIZE - 1;
 
     private final IncrementalDeepTrieWriterPageAware<Long> trieWriter;
     private final IndexOutput trieOutput;
@@ -126,7 +124,6 @@ public class SortedTermsWriter implements Closeable
      */
     public void add(final @Nonnull ByteComparable term) throws IOException
     {
-        tempTerm.clear();
         copyBytes(term, tempTerm);
 
         final BytesRef termRef = tempTerm.get();
@@ -197,8 +194,9 @@ public class SortedTermsWriter implements Closeable
     /**
      * Copies bytes from source to dest.
      */
-    private void copyBytes(ByteComparable source, BytesRefBuilder dest)
+    public static void copyBytes(ByteComparable source, BytesRefBuilder dest)
     {
+        dest.clear();
         ByteSource byteSource = source.asComparableBytes(ByteComparable.Version.OSS41);
         int val;
         while ((val = byteSource.next()) != ByteSource.END_OF_STREAM)

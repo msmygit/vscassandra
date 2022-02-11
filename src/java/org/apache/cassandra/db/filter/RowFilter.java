@@ -148,7 +148,8 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
         if (purged == null)
             return root.isEmpty();
 
-        return root.isSatisfiedBy(metadata, partitionKey, purged);
+        boolean satisfied = root.isSatisfiedBy(metadata, partitionKey, purged);
+        return satisfied;
     }
 
     /**

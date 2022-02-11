@@ -111,8 +111,6 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         this.componentMetadatas = componentMetadatas;
     }
 
-    private static final Logger logger = LoggerFactory.getLogger(SegmentMetadata.class);
-
     @SuppressWarnings("resource")
     private SegmentMetadata(IndexInput input, PrimaryKey.Factory primaryKeyFactory) throws IOException
     {
@@ -210,7 +208,7 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         }
     }
 
-    long getIndexRoot(IndexComponent indexComponent)
+    public long getIndexRoot(IndexComponent indexComponent)
     {
         return componentMetadatas.get(indexComponent).root;
     }

@@ -18,6 +18,7 @@
 package org.apache.cassandra.index.sai.disk;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.NoSuchElementException;
 
 import org.apache.cassandra.db.marshal.AbstractType;

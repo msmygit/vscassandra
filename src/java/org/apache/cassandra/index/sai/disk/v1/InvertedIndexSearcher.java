@@ -49,11 +49,11 @@ public class InvertedIndexSearcher extends IndexSearcher
     private final TermsReader reader;
     private final QueryEventListener.TrieIndexEventListener perColumnEventListener;
 
-    InvertedIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                          PerIndexFiles perIndexFiles,
-                          SegmentMetadata segmentMetadata,
-                          IndexDescriptor indexDescriptor,
-                          IndexContext indexContext) throws IOException
+    public InvertedIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                                 PerIndexFiles perIndexFiles,
+                                 SegmentMetadata segmentMetadata,
+                                 IndexDescriptor indexDescriptor,
+                                 IndexContext indexContext) throws IOException
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
 

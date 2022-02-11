@@ -16,28 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v1;
-
-import java.io.Closeable;
-import java.io.IOException;
+package org.apache.cassandra.index.sai.disk.v3;
 
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.io.util.FileHandle;
 
-/**
- * Responsible for merging index segments into a single segment during initial index build.
- */
-public interface SegmentMerger extends Closeable
+public class V3PerIndexFiles extends PerIndexFiles
 {
-    void addSegment(IndexContext context, SegmentMetadata segment, PerIndexFiles indexFiles) throws IOException;
+    public V3PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
+    {
+        super(indexDescriptor, indexContext, temporary);
+    }
 
-    boolean isEmpty();
-
-    SegmentMetadata merge(IndexDescriptor indexDescriptor,
-                          IndexContext indexContext,
-                          PrimaryKey minKey,
-                          PrimaryKey maxKey,
-                          long maxSSTableRowId) throws IOException;
+    public FileHandle getFileAndCache(IndexComponent indexComponent)
+    {
+        return files.computeIfAbsent(indexComponent, (comp) -> indexDescriptor.createPerIndexFileHandle(indexComponent, indexContext, temporary));
+    }
 }
-

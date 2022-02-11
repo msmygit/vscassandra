@@ -31,24 +31,35 @@ import org.apache.cassandra.io.util.FileUtils;
 
 public class PerIndexFiles implements Closeable
 {
-    private final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
-    private final IndexDescriptor indexDescriptor;
-    private final IndexContext indexContext;
+    protected final Map<IndexComponent, FileHandle> files = new EnumMap<>(IndexComponent.class);
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
+    protected final boolean temporary;
 
     public PerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
     {
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
+        this.temporary = temporary;
         if (TypeUtil.isLiteral(indexContext.getValidator()))
         {
-            files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
-            files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
+            if (indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, indexContext))
+                files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
+            if (indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, indexContext))
+                files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
         }
         else
         {
-            files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, temporary));
-            files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, temporary));
+            if (indexDescriptor.hasComponent(IndexComponent.KD_TREE, indexContext))
+                files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, temporary));
+            if (indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
+                files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, temporary));
         }
+    }
+
+    public IndexDescriptor indexDescriptor()
+    {
+        return indexDescriptor;
     }
 
     public FileHandle termsData()
@@ -71,7 +82,7 @@ public class PerIndexFiles implements Closeable
         return getFile(IndexComponent.KD_TREE_POSTING_LISTS);
     }
 
-    private FileHandle getFile(IndexComponent indexComponent)
+    protected FileHandle getFile(IndexComponent indexComponent)
     {
         FileHandle file = files.get(indexComponent);
         if (file == null)

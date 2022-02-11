@@ -41,18 +41,25 @@ public class MergePostingList implements PostingList
     final Closeable onClose;
     final long size;
     private long lastRowId = -1;
+    final int numLists;
 
     private MergePostingList(PriorityQueue<PeekablePostingList> postingLists, Closeable onClose)
     {
         this.temp = new ArrayList<>(postingLists.size());
         this.onClose = onClose;
         this.postingLists = postingLists;
+        this.numLists = postingLists.size();
         long totalPostings = 0;
         for (PostingList postingList : postingLists)
         {
             totalPostings += postingList.size();
         }
         this.size = totalPostings;
+    }
+
+    public int postingListCount()
+    {
+        return numLists;
     }
 
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings, Closeable onClose)

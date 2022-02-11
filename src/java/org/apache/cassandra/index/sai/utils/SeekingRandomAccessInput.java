@@ -25,13 +25,19 @@ import org.apache.lucene.store.RandomAccessInput;
 /**
  * {@link IndexInput} adapter that exposes it as a {@link RandomAccessInput} type.
  */
-public class SeekingRandomAccessInput implements RandomAccessInput
+public class SeekingRandomAccessInput implements RandomAccessInput, AutoCloseable
 {
     private final IndexInput in;
 
     public SeekingRandomAccessInput(IndexInput in)
     {
         this.in = in;
+    }
+
+    @Override
+    public void close() throws Exception
+    {
+        in.close();
     }
 
     @Override

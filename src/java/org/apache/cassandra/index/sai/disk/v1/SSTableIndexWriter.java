@@ -55,14 +55,14 @@ public class SSTableIndexWriter implements PerIndexWriter
     public static final int MAX_STRING_TERM_SIZE = Integer.getInteger("cassandra.sai.max_string_term_size_kb", 1) * 1024;
     public static final int MAX_FROZEN_TERM_SIZE = Integer.getInteger("cassandra.sai.max_frozen_term_size_kb", 5) * 1024;
     public static final String TERM_OVERSIZE_MESSAGE =
-            "Can't add term of column {} to index for key: {}, term size {} " +
-                    "max allowed size {}, use analyzed = true (if not yet set) for that column.";
+    "Can't add term of column {} to index for key: {}, term size {} " +
+    "max allowed size {}, use analyzed = true (if not yet set) for that column.";
 
-    private final IndexDescriptor indexDescriptor;
-    private final IndexContext indexContext;
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
     private final int nowInSec = FBUtilities.nowInSeconds();
     private final AbstractAnalyzer analyzer;
-    private final NamedMemoryLimiter limiter;
+    protected final NamedMemoryLimiter limiter;
     private final int maxTermSize;
     private final BooleanSupplier isIndexValid;
 
@@ -310,6 +310,16 @@ public class SSTableIndexWriter implements PerIndexWriter
         }
     }
 
+    protected SegmentMerger newSegmentMerger(boolean literal)
+    {
+        return literal ? new LiteralSegmentMerger() : new NumericSegmentMerger();
+    }
+
+    protected PerIndexFiles newPerIndexFiles(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean temporary)
+    {
+        return new PerIndexFiles(indexDescriptor, indexContext, temporary);
+    }
+
     private void compactSegments() throws IOException
     {
         if (segments.isEmpty())
@@ -318,8 +328,8 @@ public class SSTableIndexWriter implements PerIndexWriter
         PrimaryKey minKey = segments.get(0).minKey;
         PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
 
-        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
-             PerIndexFiles perIndexFiles = new PerIndexFiles(indexDescriptor, indexContext, true))
+        try (SegmentMerger segmentMerger = newSegmentMerger(indexContext.isLiteral());
+             PerIndexFiles perIndexFiles = newPerIndexFiles(indexDescriptor, indexContext, true))
         {
             for (final SegmentMetadata segment : segments)
             {
@@ -350,7 +360,7 @@ public class SSTableIndexWriter implements PerIndexWriter
         }
     }
 
-    private SegmentBuilder newSegmentBuilder()
+    protected SegmentBuilder newSegmentBuilder()
     {
         SegmentBuilder builder = TypeUtil.isLiteral(indexContext.getValidator())
                                  ? new SegmentBuilder.RAMStringSegmentBuilder(indexContext.getValidator(), limiter)

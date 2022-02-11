@@ -59,10 +59,10 @@ public abstract class SegmentBuilder
     /** Minimum flush size, dynamically updated as segment builds are started and completed/aborted. */
     private static volatile long minimumFlushBytes;
 
-    final AbstractType<?> termComparator;
+    protected final AbstractType<?> termComparator;
 
     private final NamedMemoryLimiter limiter;
-    long totalBytesAllocated;
+    protected long totalBytesAllocated;
 
     private final long lastValidSegmentRowID;
 
@@ -128,11 +128,11 @@ public abstract class SegmentBuilder
 
     public static class RAMStringSegmentBuilder extends SegmentBuilder
     {
-        final RAMStringIndexer ramIndexer;
+        protected final RAMStringIndexer ramIndexer;
 
-        final BytesRefBuilder stringBuffer = new BytesRefBuilder();
+        protected final BytesRefBuilder stringBuffer = new BytesRefBuilder();
 
-        RAMStringSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
+        public RAMStringSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
         {
             super(termComparator, limiter);
 
@@ -161,7 +161,7 @@ public abstract class SegmentBuilder
         }
     }
 
-    private SegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
+    protected SegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter)
     {
         this.termComparator = termComparator;
         this.limiter = limiter;
@@ -228,7 +228,7 @@ public abstract class SegmentBuilder
         return segmentRowId;
     }
 
-    long totalBytesAllocated()
+    public long totalBytesAllocated()
     {
         return totalBytesAllocated;
     }

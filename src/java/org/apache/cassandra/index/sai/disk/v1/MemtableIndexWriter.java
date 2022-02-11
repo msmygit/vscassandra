@@ -54,10 +54,10 @@ public class MemtableIndexWriter implements PerIndexWriter
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private final IndexDescriptor indexDescriptor;
-    private final IndexContext indexContext;
-    private final MemtableIndex memtable;
-    private final RowMapping rowMapping;
+    protected final IndexDescriptor indexDescriptor;
+    protected final IndexContext indexContext;
+    protected final MemtableIndex memtable;
+    protected final RowMapping rowMapping;
 
     public MemtableIndexWriter(MemtableIndex memtable,
                                IndexDescriptor indexDescriptor,
@@ -144,7 +144,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         }
     }
 
-    private long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
+    protected long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
     {
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;

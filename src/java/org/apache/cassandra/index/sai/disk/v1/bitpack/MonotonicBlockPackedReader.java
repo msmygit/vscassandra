@@ -47,6 +47,11 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
     private final PackedLongValues minValues;
     private final float[] averages;
 
+    public long memoryUsage()
+    {
+        return (averages.length * 4) + blockBitsPerValue.length + blockOffsets.ramBytesUsed() + minValues.ramBytesUsed();
+    }
+
     @SuppressWarnings("resource")
     public MonotonicBlockPackedReader(FileHandle file, NumericValuesMeta meta) throws IOException
     {
