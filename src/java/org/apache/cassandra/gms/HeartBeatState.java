@@ -96,23 +96,23 @@ public class HeartBeatState
     {
         return String.format("HeartBeat: generation = %d, version = %d", generation, version);
     }
-}
 
-class HeartBeatStateSerializer implements IVersionedSerializer<HeartBeatState>
-{
-    public void serialize(HeartBeatState hbState, DataOutputPlus out, int version) throws IOException
+    private static class HeartBeatStateSerializer implements IVersionedSerializer<HeartBeatState>
     {
-        out.writeInt(hbState.getGeneration());
-        out.writeInt(hbState.getHeartBeatVersion());
-    }
+        public void serialize(HeartBeatState hbState, DataOutputPlus out, int version) throws IOException
+        {
+            out.writeInt(hbState.getGeneration());
+            out.writeInt(hbState.getHeartBeatVersion());
+        }
 
-    public HeartBeatState deserialize(DataInputPlus in, int version) throws IOException
-    {
-        return new HeartBeatState(in.readInt(), in.readInt());
-    }
+        public HeartBeatState deserialize(DataInputPlus in, int version) throws IOException
+        {
+            return new HeartBeatState(in.readInt(), in.readInt());
+        }
 
-    public long serializedSize(HeartBeatState state, int version)
-    {
-        return TypeSizes.sizeof(state.getGeneration()) + TypeSizes.sizeof(state.getHeartBeatVersion());
+        public long serializedSize(HeartBeatState state, int version)
+        {
+            return TypeSizes.sizeof(state.getGeneration()) + TypeSizes.sizeof(state.getHeartBeatVersion());
+        }
     }
 }

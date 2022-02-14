@@ -361,54 +361,54 @@ public class EndpointState
     {
         return "EndpointState: HeartBeatState = " + hbState + ", AppStateMap = " + applicationState.get();
     }
-}
 
-class EndpointStateSerializer implements IVersionedSerializer<EndpointState>
-{
-    public void serialize(EndpointState epState, DataOutputPlus out, int version) throws IOException
+    private static class EndpointStateSerializer implements IVersionedSerializer<EndpointState>
     {
-        /* serialize the HeartBeatState */
-        HeartBeatState hbState = epState.getHeartBeatState();
-        HeartBeatState.serializer.serialize(hbState, out, version);
-
-        /* serialize the map of ApplicationState objects */
-        Set<Map.Entry<ApplicationState, VersionedValue>> states = epState.states();
-        out.writeInt(states.size());
-        for (Map.Entry<ApplicationState, VersionedValue> state : states)
+        public void serialize(EndpointState epState, DataOutputPlus out, int version) throws IOException
         {
-            VersionedValue value = state.getValue();
-            out.writeInt(state.getKey().ordinal());
-            VersionedValue.serializer.serialize(value, out, version);
-        }
-    }
+            /* serialize the HeartBeatState */
+            HeartBeatState hbState = epState.getHeartBeatState();
+            HeartBeatState.serializer.serialize(hbState, out, version);
 
-    public EndpointState deserialize(DataInputPlus in, int version) throws IOException
-    {
-        HeartBeatState hbState = HeartBeatState.serializer.deserialize(in, version);
-
-        int appStateSize = in.readInt();
-        Map<ApplicationState, VersionedValue> states = new EnumMap<>(ApplicationState.class);
-        for (int i = 0; i < appStateSize; ++i)
-        {
-            int key = in.readInt();
-            VersionedValue value = VersionedValue.serializer.deserialize(in, version);
-            states.put(Gossiper.STATES[key], value);
+            /* serialize the map of ApplicationState objects */
+            Set<Map.Entry<ApplicationState, VersionedValue>> states = epState.states();
+            out.writeInt(states.size());
+            for (Map.Entry<ApplicationState, VersionedValue> state : states)
+            {
+                VersionedValue value = state.getValue();
+                out.writeInt(state.getKey().ordinal());
+                VersionedValue.serializer.serialize(value, out, version);
+            }
         }
 
-        return new EndpointState(hbState, states);
-    }
-
-    public long serializedSize(EndpointState epState, int version)
-    {
-        long size = HeartBeatState.serializer.serializedSize(epState.getHeartBeatState(), version);
-        Set<Map.Entry<ApplicationState, VersionedValue>> states = epState.states();
-        size += TypeSizes.sizeof(states.size());
-        for (Map.Entry<ApplicationState, VersionedValue> state : states)
+        public EndpointState deserialize(DataInputPlus in, int version) throws IOException
         {
-            VersionedValue value = state.getValue();
-            size += TypeSizes.sizeof(state.getKey().ordinal());
-            size += VersionedValue.serializer.serializedSize(value, version);
+            HeartBeatState hbState = HeartBeatState.serializer.deserialize(in, version);
+
+            int appStateSize = in.readInt();
+            Map<ApplicationState, VersionedValue> states = new EnumMap<>(ApplicationState.class);
+            for (int i = 0; i < appStateSize; ++i)
+            {
+                int key = in.readInt();
+                VersionedValue value = VersionedValue.serializer.deserialize(in, version);
+                states.put(Gossiper.STATES[key], value);
+            }
+
+            return new EndpointState(hbState, states);
         }
-        return size;
+
+        public long serializedSize(EndpointState epState, int version)
+        {
+            long size = HeartBeatState.serializer.serializedSize(epState.getHeartBeatState(), version);
+            Set<Map.Entry<ApplicationState, VersionedValue>> states = epState.states();
+            size += TypeSizes.sizeof(states.size());
+            for (Map.Entry<ApplicationState, VersionedValue> state : states)
+            {
+                VersionedValue value = state.getValue();
+                size += TypeSizes.sizeof(state.getKey().ordinal());
+                size += VersionedValue.serializer.serializedSize(value, version);
+            }
+            return size;
+        }
     }
 }
