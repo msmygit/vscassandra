@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MapDifference;
@@ -120,6 +121,14 @@ public final class SchemaManager implements SchemaProvider
         this.localKeyspaces = new LocalKeyspaces(FORCE_LOAD_LOCAL_KEYSPACES || isDaemonInitialized() || isToolInitialized());
         this.localKeyspaces.getAll().forEach(this::loadNew);
         this.updateHandler = SchemaUpdateHandlerFactoryProvider.instance.get().getSchemaUpdateHandler(online, this::mergeAndUpdateVersion);
+    }
+
+    @VisibleForTesting
+    public SchemaManager(boolean online, LocalKeyspaces localKeyspaces, SchemaUpdateHandler updateHandler)
+    {
+        this.online = online;
+        this.localKeyspaces = localKeyspaces;
+        this.updateHandler = updateHandler;
     }
 
     public void startSync()
@@ -392,7 +401,7 @@ public final class SchemaManager implements SchemaProvider
      */
     public Keyspaces getPartitionedKeyspaces()
     {
-        return sharedKeyspaces.filter(keyspace -> Keyspace.open(keyspace.name).getReplicationStrategy().isPartitioned());
+        return sharedKeyspaces.filter(keyspace -> Keyspace.open(keyspace.name, this, true).getReplicationStrategy().isPartitioned());
     }
 
     /**
@@ -667,7 +676,8 @@ public final class SchemaManager implements SchemaProvider
      *
      * @throws ConfigurationException If one of metadata attributes has invalid value
      */
-    private synchronized void mergeAndUpdateVersion(SchemaTransformationResult result, boolean dropData)
+    @VisibleForTesting
+    public synchronized void mergeAndUpdateVersion(SchemaTransformationResult result, boolean dropData)
     {
         if (online)
             SystemKeyspace.updateSchemaVersion(result.after.getVersion());
@@ -740,7 +750,7 @@ public final class SchemaManager implements SchemaProvider
             delta.views.altered.forEach(diff -> alterView(keyspace, diff.after));
 
             // deal with all added, and altered views
-            Keyspace.open(delta.after.name).viewManager.reload(true);
+            Keyspace.open(delta.after.name, this, true).viewManager.reload(true);
         }
 
         schemaChangeNotifier.notifyKeyspaceAltered(delta);
@@ -753,7 +763,7 @@ public final class SchemaManager implements SchemaProvider
         load(keyspace);
         if (Keyspace.isInitialized())
         {
-            Keyspace.open(keyspace.name);
+            Keyspace.open(keyspace.name, this, true);
         }
 
         schemaChangeNotifier.notifyKeyspaceCreated(keyspace);
