@@ -237,7 +237,8 @@ public final class Schema implements SchemaProvider
         return keyspaceInstances.blockingLoadIfAbsent(keyspaceName, loadFunction);
     }
 
-    private void maybeRemoveKeyspaceInstance(String keyspaceName, boolean dropData)
+    @VisibleForTesting
+    public void maybeRemoveKeyspaceInstance(String keyspaceName, boolean dropData)
     {
         try
         {
@@ -793,9 +794,9 @@ public final class Schema implements SchemaProvider
      */
     public static boolean isKeyspaceWithLocalStrategy(String keyspaceName)
     {
+        KeyspaceMetadata ksm = instance.getKeyspaceMetadata(keyspaceName);
         return SchemaConstants.isLocalSystemKeyspace(keyspaceName) ||
-               (instance.getKeyspaceMetadata(keyspaceName) != null
-                && instance.getKeyspaceMetadata(keyspaceName).params.replication.klass.equals(LocalStrategy.class));
+               (ksm != null && ksm.params.replication.klass.equals(LocalStrategy.class));
     }
 
     /**
