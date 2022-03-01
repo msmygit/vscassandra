@@ -245,7 +245,8 @@ public class IndexContext
 
     public Memtable.Owner owner()
     {
-        return this.owner;
+        assert owner != null : "Attempt to access null owner on index context";
+        return owner;
     }
 
     public void index(DecoratedKey key, Row row, Memtable memtable, OpOrder.Group opGroup)
