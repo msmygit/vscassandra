@@ -41,6 +41,7 @@ import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.SchemaTestUtil;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.io.sstable.format.SSTableReader.selectOnlyBigTableReaders;
 import static org.junit.Assert.assertEquals;
 
@@ -127,7 +128,7 @@ public class IndexSummaryRedistributionTest
                 .build()
                 .applyUnsafe();
             }
-            futures.add(cfs.forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            futures.add(cfs.forceFlush(UNIT_TESTS));
         }
         for (Future future : futures)
         {

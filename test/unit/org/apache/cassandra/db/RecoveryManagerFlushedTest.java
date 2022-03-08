@@ -52,6 +52,8 @@ import org.apache.cassandra.security.EncryptionContextGenerator;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 import static org.junit.Assert.assertEquals;
 
 @RunWith(Parameterized.class)
@@ -104,8 +106,8 @@ public class RecoveryManagerFlushedTest
     public void testWithFlush() throws Exception
     {
         // Flush everything that may be in the commit log now to start fresh
-        FBUtilities.waitOnFutures(Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
-        FBUtilities.waitOnFutures(Keyspace.open(SchemaConstants.SCHEMA_KEYSPACE_NAME).flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+        FBUtilities.waitOnFutures(Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).flush(UNIT_TESTS));
+        FBUtilities.waitOnFutures(Keyspace.open(SchemaConstants.SCHEMA_KEYSPACE_NAME).flush(UNIT_TESTS));
 
 
         CompactionManager.instance.disableAutoCompaction();
@@ -122,7 +124,7 @@ public class RecoveryManagerFlushedTest
         Keyspace keyspace1 = Keyspace.open(KEYSPACE1);
         ColumnFamilyStore cfs = keyspace1.getColumnFamilyStore("Standard1");
         logger.debug("forcing flush");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         logger.debug("begin manual replay");
         // replay the commit log (nothing on Standard1 should be replayed since everything was flushed, so only the row on Standard2

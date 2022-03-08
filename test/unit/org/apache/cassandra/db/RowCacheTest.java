@@ -54,6 +54,7 @@ import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.*;
 
 public class RowCacheTest
@@ -495,7 +496,7 @@ public class RowCacheTest
         SchemaLoader.insertData(KEYSPACE_CACHED, CF_CACHED, 0, 100);
 
         //force flush for confidence that SSTables exists
-        cachedStore.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cachedStore.forceBlockingFlush(UNIT_TESTS);
 
         ((ClearableHistogram)cachedStore.metric.sstablesPerReadHistogram.cf).clear();
 

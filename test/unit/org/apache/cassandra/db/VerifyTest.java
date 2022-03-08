@@ -35,9 +35,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.UpdateBuilder;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.batchlog.Batch;
@@ -73,13 +71,21 @@ import static org.apache.cassandra.SchemaLoader.counterCFMD;
 import static org.apache.cassandra.SchemaLoader.createKeyspace;
 import static org.apache.cassandra.SchemaLoader.loadSchema;
 import static org.apache.cassandra.SchemaLoader.standardCFMD;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
+/**
+ * Test for {@link Verifier}.
+ *
+ * Note: the complete coverage is composed of:
+ * - {@link org.apache.cassandra.tools.StandaloneVerifierOnSSTablesTest}
+ * - {@link org.apache.cassandra.tools.StandaloneVerifierTest}
+ * - {@link VerifyTest}
+ */
 public class VerifyTest
 {
     public static final String KEYSPACE = "Keyspace1";
@@ -93,6 +99,7 @@ public class VerifyTest
     public static final String COUNTER_CF4 = "Counter4";
     public static final String CORRUPT_CF = "Corrupt1";
     public static final String CORRUPT_CF2 = "Corrupt2";
+    public static final String CORRUPT_CF3 = "Corrupt3";
     public static final String CORRUPTCOUNTER_CF = "CounterCorrupt1";
     public static final String CORRUPTCOUNTER_CF2 = "CounterCorrupt2";
 
@@ -115,6 +122,7 @@ public class VerifyTest
                        standardCFMD(KEYSPACE, CF4),
                        standardCFMD(KEYSPACE, CORRUPT_CF),
                        standardCFMD(KEYSPACE, CORRUPT_CF2),
+                       standardCFMD(KEYSPACE, CORRUPT_CF3),
                        counterCFMD(KEYSPACE, COUNTER_CF).compression(compressionParameters),
                        counterCFMD(KEYSPACE, COUNTER_CF2).compression(compressionParameters),
                        counterCFMD(KEYSPACE, COUNTER_CF3),
@@ -496,7 +504,7 @@ public class VerifyTest
     {
         CompactionManager.instance.disableAutoCompaction();
         Keyspace keyspace = Keyspace.open(KEYSPACE);
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CORRUPT_CF2);
+        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CORRUPT_CF3);
 
         fillCF(cfs, 2);
 
@@ -720,7 +728,7 @@ public class VerifyTest
         Batch bogus = Batch.createLocal(UUIDGen.getTimeUUID(), 0, Collections.emptyList());
         BatchlogManager.store(bogus);
         ColumnFamilyStore cfs = Keyspace.open("system").getColumnFamilyStore("batches");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
 
@@ -778,7 +786,7 @@ public class VerifyTest
                          .apply();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     protected void fillCounterCF(ColumnFamilyStore cfs, int partitionsPerSSTable) throws WriteTimeoutException
@@ -790,7 +798,7 @@ public class VerifyTest
                          .apply();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     protected long simpleFullChecksum(String filename) throws IOException

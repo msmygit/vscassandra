@@ -42,7 +42,6 @@ import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.service.ClientState;
-import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.transport.Event.SchemaChange;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
 
@@ -82,9 +81,7 @@ public final class CreateKeyspaceStatement extends AlterSchemaStatement
             throw ire("Unable to use given strategy class: LocalStrategy is reserved for internal use.");
 
         keyspace.params.validate(keyspaceName);
-        Keyspaces keyspaces = schema.withAddedOrUpdated(keyspace);
-
-        return keyspaces;
+        return schema.withAddedOrUpdated(keyspace);
     }
 
     SchemaChange schemaChangeEvent(KeyspacesDiff diff)

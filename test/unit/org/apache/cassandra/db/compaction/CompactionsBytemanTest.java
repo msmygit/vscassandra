@@ -30,6 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.apache.cassandra.Util;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
@@ -43,6 +44,7 @@ import org.jboss.byteman.contrib.bmunit.BMRule;
 import org.jboss.byteman.contrib.bmunit.BMRules;
 import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -134,7 +136,7 @@ public class CompactionsBytemanTest extends CQLTester
             targetMethod = "submitBackground",
             targetLocation = "AT INVOKE java.util.concurrent.Future.isCancelled",
             condition = "!$cfs.keyspace.getName().contains(\"system\")",
-            action = "Thread.sleep(1000)")
+            action = "Thread.sleep(5000)")
     public void testCompactingCFCounting() throws Throwable
     {
         createTable("CREATE TABLE %s (k INT, c INT, v INT, PRIMARY KEY (k, c))");
@@ -142,9 +144,10 @@ public class CompactionsBytemanTest extends CQLTester
         cfs.enableAutoCompaction();
 
         execute("INSERT INTO %s (k, c, v) VALUES (?, ?, ?)", 0, 1, 1);
-        assertEquals(0, CompactionManager.instance.getOngoingBackgroundCompactionsCount());
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        Util.spinAssertEquals(true, () -> CompactionManager.instance.getOngoingBackgroundCompactionsCount() == 0, 5);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
+        Util.spinAssertEquals(true, () -> cfs.getCompactingSSTables().size() == 0, 5);
         FBUtilities.waitOnFuture(CompactionManager.instance.submitBackground(cfs));
         assertEquals(0, CompactionManager.instance.getOngoingBackgroundCompactionsCount());
     }
@@ -160,7 +163,7 @@ public class CompactionsBytemanTest extends CQLTester
         {
             execute("INSERT INTO %s (id, val) values (2, 'immortal')");
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     private void createLowGCGraceTable(){
@@ -207,7 +210,7 @@ public class CompactionsBytemanTest extends CQLTester
             {
                 execute("insert into %s (k, c, v) values (?, ?, ?)", i, j, i*j);
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         cfs.mutateRepaired(cfs.getLiveSSTables(), System.currentTimeMillis(), null, false);
         for (int i = 0; i < 5; i++)
@@ -216,7 +219,7 @@ public class CompactionsBytemanTest extends CQLTester
             {
                 execute("insert into %s (k, c, v) values (?, ?, ?)", i, j, i*j);
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
         assertTrue(cfs.getTracker().getCompacting().isEmpty());

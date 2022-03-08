@@ -453,11 +453,11 @@ public class CompactionManager implements CompactionManagerMBean
                 {
                     SSTableReader sstable = sstableIter.next();
                     boolean needsCleanupFull = needsCleanup(sstable, fullRanges);
-                    boolean needsCleanupTransient = needsCleanup(sstable, transientRanges);
+                    boolean needsCleanupTransient = !transientRanges.isEmpty() && sstable.isRepaired() && needsCleanup(sstable, transientRanges);
                     //If there are no ranges for which the table needs cleanup either due to lack of intersection or lack
                     //of the table being repaired.
                     totalSSTables++;
-                    if (!needsCleanupFull && (!needsCleanupTransient || !sstable.isRepaired()))
+                    if (!needsCleanupFull && !needsCleanupTransient)
                     {
                         logger.debug("Skipping {} ([{}, {}]) for cleanup; all rows should be kept. Needs cleanup full ranges: {} Needs cleanup transient ranges: {} Repaired: {}",
                                     sstable,
@@ -481,7 +481,7 @@ public class CompactionManager implements CompactionManagerMBean
             public void execute(LifecycleTransaction txn) throws IOException
             {
                 CleanupStrategy cleanupStrategy = CleanupStrategy.get(cfStore, allRanges, transientRanges, txn.onlyOne().isRepaired(), FBUtilities.nowInSeconds());
-                doCleanupOne(cfStore, txn, cleanupStrategy, replicas.ranges(), fullRanges, transientRanges, hasIndexes);
+                doCleanupOne(cfStore, txn, cleanupStrategy, replicas.ranges(), hasIndexes);
             }
         }, jobs, OperationType.CLEANUP);
     }
@@ -918,7 +918,6 @@ public class CompactionManager implements CompactionManagerMBean
             final RangesAtEndpoint replicas = StorageService.instance.getLocalReplicas(keyspace.getName());
             final Set<Range<Token>> allRanges = replicas.ranges();
             final Set<Range<Token>> transientRanges = replicas.onlyTransient().ranges();
-            final Set<Range<Token>> fullRanges = replicas.onlyFull().ranges();
             boolean hasIndexes = cfs.indexManager.hasIndexes();
             SSTableReader sstable = lookupSSTable(cfs, entry.getValue());
 
@@ -931,7 +930,7 @@ public class CompactionManager implements CompactionManagerMBean
                 CleanupStrategy cleanupStrategy = CleanupStrategy.get(cfs, allRanges, transientRanges, sstable.isRepaired(), FBUtilities.nowInSeconds());
                 try (LifecycleTransaction txn = cfs.getTracker().tryModify(sstable, OperationType.CLEANUP))
                 {
-                    doCleanupOne(cfs, txn, cleanupStrategy, allRanges, fullRanges, transientRanges, hasIndexes);
+                    doCleanupOne(cfs, txn, cleanupStrategy, allRanges, hasIndexes);
                 }
                 catch (IOException e)
                 {
@@ -1100,8 +1099,6 @@ public class CompactionManager implements CompactionManagerMBean
                               LifecycleTransaction txn,
                               CleanupStrategy cleanupStrategy,
                               Collection<Range<Token>> allRanges,
-                              Collection<Range<Token>> fullRanges,
-                              Collection<Range<Token>> transientRanges,
                               boolean hasIndexes) throws IOException
     {
         assert !cfs.isIndex();
@@ -1747,7 +1744,7 @@ public class CompactionManager implements CompactionManagerMBean
         {
             exactRunningTasks.decrementAndGet();
 
-            DebuggableThreadPoolExecutor.maybeResetTraceSessionWrapper(r);
+            DebuggableThreadPoolExecutor.maybeResetLocalSessionWrapper(r);
 
             if (t == null)
                 t = DebuggableThreadPoolExecutor.extractThrowable(r);

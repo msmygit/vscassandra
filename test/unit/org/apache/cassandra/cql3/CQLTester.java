@@ -104,6 +104,7 @@ import org.apache.cassandra.utils.Pair;
 
 import static com.datastax.driver.core.SocketOptions.DEFAULT_CONNECT_TIMEOUT_MILLIS;
 import static com.datastax.driver.core.SocketOptions.DEFAULT_READ_TIMEOUT_MILLIS;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -572,7 +573,7 @@ public abstract class CQLTester
     {
         ColumnFamilyStore store = getColumnFamilyStore(keyspace, table);
         if (store != null)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
     }
 
     public void disableCompaction(String keyspace)
@@ -1042,8 +1043,8 @@ public abstract class CQLTester
     protected static void assertNoWarningContains(Message.Response response, String message)
     {
         List<String> warnings = response.getWarnings();
-        
-        if (warnings != null) 
+
+        if (warnings != null)
         {
             assertFalse(warnings.stream().anyMatch(s -> s.contains(message)));
         }
@@ -1242,7 +1243,7 @@ public abstract class CQLTester
 
     protected ResultMessage.Prepared prepare(String query) throws Throwable
     {
-        return QueryProcessor.prepare(formatQuery(query), ClientState.forInternalCalls());
+        return QueryProcessor.instance.prepare(formatQuery(query), ClientState.forInternalCalls());
     }
 
     public UntypedResultSet execute(String query, Object... values) throws Throwable

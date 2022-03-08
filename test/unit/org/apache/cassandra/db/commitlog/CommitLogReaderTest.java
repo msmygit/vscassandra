@@ -41,6 +41,8 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.KillerForTests;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 public class CommitLogReaderTest extends CQLTester
 {
     @BeforeClass
@@ -264,7 +266,7 @@ public class CommitLogReaderTest extends CQLTester
 
         Keyspace.open(keyspace())
                 .getColumnFamilyStore(currentTable())
-                .forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+                .forceBlockingFlush(UNIT_TESTS);
         return result;
     }
 }

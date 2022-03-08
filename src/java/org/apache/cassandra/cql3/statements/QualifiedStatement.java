@@ -27,13 +27,18 @@ import org.apache.cassandra.service.ClientState;
 /**
  * Abstract class for statements that work on sub-keyspace level (tables, views, indexes, functions, etc.)
  */
-public abstract class QualifiedStatement<R extends SingleKeyspaceStatement> extends RawKeyspaceAwareStatement<R>
+public abstract class QualifiedStatement<R extends CQLStatement.SingleKeyspaceCqlStatement> extends RawKeyspaceAwareStatement<R>
 {
     final QualifiedName qualifiedName;
 
     QualifiedStatement(QualifiedName qualifiedName)
     {
         this.qualifiedName = qualifiedName;
+    }
+
+    public boolean isFullyQualified()
+    {
+        return qualifiedName.hasKeyspace();
     }
 
     public void setKeyspace(ClientState state)

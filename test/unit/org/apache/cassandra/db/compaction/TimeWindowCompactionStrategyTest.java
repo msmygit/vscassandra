@@ -29,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
-
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -39,7 +38,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import org.apache.cassandra.SchemaLoader;
@@ -52,6 +50,7 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.KeyspaceParams;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy.getWindowBoundsInMillis;
 import static org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy.validateOptions;
 import static org.apache.cassandra.utils.FBUtilities.nowInSeconds;
@@ -184,7 +183,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
                 .clustering("column")
                 .add("val", value).build().applyUnsafe();
 
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         // Decrement the timestamp to simulate a timestamp in the past hour
         for (int r = 3; r < 5; r++)
@@ -194,10 +193,10 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
             new RowUpdateBuilder(cfs.metadata(), r, key.getKey())
                 .clustering("column")
                 .add("val", value).build().applyUnsafe();
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         TreeMap<Long, List<CompactionSSTable>> buckets = new TreeMap<>(Long::compare);
         List<CompactionSSTable> sstrs = new ArrayList<>(cfs.getLiveSSTables());
@@ -239,7 +238,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
                     .clustering("column")
                     .add("val", value).build().applyUnsafe();
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
         // Reset the buckets, overfill it now
@@ -274,7 +273,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         SSTableReader expiredSSTable = cfs.getLiveSSTables().iterator().next();
         Thread.sleep(10);
 
@@ -284,7 +283,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         assertEquals(cfs.getLiveSSTables().size(), 2);
 
         Map<String, String> options = new HashMap<>();
@@ -328,7 +327,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         SSTableReader expiredSSTable = cfs.getLiveSSTables().iterator().next();
         Thread.sleep(10);
 
@@ -341,7 +340,7 @@ public class TimeWindowCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         assertEquals(cfs.getLiveSSTables().size(), 2);
 
         Map<String, String> options = new HashMap<>();

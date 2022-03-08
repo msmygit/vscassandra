@@ -40,7 +40,7 @@ import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.view.View;
 import org.apache.cassandra.exceptions.SyntaxException;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.SchemaKeyspaceTables;
 import org.apache.cassandra.service.ClientWarn;
 import org.apache.cassandra.utils.FBUtilities;
 import org.awaitility.Awaitility;
@@ -48,6 +48,7 @@ import org.jboss.byteman.contrib.bmunit.BMRule;
 import org.jboss.byteman.contrib.bmunit.BMRules;
 import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -151,7 +152,7 @@ public class ViewTest extends ViewAbstractTest
         for (int i = 0; i < 100; i++)
             updateView("INSERT into %s (k,c,val)VALUES(?,?,?)", 0, i % 2, "baz");
 
-        Keyspace.open(keyspace()).getColumnFamilyStore(currentTable()).forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        Keyspace.open(keyspace()).getColumnFamilyStore(currentTable()).forceBlockingFlush(UNIT_TESTS);
 
         Assert.assertEquals(2, execute("select * from %s").size());
         Assert.assertEquals(2, execute("select * from mv_tstest").size());
@@ -355,7 +356,7 @@ public class ViewTest extends ViewAbstractTest
         assertRows(execute("SELECT a, b, c from mv WHERE b = ?", 1), row(0, 1, null));
 
         ColumnFamilyStore cfs = Keyspace.open(keyspace()).getColumnFamilyStore("mv");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         Assert.assertEquals(1, cfs.getLiveSSTables().size());
     }
 
@@ -472,22 +473,22 @@ public class ViewTest extends ViewAbstractTest
         for (int i = 0; i < 1024; i++)
             execute("INSERT into %s (k,c,val)VALUES(?,?,?)", i, i, ""+i);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         for (int i = 0; i < 1024; i++)
             execute("INSERT into %s (k,c,val)VALUES(?,?,?)", i, i, ""+i);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         for (int i = 0; i < 1024; i++)
             execute("INSERT into %s (k,c,val)VALUES(?,?,?)", i, i, ""+i);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         for (int i = 0; i < 1024; i++)
             execute("INSERT into %s (k,c,val)VALUES(?,?,?)", i, i, ""+i);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         String viewName1 = "mv_test_" + concurrentViewBuilders;
         createView(viewName1, "CREATE MATERIALIZED VIEW %s AS SELECT * FROM %%s WHERE val IS NOT NULL AND k IS NOT NULL AND c IS NOT NULL PRIMARY KEY (val,k,c)");
@@ -754,7 +755,7 @@ public class ViewTest extends ViewAbstractTest
         // Test the where clause stored in system_schema.views
         String schemaQuery = String.format("SELECT where_clause FROM %s.%s WHERE keyspace_name = ? AND view_name = ?",
                                            SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                           SchemaKeyspace.VIEWS);
+                                           SchemaKeyspaceTables.VIEWS);
         assertRows(execute(schemaQuery, keyspace(), viewName), row(expectedSchemaWhereClause));
 
         for (String insert : insertQueries)

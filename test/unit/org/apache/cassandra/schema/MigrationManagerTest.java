@@ -28,9 +28,7 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.cql3.ColumnIdentifier;
@@ -53,6 +51,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import static org.apache.cassandra.Util.throwAssert;
 import static org.apache.cassandra.cql3.CQLTester.assertRows;
 import static org.apache.cassandra.cql3.CQLTester.row;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -60,10 +59,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class MigrationManagerTest
 {
     private static final String KEYSPACE1 = "keyspace1";
+    private static final String KEYSPACE2 = "keyspace2";
     private static final String KEYSPACE3 = "keyspace3";
     private static final String KEYSPACE6 = "keyspace6";
     private static final String EMPTY_KEYSPACE = "test_empty_keyspace";
@@ -83,6 +82,10 @@ public class MigrationManagerTest
                                     KeyspaceParams.simple(1),
                                     SchemaLoader.standardCFMD(KEYSPACE1, TABLE1),
                                     SchemaLoader.standardCFMD(KEYSPACE1, TABLE2));
+        SchemaLoader.createKeyspace(KEYSPACE2,
+                KeyspaceParams.simple(1),
+                SchemaLoader.standardCFMD(KEYSPACE2, TABLE1),
+                SchemaLoader.standardCFMD(KEYSPACE2, TABLE2));
         SchemaLoader.createKeyspace(KEYSPACE3,
                                     KeyspaceParams.simple(5),
                                     SchemaLoader.standardCFMD(KEYSPACE3, TABLE1),
@@ -179,7 +182,7 @@ public class MigrationManagerTest
         // flush to exercise more than just hitting the memtable
         ColumnFamilyStore cfs = Keyspace.open(ksName).getColumnFamilyStore(tableName);
         assertNotNull(cfs);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         // and make sure we get out what we put in
         UntypedResultSet rows = QueryProcessor.executeInternal(String.format("SELECT * FROM %s.%s", ksName, tableName));
@@ -202,7 +205,7 @@ public class MigrationManagerTest
                                            "dropCf", "col" + i, "anyvalue");
         ColumnFamilyStore store = Keyspace.open(cfm.keyspace).getColumnFamilyStore(cfm.name);
         assertNotNull(store);
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
         assertTrue(store.getDirectories().sstableLister(Directories.OnTxnErr.THROW).list().size() > 0);
 
         SchemaTestUtil.announceTableDrop(ks.name, cfm.name);
@@ -251,7 +254,7 @@ public class MigrationManagerTest
                                        "key0", "col0", "val0");
         ColumnFamilyStore store = Keyspace.open(cfm.keyspace).getColumnFamilyStore(cfm.name);
         assertNotNull(store);
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         UntypedResultSet rows = QueryProcessor.executeInternal("SELECT * FROM newkeyspace1.newstandard1");
         assertRows(rows, row("key0", "col0", "val0"));
@@ -261,7 +264,7 @@ public class MigrationManagerTest
     public void dropKS() throws ConfigurationException
     {
         // sanity
-        final KeyspaceMetadata ks = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE1);
+        final KeyspaceMetadata ks = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE2);
         assertNotNull(ks);
         final TableMetadata cfm = ks.tables.getNullable(TABLE2);
         assertNotNull(cfm);
@@ -269,11 +272,11 @@ public class MigrationManagerTest
         // write some data, force a flush, then verify that files exist on disk.
         for (int i = 0; i < 100; i++)
             QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, name, val) VALUES (?, ?, ?)",
-                                                         KEYSPACE1, TABLE2),
+                                                         KEYSPACE2, TABLE2),
                                            "dropKs", "col" + i, "anyvalue");
         ColumnFamilyStore cfs = Keyspace.open(cfm.keyspace).getColumnFamilyStore(cfm.name);
         assertNotNull(cfs);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         assertTrue(!cfs.getDirectories().sstableLister(Directories.OnTxnErr.THROW).list().isEmpty());
 
         SchemaTestUtil.announceKeyspaceDrop(ks.name);
@@ -285,7 +288,7 @@ public class MigrationManagerTest
         try
         {
             QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, name, val) VALUES (?, ?, ?)",
-                                                         KEYSPACE1, TABLE2),
+                                                         KEYSPACE2, TABLE2),
                                            "dropKs", "col0", "anyvalue");
         }
         catch (Throwable th)
@@ -354,7 +357,7 @@ public class MigrationManagerTest
 
         ColumnFamilyStore cfs = Keyspace.open(newKs.name).getColumnFamilyStore(newCf.name);
         assertNotNull(cfs);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         UntypedResultSet rows = QueryProcessor.executeInternal(String.format("SELECT * FROM %s.%s", EMPTY_KEYSPACE, tableName));
         assertRows(rows, row("key0", "col0", "val0"));
@@ -509,7 +512,7 @@ public class MigrationManagerTest
                                                     TABLE1i),
                                        "key0", "col0", 1L, 1L);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         ColumnFamilyStore indexCfs = cfs.indexManager.getIndexByName(indexName)
                                                      .getBackingTable()
                                                      .orElseThrow(throwAssert("Cannot access index cfs"));

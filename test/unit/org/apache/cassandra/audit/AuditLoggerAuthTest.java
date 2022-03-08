@@ -27,14 +27,13 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.exceptions.AuthenticationException;
 import com.datastax.driver.core.exceptions.SyntaxError;
 import com.datastax.driver.core.exceptions.UnauthorizedException;
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.OverrideConfigurationLoader;
 import org.apache.cassandra.config.ParameterizedClass;
@@ -42,6 +41,7 @@ import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.PasswordObfuscator;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.service.EmbeddedCassandraService;
+import org.hamcrest.CoreMatchers;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
@@ -54,7 +54,6 @@ import static org.junit.Assert.assertTrue;
  * Non authenticated tests are covered in {@link AuditLoggerTest}
  */
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class AuditLoggerAuthTest
 {
     private static EmbeddedCassandraService embedded;
@@ -134,13 +133,13 @@ public class AuditLoggerAuthTest
     {
         String createTestRoleCQL = String.format("CREATE ROLE %s WITH LOGIN = %s ANDSUPERUSER = %s AND PASSWORD",
                                                  TEST_ROLE, true, false) + CASS_PW;
-        String createTestRoleCQLExpected = String.format("CREATE ROLE %s WITH LOGIN = %s ANDSUPERUSER = %s AND PASSWORD",
+        String createTestRoleCQLExpected = String.format("CREATE ROLE %s WITH LOGIN = %s ANDSUPERUSER = %s AND PASSWORD ",
                                                          TEST_ROLE, true, false) + PasswordObfuscator.OBFUSCATION_TOKEN;
 
         executeWithCredentials(Arrays.asList(createTestRoleCQL), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.REQUEST_FAILURE, createTestRoleCQLExpected, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.REQUEST_FAILURE, createTestRoleCQLExpected, CASS_USER,  TEST_PW);
         assertEquals(0, getInMemAuditLogger().size());
     }
 
@@ -152,7 +151,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.ALTER_ROLE, "ALTER ROLE " + TEST_ROLE + " WITH PASSWORD" + PasswordObfuscator.OBFUSCATION_TOKEN, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.ALTER_ROLE, "ALTER ROLE " + TEST_ROLE + " WITH PASSWORD = '" + PasswordObfuscator.OBFUSCATION_TOKEN + "'", CASS_USER, "foo_bar");
         assertEquals(0, getInMemAuditLogger().size());
     }
 
@@ -164,7 +163,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.DROP_ROLE, cql, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.DROP_ROLE, cql, CASS_USER, "");
         assertEquals(0, getInMemAuditLogger().size());
     }
 
@@ -175,7 +174,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.LIST_ROLES, cql, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.LIST_ROLES, cql, CASS_USER, "");
     }
 
     @Test
@@ -185,7 +184,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.LIST_PERMISSIONS, cql, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.LIST_PERMISSIONS, cql, CASS_USER, "");
     }
 
     @Test
@@ -196,7 +195,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.GRANT, cql, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.GRANT, cql, CASS_USER, "");
     }
 
     @Test
@@ -207,7 +206,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.REVOKE, cql, CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.REVOKE, cql, CASS_USER, "");
     }
 
     @Test
@@ -218,8 +217,47 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(cql), TEST_USER, TEST_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.UNAUTHORIZED_ATTEMPT, cql, TEST_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.UNAUTHORIZED_ATTEMPT, cql, TEST_USER, "");
         assertEquals(0, getInMemAuditLogger().size());
+    }
+
+    @Test
+    public void testCqlUSERCommandsAuditing()
+    {
+        //CREATE USER and ALTER USER are supported only for backwards compatibility.
+
+        String user = TEST_ROLE + "user";
+        String cql = "CREATE USER " + user + " WITH PASSWORD '" + TEST_PW + "'";
+        executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
+        assertTrue(getInMemAuditLogger().size() > 0);
+        AuditLogEntry logEntry = getInMemAuditLogger().poll();
+        assertLogEntry(logEntry,
+                       AuditLogEntryType.CREATE_ROLE,
+                       "CREATE USER " + user + " WITH PASSWORD '" + PasswordObfuscator.OBFUSCATION_TOKEN + "'",
+                       CASS_USER,
+                       TEST_PW);
+
+        cql = "ALTER USER " + user + " WITH PASSWORD '" + TEST_PW + "'";
+        executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
+        assertTrue(getInMemAuditLogger().size() > 0);
+        logEntry = getInMemAuditLogger().poll();
+        assertLogEntry(logEntry,
+                       AuditLogEntryType.ALTER_ROLE,
+                       "ALTER USER " + user + " WITH PASSWORD '" + PasswordObfuscator.OBFUSCATION_TOKEN + "'",
+                       CASS_USER,
+                       TEST_PW);
+
+        cql = "ALTER USER " + user + " WITH PASSWORD " + TEST_PW;
+        executeWithCredentials(Arrays.asList(cql), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
+        assertTrue(getInMemAuditLogger().size() > 0);
+        logEntry = getInMemAuditLogger().poll();
+        assertLogEntry(logEntry,
+                       AuditLogEntryType.REQUEST_FAILURE,
+                       "ALTER USER " + user
+                       + " WITH PASSWORD " + PasswordObfuscator.OBFUSCATION_TOKEN
+                       + "; Syntax Exception. Obscured for security reasons.",
+                       CASS_USER,
+                       TEST_PW);
     }
 
     /**
@@ -276,7 +314,7 @@ public class AuditLoggerAuthTest
         return ((InMemoryAuditLogger) AuditLogManager.instance.getLogger()).inMemQueue;
     }
 
-    private static void assertLogEntry(AuditLogEntry logEntry, AuditLogEntryType type, String cql, String username)
+    private static void assertLogEntry(AuditLogEntry logEntry, AuditLogEntryType type, String cql, String username, String forbiddenPassword)
     {
         assertSource(logEntry, username);
         assertNotEquals(0, logEntry.getTimestamp());
@@ -284,6 +322,8 @@ public class AuditLoggerAuthTest
         if (null != cql && !cql.isEmpty())
         {
             assertThat(logEntry.getOperation(), containsString(cql));
+            if (!forbiddenPassword.isEmpty())
+                assertThat(logEntry.getOperation(), CoreMatchers.not(containsString(forbiddenPassword)));
         }
     }
 
@@ -297,8 +337,11 @@ public class AuditLoggerAuthTest
 
     private static String getCreateRoleCql(String role, boolean login, boolean superUser, boolean isPasswordObfuscated)
     {
-        String baseQueryString = String.format("CREATE ROLE IF NOT EXISTS %s WITH LOGIN = %s AND SUPERUSER = %s AND PASSWORD", role, login, superUser);
-        return isPasswordObfuscated ? baseQueryString + PasswordObfuscator.OBFUSCATION_TOKEN : baseQueryString + String.format(" = '%s'", TEST_PW);
+        return String.format("CREATE ROLE IF NOT EXISTS %s WITH PASSWORD = '%s' AND LOGIN = %s AND SUPERUSER = %s",
+                             role,
+                             isPasswordObfuscated ? PasswordObfuscator.OBFUSCATION_TOKEN : TEST_PW,
+                             login,
+                             superUser);
     }
 
     private static void createTestRole()
@@ -307,7 +350,7 @@ public class AuditLoggerAuthTest
         executeWithCredentials(Arrays.asList(createTestRoleCQL), CASS_USER, CASS_PW, AuditLogEntryType.LOGIN_SUCCESS);
         assertTrue(getInMemAuditLogger().size() > 0);
         AuditLogEntry logEntry = getInMemAuditLogger().poll();
-        assertLogEntry(logEntry, AuditLogEntryType.CREATE_ROLE, getCreateRoleCql(TEST_ROLE, true, false, true), CASS_USER);
+        assertLogEntry(logEntry, AuditLogEntryType.CREATE_ROLE, getCreateRoleCql(TEST_ROLE, true, false, true), CASS_USER, "");
         assertEquals(0, getInMemAuditLogger().size());
     }
 }

@@ -20,50 +20,25 @@ package org.apache.cassandra.service;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
+import java.util.*;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
-import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.Util;
+import org.apache.cassandra.*;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.PageSize;
+import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
-import org.apache.cassandra.db.AbstractReadCommandBuilder;
-import org.apache.cassandra.db.Clustering;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.Keyspace;
-import org.apache.cassandra.db.PartitionRangeReadQuery;
-import org.apache.cassandra.db.ReadCommand;
-import org.apache.cassandra.db.ReadExecutionController;
-import org.apache.cassandra.db.ReadQuery;
-import org.apache.cassandra.db.RowUpdateBuilder;
-import org.apache.cassandra.db.SinglePartitionReadCommand;
+import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.SinglePartitionReadCommand.Group;
-import org.apache.cassandra.db.SinglePartitionReadQuery;
-import org.apache.cassandra.db.Slice;
-import org.apache.cassandra.db.Slices;
-import org.apache.cassandra.db.filter.ClusteringIndexFilter;
-import org.apache.cassandra.db.filter.ClusteringIndexSliceFilter;
-import org.apache.cassandra.db.filter.ColumnFilter;
-import org.apache.cassandra.db.filter.DataLimits;
-import org.apache.cassandra.db.filter.RowFilter;
+import org.apache.cassandra.db.filter.*;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.partitions.FilteredPartition;
 import org.apache.cassandra.db.partitions.PartitionIterator;
@@ -94,7 +69,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class QueryPagerTest
 {
     private final static Logger logger = LoggerFactory.getLogger(QueryPagerTest.class);
@@ -171,6 +145,12 @@ public class QueryPagerTest
         }
 
         tokenOrderedKeys = Lists.newArrayList(tokens);
+    }
+
+    @After
+    public void cleanUp()
+    {
+        QueryProcessor.executeInternal(String.format("TRUNCATE \"%s\".\"%s\"", KEYSPACE_CQL, CF_CQL_WITH_STATIC));
     }
 
     private static ColumnFamilyStore cfs(String ks, String cf)
@@ -909,7 +889,7 @@ public class QueryPagerTest
                     Row row = partition.next();
                     int cellIndex = !reversed ? i : 4 - i;
 
-                    assertEquals(row.clustering().bufferAt(0), ByteBufferUtil.bytes(""+cellIndex));
+                    assertEquals(string(row.clustering().bufferAt(0)), ""+cellIndex);
                     assertCell(row, table.getColumn(new ColumnIdentifier("v1", false)), cellIndex);
                     assertCell(row, table.getColumn(new ColumnIdentifier("v2", false)), cellIndex);
 

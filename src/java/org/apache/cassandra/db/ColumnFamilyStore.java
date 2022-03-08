@@ -1931,8 +1931,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                 for (SSTableReader ssTable : currentView.sstables)
                 {
                     File snapshotDirectory = Directories.getSnapshotDirectory(ssTable.descriptor, snapshotName);
-                    rateLimiter.acquire(SSTableReader.componentsFor(ssTable.descriptor).size());
-                    ssTable.createLinks(snapshotDirectory.path()); // hard links
+                    ssTable.createLinks(snapshotDirectory.path(), rateLimiter); // hard links
                     filesJSONArr.add(ssTable.descriptor.relativeFilenameFor(Component.DATA));
 
                     if (logger.isTraceEnabled())
@@ -2416,18 +2415,21 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         }
     }
 
-    /**
-     * Truncate deletes the entire column family's data with no expensive tombstone creation
-     */
     public void truncateBlocking()
     {
-        truncateBlocking(DatabaseDescriptor.isAutoSnapshot());
+        truncateBlocking(false);
+    }
+
+    public void truncateBlockingWithoutSnapshot()
+    {
+        truncateBlocking(true);
     }
 
     /**
      * Truncate deletes the entire column family's data with no expensive tombstone creation
+     * @param noSnapshot if {@code true} no snapshot will be taken
      */
-    public void truncateBlocking(boolean snapshot)
+    private void truncateBlocking(boolean noSnapshot)
     {
         // We have two goals here:
         // - truncate should delete everything written before truncate was invoked
@@ -2454,8 +2456,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         // a truncate to run, then at least one writer per token range will load sstables created by compaction
         storageHandler.reloadSSTables(StorageHandler.ReloadReason.TRUNCATION);
 
-        if ((keyspace.getMetadata().params.durableWrites && !memtableWritesAreDurable())  // need to clear dirty regions
-            || snapshot) // need sstable for snapshot
+        if (!noSnapshot && ((keyspace.getMetadata().params.durableWrites && !memtableWritesAreDurable()) || DatabaseDescriptor.isAutoSnapshot()))
         {
             replayAfter = forceBlockingFlush(FlushReason.TRUNCATE);
             viewManager.forceBlockingFlush(FlushReason.TRUNCATE);
@@ -2488,8 +2489,8 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                                                    "Stopping parent sessions {} due to truncation of tableId="+metadata.id);
                 data.notifyTruncated(replayAfter, truncatedAt);
 
-                if (snapshot)
-                    snapshot(Keyspace.getTimestampedSnapshotNameWithPrefix(name, SNAPSHOT_TRUNCATE_PREFIX));
+            if (!noSnapshot && DatabaseDescriptor.isAutoSnapshot())
+                snapshot(Keyspace.getTimestampedSnapshotNameWithPrefix(name, SNAPSHOT_TRUNCATE_PREFIX));
 
                 discardSSTables(truncatedAt);
 

@@ -89,8 +89,8 @@ public class RepairProgressReporterTest extends CQLTester
     @After
     public void after()
     {
-        Keyspace.open(DISTRIBUTED_KEYSPACE_NAME).getColumnFamilyStore(REPAIR_HISTORY).truncateBlocking(false);
-        Keyspace.open(DISTRIBUTED_KEYSPACE_NAME).getColumnFamilyStore(PARENT_REPAIR_HISTORY).truncateBlocking(false);
+        Keyspace.open(DISTRIBUTED_KEYSPACE_NAME).getColumnFamilyStore(REPAIR_HISTORY).truncateBlockingWithoutSnapshot();
+        Keyspace.open(DISTRIBUTED_KEYSPACE_NAME).getColumnFamilyStore(PARENT_REPAIR_HISTORY).truncateBlockingWithoutSnapshot();
     }
 
     @Test

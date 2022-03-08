@@ -25,6 +25,8 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SystemKeyspace;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 /*
  * This test class was too large and used to timeout CASSANDRA-16777. We're splitting it into:
  * - ViewTest
@@ -59,7 +61,7 @@ public class ViewRangesTest extends ViewAbstractTest
         updateView("DELETE FROM %s USING TIMESTAMP 10 WHERE k1 = 1 and c1=1");
 
         if (flush)
-            Keyspace.open(keyspace()).getColumnFamilyStore(currentTable()).forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            Keyspace.open(keyspace()).getColumnFamilyStore(currentTable()).forceBlockingFlush(UNIT_TESTS);
 
         String table = KEYSPACE + "." + currentTable();
         updateView("BEGIN BATCH " +

@@ -202,7 +202,7 @@ public class MultiRangeReadCommand extends ReadCommand
     }
 
     @Override
-    public ReadResponse createResponse(UnfilteredPartitionIterator iterator)
+    public ReadResponse createResponse(UnfilteredPartitionIterator iterator, RepairedDataInfo rdi)
     {
         assert !isDigestQuery();
         return MultiRangeReadResponse.createDataResponse(iterator, this);

@@ -57,6 +57,7 @@ import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadata;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -127,7 +128,7 @@ public class SSTableCorruptionDetectionTest extends SSTableWriterTestBase
                    .add("reg2", ByteBuffer.wrap(reg2));
             writer.append(builder.build().unfilteredIterator());
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         ssTableReader = writer.finish(true);
         txn.update(ssTableReader, false);

@@ -21,6 +21,7 @@ import org.apache.cassandra.audit.AuditLogContext;
 import org.apache.cassandra.audit.AuditLogEntryType;
 import org.apache.cassandra.auth.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.cql3.PasswordObfuscator;
 import org.apache.cassandra.cql3.RoleName;
 import org.apache.cassandra.exceptions.*;
 import org.apache.cassandra.service.ClientState;
@@ -97,7 +98,7 @@ public class CreateRoleStatement extends AuthenticationStatement
      */
     private void grantPermissionsToCreator(ClientState state)
     {
-        // The creator of a Role automatically gets ALTER/DROP/AUTHORIZE permissions on it if:
+        // The creator of a Role automatically gets ALTER/DROP/AUTHORIZE/DESCRIBE permissions on it if:
         // * the user is not anonymous
         // * the configured IAuthorizer supports granting of permissions (not all do, AllowAllAuthorizer doesn't and
         //   custom external implementations may not)
@@ -126,5 +127,11 @@ public class CreateRoleStatement extends AuthenticationStatement
     public AuditLogContext getAuditLogContext()
     {
         return new AuditLogContext(AuditLogEntryType.CREATE_ROLE);
+    }
+
+    @Override
+    public String obfuscatePassword(String query)
+    {
+        return PasswordObfuscator.obfuscate(query, opts);
     }
 }

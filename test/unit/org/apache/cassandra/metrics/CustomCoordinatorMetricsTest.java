@@ -30,8 +30,8 @@ public class CustomCoordinatorMetricsTest
     @BeforeClass
     public static void beforeClass()
     {
-        // Sets custom client provider class used in {@code CoordinatorClientRequestMetricsProvider#instance}
-        CUSTOM_CLIENT_REQUEST_METRICS_PROVIDER_PROPERTY.setString(CoordinatorClientRequestMetricsProvider.DefaultCoordinatorMetricsProvider.class.getName());
+        // Sets custom client provider class used in {@code ClientRequestsMetricsHolderProvider#instance}
+        CUSTOM_CLIENT_REQUEST_METRICS_PROVIDER_PROPERTY.setString(ClientRequestsMetricsProvider.DefaultClientRequestsMetricsProvider.class.getName());
     }
 
     @AfterClass
@@ -44,20 +44,20 @@ public class CustomCoordinatorMetricsTest
     public void testStaticInstanceWithCustomProviderClassName()
     {
         // Custom client provider class name set in {@link beforeClass()}
-        CoordinatorClientRequestMetricsProvider customClientRequestMetricsProvider = CoordinatorClientRequestMetricsProvider.instance;
-        assertThat(customClientRequestMetricsProvider).isInstanceOf(CoordinatorClientRequestMetricsProvider.DefaultCoordinatorMetricsProvider.class);
-        CoordinatorClientRequestMetrics metrics = customClientRequestMetricsProvider.metrics("");
+        ClientRequestsMetricsProvider customClientRequestMetricsProvider = ClientRequestsMetricsProvider.instance;
+        assertThat(customClientRequestMetricsProvider).isInstanceOf(ClientRequestsMetricsProvider.DefaultClientRequestsMetricsProvider.class);
+        ClientRequestsMetrics metrics = customClientRequestMetricsProvider.metrics("");
     }
 
     @Test
     public void testMakeProviderWithClassThatExists()
     {
-        CoordinatorClientRequestMetricsProvider.make(CoordinatorClientRequestMetricsProvider.DefaultCoordinatorMetricsProvider.class.getName());
+        ClientRequestsMetricsProvider.make(ClientRequestsMetricsProvider.DefaultClientRequestsMetricsProvider.class.getName());
     }
 
     @Test(expected = IllegalStateException.class)
     public void testMakeProviderWithClassThatDoesNotExist()
     {
-        CoordinatorClientRequestMetricsProvider.make("SomeOtherCLass");
+        ClientRequestsMetricsProvider.make("SomeOtherCLass");
     }
 }

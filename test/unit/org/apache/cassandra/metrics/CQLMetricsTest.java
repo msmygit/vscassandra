@@ -22,12 +22,10 @@ import java.io.IOException;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.schema.SchemaManager;
@@ -37,7 +35,6 @@ import org.apache.cassandra.service.EmbeddedCassandraService;
 
 import static junit.framework.Assert.assertEquals;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class CQLMetricsTest extends SchemaLoader
 {
     private static EmbeddedCassandraService cassandra;
@@ -63,9 +60,10 @@ public class CQLMetricsTest extends SchemaLoader
     @Test
     public void testPreparedStatementsCount()
     {
-        int n = (int) QueryProcessor.metrics.preparedStatementsCount.getValue();
+        int n = QueryProcessor.metrics.preparedStatementsCount.getValue();
+        session.execute("use junit");
         session.prepare("SELECT * FROM junit.metricstest WHERE id = ?");
-        assertEquals(n+1, (int) QueryProcessor.metrics.preparedStatementsCount.getValue());
+        assertEquals(n+2, (int) QueryProcessor.metrics.preparedStatementsCount.getValue());
     }
 
     @Test

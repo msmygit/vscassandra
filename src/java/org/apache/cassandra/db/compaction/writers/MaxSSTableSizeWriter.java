@@ -96,4 +96,10 @@ public class MaxSSTableSizeWriter extends CompactionAwareWriter
                                     realm.getIndexManager().listIndexGroups(),
                                     txn);
     }
+
+    @Override
+    protected long getExpectedWriteSize()
+    {
+        return Math.min(maxSSTableSize, super.getExpectedWriteSize());
+    }
 }

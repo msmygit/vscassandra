@@ -37,7 +37,6 @@ import org.apache.cassandra.db.marshal.MapType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.exceptions.InvalidRequestException;
-import org.apache.cassandra.exceptions.OperationExecutionException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.io.util.DataInputBuffer;
@@ -161,7 +160,7 @@ public abstract class DescribeStatement<T> extends CQLStatement.Raw implements C
         PageSize pageSize = options.getPageSize();
 
         if (pageSize.isDefined() && pageSize.getUnit() != PageSize.PageUnit.ROWS)
-            throw new OperationExecutionException("Paging in bytes is not supported for describe statement. Please specify the page size in rows.");
+            throw new InvalidRequestException("Paging in bytes is not supported for describe statement. Please specify the page size in rows.");
 
         Stream<? extends T> stream = describe(state.getClientState(), keyspaces);
 

@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.schema;
 
+import java.lang.management.ManagementFactory;
 import java.net.UnknownHostException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -41,7 +42,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.concurrent.ScheduledExecutors;
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.gms.ApplicationState;
@@ -83,7 +84,7 @@ public class MigrationCoordinator
     private static final Logger logger = LoggerFactory.getLogger(MigrationCoordinator.class);
     private static final CompletableFuture<Void> FINISHED_FUTURE = CompletableFuture.completedFuture(null);
 
-    private static final int MIGRATION_DELAY_IN_MS = 60000;
+    private static final int MIGRATION_DELAY_IN_MS = CassandraRelevantProperties.MIGRATION_DELAY.getInt();
     public static final int MAX_OUTSTANDING_VERSION_REQUESTS = 3;
 
     public static final String IGNORED_VERSIONS_PROP = "cassandra.skip_schema_check_for_versions";
@@ -172,7 +173,6 @@ public class MigrationCoordinator
     private final ScheduledExecutorService periodicCheckExecutor;
     private final MessagingService messagingService;
     private final AtomicReference<ScheduledFuture<?>> periodicPullTask = new AtomicReference<>();
-    private final LongSupplier getUptimeFn;
     private final int maxOutstandingVersionRequests;
     private final Gossiper gossiper;
     private final Supplier<UUID> schemaVersion;
@@ -189,7 +189,6 @@ public class MigrationCoordinator
     MigrationCoordinator(MessagingService messagingService,
                          ExecutorService executor,
                          ScheduledExecutorService periodicCheckExecutor,
-                         LongSupplier getUptimeFn,
                          int maxOutstandingVersionRequests,
                          Gossiper gossiper,
                          Supplier<UUID> schemaVersionSupplier,
@@ -198,7 +197,6 @@ public class MigrationCoordinator
         this.messagingService = messagingService;
         this.executor = executor;
         this.periodicCheckExecutor = periodicCheckExecutor;
-        this.getUptimeFn = getUptimeFn;
         this.maxOutstandingVersionRequests = maxOutstandingVersionRequests;
         this.gossiper = gossiper;
         this.schemaVersion = schemaVersionSupplier;
@@ -331,7 +329,7 @@ public class MigrationCoordinator
     private boolean shouldPullImmediately(InetAddressAndPort endpoint, UUID version)
     {
         UUID localSchemaVersion = schemaVersion.get();
-        if (SchemaConstants.emptyVersion.equals(localSchemaVersion) || getUptimeFn.getAsLong() < MIGRATION_DELAY_IN_MS)
+        if (SchemaConstants.emptyVersion.equals(localSchemaVersion) || ManagementFactory.getRuntimeMXBean().getUptime() < MIGRATION_DELAY_IN_MS)
         {
             // If we think we may be bootstrapping or have recently started, submit MigrationTask immediately
             logger.debug("Immediately submitting migration task for {}, " +

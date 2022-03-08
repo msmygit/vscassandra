@@ -34,6 +34,8 @@ import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.ObjectSizes;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 @RunWith(Parameterized.class)
 public class MemtableQuickTest extends CQLTester
 {
@@ -83,7 +85,7 @@ public class MemtableQuickTest extends CQLTester
 
         cfs = Keyspace.open(keyspace).getColumnFamilyStore(table);
         cfs.disableAutoCompaction();
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         long i;
         long limit = partitions;
@@ -133,7 +135,7 @@ public class MemtableQuickTest extends CQLTester
         UntypedResultSet result = execute("SELECT * FROM " + table);
         assertRowCount(result, rowsPerPartition * (partitions - deletedPartitions) - deletedRows);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         System.out.println("Selecting *");
         result = execute("SELECT * FROM " + table);

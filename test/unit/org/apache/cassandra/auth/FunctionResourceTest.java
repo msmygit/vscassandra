@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.auth;
 
 import java.util.ArrayList;
@@ -84,6 +85,10 @@ public class FunctionResourceTest
         FunctionResource actual = FunctionResource.fromName(String.format("%s/%s/%s[]", func, ks, name));
         assertEquals(expected, actual);
         assertEquals(expected.getKeyspace(), actual.getKeyspace());
+
+        String error = "functions/fr_ks/concat is not a valid function resource name. It must end with \"[]\"";
+        assertThatExceptionOfType(IllegalArgumentException.class).isThrownBy(() -> FunctionResource.fromName(String.format("%s/%s/%s",func,ks,name)))
+                                                                 .withMessage(error);
     }
 
     @Test

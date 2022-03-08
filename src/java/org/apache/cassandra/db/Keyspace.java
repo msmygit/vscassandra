@@ -37,6 +37,8 @@ import java.util.stream.Stream;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.RateLimiter;
+import org.apache.cassandra.locator.LocalStrategy;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -341,6 +343,13 @@ public class Keyspace
 
         this.repairManager = new CassandraKeyspaceRepairManager(this);
         this.writeHandler = new CassandraKeyspaceWriteHandler(this);
+
+        // If keyspace has been added, we need to recalculate pending ranges to make sure
+        // we send mutations to the correct set of bootstrapping nodes. Refer CASSANDRA-15433.
+        if (metadata.params.replication.klass != LocalStrategy.class)
+        {
+            PendingRangeCalculatorService.calculatePendingRanges(getReplicationStrategy(), keyspaceName);
+        }
     }
 
     private Keyspace(KeyspaceMetadata metadata)

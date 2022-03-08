@@ -35,7 +35,6 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.SerializationHeader;
 import org.apache.cassandra.db.compaction.CompactionRealm;
 import org.apache.cassandra.db.compaction.CompactionTask;
-import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
@@ -201,9 +200,7 @@ public abstract class CompactionAwareWriter extends Transactional.AbstractTransa
         {
             if (locationIndex < 0)
             {
-                Directories.DataDirectory defaultLocation = getWriteDirectory(nonExpiredSSTables,
-                                                                              realm.getExpectedCompactedFileSize(nonExpiredSSTables,
-                                                                                                                 OperationType.UNKNOWN));
+                Directories.DataDirectory defaultLocation = getWriteDirectory(nonExpiredSSTables, getExpectedWriteSize());
                 switchCompactionWriter(defaultLocation);
                 locationIndex = 0;
                 return true;
@@ -310,6 +307,11 @@ public abstract class CompactionAwareWriter extends Transactional.AbstractTransa
     {
         this.sstableWriter.setRepairedAt(repairedAt);
         return this;
+    }
+
+    protected long getExpectedWriteSize()
+    {
+        return realm.getExpectedCompactedFileSize(nonExpiredSSTables, txn.opType());
     }
 
     public long bytesWritten()

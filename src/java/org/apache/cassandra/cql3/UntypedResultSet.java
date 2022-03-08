@@ -24,6 +24,8 @@ import java.util.*;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.datastax.driver.core.CodecUtils;
+import org.apache.cassandra.cql3.functions.types.LocalDate;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.*;
@@ -380,6 +382,16 @@ public abstract class UntypedResultSet implements Iterable<UntypedResultSet.Row>
             return data.get(column);
         }
 
+        public byte[] getByteArray(String column)
+        {
+            ByteBuffer buf = data.get(column);
+            byte[] arr = new byte[buf.remaining()];
+            for (int i = 0; i < arr.length; i++)
+                arr[i] = buf.get(buf.position() + i);
+
+            return arr;
+        }
+
         public InetAddress getInetAddress(String column)
         {
             return InetAddressType.instance.compose(data.get(column));
@@ -394,6 +406,8 @@ public abstract class UntypedResultSet implements Iterable<UntypedResultSet.Row>
         {
             return TimestampType.instance.compose(data.get(column));
         }
+
+        public LocalDate getDate(String column) { return LocalDate.fromDaysSinceEpoch(CodecUtils.fromUnsignedToSignedInt(data.get(column).getInt()));}
 
         public long getLong(String column)
         {

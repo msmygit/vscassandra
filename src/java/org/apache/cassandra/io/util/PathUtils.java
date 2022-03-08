@@ -558,8 +558,13 @@ public final class PathUtils
             throw new IllegalArgumentException("Must be invoked on a path without redundant elements");
 
         Path parent = file;
+        boolean isRelative = !file.isAbsolute();
         while (parent != null && !Files.exists(parent))
+        {
             parent = parent.getParent();
+            if (parent == null && isRelative)
+                parent = Paths.get("");
+        }
         return parent;
     }
 
@@ -745,7 +750,7 @@ public final class PathUtils
     {
         try
         {
-            Path ancestor = findExistingAncestor(path.normalize());
+            Path ancestor = findExistingAncestor(path.normalize().toAbsolutePath());
             if (ancestor == null)
             {
                 orElse.accept(new NoSuchFileException(path.toString()));

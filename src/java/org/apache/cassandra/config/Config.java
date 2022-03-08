@@ -76,6 +76,8 @@ public class Config
     public volatile int max_hint_window_in_ms = 3 * 3600 * 1000; // three hours
     public String hints_directory;
 
+    public volatile boolean force_new_prepared_statement_behaviour = false;
+
     public ParameterizedClass seed_provider;
     public DiskAccessMode disk_access_mode = DiskAccessMode.auto;
 
@@ -162,7 +164,9 @@ public class Config
 
     public Integer internode_max_message_size_in_bytes;
 
+    @Replaces(oldName = "internode_send_buff_size_in_bytes", deprecated = true)
     public int internode_socket_send_buffer_size_in_bytes = 0;
+    @Replaces(oldName = "internode_recv_buff_size_in_bytes", deprecated = true)
     public int internode_socket_receive_buffer_size_in_bytes = 0;
 
     // TODO: derive defaults from system memory settings?
@@ -335,6 +339,8 @@ public class Config
     public volatile int counter_cache_save_period = 7200;
     public volatile int counter_cache_keys_to_save = Integer.MAX_VALUE;
 
+    public int cache_load_timeout_seconds = 30;
+
     private static boolean isClientMode = false;
     private static Supplier<Config> overrideLoadConfig = null;
 
@@ -397,23 +403,19 @@ public class Config
      */
     public volatile ConsistencyLevel ideal_consistency_level = null;
 
-    /*
-     * Strategy to use for coalescing messages in {@link OutboundConnections}.
-     * Can be fixed, movingaverage, timehorizon, disabled. Setting is case and leading/trailing
-     * whitespace insensitive. You can also specify a subclass of
-     * {@link org.apache.cassandra.utils.CoalescingStrategies.CoalescingStrategy} by name.
-     */
+    @Deprecated
     public String otc_coalescing_strategy = "DISABLED";
 
-    /*
-     * How many microseconds to wait for coalescing. For fixed strategy this is the amount of time after the first
-     * message is received before it will be sent with any accompanying messages. For moving average this is the
-     * maximum amount of time that will be waited as well as the interval at which messages must arrive on average
-     * for coalescing to be enabled.
-     */
+    @Deprecated
     public static final int otc_coalescing_window_us_default = 200;
+    @Deprecated
     public int otc_coalescing_window_us = otc_coalescing_window_us_default;
+    @Deprecated
     public int otc_coalescing_enough_coalesced_messages = 8;
+    @Deprecated
+    public static final int otc_backlog_expiration_interval_ms_default = 200;
+    @Deprecated
+    public volatile int otc_backlog_expiration_interval_ms = otc_backlog_expiration_interval_ms_default;
 
     public int windows_timer_interval = 0;
 
@@ -442,8 +444,21 @@ public class Config
      * "tell" a user that there's something really wrong with the UDF.
      * When you disable async UDF execution, users MUST pay attention to read-timeouts since these may indicate
      * UDFs that run too long or forever - and this can destabilize the cluster.
+     *
+     * This requires allow_insecure_udfs to be true
      */
     public boolean enable_user_defined_functions_threads = true;
+
+    /**
+     * Set this to true to allow running insecure UDFs.
+     */
+    public boolean allow_insecure_udfs = false;
+
+    /**
+     * Set this to allow UDFs accessing java.lang.System.* methods, which basically allows UDFs to execute any arbitrary code on the system.
+     */
+    public boolean allow_extra_insecure_udfs = false;
+
     /**
      * Time in milliseconds after a warning will be emitted to the log and to the client that a UDF runs too long.
      * (Only valid, if enable_user_defined_functions_threads==true)

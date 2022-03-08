@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.Nullable;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
@@ -157,15 +158,16 @@ public class CompactionTask extends AbstractCompactionTask
         return maxFile;
     }
 
-    private boolean reduceScopeForLimitedSpace(Set<SSTableReader> nonExpiredSSTables, long expectedSize)
+    @VisibleForTesting
+    public boolean reduceScopeForLimitedSpace(Set<SSTableReader> nonExpiredSSTables, long expectedSize)
     {
         if (partialCompactionsAcceptable() && transaction.originals().size() > 1)
         {
             // Try again w/o the largest one.
-            logger.warn("insufficient space to compact all requested files. {}MB required, {}",
+            logger.warn("insufficient space to compact all requested files. {}MB required, {} for compaction {}",
                         (float) expectedSize / 1024 / 1024,
-                        StringUtils.join(transaction.originals(), ", "));
-
+                        StringUtils.join(transaction.originals(), ", "),
+                        transaction.opId());
             // Note that we have removed files that are still marked as compacting.
             // This suboptimal but ok since the caller will unmark all the sstables at the end.
             SSTableReader removedSSTable = getMaxSizeFile(nonExpiredSSTables);
@@ -268,6 +270,7 @@ public class CompactionTask extends AbstractCompactionTask
         /**
          * Create a new compaction operation.
          * <p/>
+         *
          * @param controller the compaction controller is needed by the scanners and compaction iterator to manage options
          * @param actuallyCompact the set of sstables to compact (excludes any fully expired ones)
          * @param fullyExpiredSSTablesCount the number of fully expired sstables (used in metrics)
@@ -387,12 +390,10 @@ public class CompactionTask extends AbstractCompactionTask
             Throwable err = Throwables.close(errorsSoFar, obsCloseable, writer, sstableRefs);
 
             if (transaction.isOffline())
+                return;
+
+            if (completed)
             {
-                Refs.release(Refs.selfRefs(newSStables)); // this is harmless in case of exception, newSStables will be empty
-            }
-            else if (completed)
-            {
-                // This code used to execute only if the compaction was successful so we preserve the existing behavior
                 updateCompactionHistory(taskId, realm.getKeyspaceName(), realm.getTableName(), this);
                 CompactionManager.instance.incrementRemovedExpiredSSTables(fullyExpiredSSTablesCount);
                 if (transaction.originals().size() > 0 && actuallyCompact.size() == 0)
@@ -400,13 +401,9 @@ public class CompactionTask extends AbstractCompactionTask
                     CompactionManager.instance.incrementDeleteOnlyCompactions();
 
                 if (logger.isDebugEnabled())
-                {
                     debugLogCompactionSummaryInfo(taskId, System.nanoTime() - startNanos, totalKeysWritten, newSStables, this);
-                }
                 if (logger.isTraceEnabled())
-                {
                     traceLogCompactionSummaryInfo(totalKeysWritten, estimatedKeys, this);
-                }
                 if (strategy != null)
                     strategy.getCompactionLogger().compaction(startTime,
                                                               transaction.originals(),
@@ -421,6 +418,7 @@ public class CompactionTask extends AbstractCompactionTask
 
             Throwables.maybeFail(err);
         }
+
 
         //
         // TableOperation.Progress methods

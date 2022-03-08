@@ -101,20 +101,17 @@ public class NonGroupingRangeCommandIterator extends RangeCommandIterator
     private SingleRangeResponse query(ReplicaPlan.ForRangeRead replicaPlan, boolean isFirst)
     {
         PartitionRangeReadCommand rangeCommand = command.forSubRange(replicaPlan.range(), isFirst);
+
         // If enabled, request repaired data tracking info from full replicas but
         // only if there are multiple full replicas to compare results from
-        if (DatabaseDescriptor.getRepairedDataTrackingForRangeReadsEnabled()
-            && replicaPlan.contacts().filter(Replica::isFull).size() > 1)
-        {
-            command.trackRepairedStatus();
-            rangeCommand.trackRepairedStatus();
-        }
+        boolean trackRepairData = DatabaseDescriptor.getRepairedDataTrackingForRangeReadsEnabled()
+                                    && replicaPlan.contacts().filter(Replica::isFull).size() > 1;
 
         ReplicaPlan.SharedForRangeRead sharedReplicaPlan = ReplicaPlan.shared(replicaPlan);
         ReadRepair<EndpointsForRange, ReplicaPlan.ForRangeRead> readRepair =
         ReadRepair.create(command, sharedReplicaPlan, queryStartNanoTime);
         DataResolver<EndpointsForRange, ReplicaPlan.ForRangeRead> resolver =
-        new DataResolver<>(rangeCommand, sharedReplicaPlan, readRepair, queryStartNanoTime, readTracker);
+        new DataResolver<>(rangeCommand, sharedReplicaPlan, readRepair, queryStartNanoTime, trackRepairData, readTracker);
         ReadCallback<EndpointsForRange, ReplicaPlan.ForRangeRead> handler =
         new ReadCallback<>(resolver, rangeCommand, sharedReplicaPlan, queryStartNanoTime);
 
@@ -128,7 +125,7 @@ public class NonGroupingRangeCommandIterator extends RangeCommandIterator
             {
                 Tracing.trace("Enqueuing request to {}", replica);
                 ReadCommand command = replica.isFull() ? rangeCommand : rangeCommand.copyAsTransientQuery(replica);
-                Message<ReadCommand> message = command.createMessage(command.isTrackingRepairedStatus() && replica.isFull());
+                Message<ReadCommand> message = command.createMessage(trackRepairData && replica.isFull());
                 MessagingService.instance().sendWithCallback(message, replica.endpoint(), handler);
             }
         }

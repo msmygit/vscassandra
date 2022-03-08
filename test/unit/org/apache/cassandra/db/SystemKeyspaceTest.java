@@ -39,7 +39,7 @@ import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.nodes.ILocalInfo;
 import org.apache.cassandra.nodes.Nodes;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.FBUtilities;
@@ -145,7 +145,7 @@ public class SystemKeyspaceTest
         Set<String> snapshottedSystemTables = getSystemSnapshotFiles(SchemaConstants.SYSTEM_KEYSPACE_NAME);
         SystemKeyspace.metadata().tables.forEach(t -> assertTrue(snapshottedSystemTables.contains(t.name)));
         Set<String> snapshottedSchemaTables = getSystemSnapshotFiles(SchemaConstants.SCHEMA_KEYSPACE_NAME);
-        SchemaKeyspace.metadata().tables.forEach(t -> assertTrue(snapshottedSchemaTables.contains(t.name)));
+        SchemaManager.getSystemKeyspaceMetadata().tables.forEach(t -> assertTrue(snapshottedSchemaTables.contains(t.name)));
 
         // clear out the snapshots & set the previous recorded version equal to the latest, we shouldn't
         // see any new snapshots created this time.

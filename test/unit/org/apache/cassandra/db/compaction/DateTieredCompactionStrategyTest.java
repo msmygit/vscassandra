@@ -39,6 +39,7 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.utils.Pair;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.db.compaction.DateTieredCompactionStrategy.getBuckets;
 import static org.apache.cassandra.db.compaction.DateTieredCompactionStrategy.newestBucket;
 import static org.apache.cassandra.db.compaction.DateTieredCompactionStrategy.filterOldSSTables;
@@ -231,9 +232,9 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
                 .clustering("column")
                 .add("val", value).build().applyUnsafe();
 
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         List<CompactionSSTable> sstrs = new ArrayList<>(cfs.getLiveSSTables());
 
@@ -267,9 +268,9 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
                 .clustering("column")
                 .add("val", value).build().applyUnsafe();
 
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         Iterable<CompactionSSTable> filtered;
         List<CompactionSSTable> sstrs = new ArrayList<>(cfs.getLiveSSTables());
@@ -304,7 +305,7 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         SSTableReader expiredSSTable = cfs.getLiveSSTables().iterator().next();
         Thread.sleep(10);
 
@@ -313,7 +314,7 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
             .clustering("column")
             .add("val", value).build().applyUnsafe();
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         assertEquals(cfs.getLiveSSTables().size(), 2);
 
         Map<String, String> options = new HashMap<>();
@@ -360,7 +361,7 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
                     .clustering("column")
                     .add("val", bigValue).build().applyUnsafe();
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         // and small ones:
         for (int r = 0; r < numSSTables / 2; r++)
@@ -369,7 +370,7 @@ public class DateTieredCompactionStrategyTest extends SchemaLoader
             new RowUpdateBuilder(cfs.metadata(), timestamp, key.getKey())
                 .clustering("column")
                 .add("val", value).build().applyUnsafe();
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         Map<String, String> options = new HashMap<>();
         options.put(SizeTieredCompactionStrategyOptions.MIN_SSTABLE_SIZE_KEY, "1");

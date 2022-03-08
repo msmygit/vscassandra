@@ -128,7 +128,8 @@ public class Tracker
 
     // METHODS FOR ATOMICALLY MODIFYING THE VIEW
 
-    Pair<View, View> apply(Function<View, View> function)
+    @VisibleForTesting
+    public Pair<View, View> apply(Function<View, View> function)
     {
         return apply(Predicates.alwaysTrue(), function);
     }

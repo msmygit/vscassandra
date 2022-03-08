@@ -44,6 +44,8 @@ import org.apache.cassandra.io.util.FileReader;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.TableMetadata;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 public class CommitLogSegmentManagerCDCTest extends CQLTester
 {
     private static final Random random = new Random();
@@ -103,7 +105,7 @@ public class CommitLogSegmentManagerCDCTest extends CQLTester
             // Confirm that, on flush+recyle, we see files show up in cdc_raw
             Keyspace.open(keyspace())
                     .getColumnFamilyStore(currentTable())
-                    .forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+                    .forceBlockingFlush(UNIT_TESTS);
             CommitLog.instance.forceRecycleAllSegments();
             cdcMgr.awaitManagementTasksCompletion();
             Assert.assertTrue("Expected files to be moved to overflow.", getCDCRawCount() > 0);

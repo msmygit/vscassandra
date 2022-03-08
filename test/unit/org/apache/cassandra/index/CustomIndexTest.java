@@ -65,6 +65,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 
 import static org.apache.cassandra.cql3.statements.schema.IndexTarget.CUSTOM_INDEX_OPTION_NAME;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -669,7 +670,7 @@ public class CustomIndexTest extends CQLTester
         // Insert a single wide partition to be indexed
         for (int i = 0; i < totalRows; i++)
             execute("INSERT INTO %s (k, c, v) VALUES (0, ?, ?)", i, i);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         // Create the index, which won't automatically start building
         String indexName = "build_single_partition_idx";
@@ -726,7 +727,7 @@ public class CustomIndexTest extends CQLTester
         execute("INSERT INTO %s (k, c, v) VALUES (?, ?, ?)", 5, 3, 3);
         execute("DELETE FROM %s WHERE k = ?", 5);
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         String indexName = "partition_index_test_idx";
         createIndex(String.format("CREATE CUSTOM INDEX %s ON %%s(v) USING '%s'",
@@ -788,7 +789,7 @@ public class CustomIndexTest extends CQLTester
         // Insert a single row partition to be indexed
         for (int i = 0; i < totalRows; i++)
             execute("INSERT INTO %s (k, c, v) VALUES (0, ?, ?)", i, i);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         // Create the index, which won't automatically start building
         String indexName = "partition_overindex_test_idx";
@@ -814,7 +815,7 @@ public class CustomIndexTest extends CQLTester
 
         // Insert a single range tombstone
         execute("DELETE FROM %s WHERE k=1 and c > 2");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         // Create the index, which won't automatically start building
         String indexName = "range_tombstone_idx";
@@ -1177,7 +1178,7 @@ public class CustomIndexTest extends CQLTester
         assertEquals(0, index.flushedUnfiltereds.get());
         assertEquals(0, index.completeFlushCalls.get());
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         assertEquals(1, index.beginFlushCalls.get());
         assertEquals(2, index.flushedPartitions.get());
@@ -1189,7 +1190,7 @@ public class CustomIndexTest extends CQLTester
         execute("DELETE FROM %s WHERE k=?", 0);
         execute("DELETE FROM %s WHERE k=? AND c>=?", 1, 1);
         index.reset();
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         assertEquals(1, index.beginFlushCalls.get());
         assertEquals(2, index.flushedPartitions.get());
@@ -1348,7 +1349,7 @@ public class CustomIndexTest extends CQLTester
         assertEquals(10, index2.finishCalls);
 
         // flush the previous data to get rid of it, reset the group counters and flush a new memtable
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         group.reset();
         execute("INSERT INTO %s (k, s) VALUES (?, ?)", 1, 0);
         execute("INSERT INTO %s (k, c, v) VALUES (?, ?, ?)", 1, 0, 0);
@@ -1358,7 +1359,7 @@ public class CustomIndexTest extends CQLTester
         execute("INSERT INTO %s (k, c, v) VALUES (?, ?, ?)", 2, 2, 0);
         execute("DELETE FROM %s WHERE k=? AND c=?", 2, 3);
         execute("DELETE FROM %s WHERE k=?", 3);
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         // verify that the flush observer calls get only once to the group
         assertEquals(1, group.beginFlushCalls.get());

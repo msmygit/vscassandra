@@ -24,6 +24,8 @@ import org.apache.cassandra.cql3.CQLTester;
 
 import org.junit.Test;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+
 
 public class MultiKeyspaceTest extends CQLTester
 {
@@ -39,8 +41,8 @@ public class MultiKeyspaceTest extends CQLTester
         execute("INSERT INTO multikstest1.standard1 (a, b) VALUES (0, 0)");
         execute("INSERT INTO multikstest2.standard1 (a, b) VALUES (0, 0)");
 
-        Keyspace.open("multikstest1").flush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
-        Keyspace.open("multikstest2").flush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        Keyspace.open("multikstest1").flush(UNIT_TESTS);
+        Keyspace.open("multikstest2").flush(UNIT_TESTS);
 
         assertRows(execute("SELECT * FROM multikstest1.standard1"),
                    row(0, 0));

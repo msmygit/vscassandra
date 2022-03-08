@@ -53,7 +53,6 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.service.reads.ReadCallback;
 import org.apache.cassandra.transport.ProtocolVersion;
-import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.junit.Assert.assertEquals;
@@ -134,7 +133,7 @@ public class MultiRangeReadCommandTest
         MultiRangeReadCommand command = MultiRangeReadCommand.create(partitionRangeCommand, ranges, true);
 
         UnfilteredPartitionIterator data = command.executeLocally(command.executionController());
-        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data);
+        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data, null);
 
         // verify subrange response from multi-range read responses contains all data in the subrange
         for (AbstractBounds<PartitionPosition> range : ranges)
@@ -223,14 +222,14 @@ public class MultiRangeReadCommandTest
         partitionRangeCommand = partitionRangeCommand.copyAsDigestQuery();
         MultiRangeReadCommand command = MultiRangeReadCommand.create(partitionRangeCommand, ranges(2), true);
         UnfilteredPartitionIterator data = command.executeLocally(command.executionController());
-        command.createResponse(data);
+        command.createResponse(data, null);
     }
 
     @Test
     public void testResponseIsNotDigestResponse()
     {
         MultiRangeReadCommand command = command(ranges(2), true);
-        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()));
+        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()), null);
         assertFalse(response.isDigestResponse());
     }
 
@@ -238,7 +237,7 @@ public class MultiRangeReadCommandTest
     public void testResponseIsRepairedDigestConclusiveForLocalResponse()
     {
         MultiRangeReadCommand command = command(ranges(2), true);
-        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()));
+        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()), null);
         assertTrue(response.isRepairedDigestConclusive());
     }
 
@@ -246,7 +245,7 @@ public class MultiRangeReadCommandTest
     public void testRepairedDataDigestIsEmptyForLocalResponse()
     {
         MultiRangeReadCommand command = command(ranges(2), true);
-        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()));
+        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()), null);
         assertFalse(response.repairedDataDigest().hasRemaining());
     }
 
@@ -254,7 +253,7 @@ public class MultiRangeReadCommandTest
     public void testMaybeIncludeRepairedDigestForLocalResponse()
     {
         MultiRangeReadCommand command = command(ranges(2), true);
-        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()));
+        MultiRangeReadResponse response = (MultiRangeReadResponse)command.createResponse(command.executeLocally(command.executionController()), null);
         assertTrue(response.mayIncludeRepairedDigest());
     }
 
@@ -269,7 +268,7 @@ public class MultiRangeReadCommandTest
     {
         MultiRangeReadCommand command = command(ranges(10), true);
         UnfilteredPartitionIterator data = command.executeLocally(command.executionController());
-        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data);
+        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data, null);
         response.digest(null);
     }
 
@@ -278,7 +277,7 @@ public class MultiRangeReadCommandTest
     {
         MultiRangeReadCommand command = command(ranges(10), true);
         UnfilteredPartitionIterator data = command.executeLocally(command.executionController());
-        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data);
+        MultiRangeReadResponse response = (MultiRangeReadResponse) command.createResponse(data, null);
         response.toDebugString(null, null);
     }
 

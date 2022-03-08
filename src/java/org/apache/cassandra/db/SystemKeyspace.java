@@ -21,17 +21,7 @@ import java.io.IOError;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -53,28 +43,17 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
-import org.apache.cassandra.cql3.functions.AggregateFcts;
-import org.apache.cassandra.cql3.functions.BytesConversionFcts;
-import org.apache.cassandra.cql3.functions.CastFcts;
-import org.apache.cassandra.cql3.functions.OperationFcts;
-import org.apache.cassandra.cql3.functions.TimeFcts;
-import org.apache.cassandra.cql3.functions.UuidFcts;
+import org.apache.cassandra.cql3.functions.*;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
 import org.apache.cassandra.db.commitlog.CommitLogPosition;
 import org.apache.cassandra.db.compaction.CompactionHistoryTabularData;
-import org.apache.cassandra.db.marshal.BytesType;
-import org.apache.cassandra.db.marshal.TimeUUIDType;
-import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.*;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.Rows;
-import org.apache.cassandra.dht.IPartitioner;
-import org.apache.cassandra.dht.LocalPartitioner;
-import org.apache.cassandra.dht.Range;
-import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.dht.*;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
-import org.apache.cassandra.io.util.DataOutputBuffer;
-import org.apache.cassandra.io.util.File;
+import org.apache.cassandra.io.util.*;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.metrics.RestorableMeter;
 import org.apache.cassandra.net.MessagingService;
@@ -82,31 +61,18 @@ import org.apache.cassandra.nodes.INodeInfo;
 import org.apache.cassandra.nodes.IPeerInfo;
 import org.apache.cassandra.nodes.Nodes;
 import org.apache.cassandra.nodes.TruncationRecord;
-import org.apache.cassandra.schema.CompactionParams;
-import org.apache.cassandra.schema.Functions;
-import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.*;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaKeyspace;
-import org.apache.cassandra.schema.TableId;
-import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.schema.Tables;
-import org.apache.cassandra.schema.Types;
-import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.service.paxos.Commit;
 import org.apache.cassandra.service.paxos.PaxosState;
 import org.apache.cassandra.streaming.StreamOperation;
 import org.apache.cassandra.transport.ProtocolVersion;
-import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.cassandra.utils.CassandraVersion;
-import org.apache.cassandra.utils.FBUtilities;
-import org.apache.cassandra.utils.MD5Digest;
-import org.apache.cassandra.utils.Pair;
-import org.apache.cassandra.utils.UUIDGen;
+import org.apache.cassandra.utils.*;
 
 import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
+
 import static org.apache.cassandra.cql3.QueryProcessor.executeInternal;
 import static org.apache.cassandra.cql3.QueryProcessor.executeOnceInternal;
 
@@ -512,7 +478,7 @@ public final class SystemKeyspace
 
     public static void finishStartup()
     {
-        SchemaKeyspace.saveSystemKeyspacesSchema();
+        SchemaManager.instance.saveSystemKeyspace();
     }
 
     public static void persistLocalMetadata()
@@ -1198,10 +1164,10 @@ public final class SystemKeyspace
      */
     public static void clearAllEstimates()
     {
-        for (TableMetadata table : Arrays.asList(LegacySizeEstimates, TableEstimates))
+        for (String table : Arrays.asList(LEGACY_SIZE_ESTIMATES, TABLE_ESTIMATES))
         {
-            String cql = String.format("TRUNCATE TABLE " + table.toString());
-            executeInternal(cql);
+            ColumnFamilyStore cfs = Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).getColumnFamilyStore(table);
+            cfs.truncateBlockingWithoutSnapshot();
         }
     }
 
@@ -1253,7 +1219,7 @@ public final class SystemKeyspace
     public static void resetAvailableRanges()
     {
         ColumnFamilyStore availableRanges = Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).getColumnFamilyStore(AVAILABLE_RANGES_V2);
-        availableRanges.truncateBlocking();
+        availableRanges.truncateBlockingWithoutSnapshot();
     }
 
     public static synchronized void updateTransferredRanges(StreamOperation streamOperation,
@@ -1413,18 +1379,41 @@ public final class SystemKeyspace
 
     public static void resetPreparedStatements()
     {
-        ColumnFamilyStore availableRanges = Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).getColumnFamilyStore(PREPARED_STATEMENTS);
-        availableRanges.truncateBlocking();
+        ColumnFamilyStore preparedStatements = Keyspace.open(SchemaConstants.SYSTEM_KEYSPACE_NAME).getColumnFamilyStore(PREPARED_STATEMENTS);
+        preparedStatements.truncateBlockingWithoutSnapshot();
     }
 
-    public static List<Pair<String, String>> loadPreparedStatements()
+    public static int loadPreparedStatements(TriFunction<MD5Digest, String, String, Boolean> onLoaded)
     {
-        String query = format("SELECT logged_keyspace, query_string FROM %s", PreparedStatements.toString());
+        String query = String.format("SELECT prepared_id, logged_keyspace, query_string FROM %s.%s", SchemaConstants.SYSTEM_KEYSPACE_NAME, PREPARED_STATEMENTS);
         UntypedResultSet resultSet = executeOnceInternal(query);
-        List<Pair<String, String>> r = new ArrayList<>();
+        int counter = 0;
         for (UntypedResultSet.Row row : resultSet)
-            r.add(Pair.create(row.has("logged_keyspace") ? row.getString("logged_keyspace") : null,
-                              row.getString("query_string")));
-        return r;
+        {
+            if (onLoaded.accept(MD5Digest.wrap(row.getByteArray("prepared_id")),
+                                row.getString("query_string"),
+                                row.has("logged_keyspace") ? row.getString("logged_keyspace") : null))
+                counter++;
+        }
+        return counter;
+    }
+
+    public static int loadPreparedStatement(MD5Digest digest, TriFunction<MD5Digest, String, String, Boolean> onLoaded)
+    {
+        String query = String.format("SELECT prepared_id, logged_keyspace, query_string FROM %s.%s WHERE prepared_id = ?", SchemaConstants.SYSTEM_KEYSPACE_NAME, PREPARED_STATEMENTS);
+        UntypedResultSet resultSet = executeOnceInternal(query, digest.byteBuffer());
+        int counter = 0;
+        for (UntypedResultSet.Row row : resultSet)
+        {
+            if (onLoaded.accept(MD5Digest.wrap(row.getByteArray("prepared_id")),
+                                row.getString("query_string"),
+                                row.has("logged_keyspace") ? row.getString("logged_keyspace") : null))
+                counter++;
+        }
+        return counter;
+    }
+
+    public static interface TriFunction<A, B, C, D> {
+        D accept(A var1, B var2, C var3);
     }
 }

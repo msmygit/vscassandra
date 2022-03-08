@@ -164,7 +164,8 @@ public class LifecycleTransaction extends Transactional.AbstractTransactional im
     }
 
     @SuppressWarnings("resource") // log closed during postCleanup
-    LifecycleTransaction(Tracker tracker, OperationType operationType, Iterable<? extends SSTableReader> readers)
+    @VisibleForTesting
+    public LifecycleTransaction(Tracker tracker, OperationType operationType, Iterable<? extends SSTableReader> readers)
     {
         this.tracker = tracker;
         this.log = ILogTransactionsFactory.instance.createLogTransaction(operationType, tracker.metadata);

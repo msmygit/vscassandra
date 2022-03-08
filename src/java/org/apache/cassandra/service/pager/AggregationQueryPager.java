@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.cql3.PageSize;
+import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.OperationExecutionException;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.*;
@@ -82,7 +83,7 @@ public final class AggregationQueryPager implements QueryPager
                                        long queryStartNanoTime) throws OperationExecutionException
     {
         if (pageSize.isDefined() && pageSize.getUnit() != PageSize.PageUnit.ROWS)
-            throw new OperationExecutionException("Paging in bytes is not supported for aggregation queries. Please specify the page size in rows.");
+            throw new InvalidRequestException("Paging in bytes is not supported for aggregation queries. Please specify the page size in rows.");
 
         if (limits.isGroupByLimit())
             return new GroupByPartitionIterator(pageSize, subPageSize, consistency, queryState, queryStartNanoTime);
@@ -106,7 +107,7 @@ public final class AggregationQueryPager implements QueryPager
     public PartitionIterator fetchPageInternal(PageSize pageSize, ReadExecutionController executionController)
     {
         if (pageSize.isDefined() && pageSize.getUnit() != PageSize.PageUnit.ROWS)
-            throw new OperationExecutionException("Paging in bytes is not supported for aggregation queries. Please specify the page size in rows.");
+            throw new InvalidRequestException("Paging in bytes is not supported for aggregation queries. Please specify the page size in rows.");
 
         if (limits.isGroupByLimit())
             return new GroupByPartitionIterator(pageSize, subPageSize, executionController, System.nanoTime());

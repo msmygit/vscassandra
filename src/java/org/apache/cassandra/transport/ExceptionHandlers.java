@@ -32,6 +32,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.unix.Errors;
 import org.apache.cassandra.exceptions.OverloadedException;
 import org.apache.cassandra.metrics.ClientMetrics;
 import org.apache.cassandra.net.FrameEncoder;
@@ -88,7 +89,7 @@ public class ExceptionHandlers
                     JVMStabilityInspector.inspectThrowable(cause);
                 }
             }
-            
+
             logClientNetworkingExceptions(cause);
         }
 
@@ -117,7 +118,12 @@ public class ExceptionHandlers
             // Once the threshold for overload is breached, it will very likely spam the logs...
             NoSpamLogger.log(logger, NoSpamLogger.Level.INFO, 1, TimeUnit.MINUTES, cause.getMessage());
         }
-        else
+        else if (Throwables.anyCauseMatches(cause, t -> t instanceof Errors.NativeIoException))
+            {
+                ClientMetrics.instance.markUnknownException();
+                logger.trace("Native exception in client networking", cause);
+            }
+            else
         {
             ClientMetrics.instance.markUnknownException();
             logger.warn("Unknown exception in client networking", cause);

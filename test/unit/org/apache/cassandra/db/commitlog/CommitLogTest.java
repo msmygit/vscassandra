@@ -104,6 +104,9 @@ import org.apache.cassandra.utils.KillerForTests;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.vint.VIntCoding;
 
+import org.junit.After;
+
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.STARTUP;
 import static org.apache.cassandra.db.commitlog.CommitLogSegment.ENTRY_OVERHEAD_SIZE;
 import static org.apache.cassandra.db.commitlog.CommitLogSegment.SYNC_MARKER_SIZE;
@@ -236,7 +239,7 @@ public abstract class CommitLogTest
     public void testHeaderOnlyFileFiltering() throws Exception
     {
         Assume.assumeTrue(!DatabaseDescriptor.getEncryptionContext().isEnabled());
-        
+
         File directory = new File(Files.createTempDir());
 
         CommitLogDescriptor desc1 = new CommitLogDescriptor(CommitLogDescriptor.current_version, 1, null, DatabaseDescriptor.getEncryptionContext());
@@ -961,7 +964,7 @@ public abstract class CommitLogTest
                 {
                     try (Closeable c = Util.markDirectoriesUnwriteable(cfs))
                     {
-                        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+                        cfs.forceBlockingFlush(UNIT_TESTS);
                     }
                     catch (Throwable t)
                     {
@@ -971,7 +974,7 @@ public abstract class CommitLogTest
                     }
                 }
                 else
-                    cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+                    cfs.forceBlockingFlush(UNIT_TESTS);
             }
         }
         finally
@@ -1026,7 +1029,7 @@ public abstract class CommitLogTest
     {
         try
         {
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         catch (Throwable t)
         {
@@ -1053,7 +1056,7 @@ public abstract class CommitLogTest
     {
         try
         {
-            cfs.switchMemtableIfCurrent(current, ColumnFamilyStore.FlushReason.UNIT_TESTS).get();
+            cfs.switchMemtableIfCurrent(current, UNIT_TESTS).get();
         }
         catch (InterruptedException|ExecutionException e)
         {

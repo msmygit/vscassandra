@@ -42,7 +42,9 @@ import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.ReadExecutionController;
 import org.apache.cassandra.db.ReadQuery;
 import org.apache.cassandra.db.partitions.PartitionIterator;
+import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.OperationExecutionException;
+import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.pager.AggregationQueryPager;
 import org.apache.cassandra.service.pager.QueryPager;
@@ -238,7 +240,7 @@ public class PagingQueryTest extends CQLTester
             assertThat(count).isEqualTo(expectedCount);
             assertThat(pager.isExhausted()).isTrue();
         }
-        catch (OperationExecutionException ex)
+        catch (InvalidRequestException ex)
         {
             if (pager instanceof AggregationQueryPager && requestedPageSize.getUnit() == PageSize.PageUnit.BYTES)
                 return null;
@@ -260,7 +262,7 @@ public class PagingQueryTest extends CQLTester
     {
         String table = generateData(genPartitions, genClusterings, genClusterings2);
 
-        flush(true);
+        flush(KEYSPACE, table);
         Supplier<Pair<QueryPager, SelectStatement>> pagerSupplier;
         query = String.format(query, KEYSPACE + '.' + table);
         int selected = selPartitions * selClusterings;
@@ -377,7 +379,7 @@ public class PagingQueryTest extends CQLTester
     {
         String table = generateData(genPartitions, genClusterings, genClusterings2);
 
-        flush(true);
+        flush(KEYSPACE, table);
         Supplier<Pair<QueryPager, SelectStatement>> pagerSupplier;
         query = String.format(query, KEYSPACE + '.' + table);
 
@@ -388,19 +390,24 @@ public class PagingQueryTest extends CQLTester
 
     private String generateData(int genPartitions, int genClusterings, int genClusterings2) throws Throwable
     {
-        String table = createTable("CREATE TABLE %s (k INT, c INT, c2 INT, v INT, PRIMARY KEY (k, c, c2))");
+        String table = String.format("table_%d_%d_%d", genPartitions, genClusterings, genClusterings2);
+        if (SchemaManager.instance.getTableMetadata(KEYSPACE, table) != null)
+            return table;
+
+        QueryProcessor.executeInternal(String.format("CREATE TABLE %s.%s (k INT, c INT, c2 INT, v INT, PRIMARY KEY (k, c, c2))", KEYSPACE, table));
         for (int k = 0; k < genPartitions; k++)
         {
             for (int c = 0; c < genClusterings; c++)
             {
                 for (int c2 = 0; c2 < genClusterings2; c2++)
                 {
-                    execute("INSERT INTO %s (k, c, c2, v) VALUES (?, ?, ?, ?)", k, c, c2, 1);
+                    execute(String.format("INSERT INTO %s.%s (k, c, c2, v) VALUES (?, ?, ?, ?)", KEYSPACE, table), k, c, c2, 1);
                     if ((k * genClusterings + c) % (3 * (genClusterings + genPartitions) / 2) == 0)
-                        flush(true);
+                        flush(KEYSPACE, table);
                 }
             }
         }
+
         return table;
     }
 
@@ -537,7 +544,6 @@ public class PagingQueryTest extends CQLTester
     {
         testPagingCasesWithAggregateEverything("SELECT COUNT(*) FROM %s WHERE c > 2 AND c <= 7 AND k = 5", 10, 10, 10, 50);
     }
-
 
     private static String someText()
     {

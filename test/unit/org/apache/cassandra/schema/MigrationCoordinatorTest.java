@@ -143,7 +143,6 @@ public class MigrationCoordinatorTest
             this.coordinator = new MigrationCoordinator(messagingService,
                                                         MoreExecutors.newDirectExecutorService(),
                                                         oneTimeExecutor,
-                                                        () -> ManagementFactory.getRuntimeMXBean().getUptime(),
                                                         maxOutstandingRequests,
                                                         gossiper,
                                                         () -> localSchemaVersion,

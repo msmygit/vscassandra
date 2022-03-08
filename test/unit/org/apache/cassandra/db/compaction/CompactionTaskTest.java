@@ -24,21 +24,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-
 
 import com.google.common.collect.ImmutableSet;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
+import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.io.sstable.ScannerList;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.KeyspaceParams;
@@ -52,6 +52,8 @@ import org.apache.cassandra.utils.concurrent.Transactional;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+import static org.apache.cassandra.db.lifecycle.View.updateCompacting;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -102,10 +104,10 @@ public class CompactionTaskTest
         cfs.getCompactionStrategyContainer().disable();
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (1, 1);");
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (2, 2);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (3, 3);");
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (4, 4);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         Set<SSTableReader> sstables = cfs.getLiveSSTables();
 
         Assert.assertEquals(2, sstables.size());
@@ -178,13 +180,13 @@ public class CompactionTaskTest
     {
         cfs.getCompactionStrategyContainer().disable();
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (1, 1);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (2, 2);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (3, 3);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (4, 4);");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         List<SSTableReader> sstables = new ArrayList<>(cfs.getLiveSSTables());
         Assert.assertEquals(4, sstables.size());
@@ -219,6 +221,43 @@ public class CompactionTaskTest
                     txn.abort();
             }
             Collections.rotate(toCompact, 1);
+        }
+    }
+
+    @Test
+    public void testOfflineCompaction()
+    {
+        cfs.getCompactionStrategyContainer().disable();
+        QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (1, 1);");
+        cfs.forceBlockingFlush(UNIT_TESTS);
+        QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (2, 2);");
+        cfs.forceBlockingFlush(UNIT_TESTS);
+        QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (3, 3);");
+        cfs.forceBlockingFlush(UNIT_TESTS);
+        QueryProcessor.executeInternal("INSERT INTO ks.tbl (k, v) VALUES (4, 4);");
+        cfs.forceBlockingFlush(UNIT_TESTS);
+
+        Set<SSTableReader> sstables = cfs.getLiveSSTables();
+        Assert.assertEquals(4, sstables.size());
+
+        Tracker tracker = Tracker.newDummyTracker(cfs.metadata);
+        tracker.addInitialSSTables(sstables);
+        tracker.apply(updateCompacting(Collections.emptySet(), sstables));
+        try (LifecycleTransaction txn = new LifecycleTransaction(tracker, OperationType.COMPACTION, sstables))
+        {
+            Assert.assertEquals(4, tracker.getView().liveSSTables().size());
+            CompactionTask task = new CompactionTask(cfs, txn, 1000, false, null);
+            task.execute(new ActiveOperations());
+
+            // Check that new SSTable was not released
+            Assert.assertEquals(1, tracker.getView().liveSSTables().size());
+            SSTableReader newSSTable = tracker.getView().liveSSTables().iterator().next();
+            Assert.assertNotNull(newSSTable.tryRef());
+        }
+        finally
+        {
+            // SSTables were compacted offline; CFS didn't notice that, so we have to remove them manually
+            cfs.getTracker().removeUnsafe(sstables);
         }
     }
 

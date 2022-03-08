@@ -56,6 +56,7 @@ import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.schema.CompactionParams;
 import org.apache.cassandra.service.StorageService;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -432,7 +433,7 @@ public class CompactionsCQLTest extends CQLTester
             {
                 execute("insert into %s (id, id2, t) values (?, ?, ?)", i, j, value);
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         assertEquals(50, cfs.getLiveSSTables().size());
         LeveledCompactionStrategy lcs = (LeveledCompactionStrategy) ((CompactionStrategyManager) cfs.getCompactionStrategyContainer())
@@ -452,7 +453,7 @@ public class CompactionsCQLTest extends CQLTester
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         cfs.disableAutoCompaction();
         execute("insert into %s (id, id2, t) values (?, ?, ?)", 1,1,"L1");
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         cfs.forceMajorCompaction();
         SSTableReader l1sstable = cfs.getLiveSSTables().iterator().next();
         assertEquals(1, l1sstable.getSSTableLevel());
@@ -466,7 +467,7 @@ public class CompactionsCQLTest extends CQLTester
             {
                 execute("insert into %s (id, id2, t) values (?, ?, ?)", i, j, value);
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
         assertEquals(51, cfs.getLiveSSTables().size());
 
@@ -558,14 +559,14 @@ public class CompactionsCQLTest extends CQLTester
             r.nextBytes(b);
             execute("insert into %s (id, x) values (?, ?)", i, ByteBuffer.wrap(b));
         }
-        getCurrentColumnFamilyStore().forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        getCurrentColumnFamilyStore().forceBlockingFlush(UNIT_TESTS);
         getCurrentColumnFamilyStore().disableAutoCompaction();
         for (int i = 0; i < 1000; i++)
         {
             r.nextBytes(b);
             execute("insert into %s (id, x) values (?, ?)", i, ByteBuffer.wrap(b));
         }
-        getCurrentColumnFamilyStore().forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        getCurrentColumnFamilyStore().forceBlockingFlush(UNIT_TESTS);
 
         LeveledCompactionStrategy lcs = (LeveledCompactionStrategy) ((CompactionStrategyManager) getCurrentColumnFamilyStore().getCompactionStrategyContainer())
                                                                     .getUnrepairedUnsafe()
@@ -595,7 +596,7 @@ public class CompactionsCQLTest extends CQLTester
             r.nextBytes(b);
             execute("insert into %s (id, x) values (?, ?)", i, ByteBuffer.wrap(b));
         }
-        getCurrentColumnFamilyStore().forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        getCurrentColumnFamilyStore().forceBlockingFlush(UNIT_TESTS);
         // now we have a bunch of sstables in L2 and one in L0 - bump the L0 one to L1:
         for (SSTableReader sstable : getCurrentColumnFamilyStore().getLiveSSTables())
         {

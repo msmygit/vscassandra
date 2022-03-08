@@ -153,7 +153,7 @@ public class View
                 // the live set when they are completely exhausted.
 
                 // Add the compacting versions first because they will be the canonical versions of compaction sources.
-                Set<SSTableReader> canonicalSSTables = new HashSet<>();
+                Set<SSTableReader> canonicalSSTables = new HashSet<>(sstables.size() + compacting.size());
                 for (SSTableReader sstable : compacting)
                     if (sstable.openReason != SSTableReader.OpenReason.EARLY)
                         canonicalSSTables.add(sstable);
@@ -255,7 +255,8 @@ public class View
     // METHODS TO CONSTRUCT FUNCTIONS FOR MODIFYING A VIEW:
 
     // return a function to un/mark the provided readers compacting in a view
-    static Function<View, View> updateCompacting(final Set<? extends SSTableReader> unmark, final Iterable<? extends SSTableReader> mark)
+    @VisibleForTesting
+    public static Function<View, View> updateCompacting(final Set<? extends SSTableReader> unmark, final Iterable<? extends SSTableReader> mark)
     {
         if (unmark.isEmpty() && Iterables.isEmpty(mark))
             return Functions.identity();

@@ -30,19 +30,19 @@ import org.junit.Test;
 
 import org.apache.cassandra.cache.KeyCacheKey;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
-import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.metrics.CacheMetrics;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.schema.CachingParams;
+import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.service.StorageService;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -317,7 +317,7 @@ public class KeyCacheCqlTest extends CQLTester
         }
 
         dropTable("DROP TABLE %s");
-        assert SchemaManager.instance.isSameVersion(SchemaKeyspace.calculateSchemaDigest());
+        assert SchemaManager.instance.isSameVersion(SchemaTestUtil.calculateSchemaDigest());
 
         //Test loading for a dropped 2i/table
         CacheService.instance.keyCache.clear();
@@ -575,7 +575,7 @@ public class KeyCacheCqlTest extends CQLTester
 
             if (i % 10 == 9)
             {
-                Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS).get();
+                Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(UNIT_TESTS).get();
                 if (index != null)
                     triggerBlockingFlush(Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).indexManager.getIndexByName(index));
             }
@@ -585,7 +585,7 @@ public class KeyCacheCqlTest extends CQLTester
     private static void prepareTable(String table) throws IOException, InterruptedException, java.util.concurrent.ExecutionException
     {
         StorageService.instance.disableAutoCompaction(KEYSPACE_PER_TEST, table);
-        Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS).get();
+        Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).forceFlush(UNIT_TESTS).get();
         Keyspace.open(KEYSPACE_PER_TEST).getColumnFamilyStore(table).truncateBlocking();
     }
 

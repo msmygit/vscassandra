@@ -46,6 +46,7 @@ import org.apache.cassandra.cql3.functions.FunctionName;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.KeyspaceNotDefinedException;
+import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
@@ -58,6 +59,7 @@ import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 
 import static com.google.common.collect.Iterables.size;
 import static java.lang.String.format;
@@ -139,6 +141,22 @@ public final class SchemaManager implements SchemaProvider
     {
         logger.debug("Waiting for update handler to be ready...");
         return updateHandler.waitUntilReady(timeout);
+    }
+
+    /**
+     * Add entries to system_schema.* for the hardcoded system keyspaces
+     *
+     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
+     */
+    // TODO RMEOVE THIS METHODS WHEN PORTING CASSANDRA-17044 - schema keyspace should not be touched outside the schema update handler
+    public synchronized void saveSystemKeyspace()
+    {
+        SchemaKeyspace.saveSystemKeyspacesSchema();
+    }
+
+    public static KeyspaceMetadata getSystemKeyspaceMetadata()
+    {
+        return SchemaKeyspace.metadata();
     }
 
     /**
@@ -587,6 +605,8 @@ public final class SchemaManager implements SchemaProvider
     /**
      * Read schema from system keyspace and calculate MD5 digest of every row, resulting digest
      * will be converted into UUID which would act as content-based version of the schema.
+     *
+     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
      */
     private void updateVersion(UUID version)
     {

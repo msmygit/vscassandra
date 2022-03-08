@@ -23,9 +23,7 @@ import java.io.IOException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.Attributes;
@@ -45,11 +43,11 @@ import org.apache.cassandra.tools.ToolRunner.ToolResult;
 import org.apache.cassandra.utils.FBUtilities;
 import org.assertj.core.api.Assertions;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class TTLTest extends CQLTester
 {
     public static String NEGATIVE_LOCAL_EXPIRATION_TEST_DIR = "test/data/negative-local-expiration-test/%s";
@@ -214,15 +212,7 @@ public class TTLTest extends CQLTester
         baseTestRecoverOverflowedExpiration(false, false, false);
         baseTestRecoverOverflowedExpiration(true, false, false);
         baseTestRecoverOverflowedExpiration(true, false, true);
-        // we reset the corrupted ts strategy after each test in @After above
-    }
 
-    @Test
-    public void testRecoverOverflowedExpirationWithSSTableScrub() throws Throwable
-    {
-        // this tests writes corrupt tombstones on purpose, disable the strategy:
-        DatabaseDescriptor.setCorruptedTombstoneStrategy(Config.CorruptedTombstoneStrategy.disabled);
-        baseTestRecoverOverflowedExpiration(false, false, false);
         baseTestRecoverOverflowedExpiration(false, true, false);
         baseTestRecoverOverflowedExpiration(false, true, true);
         // we reset the corrupted ts strategy after each test in @After above
@@ -279,7 +269,7 @@ public class TTLTest extends CQLTester
         // Maybe Flush
         Keyspace ks = Keyspace.open(keyspace());
         if (flush)
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
 
         // Verify data
         verifyData(simple);
@@ -437,6 +427,7 @@ public class TTLTest extends CQLTester
 
         try
         {
+            cfs.truncateBlocking();
             dropTable("DROP TABLE %s");
         }
         catch (Throwable e)

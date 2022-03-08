@@ -27,6 +27,8 @@ import org.apache.cassandra.io.util.FileUtils;
 import org.assertj.core.api.Assertions;
 import org.mockito.Mockito;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
 public class LogReplicationSetTest
 {
     @Test

@@ -53,6 +53,7 @@ import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NonThrowingCloseable;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -69,7 +70,7 @@ public class ActiveOperationsTest extends CQLTester
         for (int i = 0; i < 5; i++)
         {
             execute("INSERT INTO %s (pk, ck, a, b) VALUES (" + i + ", 2, 3, 4)");
-            getCurrentColumnFamilyStore().forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            getCurrentColumnFamilyStore().forceBlockingFlush(UNIT_TESTS);
         }
 
         Index idx = getCurrentColumnFamilyStore().indexManager.getIndexByName(idxName);

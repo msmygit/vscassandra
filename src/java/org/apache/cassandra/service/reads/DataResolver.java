@@ -61,6 +61,7 @@ public class DataResolver<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
 {
     private final boolean enforceStrictLiveness;
     private final ReadRepair<E, P> readRepair;
+    private final boolean trackRepairedStatus;
     protected final QueryInfoTracker.ReadTracker readTracker;
 
     public DataResolver(ReadCommand command,
@@ -69,10 +70,22 @@ public class DataResolver<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
                         long queryStartNanoTime,
                         QueryInfoTracker.ReadTracker readTracker)
     {
+        this(command, replicaPlan, readRepair, queryStartNanoTime, false, readTracker);
+    }
+
+    public DataResolver(ReadCommand command, ReplicaPlan.Shared<E, P> replicaPlan, ReadRepair<E, P> readRepair, long queryStartNanoTime, boolean trackRepairedStatus, QueryInfoTracker.ReadTracker readTracker)
+    {
         super(command, replicaPlan, queryStartNanoTime);
         this.enforceStrictLiveness = command.metadata().enforceStrictLiveness();
         this.readRepair = readRepair;
+        this.trackRepairedStatus = trackRepairedStatus;
         this.readTracker = readTracker;
+    }
+
+    public PartitionIterator getData()
+    {
+        ReadResponse response = responses.get(0).payload;
+        return UnfilteredPartitionIterators.filter(response.makeIterator(command), command.nowInSec());
     }
 
     public boolean isDataPresent()
@@ -90,7 +103,7 @@ public class DataResolver<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
         E replicas = replicaPlan().candidates().select(transform(messages, Message::from), false);
 
         // If requested, inspect each response for a digest of the replica's repaired data set
-        RepairedDataTracker repairedDataTracker = command.isTrackingRepairedStatus()
+        RepairedDataTracker repairedDataTracker = trackRepairedStatus
                                                   ? new RepairedDataTracker(getRepairedDataVerifier(command))
                                                   : null;
         if (repairedDataTracker != null)

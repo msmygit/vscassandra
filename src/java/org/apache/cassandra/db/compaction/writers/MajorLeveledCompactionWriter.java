@@ -116,4 +116,10 @@ public class MajorLeveledCompactionWriter extends CompactionAwareWriter
                                     realm.getIndexManager().listIndexGroups(),
                                     txn);
     }
+
+    @Override
+    protected long getExpectedWriteSize()
+    {
+        return Math.min(maxSSTableSize, super.getExpectedWriteSize());
+    }
 }

@@ -62,10 +62,15 @@ public interface QueryHandler
 
         public final MD5Digest resultMetadataId;
 
-        public Prepared(CQLStatement statement)
+        public final String keyspace;
+        public final boolean fullyQualified;
+
+        public Prepared(CQLStatement statement, boolean fullyQualified, String keyspace)
         {
             this.statement = statement;
             this.resultMetadataId = ResultSet.ResultMetadata.fromPrepared(statement).getResultMetadataId();
+            this.fullyQualified = fullyQualified;
+            this.keyspace = keyspace;
         }
     }
 }

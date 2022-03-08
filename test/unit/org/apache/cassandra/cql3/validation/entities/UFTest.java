@@ -184,16 +184,16 @@ public class UFTest extends CQLTester
         // drop it those statements should be removed from the cache in QueryProcessor. The other statements
         // should be unaffected.
 
-        ResultMessage.Prepared preparedSelect1 = QueryProcessor.prepare(
+        ResultMessage.Prepared preparedSelect1 = QueryProcessor.instance.prepare(
                                                                        String.format("SELECT key, %s(d) FROM %s.%s", fSin, KEYSPACE, currentTable()),
                                                                        ClientState.forInternalCalls());
-        ResultMessage.Prepared preparedSelect2 = QueryProcessor.prepare(
+        ResultMessage.Prepared preparedSelect2 = QueryProcessor.instance.prepare(
                                                     String.format("SELECT key FROM %s.%s", KEYSPACE, currentTable()),
                                                     ClientState.forInternalCalls());
-        ResultMessage.Prepared preparedInsert1 = QueryProcessor.prepare(
+        ResultMessage.Prepared preparedInsert1 = QueryProcessor.instance.prepare(
                                                       String.format("INSERT INTO %s.%s (key, d) VALUES (?, %s(?))", KEYSPACE, currentTable(), fSin),
                                                       ClientState.forInternalCalls());
-        ResultMessage.Prepared preparedInsert2 = QueryProcessor.prepare(
+        ResultMessage.Prepared preparedInsert2 = QueryProcessor.instance.prepare(
                                                       String.format("INSERT INTO %s.%s (key, d) VALUES (?, ?)", KEYSPACE, currentTable()),
                                                       ClientState.forInternalCalls());
 
@@ -218,10 +218,10 @@ public class UFTest extends CQLTester
 
         Assert.assertEquals(1, SchemaManager.instance.getFunctions(fSinName).size());
 
-        preparedSelect1= QueryProcessor.prepare(
+        preparedSelect1= QueryProcessor.instance.prepare(
                                          String.format("SELECT key, %s(d) FROM %s.%s", fSin, KEYSPACE, currentTable()),
                                          ClientState.forInternalCalls());
-        preparedInsert1 = QueryProcessor.prepare(
+        preparedInsert1 = QueryProcessor.instance.prepare(
                                          String.format("INSERT INTO %s.%s (key, d) VALUES (?, %s(?))", KEYSPACE, currentTable(), fSin),
                                          ClientState.forInternalCalls());
         Assert.assertNotNull(QueryProcessor.instance.getPrepared(preparedSelect1.statementId));
@@ -284,7 +284,7 @@ public class UFTest extends CQLTester
                     " key int PRIMARY KEY," +
                     " val " + collectionType + ')');
 
-        ResultMessage.Prepared prepared = QueryProcessor.prepare(
+        ResultMessage.Prepared prepared = QueryProcessor.instance.prepare(
                                                                 String.format("INSERT INTO %s.%s (key, val) VALUES (?, %s)",
                                                                              KEYSPACE,
                                                                              currentTable(),
@@ -300,7 +300,7 @@ public class UFTest extends CQLTester
                     " key int PRIMARY KEY," +
                     " val tuple<double> )");
 
-        ResultMessage.Prepared prepared = QueryProcessor.prepare(
+        ResultMessage.Prepared prepared = QueryProcessor.instance.prepare(
                                                                 String.format("INSERT INTO %s.%s (key, val) VALUES (?, (%s(0.0)))",
                                                                              KEYSPACE,
                                                                              currentTable(),
@@ -316,7 +316,7 @@ public class UFTest extends CQLTester
         createTable("CREATE TABLE %s (" +
                     " key int PRIMARY KEY," +
                     " val double)");
-        ResultMessage.Prepared control = QueryProcessor.prepare(
+        ResultMessage.Prepared control = QueryProcessor.instance.prepare(
                                                                String.format("INSERT INTO %s.%s (key, val) VALUES (?, ?)",
                                                                             KEYSPACE,
                                                                             currentTable()),
@@ -767,7 +767,7 @@ public class UFTest extends CQLTester
 
         Assert.assertEquals(1, SchemaManager.instance.getFunctions(fNameName).size());
 
-        ResultMessage.Prepared prepared = QueryProcessor.prepare(String.format("SELECT key, %s(udt) FROM %s.%s", fName, KEYSPACE, currentTable()),
+        ResultMessage.Prepared prepared = QueryProcessor.instance.prepare(String.format("SELECT key, %s(udt) FROM %s.%s", fName, KEYSPACE, currentTable()),
                                                                  ClientState.forInternalCalls());
         Assert.assertNotNull(QueryProcessor.instance.getPrepared(prepared.statementId));
 

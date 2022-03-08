@@ -43,6 +43,7 @@ import org.apache.cassandra.metrics.RestorableMeter;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.mockito.Mockito;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy.validateOptions;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -182,9 +183,9 @@ public class SizeTieredCompactionStrategyTest
             new RowUpdateBuilder(cfs.metadata(), 0, key)
                 .clustering("column").add("val", value)
                 .build().applyUnsafe();
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         SizeTieredCompactionStrategyOptions stcsOptions = new SizeTieredCompactionStrategyOptions();
         List<SSTableReader> sstrs = new ArrayList<>(cfs.getLiveSSTables());

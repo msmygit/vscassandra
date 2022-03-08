@@ -38,6 +38,7 @@ import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
+import org.apache.cassandra.service.StorageService;
 
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
@@ -62,6 +63,7 @@ public abstract class GuardrailTester extends CQLTester
 
         requireAuthentication();
         requireNetwork();
+        StorageService.instance.doAuthSetup(true);
     }
 
     @AfterClass

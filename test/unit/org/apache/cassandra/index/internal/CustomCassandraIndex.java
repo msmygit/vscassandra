@@ -62,6 +62,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.concurrent.Refs;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.index.internal.CassandraIndex.getFunctions;
 import static org.apache.cassandra.index.internal.CassandraIndex.indexCfsMetadata;
 
@@ -136,7 +137,7 @@ public class CustomCassandraIndex implements Index
     public Callable<Void> getBlockingFlushTask()
     {
         return () -> {
-            indexCfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            indexCfs.forceBlockingFlush(UNIT_TESTS);
             return null;
         };
     }
@@ -599,7 +600,7 @@ public class CustomCassandraIndex implements Index
         CompactionManager.instance.interruptCompactionForCFs(cfss, (sstable) -> true, true);
         CompactionManager.instance.waitForCessation(cfss, (sstable) -> true);
         indexCfs.keyspace.writeOrder.awaitNewBarrier();
-        indexCfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        indexCfs.forceBlockingFlush(UNIT_TESTS);
         indexCfs.readOrdering.awaitNewBarrier();
         indexCfs.invalidate();
     }
@@ -624,7 +625,7 @@ public class CustomCassandraIndex implements Index
 
     private void buildBlocking()
     {
-        baseCfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        baseCfs.forceBlockingFlush(UNIT_TESTS);
 
         try (ColumnFamilyStore.RefViewFragment viewFragment = baseCfs.selectAndReference(View.selectFunction(SSTableSet.CANONICAL));
              Refs<SSTableReader> sstables = viewFragment.refs)
@@ -648,7 +649,7 @@ public class CustomCassandraIndex implements Index
                                                                          ImmutableSet.copyOf(sstables));
             Future<?> future = CompactionManager.instance.submitIndexBuild(builder);
             FBUtilities.waitOnFuture(future);
-            indexCfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            indexCfs.forceBlockingFlush(UNIT_TESTS);
         }
         logger.info("Index build of {} complete", metadata.name);
     }

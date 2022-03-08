@@ -40,9 +40,9 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.locator.ReplicaPlan;
 import org.apache.cassandra.locator.ReplicaPlans;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.service.QueryInfoTracker;
 import org.apache.cassandra.utils.CloseableIterator;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.service.QueryInfoTracker.*;
 import static org.junit.Assert.assertEquals;
 
@@ -99,7 +99,7 @@ public class RangeCommandIteratorTest
             builder.add("val", String.valueOf(i));
             builder.build().applyUnsafe();
         }
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         PartitionRangeReadCommand command = (PartitionRangeReadCommand) Util.cmd(cfs).build();
         AbstractBounds<PartitionPosition> keyRange = command.dataRange().keyRange();

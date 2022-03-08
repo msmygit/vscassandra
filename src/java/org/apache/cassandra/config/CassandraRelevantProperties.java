@@ -139,6 +139,10 @@ public enum CassandraRelevantProperties
     /** mx4jport */
     MX4JPORT ("mx4jport"),
 
+    RING_DELAY("cassandra.ring_delay_ms", "30000"),
+
+    MIGRATION_DELAY("cassandra.migration_delay_ms", "60000"),
+
     /**
      * When bootstraping we wait for all schema versions found in gossip to be seen, and if not seen in time we fail
      * the bootstrap; this property will avoid failing and allow bootstrap to continue if set to true.
@@ -166,6 +170,11 @@ public enum CassandraRelevantProperties
      * be true.
      */
     REPLACEMENT_ALLOW_EMPTY("cassandra.allow_empty_replace_address", "true"),
+
+    /**
+     * Whether {@link org.apache.cassandra.db.ConsistencyLevel#NODE_LOCAL} should be allowed.
+     */
+    ENABLE_NODELOCAL_QUERIES("cassandra.enable_nodelocal_queries", "false"),
 
     CONSISTENT_DIRECTORY_LISTINGS("cassandra.consistent_directory_listings", "false"),
 
@@ -367,6 +376,39 @@ public enum CassandraRelevantProperties
     public void setInt(int value)
     {
         System.setProperty(key, Integer.toString(value));
+    }
+
+    /**
+     * Gets the value of a system property as a long.
+     * @return system property long value if it exists, defaultValue otherwise.
+     */
+    public long getLong()
+    {
+        String value = System.getProperty(key);
+
+        return LONG_CONVERTER.convert(value == null ? defaultVal : value);
+    }
+
+    /**
+     * Gets the value of a system property as a long.
+     * @return system property long value if it exists, overrideDefaultValue otherwise.
+     */
+    public long getLong(int overrideDefaultValue)
+    {
+        String value = System.getProperty(key);
+        if (value == null)
+            return overrideDefaultValue;
+
+        return LONG_CONVERTER.convert(value);
+    }
+
+    /**
+     * Sets the value into system properties.
+     * @param value to set
+     */
+    public void setLong(long value)
+    {
+        System.setProperty(key, Long.toString(value));
     }
 
     private interface PropertyConverter<T>

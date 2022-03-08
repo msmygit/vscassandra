@@ -30,6 +30,9 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.utils.FBUtilities;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+import static org.junit.Assert.assertEquals;
+
 /*
  * This test class was too large and used to timeout CASSANDRA-16777. We're splitting it into:
  * - ViewTest
@@ -103,18 +106,18 @@ public class ViewTimesTest extends ViewAbstractTest
         assertRows(execute("SELECT d from mv WHERE c = ? and a = ? and b = ?", 1, 0, 0), row(0));
 
         if (flush)
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
 
         // change c's value and TS=3, tombstones c=1 and adds c=0 record
         executeNet("UPDATE %s USING TIMESTAMP 3 SET c = ? WHERE a = ? and b = ? ", 0, 0, 0);
         if (flush)
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
         assertRows(execute("SELECT d from mv WHERE c = ? and a = ? and b = ?", 1, 0, 0));
 
         if(flush)
         {
             ks.getColumnFamilyStore("mv").forceMajorCompaction();
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
         }
 
 
@@ -123,7 +126,7 @@ public class ViewTimesTest extends ViewAbstractTest
         if (flush)
         {
             ks.getColumnFamilyStore("mv").forceMajorCompaction();
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
         }
 
         assertRows(execute("SELECT d,e from mv WHERE c = ? and a = ? and b = ?", 1, 0, 0), row(0, null));
@@ -134,7 +137,7 @@ public class ViewTimesTest extends ViewAbstractTest
         assertRows(execute("SELECT d,e from mv WHERE c = ? and a = ? and b = ?", 1, 0, 0), row(0, 1));
 
         if (flush)
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
 
 
         //Change d value @ TS=2
@@ -142,7 +145,7 @@ public class ViewTimesTest extends ViewAbstractTest
         assertRows(execute("SELECT d from mv WHERE c = ? and a = ? and b = ?", 1, 0, 0), row(2));
 
         if (flush)
-            FBUtilities.waitOnFutures(ks.flush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            FBUtilities.waitOnFutures(ks.flush(UNIT_TESTS));
 
 
         //Change d value @ TS=3
@@ -286,16 +289,25 @@ public class ViewTimesTest extends ViewAbstractTest
                     "c int, " +
                     "val int) WITH default_time_to_live = 60");
 
+        execute("USE " + keyspace());
+        executeNet("USE " + keyspace());
+
         createView("mv_ttl2", "CREATE MATERIALIZED VIEW %s AS SELECT * FROM %%s WHERE k IS NOT NULL AND c IS NOT NULL PRIMARY KEY (k,c)");
 
         // Must NOT include "default_time_to_live" on alter Materialized View
         try
         {
-            executeNet("ALTER MATERIALIZED VIEW %s WITH default_time_to_live = 30");
+            executeNet("ALTER MATERIALIZED VIEW " + keyspace()+ ".mv_ttl2 WITH default_time_to_live = 30");
             Assert.fail("Should fail if TTL is provided while altering materialized view");
         }
         catch (Exception e)
         {
+            // Make sure the message is clear. See CASSANDRA-16960
+            assertEquals("Forbidden default_time_to_live detected for a materialized view. " +
+                         "Data in a materialized view always expires at the same time as " +
+                         "the corresponding data in the parent table. default_time_to_live " +
+                         "must be set to zero, see CASSANDRA-12868 for more information",
+                         e.getMessage());
         }
     }
 }

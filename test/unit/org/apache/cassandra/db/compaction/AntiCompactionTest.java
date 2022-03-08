@@ -68,6 +68,7 @@ import org.apache.cassandra.utils.UUIDGen;
 import org.apache.cassandra.utils.concurrent.Refs;
 import org.apache.cassandra.utils.concurrent.Transactional;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.Util.assertOnDiskState;
 import static org.apache.cassandra.service.ActiveRepairService.NO_PENDING_REPAIR;
 import static org.apache.cassandra.service.ActiveRepairService.UNREPAIRED_SSTABLE;
@@ -300,7 +301,7 @@ public class AntiCompactionTest
                     .build()
                     .applyUnsafe();
         }
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
     }
 
     @Test
@@ -443,7 +444,7 @@ public class AntiCompactionTest
                 .build()
                 .applyUnsafe();
         }
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
         return store;
     }
 

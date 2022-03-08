@@ -122,18 +122,19 @@ public class RepairMessageVerbHandler implements IVerbHandler<RepairMessage>
                 }
 
                 ActiveRepairService.ParentRepairSession prs = ActiveRepairService.instance.getParentRepairSession(desc.parentSessionId);
-                TableRepairManager repairManager = cfs.getRepairManager();
-                if (prs.isGlobal)
-                {
-                    repairManager.snapshot(desc.parentSessionId.toString(), prs.getRanges(), false);
-                }
-                else
-                {
-                    repairManager.snapshot(desc.parentSessionId.toString(), desc.ranges, true);
-                }
-                logger.debug("Enqueuing response to snapshot request {} to {}", desc.sessionId, message.from());
-                MessagingService.instance().send(message.emptyResponse(), message.from());
-            }
+                prs.setHasSnapshots();
+                    TableRepairManager repairManager = cfs.getRepairManager();
+                    if (prs.isGlobal)
+                    {
+                        repairManager.snapshot(desc.parentSessionId.toString(), prs.getRanges(), false);
+                    }
+                    else
+                    {
+                        repairManager.snapshot(desc.parentSessionId.toString(), desc.ranges, true);
+                    }
+                    logger.debug("Enqueuing response to snapshot request {} to {}", desc.sessionId, message.from());
+                    MessagingService.instance().send(message.emptyResponse(), message.from());
+                    }
             else if (message.verb() == VALIDATION_REQ)
             {
                 ValidationRequest validationRequest = (ValidationRequest) message.payload;

@@ -112,6 +112,6 @@ public class ArrayCell extends AbstractCell<byte[]>
 
     public long unsharedHeapSizeExcludingData()
     {
-        return EMPTY_SIZE + ObjectSizes.sizeOfArray(value) + value.length + (path == null ? 0 : path.unsharedHeapSizeExcludingData());
+        return EMPTY_SIZE + ObjectSizes.sizeOfArray(value) - value.length + (path == null ? 0 : path.unsharedHeapSizeExcludingData());
     }
 }

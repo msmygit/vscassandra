@@ -133,6 +133,7 @@ import org.apache.cassandra.utils.memory.BufferPools;
 import org.apache.cassandra.utils.progress.jmx.JMXBroadcastExecutor;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
 import static org.apache.cassandra.distributed.api.Feature.NATIVE_PROTOCOL;
 import static org.apache.cassandra.distributed.api.Feature.NETWORK;
@@ -401,22 +402,26 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
     @Override
     public void receiveMessage(IMessage message)
     {
-        sync(() -> {
-            if (message.version() > MessagingService.current_version)
-            {
-                throw new IllegalStateException(String.format("Node%d received message version %d but current version is %d",
-                                                              this.config.num(),
-                                                              message.version(),
-                                                              MessagingService.current_version));
-            }
+        sync(() -> receiveMessageWithInvokingThread(message)).run();
+    }
 
-            Message<?> messageIn = deserializeMessage(message);
-            Message.Header header = messageIn.header;
-            TraceState state = Tracing.instance.initializeFromMessage(header);
-            if (state != null) state.trace("{} message received from {}", header.verb, header.from);
-            header.verb.stage.execute(() -> MessagingService.instance().inboundSink.accept(messageIn),
-                                      ExecutorLocals.create(state));
-        }).run();
+    @Override
+    public void receiveMessageWithInvokingThread(IMessage message)
+    {
+        if (message.version() > MessagingService.current_version)
+        {
+            throw new IllegalStateException(String.format("Node%d received message version %d but current version is %d",
+                                                          this.config.num(),
+                                                          message.version(),
+                                                          MessagingService.current_version));
+        }
+
+        Message<?> messageIn = deserializeMessage(message);
+        Message.Header header = messageIn.header;
+        TraceState state = Tracing.instance.initializeFromMessage(header);
+        if (state != null) state.trace("{} message received from {}", header.verb, header.from);
+        header.verb.stage.execute(() -> MessagingService.instance().inboundSink.accept(messageIn),
+                                  ExecutorLocals.create(state));
     }
 
     public int getMessagingVersion()
@@ -438,7 +443,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
     public void flush(String keyspace)
     {
-        runOnInstance(() -> FBUtilities.waitOnFutures(Keyspace.open(keyspace).flush(ColumnFamilyStore.FlushReason.UNIT_TESTS)));
+        runOnInstance(() -> FBUtilities.waitOnFutures(Keyspace.open(keyspace).flush(UNIT_TESTS)));
     }
 
     public void forceCompact(String keyspace, String table)
@@ -464,7 +469,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 if (config.has(GOSSIP))
                 {
                     // TODO: hacky
-                    System.setProperty("cassandra.ring_delay_ms", "5000");
+                    System.setProperty("cassandra.ring_delay_ms", "15000");
                     System.setProperty("cassandra.consistent.rangemovement", "false");
                     System.setProperty("cassandra.consistent.simultaneousmoves.allow", "true");
                 }
@@ -567,7 +572,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
                 SystemKeyspace.finishStartup();
 
-                CassandraDaemon.getInstanceForTesting().setupCompleted();
+                StorageService.instance.doAuthSetup(false);
+                CassandraDaemon.getInstanceForTesting().completeSetup();
 
                 if (config.has(NATIVE_PROTOCOL))
                 {
@@ -604,7 +610,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 
     private Config loadConfig(IInstanceConfig overrides)
     {
-        Map<String,Object> params = ((InstanceConfig) overrides).getParams();
+        Map<String,Object> params = overrides.getParams();
         boolean check = true;
         if (overrides.get(Constants.KEY_DTEST_API_CONFIG_CHECK) != null)
             check = (boolean) overrides.get(Constants.KEY_DTEST_API_CONFIG_CHECK);
@@ -711,6 +717,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 JVMStabilityInspector.removeShutdownHooks();
             }
 
+            error = parallelRun(error, executor, StorageService.instance::disableAutoCompaction);
+
             error = parallelRun(error, executor,
                                 () -> Gossiper.instance.stopShutdownAndWait(1L, MINUTES),
                                 CompactionManager.instance::forceShutdown,
@@ -729,9 +737,10 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                                 () -> DiagnosticSnapshotService.instance.shutdownAndWait(1L, MINUTES),
                                 () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES),
                                 () -> SSTableReader.shutdownBlocking(1L, MINUTES),
-                                () -> shutdownAndWait(Collections.singletonList(ActiveRepairService.repairCommandExecutor())),
-                                () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES)
+                                () -> shutdownAndWait(Collections.singletonList(ActiveRepairService.repairCommandExecutor()))
             );
+
+            error = parallelRun(error, executor, () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES));
 
             error = parallelRun(error, executor,
                                 CommitLog.instance::shutdownBlocking,

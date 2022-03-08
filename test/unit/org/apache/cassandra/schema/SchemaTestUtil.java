@@ -21,10 +21,9 @@ package org.apache.cassandra.schema;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,8 +31,11 @@ import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.exceptions.AlreadyExistsException;
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.net.NoPayload;
+import org.apache.cassandra.net.RequestCallback;
+import org.apache.cassandra.net.Verb;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.net.Verb.SCHEMA_PUSH_REQ;
@@ -141,7 +143,21 @@ public class SchemaTestUtil
     public static void mergeAndAnnounceLocally(Collection<Mutation> schemaMutations)
     {
         SchemaPushVerbHandler.instance.doVerb(Message.out(SCHEMA_PUSH_REQ, schemaMutations));
-        FBUtilities.waitOnFuture(Stage.MIGRATION.submit(() -> {}), Duration.ofSeconds(10)); // simply wait for stage executor to complete previously scheduled tasks
+        FBUtilities.waitOnFuture(Stage.MIGRATION.submit(() -> {
+        }), Duration.ofSeconds(10)); // simply wait for stage executor to complete previously scheduled tasks
     }
 
+    public static UUID calculateSchemaDigest()
+    {
+        return SchemaKeyspace.calculateSchemaDigest();
+    }
+
+    public static CompletableFuture<Collection<Mutation>> getSchemaMutations()
+    {
+        CompletableFuture<Collection<Mutation>> p = new CompletableFuture<>();
+        MessagingService.instance().sendWithCallback(Message.out(Verb.SCHEMA_PULL_REQ, NoPayload.noPayload),
+                                                     FBUtilities.getBroadcastAddressAndPort(),
+                                                     (RequestCallback<Collection<Mutation>>) msg -> p.complete(msg.payload));
+        return p;
+    }
 }

@@ -17,6 +17,7 @@
  */
 package org.apache.cassandra.index.sasi;
 
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -24,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -41,6 +43,7 @@ import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sasi.plan.SASIIndexSearcher;
+import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.TableMetadata;
@@ -73,8 +76,11 @@ import org.apache.cassandra.index.sasi.exceptions.TimeQuotaExceededException;
 import org.apache.cassandra.index.sasi.memory.IndexMemtable;
 import org.apache.cassandra.index.sasi.plan.QueryController;
 import org.apache.cassandra.index.sasi.utils.RangeIterator;
+import org.apache.cassandra.io.sstable.Component;
+import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.IndexSummaryManager;
 import org.apache.cassandra.io.sstable.SSTable;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.serializers.MarshalException;
@@ -88,9 +94,13 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 import org.junit.*;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 
 public class SASIIndexTest
 {
@@ -132,7 +142,84 @@ public class SASIIndexTest
     }
 
     @Test
-    public void testSingleExpressionQueries()
+    public void testSASIComponentsAddedToSnapshot() throws Throwable
+    {
+        String snapshotName = "sasi_test";
+        Map<String, Pair<String, Integer>> data = new HashMap<>();
+        Random r = new Random();
+
+        for (int i = 0; i < 100; i++)
+            data.put(UUID.randomUUID().toString(), Pair.create(UUID.randomUUID().toString(), r.nextInt()));
+
+        ColumnFamilyStore store = loadData(data, true);
+        store.forceMajorCompaction();
+
+        Set<SSTableReader> ssTableReaders = store.getLiveSSTables();
+        Set<Component> sasiComponents = new HashSet<>();
+
+        for (Index index : store.indexManager.listIndexes())
+            if (index instanceof SASIIndex)
+                sasiComponents.add(((SASIIndex) index).getIndex().getComponent());
+
+        Assert.assertFalse(sasiComponents.isEmpty());
+
+        try
+        {
+            store.snapshot(snapshotName);
+            FileReader reader = new FileReader(store.getDirectories().getSnapshotManifestFile(snapshotName).toJavaIOFile());
+            JSONObject manifest = (JSONObject) new JSONParser().parse(reader);
+            JSONArray files = (JSONArray) manifest.get("files");
+
+            Assert.assertFalse(ssTableReaders.isEmpty());
+            Assert.assertFalse(files.isEmpty());
+            Assert.assertEquals(ssTableReaders.size(), files.size());
+
+            Map<Descriptor, Set<Component>> snapshotSSTables = store.getDirectories()
+                                                                    .sstableLister(Directories.OnTxnErr.IGNORE)
+                                                                    .snapshots(snapshotName)
+                                                                    .list();
+
+            long indexSize = 0;
+            long tableSize = 0;
+
+            for (SSTableReader sstable : ssTableReaders)
+            {
+                File snapshotDirectory = Directories.getSnapshotDirectory(sstable.descriptor, snapshotName);
+                Descriptor snapshotSSTable = new Descriptor(snapshotDirectory,
+                                                            sstable.getKeyspaceName(),
+                                                            sstable.getColumnFamilyName(),
+                                                            sstable.descriptor.generation,
+                                                            sstable.descriptor.formatType);
+
+                Set<Component> components = snapshotSSTables.get(snapshotSSTable);
+
+                Assert.assertNotNull(components);
+                Assert.assertTrue(components.containsAll(sasiComponents));
+
+                for (Component c : components)
+                {
+                    File componentPath = sstable.descriptor.fileFor(c);
+                    long componentSize = componentPath.length();
+                    if (Component.Type.fromRepresentation(c.name) == Component.Type.SECONDARY_INDEX)
+                        indexSize += componentSize;
+                    else
+                        tableSize += componentSize;
+                }
+            }
+
+            Map<String, Directories.SnapshotSizeDetails> details = store.getSnapshotDetails();
+
+            // check that SASI components are included in the computation of snapshot size
+            Assert.assertEquals((long) details.get(snapshotName).dataSizeBytes, tableSize + indexSize);
+        }
+        finally
+        {
+            store.clearSnapshot(snapshotName);
+        }
+    }
+
+    @Test
+    public void testSingleExpressionQueries() throws Exception
     {
         testSingleExpressionQueries(false);
         cleanupData();
@@ -457,7 +544,7 @@ public class SASIIndexTest
 
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         final UntypedResultSet results = executeCQL(FTS_CF_NAME, "SELECT * FROM %s.%s WHERE artist LIKE 'lady%%'");
         Assert.assertNotNull(results);
@@ -809,7 +896,7 @@ public class SASIIndexTest
         rm3.build().apply();
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         final ByteBuffer dataOutputId = UTF8Type.instance.decompose("/data/output/id");
 
@@ -971,7 +1058,7 @@ public class SASIIndexTest
     {
         setMinIndexInterval(minIndexInterval);
         IndexSummaryManager.instance.redistributeSummaries();
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         Set<String> rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
         Assert.assertEquals(rows.toString(), expected, rows.size());
@@ -1215,7 +1302,7 @@ public class SASIIndexTest
         rm.build().apply();
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         Set<String> rows;
 
@@ -1287,7 +1374,7 @@ public class SASIIndexTest
         rm.build().apply();
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         Set<String> rows;
 
@@ -1348,7 +1435,7 @@ public class SASIIndexTest
             rows = getIndexed(store, 10, buildExpression(comment, Operator.LIKE_MATCHES, bigValue.duplicate()));
             Assert.assertEquals(0, rows.size());
 
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
             rows = getIndexed(store, 10, buildExpression(comment, Operator.LIKE_MATCHES, bigValue.duplicate()));
             Assert.assertEquals(0, rows.size());
@@ -1451,7 +1538,7 @@ public class SASIIndexTest
         update(rm, fullName, UTF8Type.instance.decompose("利久 寺地"), 8000);
         rm.build().apply();
 
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
 
         Set<String> rows;
@@ -1488,7 +1575,7 @@ public class SASIIndexTest
         rm.build().apply();
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         Set<String> rows;
 
@@ -1573,7 +1660,7 @@ public class SASIIndexTest
         rm.build().apply();
 
         // first flush would make interval for name - 'johnny' -> 'pavel'
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         rm = new Mutation.PartitionUpdateCollector(KS_NAME, decoratedKey("key6"));
         update(rm, name, UTF8Type.instance.decompose("Jason"), 6000);
@@ -1588,7 +1675,7 @@ public class SASIIndexTest
         rm.build().apply();
 
         // this flush is going to produce range - 'jason' -> 'vijay'
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         // make sure that overlap of the prefixes is properly handled across sstables
         // since simple interval tree lookup is not going to cover it, prefix lookup actually required.
@@ -1752,7 +1839,7 @@ public class SASIIndexTest
         executeCQL(CLUSTERING_CF_NAME_1 ,"INSERT INTO %s.%s (name, nickname, location, age, height, score) VALUES (?, ?, ?, ?, ?, ?)", "Jordan", "jrwest", "US", 27, 182, 1.0);
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         UntypedResultSet results;
 
@@ -1839,7 +1926,7 @@ public class SASIIndexTest
         executeCQL(CLUSTERING_CF_NAME_2 ,"INSERT INTO %s.%s (name, nickname, location, age, height, score) VALUES (?, ?, ?, ?, ?, ?)", "Christopher", "chis", "US", 27, 180, 1.0);
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         results = executeCQL(CLUSTERING_CF_NAME_2 ,"SELECT * FROM %s.%s WHERE location LIKE 'US' AND age = 43 ALLOW FILTERING");
         Assert.assertNotNull(results);
@@ -1865,7 +1952,7 @@ public class SASIIndexTest
         executeCQL(STATIC_CF_NAME, "INSERT INTO %s.%s (sensor_id,date,value,variance) VALUES(?, ?, ?, ?)", 1, 20160403L, 24.96, 4);
 
         if (shouldFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         executeCQL(STATIC_CF_NAME, "INSERT INTO %s.%s (sensor_id,sensor_type) VALUES(?, ?)", 2, "PRESSURE");
         executeCQL(STATIC_CF_NAME, "INSERT INTO %s.%s (sensor_id,date,value,variance) VALUES(?, ?, ?, ?)", 2, 20160401L, 1.03, 9);
@@ -1873,7 +1960,7 @@ public class SASIIndexTest
         executeCQL(STATIC_CF_NAME, "INSERT INTO %s.%s (sensor_id,date,value,variance) VALUES(?, ?, ?, ?)", 2, 20160403L, 1.01, 4);
 
         if (shouldFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         UntypedResultSet results;
 
@@ -1954,7 +2041,7 @@ public class SASIIndexTest
         executeCQL(CLUSTERING_CF_NAME_1, "INSERT INTO %s.%s (name, location, age, height, score) VALUES (?, ?, ?, ?, ?)", "Pavel", "BY", 28, 182, 2.0);
         executeCQL(CLUSTERING_CF_NAME_1, "INSERT INTO %s.%s (name, nickname, location, age, height, score) VALUES (?, ?, ?, ?, ?, ?)", "Jordan", "jrwest", "US", 27, 182, 1.0);
 
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         SSTable ssTable = store.getSSTables(SSTableSet.LIVE).iterator().next();
         Path path = FileSystems.getDefault().getPath(ssTable.getFilename().replace("-Data", "-SI_" + CLUSTERING_CF_NAME_1 + "_age"));
@@ -1993,7 +2080,7 @@ public class SASIIndexTest
 
         executeCQL(CLUSTERING_CF_NAME_1, "INSERT INTO %s.%s (name, nickname) VALUES (?, ?)", "Alex", "ifesdjeen");
 
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         for (Index index : store.indexManager.listIndexes())
         {
@@ -2119,7 +2206,7 @@ public class SASIIndexTest
         {
             Keyspace keyspace = Keyspace.open(KS_NAME);
             for (String table : Arrays.asList(containsTable, prefixTable, analyzedPrefixTable))
-                keyspace.getColumnFamilyStore(table).forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+                keyspace.getColumnFamilyStore(table).forceBlockingFlush(UNIT_TESTS);
         }
 
         UntypedResultSet results;
@@ -2353,7 +2440,7 @@ public class SASIIndexTest
 
         Assert.assertTrue(rangesSize(beforeFlushMemtable, expression) > 0);
 
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         IndexMemtable afterFlushMemtable = index.getCurrentMemtable();
 
@@ -2531,7 +2618,7 @@ public class SASIIndexTest
         ColumnFamilyStore store = Keyspace.open(KS_NAME).getColumnFamilyStore(CF_NAME);
 
         if (forceFlush)
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
         return store;
     }

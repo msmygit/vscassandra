@@ -859,6 +859,12 @@ public class DatabaseDescriptor
             getGuardrailsConfig().unlogged_batch_across_partitions_warn_threshold = conf.unlogged_batch_across_partitions_warn_threshold;
         }
 
+        if (!conf.allow_insecure_udfs && !conf.enable_user_defined_functions_threads)
+            throw new ConfigurationException("To be able to set enable_user_defined_functions_threads: false you need to set allow_insecure_udfs: true - this is an unsafe configuration and is not recommended.");
+
+        if (conf.allow_extra_insecure_udfs)
+            logger.warn("Allowing java.lang.System.* access in UDFs is dangerous and not recommended. Set allow_extra_insecure_udfs: false to disable.");
+
         if (conf.commitlog_segment_size_in_mb <= 0)
             throw new ConfigurationException("commitlog_segment_size_in_mb must be positive, but was "
                     + conf.commitlog_segment_size_in_mb, false);
@@ -902,12 +908,6 @@ public class DatabaseDescriptor
                 diskOptimizationStrategy = new SpinningDiskOptimizationStrategy();
                 break;
         }
-
-        if (conf.otc_coalescing_enough_coalesced_messages > 128)
-            throw new ConfigurationException("otc_coalescing_enough_coalesced_messages must be smaller than 128", false);
-
-        if (conf.otc_coalescing_enough_coalesced_messages <= 0)
-            throw new ConfigurationException("otc_coalescing_enough_coalesced_messages must be positive", false);
 
         if (conf.server_encryption_options != null)
         {
@@ -2851,6 +2851,17 @@ public class DatabaseDescriptor
         conf.counter_cache_save_period = counterCacheSavePeriod;
     }
 
+    public static int getCacheLoadTimeout()
+    {
+        return conf.cache_load_timeout_seconds;
+    }
+
+    @VisibleForTesting
+    public static void setCacheLoadTimeout(int seconds)
+    {
+        conf.cache_load_timeout_seconds = seconds;
+    }
+
     public static int getCounterCacheKeysToSave()
     {
         return conf.counter_cache_keys_to_save;
@@ -3053,6 +3064,16 @@ public class DatabaseDescriptor
     public static void setUserDefinedFunctionWarnTimeout(long userDefinedFunctionWarnTimeout)
     {
         conf.user_defined_function_warn_timeout = userDefinedFunctionWarnTimeout;
+    }
+
+    public static boolean allowInsecureUDFs()
+    {
+        return conf.allow_insecure_udfs;
+    }
+
+    public static boolean allowExtraInsecureUDFs()
+    {
+        return conf.allow_extra_insecure_udfs;
     }
 
     public static boolean getEnableMaterializedViews()
@@ -3520,6 +3541,20 @@ public class DatabaseDescriptor
     public static void setConsecutiveMessageErrorsThreshold(int value)
     {
         conf.consecutive_message_errors_threshold = value;
+    }
+
+    public static boolean getForceNewPreparedStatementBehaviour()
+    {
+        return conf.force_new_prepared_statement_behaviour;
+    }
+
+    public static void setForceNewPreparedStatementBehaviour(boolean value)
+    {
+        if (value != conf.force_new_prepared_statement_behaviour)
+        {
+            logger.info("Setting force_new_prepared_statement_behaviour to {}", value);
+            conf.force_new_prepared_statement_behaviour = value;
+        }
     }
 
     public static int getSAISegmentWriteBufferSpace()

@@ -42,6 +42,7 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.utils.FBUtilities;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -162,7 +163,7 @@ public class LongLeveledCompactionStrategyTest
         }
 
         //Flush sstable
-        store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        store.forceBlockingFlush(UNIT_TESTS);
 
         store.runWithCompactionsDisabled(new Callable<Void>()
         {
@@ -265,7 +266,7 @@ public class LongLeveledCompactionStrategyTest
 
             Mutation rm = new Mutation(builder.build());
             rm.apply();
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
         }
     }
 }

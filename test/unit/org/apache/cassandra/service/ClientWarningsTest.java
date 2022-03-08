@@ -43,6 +43,7 @@ import org.apache.cassandra.transport.SimpleClient;
 import org.apache.cassandra.transport.messages.QueryMessage;
 
 import static junit.framework.Assert.assertEquals;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertNull;
 
 @RunWith(Parameterized.class)
@@ -154,7 +155,7 @@ public class ClientWarningsTest extends CQLTester
                 client.execute(query);
             }
             ColumnFamilyStore store = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
             for (int i = 0; i < iterations; i++)
             {
@@ -164,7 +165,7 @@ public class ClientWarningsTest extends CQLTester
                                                                     i), QueryOptions.DEFAULT);
                 client.execute(query);
             }
-            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            store.forceBlockingFlush(UNIT_TESTS);
 
             {
                 QueryMessage query = new QueryMessage(String.format("SELECT * FROM %s.%s WHERE pk = 1",

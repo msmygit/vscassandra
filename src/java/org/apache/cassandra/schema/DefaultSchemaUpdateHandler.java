@@ -69,7 +69,6 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
         return new MigrationCoordinator(messagingService,
                                         Stage.MIGRATION.executor(),
                                         ScheduledExecutors.scheduledTasks,
-                                        () -> ManagementFactory.getRuntimeMXBean().getUptime(),
                                         MAX_OUTSTANDING_VERSION_REQUESTS,
                                         Gossiper.instance,
                                         () -> schema.getVersion(),
@@ -94,10 +93,13 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
         SchemaPullVerbHandler.instance.register(msg -> messagingService.send(msg.responseWith(getSchemaMutations()), msg.from()));
     }
 
-    public void start()
+    public synchronized void start()
     {
         if (StorageService.instance.isReplacing())
             onRemove(DatabaseDescriptor.getReplaceAddress());
+
+        SchemaKeyspace.saveSystemKeyspacesSchema();
+
         migrationCoordinator.start();
     }
 

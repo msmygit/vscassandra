@@ -20,10 +20,13 @@ package org.apache.cassandra.service;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -425,6 +428,11 @@ public class CacheService implements CacheServiceMBean
 
     public static class KeyCacheSerializer implements CacheSerializer<KeyCacheKey, BigTableRowIndexEntry>
     {
+        // For column families with many SSTables the linear nature of getSSTables slowed down KeyCache loading
+        // by orders of magnitude. So we cache the sstables once and rely on cleanupAfterDeserialize to cleanup any
+        // cached state we may have accumulated during the load.
+        Map<Pair<String, String>, Map<SSTableUniqueIdentifier, SSTableReader>> cachedSSTableReaders = new ConcurrentHashMap<>();
+
         public void serialize(KeyCacheKey key, DataOutputPlus out, ColumnFamilyStore cfs) throws IOException
         {
             BigTableRowIndexEntry entry = CacheService.instance.keyCache.getInternal(key);
@@ -445,6 +453,8 @@ public class CacheService implements CacheServiceMBean
 
         public Future<Pair<KeyCacheKey, BigTableRowIndexEntry>> deserialize(DataInputPlus input, ColumnFamilyStore cfs) throws IOException
         {
+            boolean skipEntry = cfs == null || !cfs.isKeyCacheEnabled();
+
             //Keyspace and CF name are deserialized by AutoSaving cache and used to fetch the CFS provided as a
             //parameter so they aren't deserialized here, even though they are serialized by this serializer
             int keyLength = input.readInt();
@@ -460,8 +470,25 @@ public class CacheService implements CacheServiceMBean
                                   : new SequenceBasedSSTableUniqueIdentifier(generation); // Backwards compatibility for "int based generation sstables"
 
             input.readBoolean(); // backwards compatibility for "promoted indexes" boolean
-            SSTableReader reader;
-            if (cfs == null || !cfs.isKeyCacheEnabled() || (reader = findDesc(generationId, cfs.getSSTables(SSTableSet.CANONICAL))) == null)
+            SSTableReader reader = null;
+            if (!skipEntry)
+            {
+                Pair<String, String> qualifiedName = Pair.create(cfs.metadata.keyspace, cfs.metadata.name);
+                Map<SSTableUniqueIdentifier, SSTableReader> generationToSSTableReader = cachedSSTableReaders.get(qualifiedName);
+                if (generationToSSTableReader == null)
+                {
+                    generationToSSTableReader = new HashMap<>(cfs.getLiveSSTables().size());
+                    for (SSTableReader ssTableReader : cfs.getSSTables(SSTableSet.CANONICAL))
+                    {
+                        generationToSSTableReader.put(ssTableReader.descriptor.generation, ssTableReader);
+                    }
+
+                    cachedSSTableReaders.putIfAbsent(qualifiedName, generationToSSTableReader);
+                }
+                reader = generationToSSTableReader.get(generationId);
+            }
+
+            if (skipEntry || reader == null)
             {
                 // The sstable doesn't exist anymore, so we can't be sure of the exact version and assume its the current version. The only case where we'll be
                 // wrong is during upgrade, in which case we fail at deserialization. This is not a huge deal however since 1) this is unlikely enough that
@@ -470,9 +497,15 @@ public class CacheService implements CacheServiceMBean
                 BigTableRowIndexEntry.Serializer.skipForCache(input);
                 return null;
             }
+
             BigTableRowIndexEntry.IndexSerializer<?> indexSerializer = new BigTableRowIndexEntry.Serializer(reader.descriptor.version, reader.header);
             BigTableRowIndexEntry entry = indexSerializer.deserializeForCache(input);
             return Futures.immediateFuture(Pair.create(new KeyCacheKey(cfs.metadata(), reader.descriptor, key), entry));
+        }
+
+        public void cleanupAfterDeserialize()
+        {
+            cachedSSTableReaders.clear();
         }
 
         private SSTableReader findDesc(SSTableUniqueIdentifier generation, Iterable<SSTableReader> collection)

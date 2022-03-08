@@ -21,9 +21,7 @@ package org.apache.cassandra.tools;
 import java.util.Arrays;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.tools.ToolRunner.ToolResult;
 import org.assertj.core.api.Assertions;
 import org.hamcrest.CoreMatchers;
@@ -31,25 +29,14 @@ import org.hamcrest.CoreMatchers;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
+/**
+* Note: the complete coverage is composed of:
+ * - {@link StandaloneVerifierOnSSTablesTest}
+ * - {@link StandaloneVerifierTest}
+ * - {@link org.apache.cassandra.db.VerifyTest}
+*/
 public class StandaloneVerifierTest extends OfflineToolUtils
 {
-
-    @Test
-    public void testNoArgsPrintsHelp()
-    {
-        ToolResult tool = ToolRunner.invokeClass(StandaloneVerifier.class);
-        assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("usage:"));
-        assertThat(tool.getCleanedStderr(), CoreMatchers.containsStringIgnoringCase("Missing arguments"));
-        assertEquals(1, tool.getExitCode());
-        assertNoUnexpectedThreadsStarted(null, null);
-        assertSchemaNotLoaded();
-        assertCLSMNotLoaded();
-        assertSystemKSNotLoaded();
-        assertKeyspaceNotLoaded();
-        assertServerNotLoaded();
-    }
-
     @Test
     public void testMaybeChangeDocs()
     {
@@ -89,6 +76,8 @@ public class StandaloneVerifierTest extends OfflineToolUtils
         Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
         assertEquals(0, tool.getExitCode());
         assertCorrectEnvPostTest();
+        tool.assertOnCleanExit();
+
     }
 
     @Test
@@ -97,8 +86,9 @@ public class StandaloneVerifierTest extends OfflineToolUtils
         ToolResult tool = ToolRunner.invokeClass(StandaloneVerifier.class, "--debug", "system_schema", "tables");
         assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("debug=true"));
         Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-        tool.assertOnExitCode();
         assertCorrectEnvPostTest();
+        tool.assertOnCleanExit();
+
     }
 
     @Test
@@ -111,8 +101,8 @@ public class StandaloneVerifierTest extends OfflineToolUtils
                                                        "tables");
             assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("extended=true"));
             Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-            tool.assertOnExitCode();
             assertCorrectEnvPostTest();
+            tool.assertOnCleanExit();
         });
     }
 
@@ -126,8 +116,8 @@ public class StandaloneVerifierTest extends OfflineToolUtils
                                                        "tables");
             assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("quick=true"));
             Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-            tool.assertOnExitCode();
             assertCorrectEnvPostTest();
+            tool.assertOnCleanExit();
         });
     }
 
@@ -141,8 +131,8 @@ public class StandaloneVerifierTest extends OfflineToolUtils
                                                        "tables");
             assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("mutateRepairStatus=true"));
             Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-            tool.assertOnExitCode();
             assertCorrectEnvPostTest();
+            tool.assertOnCleanExit();
         });
     }
 
@@ -153,8 +143,8 @@ public class StandaloneVerifierTest extends OfflineToolUtils
             ToolResult tool = ToolRunner.invokeClass(StandaloneVerifier.class, arg);
             assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("usage:"));
             Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-            tool.assertOnExitCode();
             assertCorrectEnvPostTest();
+            tool.assertOnCleanExit();
         });
     }
 
@@ -168,8 +158,17 @@ public class StandaloneVerifierTest extends OfflineToolUtils
                                                        "tables");
             assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("verbose=true"));
             Assertions.assertThat(tool.getCleanedStderr()).isEmpty();
-            tool.assertOnExitCode();
             assertCorrectEnvPostTest();
+            tool.assertOnCleanExit();
         });
+    }
+
+    @Test
+    public void testTooManyArgs()
+    {
+        ToolResult tool = ToolRunner.invokeClass(StandaloneVerifier.class, "another arg", "system_schema", "tables");
+        assertThat(tool.getStdout(), CoreMatchers.containsStringIgnoringCase("usage:"));
+        assertThat(tool.getCleanedStderr(), CoreMatchers.containsStringIgnoringCase("Too many arguments"));
+        assertEquals(1, tool.getExitCode());
     }
 }

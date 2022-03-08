@@ -46,7 +46,7 @@ import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.MemtableParams;
 import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.SchemaKeyspaceTables;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.triggers.ITrigger;
@@ -597,7 +597,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map()));
@@ -609,7 +609,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("class", "SkipListMemtable")));
@@ -621,7 +621,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("class", "org.apache.cassandra.db.memtable.TrieMemtable")));
@@ -632,7 +632,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("class", TestMemtableFactory.class.getName())));
@@ -643,7 +643,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("class", TestMemtableFactory.class.getName(),
@@ -655,7 +655,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT memtable FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map()));
@@ -692,7 +692,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "16", "class", "org.apache.cassandra.io.compress.LZ4Compressor")));
@@ -702,7 +702,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "32", "class", "org.apache.cassandra.io.compress.SnappyCompressor")));
@@ -712,7 +712,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "32", "class", "org.apache.cassandra.io.compress.SnappyCompressor")));
@@ -722,7 +722,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "32", "class", "org.apache.cassandra.io.compress.SnappyCompressor")));
@@ -732,7 +732,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "16", "class", "org.apache.cassandra.io.compress.SnappyCompressor", "min_compress_ratio", "2.0")));
@@ -742,7 +742,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "16", "class", "org.apache.cassandra.io.compress.SnappyCompressor", "min_compress_ratio", "1.0")));
@@ -752,7 +752,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("chunk_length_in_kb", "16", "class", "org.apache.cassandra.io.compress.SnappyCompressor")));
@@ -762,7 +762,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("enabled", "false")));
@@ -772,7 +772,7 @@ public class CreateTest extends CQLTester
 
         assertRows(execute(format("SELECT compression FROM %s.%s WHERE keyspace_name = ? and table_name = ?;",
                                   SchemaConstants.SCHEMA_KEYSPACE_NAME,
-                                  SchemaKeyspace.TABLES),
+                                  SchemaKeyspaceTables.TABLES),
                            KEYSPACE,
                            currentTable()),
                    row(map("enabled", "false")));

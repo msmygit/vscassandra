@@ -19,6 +19,7 @@ package org.apache.cassandra.db.commitlog;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.FileStore;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -541,6 +542,11 @@ public class CommitLog implements CommitLogMBean
         return start().recoverSegmentsOnDisk(ColumnFamilyStore.FlushReason.STARTUP);
     }
 
+    public static long freeDiskSpace()
+    {
+        return PathUtils.tryGetSpace(DatabaseDescriptor.getCommitLogLocation().toPath(), FileStore::getUsableSpace) - DatabaseDescriptor.getMinFreeSpacePerDriveInBytes();
+    }
+
     @VisibleForTesting
     public static boolean handleCommitError(String message, Throwable t)
     {
@@ -553,15 +559,35 @@ public class CommitLog implements CommitLogMBean
                 StorageService.instance.stopTransports();
                 //$FALL-THROUGH$
             case stop_commit:
-                logger.error(String.format("%s. Commit disk failure policy is %s; terminating thread", message, DatabaseDescriptor.getCommitFailurePolicy()), t);
+                String errorMsg = String.format("%s. Commit disk failure policy is %s; terminating thread.", message, DatabaseDescriptor.getCommitFailurePolicy());
+                logger.error(addAdditionalInformationIfPossible(errorMsg), t);
                 return false;
             case fail_writes:
             case ignore:
-                logger.error(message, t);
+                logger.error(addAdditionalInformationIfPossible(message), t);
                 return true;
             default:
                 throw new AssertionError(DatabaseDescriptor.getCommitFailurePolicy());
         }
+    }
+
+    /**
+     * Add additional information to the error message if the commit directory does not have enough free space.
+     *
+     * @param msg the original error message
+     * @return the message with additional information if possible
+     */
+    private static String addAdditionalInformationIfPossible(String msg)
+    {
+        long unallocatedSpace = freeDiskSpace();
+        int segmentSize = DatabaseDescriptor.getCommitLogSegmentSize();
+
+        if (unallocatedSpace < segmentSize)
+        {
+            return String.format("%s. %d bytes required for next commitlog segment but only %d bytes available. Check %s to see if not enough free space is the reason for this error.",
+                                 msg, segmentSize, unallocatedSpace, DatabaseDescriptor.getCommitLogLocation());
+        }
+        return msg;
     }
 
     public static final class Configuration

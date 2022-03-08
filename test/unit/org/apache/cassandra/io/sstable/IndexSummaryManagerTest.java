@@ -33,11 +33,9 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.concurrent.NamedThreadFactory;
@@ -65,6 +63,7 @@ import org.hamcrest.Matchers;
 import static com.google.common.collect.ImmutableMap.of;
 import static java.util.Arrays.asList;
 import static org.apache.cassandra.Util.assertOnDiskState;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.apache.cassandra.io.sstable.Downsampling.BASE_SAMPLING_LEVEL;
 import static org.apache.cassandra.io.sstable.IndexSummaryRedistribution.DOWNSAMPLE_THESHOLD;
 import static org.apache.cassandra.io.sstable.IndexSummaryRedistribution.UPSAMPLE_THRESHOLD;
@@ -75,7 +74,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class IndexSummaryManagerTest
 {
     private static final Logger logger = LoggerFactory.getLogger(IndexSummaryManagerTest.class);
@@ -202,7 +200,7 @@ public class IndexSummaryManagerTest
                     .build()
                     .applyUnsafe();
             }
-            futures.add(cfs.forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS));
+            futures.add(cfs.forceFlush(UNIT_TESTS));
         }
         for (Future future : futures)
         {
@@ -527,7 +525,7 @@ public class IndexSummaryManagerTest
             .applyUnsafe();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         List<SSTableReader> sstables = selectOnlyBigTableReaders(cfs.getLiveSSTables(), Collectors.toList());
         assertEquals(1, sstables.size());
@@ -592,7 +590,7 @@ public class IndexSummaryManagerTest
                 .build()
                 .applyUnsafe();
             }
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
         assertTrue(manager.getAverageIndexInterval() >= cfs.metadata().params.minIndexInterval);

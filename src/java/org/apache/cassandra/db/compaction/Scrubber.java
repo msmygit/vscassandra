@@ -206,7 +206,10 @@ public class Scrubber implements Closeable
                 Throwable keyReadError = null;
                 try
                 {
-                    key = sstable.decorateKey(ByteBufferUtil.readWithShortLength(dataFile));
+                    ByteBuffer raw = ByteBufferUtil.readWithShortLength(dataFile);
+                    if (!realm.metadataRef().getLocal().isIndex())
+                        realm.metadataRef().getLocal().partitionKeyType.validate(raw);
+                    key = sstable.decorateKey(raw);
                 }
                 catch (Throwable th)
                 {
@@ -288,6 +291,8 @@ public class Scrubber implements Closeable
                         key = sstable.decorateKey(currentIndexKey);
                         try
                         {
+                            if (!realm.metadataRef().getLocal().isIndex())
+                                realm.metadataRef().getLocal().partitionKeyType.validate(key.getKey());
                             dataFile.seek(rowStartFromIndex);
 
                             if (tryAppend(prevKey, key, writer))

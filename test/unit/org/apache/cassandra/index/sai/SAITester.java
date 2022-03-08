@@ -611,7 +611,10 @@ public class SAITester extends CQLTester
     protected void truncate(boolean snapshot)
     {
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        cfs.truncateBlocking(snapshot);
+        if (snapshot)
+            cfs.truncateBlocking();
+        else
+            cfs.truncateBlockingWithoutSnapshot();
     }
 
     protected void rebuildIndexes(String... indexes)

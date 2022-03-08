@@ -29,7 +29,7 @@ import org.apache.cassandra.service.QueryState;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
-public class UseStatement extends CQLStatement.Raw implements CQLStatement, SingleKeyspaceStatement
+public class UseStatement extends CQLStatement.Raw implements CQLStatement.SingleKeyspaceCqlStatement
 {
     private final String keyspace;
 

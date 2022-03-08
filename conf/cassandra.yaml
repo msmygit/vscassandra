@@ -382,6 +382,11 @@ counter_cache_save_period: 7200
 # If not set, the default directory is $CASSANDRA_HOME/data/saved_caches.
 # saved_caches_directory: /var/lib/cassandra/saved_caches
 
+# Number of seconds the server will wait for each cache (row, key, etc ...) to load while starting
+# the Cassandra process. Setting this to a negative value is equivalent to disabling all cache loading on startup
+# while still having the cache during runtime.
+# cache_load_timeout_seconds: 30
+
 # commitlog_sync may be either "periodic", "group", or "batch." 
 # 
 # When in batch mode, Cassandra won't ack writes until the commit log
@@ -773,12 +778,12 @@ rpc_keepalive: true
 # /proc/sys/net/ipv4/tcp_wmem
 # /proc/sys/net/ipv4/tcp_wmem
 # and 'man tcp'
-# internode_send_buff_size_in_bytes:
+# internode_socket_send_buffer_size_in_bytes:
 
 # Uncomment to set socket buffer size for internode communication
 # Note that when setting this, the buffer size is limited by net.core.wmem_max
 # and when not setting it it is defined by net.ipv4.tcp_wmem
-# internode_recv_buff_size_in_bytes:
+# internode_socket_receive_buffer_size_in_bytes:
 
 # Set to true to have Cassandra create a hard link to each sstable
 # flushed or streamed locally in a backups/ subdirectory of the
@@ -893,6 +898,19 @@ sstable_preemptive_open_interval_in_mb: 50
 # When unset, the default is 200 Mbps or 25 MB/s
 # inter_dc_stream_throughput_outbound_megabits_per_sec: 200
 
+# Server side timeouts for requests. The server will return a timeout exception
+# to the client if it can't complete an operation within the corresponding
+# timeout. Those settings are a protection against:
+#   1) having client wait on an operation that might never terminate due to some
+#      failures.
+#   2) operations that use too much CPU/read too much data (leading to memory build
+#      up) by putting a limit to how long an operation will execute.
+# For this reason, you should avoid putting these settings too high. In other words, 
+# if you are timing out requests because of underlying resource constraints then 
+# increasing the timeout will just cause more problems. Of course putting them too 
+# low is equally ill-advised since clients could get timeouts even for successful 
+# operations just because the timeout setting is too tight.
+
 # How long the coordinator should wait for read operations to complete.
 # Lowest acceptable value is 10 ms.
 read_request_timeout_in_ms: 5000
@@ -922,20 +940,17 @@ request_timeout_in_ms: 10000
 # See (CASSANDRA-14358) for details.
 #
 # The amount of time to wait for internode tcp connections to establish.
-# internode_tcp_connect_timeout_in_ms = 2000
+# internode_tcp_connect_timeout_in_ms: 2000
 #
 # The amount of time unacknowledged data is allowed on a connection before we throw out the connection
 # Note this is only supported on Linux + epoll, and it appears to behave oddly above a setting of 30000
 # (it takes much longer than 30s) as of Linux 4.12. If you want something that high set this to 0
 # which picks up the OS default and configure the net.ipv4.tcp_retries2 sysctl to be ~8.
-# internode_tcp_user_timeout_in_ms = 30000
+# internode_tcp_user_timeout_in_ms: 30000
 
 # The amount of time unacknowledged data is allowed on a streaming connection.
 # The default is 5 minutes. Increase it or set it to 0 in order to increase the timeout.
-# internode_streaming_tcp_user_timeout_in_ms = 300000
-
-# The maximum continuous period a connection may be unwritable in application space
-# internode_application_timeout_in_ms = 30000
+# internode_streaming_tcp_user_timeout_in_ms: 300000
 
 # Global, per-endpoint and per-connection limits imposed on messages queued for delivery to other nodes
 # and waiting to be processed on arrival from other nodes in the cluster.  These limits are applied to the on-wire
@@ -1276,42 +1291,6 @@ replica_filtering_protection:
 # early. Any value size larger than this threshold will result into marking an SSTable
 # as corrupted. This should be positive and less than 2048.
 # max_value_size_in_mb: 256
-
-# Coalescing Strategies #
-# Coalescing multiples messages turns out to significantly boost message processing throughput (think doubling or more).
-# On bare metal, the floor for packet processing throughput is high enough that many applications won't notice, but in
-# virtualized environments, the point at which an application can be bound by network packet processing can be
-# surprisingly low compared to the throughput of task processing that is possible inside a VM. It's not that bare metal
-# doesn't benefit from coalescing messages, it's that the number of packets a bare metal network interface can process
-# is sufficient for many applications such that no load starvation is experienced even without coalescing.
-# There are other benefits to coalescing network messages that are harder to isolate with a simple metric like messages
-# per second. By coalescing multiple tasks together, a network thread can process multiple messages for the cost of one
-# trip to read from a socket, and all the task submission work can be done at the same time reducing context switching
-# and increasing cache friendliness of network message processing.
-# See CASSANDRA-8692 for details.
-
-# Strategy to use for coalescing messages in OutboundTcpConnection.
-# Can be fixed, movingaverage, timehorizon, disabled (default).
-# You can also specify a subclass of CoalescingStrategies.CoalescingStrategy by name.
-# otc_coalescing_strategy: DISABLED
-
-# How many microseconds to wait for coalescing. For fixed strategy this is the amount of time after the first
-# message is received before it will be sent with any accompanying messages. For moving average this is the
-# maximum amount of time that will be waited as well as the interval at which messages must arrive on average
-# for coalescing to be enabled.
-# otc_coalescing_window_us: 200
-
-# Do not try to coalesce messages if we already got that many messages. This should be more than 2 and less than 128.
-# otc_coalescing_enough_coalesced_messages: 8
-
-# How many milliseconds to wait between two expiration runs on the backlog (queue) of the OutboundTcpConnection.
-# Expiration is done if messages are piling up in the backlog. Droppable messages are expired to free the memory
-# taken by expired messages. The interval should be between 0 and 1000, and in most installations the default value
-# will be appropriate. A smaller value could potentially expire messages slightly sooner at the expense of more CPU
-# time and queue contention while iterating the backlog of messages.
-# An interval of 0 disables any wait time, which is the behavior of former Cassandra versions.
-#
-# otc_backlog_expiration_interval_ms: 200
 
 # Track a metric per keyspace indicating whether replication achieved the ideal consistency
 # level for writes without timing out. This is different from the consistency level requested by

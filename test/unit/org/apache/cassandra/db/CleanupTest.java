@@ -58,6 +58,7 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -277,6 +278,17 @@ public class CleanupTest
     @Test
     public void testCleanupSkippingSSTables() throws UnknownHostException, ExecutionException, InterruptedException
     {
+        testCleanupSkippingSSTablesHelper(false);
+    }
+
+    @Test
+    public void testCleanupSkippingRepairedSSTables() throws UnknownHostException, ExecutionException, InterruptedException
+    {
+        testCleanupSkippingSSTablesHelper(true);
+    }
+
+    public void testCleanupSkippingSSTablesHelper(boolean repaired) throws UnknownHostException, ExecutionException, InterruptedException
+    {
         Keyspace keyspace = Keyspace.open(KEYSPACE3);
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF_STANDARD3);
         cfs.disableAutoCompaction();
@@ -291,10 +303,24 @@ public class CleanupTest
             .add("val", VALUE)
             .build()
             .applyUnsafe();
-            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+            cfs.forceBlockingFlush(UNIT_TESTS);
         }
 
         Set<SSTableReader> beforeFirstCleanup = Sets.newHashSet(cfs.getLiveSSTables());
+        if (repaired)
+        {
+            beforeFirstCleanup.forEach((sstable) -> {
+                try
+                {
+                    sstable.descriptor.getMetadataSerializer().mutateRepairMetadata(sstable.descriptor, System.currentTimeMillis(), null, false);
+                    sstable.reloadSSTableMetadata();
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
         // single token - 127.0.0.1 owns everything, cleanup should be noop
         cfs.forceCleanup(2);
         assertEquals(beforeFirstCleanup, cfs.getLiveSSTables());
@@ -426,7 +452,7 @@ public class CleanupTest
                     .applyUnsafe();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     protected List<Long> getMaxTimestampList(ColumnFamilyStore cfs)

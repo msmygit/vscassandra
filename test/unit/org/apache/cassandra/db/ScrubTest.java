@@ -45,10 +45,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import net.openhft.chronicle.core.util.ThrowingBiConsumer;
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.UpdateBuilder;
 import org.apache.cassandra.Util;
@@ -102,6 +100,7 @@ import static org.apache.cassandra.SchemaLoader.createKeyspace;
 import static org.apache.cassandra.SchemaLoader.getCompressionParameters;
 import static org.apache.cassandra.SchemaLoader.loadSchema;
 import static org.apache.cassandra.SchemaLoader.standardCFMD;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -109,7 +108,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class ScrubTest
 {
     public static final String INVALID_LEGACY_SSTABLE_ROOT_PROP = "invalid-legacy-sstable-root";
@@ -128,8 +126,8 @@ public class ScrubTest
 
     private static final AtomicInteger seq = new AtomicInteger();
 
-    private String ksName;
-    private Keyspace keyspace;
+    String ksName;
+    Keyspace keyspace;
 
     @BeforeClass
     public static void defineSchema() throws ConfigurationException
@@ -187,7 +185,7 @@ public class ScrubTest
 
         CompactionManager.instance.disableAutoCompaction();
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(COUNTER_CF);
-
+        cfs.truncateBlocking();
         fillCounterCF(cfs, numPartitions);
 
         assertOrderedAll(cfs, numPartitions);
@@ -519,12 +517,12 @@ public class ScrubTest
         }
     }
 
-    private void overrideWithGarbage(SSTableReader sstable, ByteBuffer key1, ByteBuffer key2) throws IOException
+    static void overrideWithGarbage(SSTableReader sstable, ByteBuffer key1, ByteBuffer key2) throws IOException
     {
         overrideWithGarbage(sstable, key1, key2, (byte) 'z');
     }
 
-    private void overrideWithGarbage(SSTableReader sstable, ByteBuffer key1, ByteBuffer key2, byte junk) throws IOException
+    static void overrideWithGarbage(SSTableReader sstable, ByteBuffer key1, ByteBuffer key2, byte junk) throws IOException
     {
         boolean compression = Boolean.parseBoolean(System.getProperty("cassandra.test.compression", "false"));
         long startPosition, endPosition;
@@ -554,17 +552,17 @@ public class ScrubTest
         overrideWithGarbage(sstable, startPosition, endPosition, junk);
     }
 
-    private void overrideWithGarbage(SSTableReader sstable, long startPosition, long endPosition) throws IOException
+    private static void overrideWithGarbage(SSTableReader sstable, long startPosition, long endPosition) throws IOException
     {
         overrideWithGarbage(sstable, startPosition, endPosition, (byte) 'z');
     }
 
-    private void overrideWithGarbage(SSTableReader sstable, long startPosition, long endPosition, byte junk) throws IOException
+    private static void overrideWithGarbage(SSTableReader sstable, long startPosition, long endPosition, byte junk) throws IOException
     {
         overrideWithGarbage(sstable.getDataFile(), startPosition, endPosition, junk);
     }
 
-    private void overrideWithGarbage(File path, long startPosition, long endPosition, byte junk) throws IOException
+    private static void overrideWithGarbage(File path, long startPosition, long endPosition, byte junk) throws IOException
     {
         try (RandomAccessFile file = new RandomAccessFile(path.toJavaIOFile(), "rw"))
         {
@@ -578,7 +576,7 @@ public class ScrubTest
             ChunkCache.instance.invalidateFile(path.toString());
     }
 
-    private static void assertOrderedAll(ColumnFamilyStore cfs, int expectedSize)
+    static void assertOrderedAll(ColumnFamilyStore cfs, int expectedSize)
     {
         assertOrdered(Util.cmd(cfs).build(), expectedSize);
     }
@@ -597,7 +595,7 @@ public class ScrubTest
         assertEquals(expectedSize, size);
     }
 
-    protected void fillCF(ColumnFamilyStore cfs, int partitionsPerSSTable)
+    protected static void fillCF(ColumnFamilyStore cfs, int partitionsPerSSTable)
     {
         for (int i = 0; i < partitionsPerSSTable; i++)
         {
@@ -609,7 +607,7 @@ public class ScrubTest
             new Mutation(update).applyUnsafe();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
     public static void fillIndexCF(ColumnFamilyStore cfs, boolean composite, long... values)
@@ -633,10 +631,10 @@ public class ScrubTest
             new Mutation(builder.build()).applyUnsafe();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
     }
 
-    protected String[] fillCounterCF(ColumnFamilyStore cfs, int partitionsPerSSTable) throws WriteTimeoutException
+    protected static String[] fillCounterCF(ColumnFamilyStore cfs, int partitionsPerSSTable) throws WriteTimeoutException
     {
         SortedSet<String> tokenSorted = Sets.newTreeSet(Comparator.comparing(a -> cfs.getPartitioner()
                                                                                      .decorateKey(ByteBufferUtil.bytes(a))));
@@ -650,7 +648,7 @@ public class ScrubTest
             new CounterMutation(new Mutation(update), ConsistencyLevel.ONE).apply();
         }
 
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
 
         return tokenSorted.toArray(ArrayUtils.EMPTY_STRING_ARRAY);
     }
@@ -663,14 +661,14 @@ public class ScrubTest
         ColumnFamilyStore cfs = keyspace.getColumnFamilyStore("test_compact_static_columns");
 
         QueryProcessor.executeInternal(String.format("INSERT INTO \"%s\".test_compact_static_columns (a, b, c, d) VALUES (123, c3db07e8-b602-11e3-bc6b-e0b9a54a6d93, true, 'foobar')", ksName));
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         CompactionManager.instance.performScrub(cfs, false, true, 2);
 
         QueryProcessor.process(String.format("CREATE TABLE \"%s\".test_scrub_validation (a text primary key, b int)", ksName), ConsistencyLevel.ONE);
         ColumnFamilyStore cfs2 = keyspace.getColumnFamilyStore("test_scrub_validation");
 
         new Mutation(UpdateBuilder.create(cfs2.metadata(), "key").newRow().add("b", Int32Type.instance.decompose(1)).build()).apply();
-        cfs2.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs2.forceBlockingFlush(UNIT_TESTS);
 
         CompactionManager.instance.performScrub(cfs2, false, false, 2);
     }
@@ -689,7 +687,7 @@ public class ScrubTest
         QueryProcessor.executeInternal(String.format("INSERT INTO \"%s\".test_compact_dynamic_columns (a, b, c) VALUES (0, 'a', 'foo')", ksName));
         QueryProcessor.executeInternal(String.format("INSERT INTO \"%s\".test_compact_dynamic_columns (a, b, c) VALUES (0, 'b', 'bar')", ksName));
         QueryProcessor.executeInternal(String.format("INSERT INTO \"%s\".test_compact_dynamic_columns (a, b, c) VALUES (0, 'c', 'boo')", ksName));
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         CompactionManager.instance.performScrub(cfs, true, true, 2);
 
         // Scrub is silent, but it will remove broken records. So reading everything back to make sure nothing to "scrubbed away"
@@ -832,196 +830,46 @@ public class ScrubTest
     @Test
     public void testFilterOutDuplicates() throws Exception
     {
-        DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
-        QueryProcessor.process(String.format("CREATE TABLE \"%s\".cf_with_duplicates_3_0 (a int, b int, c int, PRIMARY KEY (a, b))", ksName), ConsistencyLevel.ONE);
-
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore("cf_with_duplicates_3_0");
-
-        Path legacySSTableRoot = Paths.get(System.getProperty(INVALID_LEGACY_SSTABLE_ROOT_PROP),
-                                           "Keyspace1",
-                                           "cf_with_duplicates_3_0");
-
-        for (String filename : new String[]{ "mb-3-big-CompressionInfo.db",
-                                             "mb-3-big-Digest.crc32",
-                                             "mb-3-big-Index.db",
-                                             "mb-3-big-Summary.db",
-                                             "mb-3-big-Data.db",
-                                             "mb-3-big-Filter.db",
-                                             "mb-3-big-Statistics.db",
-                                             "mb-3-big-TOC.txt" })
-        {
-            Files.copy(Paths.get(legacySSTableRoot.toString(), filename), cfs.getDirectories().getDirectoryForNewSSTables().toPath().resolve(filename));
-        }
-
-        cfs.loadNewSSTables();
-
-        cfs.scrub(true, true, false, false, false, 1);
-
-        UntypedResultSet rs = QueryProcessor.executeInternal(String.format("SELECT * FROM \"%s\".cf_with_duplicates_3_0", ksName));
-        assertNotNull(rs);
-        assertEquals(1, rs.size());
-
-        QueryProcessor.executeInternal(String.format("DELETE FROM \"%s\".cf_with_duplicates_3_0 WHERE a=1 AND b =2", ksName));
-        rs = QueryProcessor.executeInternal(String.format("SELECT * FROM \"%s\".cf_with_duplicates_3_0", ksName));
-        assertNotNull(rs);
-        assertEquals(0, rs.size());
-    }
-
-    @Test
-    public void testScrubOnePartitionWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        // insert data and verify we get it back w/ range query
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
-        tool.assertOnCleanExit();
-
-        // check data is still there
-        assertOrderedAll(cfs, 1);
-    }
-
-    @Test
-    public void testSkipScrubCorruptedCounterPartitionWithTool() throws IOException, WriteTimeoutException
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(COUNTER_CF);
-        int numPartitions = 1000;
-
-        fillCounterCF(cfs, numPartitions);
-        assertOrderedAll(cfs, numPartitions);
-        assertEquals(1, cfs.getLiveSSTables().size());
-        SSTableReader sstable = cfs.getLiveSSTables().iterator().next();
-
-        overrideWithGarbage(sstable, ByteBufferUtil.bytes("0"), ByteBufferUtil.bytes("1"), (byte)0x7A);
-
-        // with skipCorrupted == true, the corrupt rows will be skipped
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-s", ksName, COUNTER_CF);
-        Assertions.assertThat(tool.getStdout()).contains("0 empty");
-        Assertions.assertThat(tool.getStdout()).contains("partitions that were skipped");
-        tool.assertOnCleanExit();
-
-        assertEquals(1, cfs.getLiveSSTables().size());
-    }
-
-    @Test
-    public void testNoSkipScrubCorruptedCounterPartitionWithTool() throws IOException, WriteTimeoutException
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(COUNTER_CF);
-        int numPartitions = 1000;
-
-        fillCounterCF(cfs, numPartitions);
-        assertOrderedAll(cfs, numPartitions);
-        assertEquals(1, cfs.getLiveSSTables().size());
-        SSTableReader sstable = cfs.getLiveSSTables().iterator().next();
-
-        //use 0x00 instead of the usual 0x7A because if by any chance it's able to iterate over the corrupt
-        //section, then we get many out-of-order errors, which we don't want
-        overrideWithGarbage(sstable, ByteBufferUtil.bytes("0"), ByteBufferUtil.bytes("1"), (byte) 0x0);
-
-        // with skipCorrupted == false, the scrub is expected to fail
+        IPartitioner oldPart = DatabaseDescriptor.getPartitioner();
         try
         {
-            ToolRunner.invokeClass(StandaloneScrubber.class, ksName, COUNTER_CF);
-            fail("Expected a CorruptSSTableException to be thrown");
+            DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
+            QueryProcessor.process(String.format("CREATE TABLE \"%s\".cf_with_duplicates_3_0 (a int, b int, c int, PRIMARY KEY (a, b))", ksName), ConsistencyLevel.ONE);
+
+            ColumnFamilyStore cfs = keyspace.getColumnFamilyStore("cf_with_duplicates_3_0");
+
+            Path legacySSTableRoot = Paths.get(System.getProperty(INVALID_LEGACY_SSTABLE_ROOT_PROP),
+                                               "Keyspace1",
+                                               "cf_with_duplicates_3_0");
+
+            for (String filename : new String[]{ "mb-3-big-CompressionInfo.db",
+                                                 "mb-3-big-Digest.crc32",
+                                                 "mb-3-big-Index.db",
+                                                 "mb-3-big-Summary.db",
+                                                 "mb-3-big-Data.db",
+                                                 "mb-3-big-Filter.db",
+                                                 "mb-3-big-Statistics.db",
+                                                 "mb-3-big-TOC.txt" })
+            {
+                Files.copy(Paths.get(legacySSTableRoot.toString(), filename), cfs.getDirectories().getDirectoryForNewSSTables().toPath().resolve(filename));
+            }
+
+            cfs.loadNewSSTables();
+
+            cfs.scrub(true, true, false, false, false, 1);
+
+            UntypedResultSet rs = QueryProcessor.executeInternal(String.format("SELECT * FROM \"%s\".cf_with_duplicates_3_0", ksName));
+            assertNotNull(rs);
+            assertEquals(1, rs.size());
+
+            QueryProcessor.executeInternal(String.format("DELETE FROM \"%s\".cf_with_duplicates_3_0 WHERE a=1 AND b =2", ksName));
+            rs = QueryProcessor.executeInternal(String.format("SELECT * FROM \"%s\".cf_with_duplicates_3_0", ksName));
+            assertNotNull(rs);
+            assertEquals(0, rs.size());
         }
-        catch (IOError err)
+        finally
         {
-            assertTrue(err.getCause() instanceof CorruptSSTableException);
+            DatabaseDescriptor.setPartitionerUnsafe(oldPart);
         }
-    }
-
-    @Test
-    public void testNoCheckScrubMultiPartitionWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        // insert data and verify we get it back w/ range query
-        fillCF(cfs, 10);
-        assertOrderedAll(cfs, 10);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-n", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("10 partitions in new sstable and 0 empty");
-        tool.assertOnCleanExit();
-
-        // check data is still there
-        assertOrderedAll(cfs, 10);
-    }
-
-    @Test
-    public void testHeaderFixValidateOnlyWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "validate_only", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Not continuing with scrub, since '--header-fix validate-only' was specified.");
-        tool.assertOnCleanExit();
-        assertOrderedAll(cfs, 1);
-    }
-
-    @Test
-    public void testHeaderFixValidateWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "validate", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
-        tool.assertOnCleanExit();
-        assertOrderedAll(cfs, 1);
-    }
-
-    @Test
-    public void testHeaderFixFixOnlyWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "fix-only", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Not continuing with scrub, since '--header-fix fix-only' was specified.");
-        tool.assertOnCleanExit();
-        assertOrderedAll(cfs, 1);
-    }
-
-    @Test
-    public void testHeaderFixWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "fix", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
-        tool.assertOnCleanExit();
-        assertOrderedAll(cfs, 1);
-    }
-
-    @Test
-    public void testHeaderFixNoChecksWithTool()
-    {
-        ColumnFamilyStore cfs = keyspace.getColumnFamilyStore(CF);
-
-        fillCF(cfs, 1);
-        assertOrderedAll(cfs, 1);
-
-        ToolResult tool = ToolRunner.invokeClass(StandaloneScrubber.class, "-e", "off", ksName, CF);
-        Assertions.assertThat(tool.getStdout()).contains("Pre-scrub sstables snapshotted into");
-        Assertions.assertThat(tool.getStdout()).contains("1 partitions in new sstable and 0 empty");
-        tool.assertOnCleanExit();
-        assertOrderedAll(cfs, 1);
     }
 }

@@ -19,13 +19,10 @@
 package org.apache.cassandra.tools;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import org.apache.cassandra.OrderedJUnit4ClassRunner;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.tools.ToolRunner.ToolResult;
 
-@RunWith(OrderedJUnit4ClassRunner.class)
 public class CompactionStressTest extends OfflineToolUtils
 {
     @Test

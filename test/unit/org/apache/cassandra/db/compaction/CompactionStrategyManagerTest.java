@@ -65,6 +65,7 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.UUIDGen;
 import org.mockito.Mockito;
 
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -451,7 +452,7 @@ public class CompactionStrategyManagerTest
         .build()
         .applyUnsafe();
         Set<SSTableReader> before = cfs.getLiveSSTables();
-        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+        cfs.forceBlockingFlush(UNIT_TESTS);
         Set<SSTableReader> after = cfs.getLiveSSTables();
         return Iterables.getOnlyElement(Sets.difference(after, before));
     }
