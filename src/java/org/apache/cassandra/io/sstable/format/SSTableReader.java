@@ -1646,6 +1646,12 @@ public abstract class SSTableReader extends SSTable implements UnfilteredSource,
         }
     }
 
+    public DecoratedKey keyAt(RandomAccessReader reader, long position) throws IOException
+    {
+        reader.seek(position);
+        return keyAt(reader);
+    }
+
     private DecoratedKey keyAt(FileDataInput reader) throws IOException
     {
         if (reader.isEOF()) return null;

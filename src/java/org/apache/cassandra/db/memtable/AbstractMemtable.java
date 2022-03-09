@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.commitlog.CommitLogPosition;
+import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.partitions.Partition;
 import org.apache.cassandra.db.rows.EncodingStats;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -37,6 +38,8 @@ import org.github.jamm.Unmetered;
 
 public abstract class AbstractMemtable implements Memtable
 {
+    private final AtomicReference<LifecycleTransaction> flushTransaction = new AtomicReference<>(null);
+
     protected final AtomicLong currentOperations = new AtomicLong(0);
     protected final ColumnsCollector columnsCollector;
     protected final StatsCollector statsCollector = new StatsCollector();
@@ -108,6 +111,16 @@ public abstract class AbstractMemtable implements Memtable
     EncodingStats encodingStats()
     {
         return statsCollector.get();
+    }
+
+    public LifecycleTransaction getFlushTransaction()
+    {
+        return flushTransaction.get();
+    }
+
+    public LifecycleTransaction setFlushTransaction(LifecycleTransaction flushTransaction)
+    {
+        return this.flushTransaction.getAndSet(flushTransaction);
     }
 
     protected static class ColumnsCollector

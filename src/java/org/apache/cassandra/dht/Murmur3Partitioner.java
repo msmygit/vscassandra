@@ -38,6 +38,9 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.cassandra.utils.MurmurHash;
 import org.apache.cassandra.utils.ObjectSizes;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Longs;
@@ -199,6 +202,12 @@ public class Murmur3Partitioner implements IPartitioner
 
         @Override
         public Object getTokenValue()
+        {
+            return token;
+        }
+
+        @Override
+        public long getLongValue()
         {
             return token;
         }

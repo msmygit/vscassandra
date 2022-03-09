@@ -4545,4 +4545,14 @@ public class DatabaseDescriptor
             conf.sstable_read_rate_persistence_enabled = enabled;
         }
     }
+
+    public static int getSAISegmentWriteBufferSpace()
+    {
+        return conf.sai_options.segment_write_buffer_space_mb;
+    }
+
+    public static void setSAISegmentWriteBufferSpace(int bufferSpace)
+    {
+        conf.sai_options.segment_write_buffer_space_mb = bufferSpace;
+    }
 }

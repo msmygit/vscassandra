@@ -198,6 +198,12 @@ public class Tracker
         return accumulate;
     }
 
+    public void updateSizeTracking(long adjustment)
+    {
+        cfstore.metric.liveDiskSpaceUsed.inc(adjustment);
+        cfstore.metric.totalDiskSpaceUsed.inc(adjustment);
+    }
+
     // SETUP / CLEANUP
 
     public void addInitialSSTables(Iterable<SSTableReader> sstables)

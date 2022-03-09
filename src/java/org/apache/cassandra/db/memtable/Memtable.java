@@ -26,6 +26,7 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.commitlog.CommitLogPosition;
+import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.partitions.Partition;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.EncodingStats;
@@ -376,6 +377,10 @@ public interface Memtable extends Comparable<Memtable>, UnfilteredSource
 
     /** True if the memtable contains no data */
     boolean isClean();
+
+    /** These two methods provide a way of tracking on-going flushes */
+    public LifecycleTransaction setFlushTransaction(LifecycleTransaction transaction);
+    public LifecycleTransaction getFlushTransaction();
 
     /** Order memtables by time as reflected in the commit log position at time of construction */
     default int compareTo(Memtable that)
