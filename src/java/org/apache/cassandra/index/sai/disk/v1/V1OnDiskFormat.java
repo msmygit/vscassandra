@@ -62,7 +62,9 @@ public class V1OnDiskFormat implements OnDiskFormat
     private static final Set<IndexComponent> PER_SSTABLE_COMPONENTS = EnumSet.of(IndexComponent.GROUP_COMPLETION_MARKER,
                                                                                  IndexComponent.GROUP_META,
                                                                                  IndexComponent.TOKEN_VALUES,
-                                                                                 IndexComponent.OFFSETS_VALUES);
+                                                                                 IndexComponent.PRIMARY_KEY_TRIE,
+                                                                                 IndexComponent.PRIMARY_KEY_BLOCKS,
+                                                                                 IndexComponent.PRIMARY_KEY_BLOCK_OFFSETS);
     private static final Set<IndexComponent> LITERAL_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
                                                                              IndexComponent.META,
                                                                              IndexComponent.TERMS_DATA,
@@ -109,7 +111,7 @@ public class V1OnDiskFormat implements OnDiskFormat
         @Override
         public boolean isRowAware()
         {
-            return false;
+            return true;
         }
     };
 
@@ -125,7 +127,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public PrimaryKey.Factory primaryKeyFactory(ClusteringComparator comparator)
     {
-        return new PartitionAwarePrimaryKeyFactory();
+        return new RowAwarePrimaryKeyFactory(comparator);
     }
 
     @Override
@@ -144,7 +146,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
     {
-        return new PartitionAwarePrimaryKeyMap.PartitionAwarePrimaryKeyMapFactory(indexDescriptor, sstable);
+        return new RowAwarePrimaryKeyMap.RowAwarePrimaryKeyMapFactory(indexDescriptor, sstable);
     }
 
     @Override
@@ -256,7 +258,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public int openFilesPerSSTable()
     {
-        return 2;
+        return 4;
     }
 
     @Override

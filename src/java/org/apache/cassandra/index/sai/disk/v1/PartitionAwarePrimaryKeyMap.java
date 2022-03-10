@@ -93,6 +93,7 @@ public class PartitionAwarePrimaryKeyMap implements PrimaryKeyMap
         }
 
         @Override
+        @SuppressWarnings("resource")
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context)
         {
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));

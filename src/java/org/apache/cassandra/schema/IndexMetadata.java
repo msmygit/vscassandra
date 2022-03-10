@@ -67,6 +67,7 @@ public final class IndexMetadata
 
     static
     {
+        indexNameAliases.put(StorageAttachedIndex.class.getSimpleName(), StorageAttachedIndex.class.getCanonicalName());
         indexNameAliases.put(SASIIndex.class.getSimpleName(), SASIIndex.class.getCanonicalName());
         indexNameAliases.put(StorageAttachedIndex.class.getSimpleName(), StorageAttachedIndex.class.getCanonicalName());
     }
@@ -190,6 +191,8 @@ public final class IndexMetadata
         }
         catch (InvocationTargetException e)
         {
+            if (e.getTargetException() instanceof RequestValidationException)
+                throw (RequestValidationException) e.getTargetException();
             if (e.getTargetException() instanceof ConfigurationException)
                 throw (ConfigurationException) e.getTargetException();
             throw new ConfigurationException("Failed to validate custom indexer options: " + options);

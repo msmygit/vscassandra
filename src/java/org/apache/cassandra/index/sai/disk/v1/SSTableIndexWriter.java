@@ -40,6 +40,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
 
@@ -263,7 +264,7 @@ public class SSTableIndexWriter implements PerIndexWriter
 
     private void flushSegment() throws IOException
     {
-        long start = System.nanoTime();
+        long start = Clock.Global.nanoTime();
 
         try
         {
@@ -271,7 +272,7 @@ public class SSTableIndexWriter implements PerIndexWriter
 
             SegmentMetadata segmentMetadata = currentBuilder.flush(indexDescriptor, indexContext);
 
-            long flushMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
+            long flushMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(Clock.Global.nanoTime() - start));
 
             if (segmentMetadata != null)
             {

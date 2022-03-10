@@ -83,7 +83,7 @@ public abstract class SSTable
     public static final int TOMBSTONE_HISTOGRAM_TTL_ROUND_SECONDS = Integer.valueOf(System.getProperty("cassandra.streaminghistogram.roundseconds", "60"));
 
     public final Descriptor descriptor;
-    protected final Set<Component> components;
+    public final Set<Component> components;
     public final boolean compression;
 
     public DecoratedKey first;
@@ -334,7 +334,7 @@ public abstract class SSTable
      * Reads the list of components from the TOC component.
      * @return set of components found in the TOC
      */
-    protected static Set<Component> readTOC(Descriptor descriptor) throws IOException
+    public static Set<Component> readTOC(Descriptor descriptor) throws IOException
     {
         return readTOC(descriptor, true);
     }

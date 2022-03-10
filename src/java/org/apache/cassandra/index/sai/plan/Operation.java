@@ -63,6 +63,7 @@ public class Operation
     }
 
     @VisibleForTesting
+    @SuppressWarnings("resource")
     protected static ListMultimap<ColumnMetadata, Expression> analyzeGroup(QueryController controller,
                                                                            OperationType op,
                                                                            List<RowFilter.Expression> expressions)
