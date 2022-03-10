@@ -73,7 +73,7 @@ public class CollectionIndexingTest extends SAITester
         createIndex("CREATE CUSTOM INDEX ON %s(ENTRIES(value)) USING 'StorageAttachedIndex'");
         waitForIndexQueryable();
         assertEquals(2, execute("SELECT * FROM %s WHERE value[1] = 'v1'").size());
-        assertEquals(1, execute("SELECT * FROM %s WHERE value[1] = 'v1' AND value[2] = 'v2'").size());
+        assertEquals(1, execute("SELECT * FROM %s WHERE value[1] = 'v1' AND value[2] = 'v2' ALLOW FILTERING").size());
     }
 
     @Test

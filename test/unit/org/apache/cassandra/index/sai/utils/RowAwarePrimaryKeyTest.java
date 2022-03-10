@@ -23,7 +23,7 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import org.apache.cassandra.db.Clustering;
-import org.apache.cassandra.index.sai.disk.v2.RowAwarePrimaryKeyFactory;
+import org.apache.cassandra.index.sai.disk.v1.RowAwarePrimaryKeyFactory;
 
 public class RowAwarePrimaryKeyTest extends AbstractPrimaryKeyTest
 {

@@ -51,4 +51,4 @@
  * The implementation has been based on code from Lucene version 7.5 SortedDocValues.
  * Prefix compression and bitpacking are used extensively to save space.
  */
-package org.apache.cassandra.index.sai.disk.v2.sortedterms;
+package org.apache.cassandra.index.sai.disk.v1.sortedterms;

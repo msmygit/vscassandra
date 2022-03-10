@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v2;
+package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -35,12 +35,10 @@ import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.LongArray;
-import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.BlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.NumericValuesMeta;
-import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsMeta;
-import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsReader;
+import org.apache.cassandra.index.sai.disk.v1.sortedterms.SortedTermsMeta;
+import org.apache.cassandra.index.sai.disk.v1.sortedterms.SortedTermsReader;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.FileHandle;

@@ -50,7 +50,6 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.ReversedType;
 import org.apache.cassandra.db.marshal.UTF8Type;
-import org.apache.cassandra.exceptions.SyntaxException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -61,7 +60,6 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.NumericValuesWriter;
-import org.apache.cassandra.index.sai.utils.SuppressLeakCheck;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Expression;
@@ -83,7 +81,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
-public class NativeIndexDDLTest extends SAITester
+public class StorageAttachedIndexDDLTest extends SAITester
 {
     private static final Injections.Counter NDI_CREATION_COUNTER = Injections.newCounter("IndexCreationCounter")
                                                                              .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("register"))

@@ -75,17 +75,11 @@ public abstract class SegmentFlushingFailureTest extends SAITester
                                             .onMethod("abort")
                                             .atEntry()).build();
 
-    private static final Injection v1sstableComponentsWriterFailure =
+    private static final Injection sstableComponentsWriterFailure =
             newFailureOnEntry("sstableComponentsWriterFailure",
-                              SSTableComponentsWriter.class,
+                              org.apache.cassandra.index.sai.disk.v1.SSTableComponentsWriter.class,
                               "complete",
                               RuntimeException.class);
-
-    private static final Injection v2sstableComponentsWriterFailure =
-    newFailureOnEntry("sstableComponentsWriterFailure",
-                      org.apache.cassandra.index.sai.disk.v2.SSTableComponentsWriter.class,
-                      "complete",
-                      RuntimeException.class);
 
     private static final Injection segmentFlushFailure =
             newFailureOnEntry("segmentFlushFailure", SegmentBuilder.class, "flush", RuntimeException.class);
@@ -141,9 +135,9 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     @Test
     public void shouldZeroMemoryTrackerOnOffsetsRuntimeFailure() throws Throwable
     {
-        shouldZeroMemoryTrackerOnFailure(Version.LATEST == Version.AA ? v1sstableComponentsWriterFailure : v2sstableComponentsWriterFailure, "v1");
+        shouldZeroMemoryTrackerOnFailure(sstableComponentsWriterFailure, "v1");
         resetCounters();
-        shouldZeroMemoryTrackerOnFailure(Version.LATEST == Version.AA ? v1sstableComponentsWriterFailure : v2sstableComponentsWriterFailure, "v2");
+        shouldZeroMemoryTrackerOnFailure(sstableComponentsWriterFailure, "v2");
     }
 
     @Test

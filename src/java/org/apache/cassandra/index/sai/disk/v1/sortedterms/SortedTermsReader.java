@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v2.sortedterms;
+package org.apache.cassandra.index.sai.disk.v1.sortedterms;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -39,8 +39,8 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 
-import static org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWriter.TERMS_DICT_BLOCK_MASK;
-import static org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsWriter.TERMS_DICT_BLOCK_SHIFT;
+import static org.apache.cassandra.index.sai.disk.v1.sortedterms.SortedTermsWriter.TERMS_DICT_BLOCK_MASK;
+import static org.apache.cassandra.index.sai.disk.v1.sortedterms.SortedTermsWriter.TERMS_DICT_BLOCK_SHIFT;
 
 /**
  * Provides read access to a sorted on-disk sequence of terms.

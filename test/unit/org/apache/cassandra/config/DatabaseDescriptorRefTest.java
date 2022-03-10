@@ -93,6 +93,7 @@ public class DatabaseDescriptorRefTest
     "org.apache.cassandra.config.EncryptionOptions$ServerEncryptionOptions",
     "org.apache.cassandra.config.EncryptionOptions$ServerEncryptionOptions$InternodeEncryption",
     "org.apache.cassandra.config.EncryptionOptions$ServerEncryptionOptions$OutgoingEncryptedPortSource",
+    "org.apache.cassandra.config.StorageAttachedIndexOptions",
     "org.apache.cassandra.db.guardrails.GuardrailsConfig",
     "org.apache.cassandra.db.guardrails.GuardrailsConfigMBean",
     "org.apache.cassandra.db.guardrails.GuardrailsConfig$IntThreshold",

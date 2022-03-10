@@ -24,7 +24,6 @@ import com.google.common.collect.Lists;
 
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -34,16 +33,14 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 public class Version
 {
-    // 6.8 formats
-    public static final Version AA = new Version("aa", V1OnDiskFormat.instance, Version::aaFileNameFormat);
-    // Stargazer
-    public static final Version BA = new Version("ba", V2OnDiskFormat.instance, (c, i) -> stargazerFileNameFormat(c, i, "ba"));
+    // Current version
+    public static final Version BA = new Version("ba", V1OnDiskFormat.instance, (c, i) -> defaultFileNameFormat(c, i, "ba"));
 
-    // These are in reverse order so that the latest version is used first. Version matching tests
+    // These should be added in reverse order so that the latest version is used first. Version matching tests
     // are more likely to match the latest version so we want to test that one first.
-    public static final List<Version> ALL = Lists.newArrayList(AA, BA);
+    public static final List<Version> ALL = Lists.newArrayList(BA);
 
-    public static final Version EARLIEST = AA;
+    public static final Version EARLIEST = BA;
     // The latest version can be configured to be an earlier version to support partial upgrades that don't
     // write newer versions of the on-disk formats.
     public static final Version LATEST = parse(System.getProperty("cassandra.sai.latest.version", "ba"));
@@ -63,8 +60,6 @@ public class Version
     {
         checkArgument(input != null);
         checkArgument(input.length() == 2);
-        if (input.equals(AA.version))
-            return AA;
         if (input.equals(BA.version))
             return BA;
         throw new IllegalArgumentException();
@@ -112,25 +107,7 @@ public class Version
     }
 
     //
-    // Version.AA filename formatter. This is the old DSE 6.8 SAI on-disk filename format
-    //
-    // Format: <sstable descriptor>-SAI(_<index name>)_<component name>.db
-    //
-    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
-    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
-
-    private static String aaFileNameFormat(IndexComponent indexComponent, IndexContext indexContext)
-    {
-        StringBuilder stringBuilder = new StringBuilder();
-
-        stringBuilder.append(indexContext == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.representation)
-                                                  : String.format(VERSION_AA_PER_INDEX_FORMAT, indexContext.getIndexName(), indexComponent.representation));
-
-        return stringBuilder.toString();
-    }
-
-    //
-    // Stargazer filename formatter. This is the current SAI on-disk filename format
+    // SAI default filename formatter. This is the current SAI on-disk filename format
     //
     // Format: <sstable descriptor>-SAI+<version>(+<index name>)+<component name>.db
     //
@@ -138,7 +115,7 @@ public class Version
     private static final String SAI_SEPARATOR = "+";
     private static final String EXTENSION = ".db";
 
-    private static String stargazerFileNameFormat(IndexComponent indexComponent, IndexContext indexContext, String version)
+    private static String defaultFileNameFormat(IndexComponent indexComponent, IndexContext indexContext, String version)
     {
         StringBuilder stringBuilder = new StringBuilder();
 
@@ -151,5 +128,4 @@ public class Version
 
         return stringBuilder.toString();
     }
-
 }

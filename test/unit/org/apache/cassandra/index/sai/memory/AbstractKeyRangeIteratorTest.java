@@ -23,7 +23,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v2.RowAwarePrimaryKeyFactory;
+import org.apache.cassandra.index.sai.disk.v1.RowAwarePrimaryKeyFactory;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 

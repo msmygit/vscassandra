@@ -60,7 +60,7 @@ public class IndexDescriptorTest
     public void setup() throws Throwable
     {
         temporaryFolder.create();
-        descriptor = Descriptor.fromFilename(temporaryFolder.newFolder().getAbsolutePath() + "/ca-1-bti-Data.db");
+        descriptor = Descriptor.fromFilename(temporaryFolder.newFolder().getAbsolutePath() + "/nb-1-big-Data.db");
         latest = Version.LATEST;
     }
 
@@ -69,34 +69,6 @@ public class IndexDescriptorTest
     {
         setLatestVersion(latest);
         temporaryFolder.delete();
-    }
-
-    @Test
-    public void versionAAPerSSTableComponentIsParsedCorrectly() throws Throwable
-    {
-        setLatestVersion(Version.AA);
-
-        createFileOnDisk("-SAI_GroupComplete.db");
-
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
-
-        assertEquals(Version.AA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER));
-    }
-
-    @Test
-    public void versionAAPerIndexComponentIsParsedCorrectly() throws Throwable
-    {
-        setLatestVersion(Version.AA);
-
-        createFileOnDisk("-SAI_GroupComplete.db");
-        createFileOnDisk("-SAI_test_index_ColumnComplete.db");
-
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
-        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
-
-        assertEquals(Version.AA, indexDescriptor.version);
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
     }
 
     @Test
@@ -124,65 +96,6 @@ public class IndexDescriptorTest
 
         assertEquals(Version.BA, indexDescriptor.version);
         assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
-    }
-
-    @Test
-    public void allVersionAAPerSSTableComponentsAreLoaded() throws Throwable
-    {
-        setLatestVersion(Version.AA);
-
-        createFileOnDisk("-SAI_GroupComplete.db");
-        createFileOnDisk("-SAI_GroupMeta.db");
-        createFileOnDisk("-SAI_TokenValues.db");
-        createFileOnDisk("-SAI_OffsetsValues.db");
-
-        IndexDescriptor result = IndexDescriptor.create(descriptor, Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
-
-        assertTrue(result.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER));
-        assertTrue(result.hasComponent(IndexComponent.GROUP_META));
-        assertTrue(result.hasComponent(IndexComponent.TOKEN_VALUES));
-        assertTrue(result.hasComponent(IndexComponent.OFFSETS_VALUES));
-    }
-
-    @Test
-    public void allVersionAAPerIndexLiteralComponentsAreLoaded() throws Throwable
-    {
-        setLatestVersion(Version.AA);
-
-        createFileOnDisk("-SAI_GroupComplete.db");
-        createFileOnDisk("-SAI_test_index_ColumnComplete.db");
-        createFileOnDisk("-SAI_test_index_Meta.db");
-        createFileOnDisk("-SAI_test_index_TermsData.db");
-        createFileOnDisk("-SAI_test_index_PostingLists.db");
-
-
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
-        IndexContext indexContext = SAITester.createIndexContext("test_index", UTF8Type.instance);
-
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, indexContext));
-    }
-
-    @Test
-    public void allVersionAAPerIndexNumericComponentsAreLoaded() throws Throwable
-    {
-        setLatestVersion(Version.AA);
-
-        createFileOnDisk("-SAI_GroupComplete.db");
-        createFileOnDisk("-SAI_test_index_ColumnComplete.db");
-        createFileOnDisk("-SAI_test_index_Meta.db");
-        createFileOnDisk("-SAI_test_index_KDTree.db");
-        createFileOnDisk("-SAI_test_index_KDTreePostingLists.db");
-
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
-        IndexContext indexContext = SAITester.createIndexContext("test_index", Int32Type.instance);
-
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.META, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE, indexContext));
-        assertTrue(indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, indexContext));
     }
 
     private void setLatestVersion(Version version) throws Throwable
