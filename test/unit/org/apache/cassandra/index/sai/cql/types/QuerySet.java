@@ -255,7 +255,7 @@ public abstract class QuerySet extends SAITester
                 Map map = (Map)allRows[index][2];
                 Object value1 = map.values().toArray()[getRandom().nextIntBetween(0, map.values().size() - 1)];
                 Object value2 = map.keySet().toArray()[getRandom().nextIntBetween(0, map.values().size() - 1)];
-                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS ? AND value CONTAINS ?",
+                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS ? AND value CONTAINS ? ALLOW FILTERING",
                         value1, value2), getExpectedRows(value1, value2, allRows));
             }
         }
@@ -305,7 +305,7 @@ public abstract class QuerySet extends SAITester
                 Map map = (Map)allRows[index][2];
                 Object key1 = map.keySet().toArray()[getRandom().nextIntBetween(0, map.keySet().size() - 1)];
                 Object key2 = map.keySet().toArray()[getRandom().nextIntBetween(0, map.keySet().size() - 1)];
-                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS KEY ? AND value CONTAINS KEY ?",
+                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value CONTAINS KEY ? AND value CONTAINS KEY ? ALLOW FILTERING",
                         key1, key2), getExpectedRows(key1, key2, allRows));
             }
         }
@@ -359,7 +359,7 @@ public abstract class QuerySet extends SAITester
                 Object value1 = map.get(key1);
                 Object key2 = map.keySet().toArray()[getRandom().nextIntBetween(0, map.keySet().size() - 1)];
                 Object value2 = map.get(key2);
-                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value[?] = ? AND value[?] = ?",
+                assertRowsIgnoringOrder(tester.execute("SELECT * FROM %s WHERE value[?] = ? AND value[?] = ? ALLOW FILTERING",
                         key1, value1, key2, value2), getExpectedRows(key1, value1, key2, value2, allRows));
             }
         }
