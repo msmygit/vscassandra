@@ -17,6 +17,7 @@
  */
 package org.apache.cassandra.index.sai.cql;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import org.apache.cassandra.cql3.restrictions.StatementRestrictions;
@@ -80,6 +81,7 @@ public class MixedIndexImplementationsTest extends SAITester
         assertRowsIgnoringOrder(execute(ndiSelect, 1, 1), new Object[]{3, 1, 1});
     }
 
+    @Ignore("Skipped until StatementRestrictions changes are added")
     @Test
     public void shouldRequireAllowFilteringWithOtherIndex() throws Throwable
     {
