@@ -50,7 +50,7 @@ public class NodeRestartTest extends SAITester
         // This barrier allows us to wait until the 2i initialization task, which validates the index, has run:
         Injections.Barrier initTaskLatch =
                 Injections.newBarrier("failing_init_task_barrier", 1, false)
-                          .add(InvokePointBuilder.newInvokePoint().atExceptionExit().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
+                          .add(InvokePointBuilder.newInvokePoint().atExceptionExit().onClass(StorageAttachedIndex.class).onMethod("runInitialBuildBlocking"))
                           .build();
 
         Injections.inject(ssTableIndexValidationError, initTaskLatch, perSSTableValidationCounter, perColumnValidationCounter);
@@ -78,12 +78,12 @@ public class NodeRestartTest extends SAITester
         // This barrier prevents the 2i initialization task, which makes the index queryable, from running:
         Injections.Barrier initTaskLatch =
                 Injections.newBarrier("pause_init_task_entry", 2, false)
-                          .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
+                          .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("runInitialBuildBlocking"))
                           .build();
 
         Injections.Barrier initTaskLatchExit =
                 Injections.newBarrier("pause_init_task_exit", 1, false)
-                          .add(InvokePointBuilder.newInvokePoint().atExit().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
+                          .add(InvokePointBuilder.newInvokePoint().atExit().onClass(StorageAttachedIndex.class).onMethod("runInitialBuildBlocking"))
                           .build();
 
         // Make sure we re-introduce existing counter injections...

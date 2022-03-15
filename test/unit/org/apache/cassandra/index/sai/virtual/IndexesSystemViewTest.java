@@ -57,7 +57,7 @@ public class IndexesSystemViewTest extends SAITester
 
     private Injections.Barrier blockIndexBuild = Injections.newBarrier("block_index_build", 2, false)
                                                            .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class)
-                                                                                  .onMethod("startInitialBuild"))
+                                                                                  .onMethod("runInitialBuildBlocking"))
                                                            .build();
 
     @BeforeClass
