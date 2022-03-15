@@ -115,6 +115,7 @@ public abstract class AbstractAnalyzer implements Iterator<ByteBuffer>
         }
     }
 
+    @SuppressWarnings("resource")
     public static AnalyzerFactory toAnalyzerFactory(String json, final AbstractType<?> type, final Map<String, String> options) //throws Exception
     {
         try

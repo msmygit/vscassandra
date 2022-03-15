@@ -105,6 +105,7 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
         }
 
         @Override
+        @SuppressWarnings("resource")
         public PrimaryKeyMap newPerSSTablePrimaryKeyMap(SSTableQueryContext context) throws IOException
         {
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.openTokenReader(0, context));

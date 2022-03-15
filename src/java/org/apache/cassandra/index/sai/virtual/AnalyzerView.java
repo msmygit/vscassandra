@@ -69,25 +69,27 @@ public class AnalyzerView extends AbstractVirtualTable
             text = UTF8Type.instance.compose(array[0]);
             optionsString = UTF8Type.instance.compose(array[1]);
 
-            Analyzer analyzer = JSONAnalyzerParser.parse(optionsString);
-            luceneAnalyzer = new LuceneAnalyzer(UTF8Type.instance, analyzer, new HashMap<>());
-
-            ByteBuffer toAnalyze = ByteBuffer.wrap(text.getBytes(Charsets.UTF_8));
-            luceneAnalyzer.reset(toAnalyze);
-            ByteBuffer analyzed = null;
-
-            List<String> list = new ArrayList<>();
-
-            while (luceneAnalyzer.hasNext())
+            try (Analyzer analyzer = JSONAnalyzerParser.parse(optionsString))
             {
-                analyzed = luceneAnalyzer.next();
+                luceneAnalyzer = new LuceneAnalyzer(UTF8Type.instance, analyzer, new HashMap<>());
 
-                list.add(ByteBufferUtil.string(analyzed, Charsets.UTF_8));
+                ByteBuffer toAnalyze = ByteBuffer.wrap(text.getBytes(Charsets.UTF_8));
+                luceneAnalyzer.reset(toAnalyze);
+                ByteBuffer analyzed = null;
+
+                List<String> list = new ArrayList<>();
+
+                while (luceneAnalyzer.hasNext())
+                {
+                    analyzed = luceneAnalyzer.next();
+
+                    list.add(ByteBufferUtil.string(analyzed, Charsets.UTF_8));
+                }
+
+                SimpleDataSet result = new SimpleDataSet(metadata());
+                result.row(text, optionsString).column("tokens", list.toString());
+                return result;
             }
-
-            SimpleDataSet result = new SimpleDataSet(metadata());
-            result.row(text, optionsString).column("tokens", list.toString());
-            return result;
         }
         catch (Exception ex)
         {

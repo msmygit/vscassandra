@@ -58,6 +58,7 @@ public abstract class IndexSearcher implements Closeable
         this.indexContext = indexContext;
     }
 
+    @SuppressWarnings("resource")
     public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory,
                                      PerIndexFiles indexFiles,
                                      SegmentMetadata segmentMetadata,

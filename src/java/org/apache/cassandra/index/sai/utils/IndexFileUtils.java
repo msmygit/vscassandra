@@ -53,6 +53,7 @@ public class IndexFileUtils
     protected IndexFileUtils()
     {}
 
+    @SuppressWarnings("resource")
     public IndexOutputWriter openOutput(File file)
     {
         assert writerOption.finishOnClose() : "IndexOutputWriter relies on close() to sync with disk.";
@@ -65,6 +66,7 @@ public class IndexFileUtils
         return IndexInputReader.create(handle);
     }
 
+    @SuppressWarnings("resource")
     public IndexInput openBlockingInput(File file)
     {
         try (final FileHandle.Builder builder = new FileHandle.Builder(file.absolutePath()))
