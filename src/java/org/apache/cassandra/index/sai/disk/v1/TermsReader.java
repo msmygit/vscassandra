@@ -40,6 +40,7 @@ import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -142,7 +143,7 @@ public class TermsReader implements Closeable
             postingsInput = IndexFileUtils.instance.openInput(postingsFile);
             postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
             this.term = term;
-            lookupStartTime = System.nanoTime();
+            lookupStartTime = Clock.Global.nanoTime();
             this.context = context;
         }
 
@@ -186,7 +187,7 @@ public class TermsReader implements Closeable
             {
                 final long offset = reader.exactMatch(term);
 
-                listener.onTraversalComplete(System.nanoTime() - lookupStartTime, TimeUnit.NANOSECONDS);
+                listener.onTraversalComplete(Clock.Global.nanoTime() - lookupStartTime, TimeUnit.NANOSECONDS);
 
                 if (offset == TrieTermsDictionaryReader.NOT_FOUND)
                     return PostingList.OFFSET_NOT_FOUND;

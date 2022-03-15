@@ -100,7 +100,7 @@ public class IncrementalTrieWriterSimple<VALUE>
         return size;
     }
 
-    static class Node<Value> extends BaseNode<Value, Node<Value>>
+    static class Node<Value> extends IncrementalTrieWriterBase.BaseNode<Value, Node<Value>>
     {
         Node(int transition)
         {

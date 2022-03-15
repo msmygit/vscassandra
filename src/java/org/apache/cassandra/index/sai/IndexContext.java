@@ -72,6 +72,7 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 
@@ -227,7 +228,7 @@ public class IndexContext
                                ? current
                                : liveMemtables.computeIfAbsent(mt, memtable -> new MemtableIndex(this));
 
-        long start = System.nanoTime();
+        long start = Clock.Global.nanoTime();
 
         long bytes = 0;
 
@@ -248,7 +249,7 @@ public class IndexContext
             ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
             target.index(key, row.clustering(), value);
         }
-        indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        indexMetrics.memtableIndexWriteLatency.update(Clock.Global.nanoTime() - start, TimeUnit.NANOSECONDS);
         return bytes;
     }
 

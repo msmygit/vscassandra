@@ -34,16 +34,12 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,16 +51,15 @@ import org.apache.cassandra.db.CassandraWriteContext;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
+import org.apache.cassandra.db.Memtable;
 import org.apache.cassandra.db.RangeTombstone;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.WriteContext;
 import org.apache.cassandra.db.compaction.CompactionManager;
-import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.db.Memtable;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.ByteOrderedPartitioner;
@@ -96,7 +91,9 @@ import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.concurrent.Future;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 
 public class StorageAttachedIndex implements Index
@@ -282,16 +279,19 @@ public class StorageAttachedIndex implements Index
         // New storage-attached indexes will be available for queries after on disk index data are built.
         // Memtable data will be indexed via flushing triggered by schema change
         // We only want to validate the index files if we are starting up
-        return () -> startInitialBuild(baseCfs, StorageService.instance.isStarting()).get();
+        return () -> {
+            runInitialBuildBlocking(baseCfs, StorageService.instance.isStarting());
+            return null;
+        };
     }
 
-    private Future<?> startInitialBuild(ColumnFamilyStore baseCfs, boolean validate)
+    private void runInitialBuildBlocking(ColumnFamilyStore baseCfs, boolean validate)
     {
         if (baseCfs.indexManager.isIndexQueryable(this))
         {
             logger.debug(indexContext.logMessage("Skipping validation and building in initialization task, as pre-join has already made the storage attached index queryable..."));
             initBuildStarted = true;
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         // stop in-progress compaction tasks to prevent compacted sstable not being index.
@@ -315,12 +315,12 @@ public class StorageAttachedIndex implements Index
 
         if (nonIndexed.isEmpty())
         {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
         // split sorted sstables into groups with similar size and build each group in separate compaction thread
         List<List<SSTableReader>> groups = groupBySize(nonIndexed, DatabaseDescriptor.getConcurrentCompactors());
-        List<ListenableFuture<?>> futures = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
 
         for (List<SSTableReader> group : groups)
         {
@@ -331,7 +331,7 @@ public class StorageAttachedIndex implements Index
         }
 
         logger.info(indexContext.logMessage("Submitting {} parallel initial index builds over {} total sstables..."), futures.size(), nonIndexed.size());
-        return Futures.allAsList(futures);
+        FBUtilities.waitOnFutures(futures);
     }
 
     /**

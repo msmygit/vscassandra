@@ -428,7 +428,7 @@ implements IncrementalTrieWriter<VALUE>
         return nodePosition;
     }
 
-    static class Node<Value> extends BaseNode<Value, Node<Value>>
+    static class Node<Value> extends IncrementalTrieWriterBase.BaseNode<Value, Node<Value>>
     {
         /**
          * Currently calculated size of the branch below this node, not including the node itself.

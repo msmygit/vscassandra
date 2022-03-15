@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.utils.Clock;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
@@ -96,7 +97,7 @@ public class MemtableIndexWriter implements PerIndexWriter
     @Override
     public void complete(Stopwatch stopwatch) throws IOException
     {
-        long start = System.nanoTime();
+        long start = Clock.Global.nanoTime();
 
         try
         {
@@ -122,7 +123,7 @@ public class MemtableIndexWriter implements PerIndexWriter
 
                 indexContext.getIndexMetrics().memtableIndexFlushCount.inc();
 
-                long durationMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
+                long durationMillis = Math.max(1, TimeUnit.NANOSECONDS.toMillis(Clock.Global.nanoTime() - start));
 
                 if (logger.isTraceEnabled())
                 {
