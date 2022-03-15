@@ -68,8 +68,8 @@ public class SnapshotTest extends SAITester
 
         // Take a snapshot recording the index files last modified date
         String snapshot = "s";
-        int numSnapshottedSSTables = snapshot(snapshot);
-        assertEquals(2, numSnapshottedSSTables);
+        int numSnapshottedDirectories = snapshot(snapshot);
+        assertEquals(1, numSnapshottedDirectories);
         long snapshotLastModified = indexFilesLastModified();
 
         // File.lastModified result can be truncated one second resolution, which can be lesser than the index build
@@ -139,8 +139,8 @@ public class SnapshotTest extends SAITester
 
         // Take a snapshot recording the index files last modified date
         String snapshot = "s";
-        int numSnapshottedSSTables = snapshot(snapshot);
-        assertEquals(2, numSnapshottedSSTables);
+        int numSnapshottedDirectories = snapshot(snapshot);
+        assertEquals(1, numSnapshottedDirectories);
         long snapshotLastModified = indexFilesLastModified();
 
         // File.lastModified result can be truncated one second resolution, which can be lesser than the index build

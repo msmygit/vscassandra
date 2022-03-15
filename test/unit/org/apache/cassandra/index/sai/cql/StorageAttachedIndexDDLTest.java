@@ -144,19 +144,20 @@ public class StorageAttachedIndexDDLTest extends SAITester
             String createTableTemplate = "CREATE TABLE %%s (id text PRIMARY KEY, %s %s)";
             createTable(String.format(createTableTemplate, cql3Type, cql3Type));
 
-            boolean supported = StorageAttachedIndex.SUPPORTED_TYPES.contains(cql3Type);
-
-            try
+            if (StorageAttachedIndex.SUPPORTED_TYPES.contains(cql3Type))
             {
-                executeNet(String.format("CREATE CUSTOM INDEX ON %%s(%s) USING 'StorageAttachedIndex'", cql3Type));
-                assertTrue("Index creation on unsupported type " + cql3Type + " should have failed.", supported);
+                try
+                {
+                    executeNet(String.format("CREATE CUSTOM INDEX ON %%s(%s) USING 'StorageAttachedIndex'", cql3Type));
+                }
+                catch (RuntimeException e)
+                {
+                    fail("Index creation on supported type " + cql3Type + " should have succeeded.");
+                }
             }
-            catch (RuntimeException e)
-            {
-                assertFalse("Index creation on supported type " + cql3Type + " should have succeeded.", supported);
-                // InvalidConfigurationInQueryException is sub-class of InvalidQueryException
-                assertTrue(Throwables.isCausedBy(e, t -> t.getClass().getName().equals(InvalidQueryException.class.getName())));
-            }
+            else
+                assertThatThrownBy(() -> executeNet(String.format("CREATE CUSTOM INDEX ON %%s(%s) USING 'StorageAttachedIndex'", cql3Type)))
+                        .isInstanceOf(InvalidQueryException.class);
         }
     }
 

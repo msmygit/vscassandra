@@ -90,7 +90,7 @@ public class SelectiveIntersectionTest extends SAITester
     @Test
     public void queryAtSelectiveLimitUsesDeferredFlows() throws Throwable
     {
-        assertEquals(20, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1'").size());
+        assertEquals(20, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' ALLOW FILTERING").size());
         Assert.assertEquals(1, INTERSECTION_FLOW_COUNTER.get());
 
         Assert.assertEquals(POSTINGS_READER_OPEN_COUNTER.get(), POSTINGS_READER_CLOSE_COUNTER.get());
@@ -99,7 +99,7 @@ public class SelectiveIntersectionTest extends SAITester
     @Test
     public void queryAboveSelectiveLimitUsesDirectFlows() throws Throwable
     {
-        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9'").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9' ALLOW FILTERING").size());
         Assert.assertEquals(1, INTERSECTION_FLOW_COUNTER.get());
 
         Assert.assertEquals(POSTINGS_READER_OPEN_COUNTER.get(), POSTINGS_READER_CLOSE_COUNTER.get());
@@ -110,7 +110,7 @@ public class SelectiveIntersectionTest extends SAITester
     {
         setLimits(1);
 
-        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9'").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9' ALLOW FILTERING").size());
         Assert.assertEquals(0, INTERSECTION_FLOW_COUNTER.get());
 
         Assert.assertEquals(POSTINGS_READER_OPEN_COUNTER.get(), POSTINGS_READER_CLOSE_COUNTER.get());
@@ -121,7 +121,7 @@ public class SelectiveIntersectionTest extends SAITester
     {
         setLimits(0);
 
-        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9'").size());
+        assertEquals(2, execute("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9' ALLOW FILTERING").size());
         Assert.assertEquals(1, INTERSECTION_FLOW_COUNTER.get());
 
         Assert.assertEquals(POSTINGS_READER_OPEN_COUNTER.get(), POSTINGS_READER_CLOSE_COUNTER.get());
@@ -132,13 +132,13 @@ public class SelectiveIntersectionTest extends SAITester
     {
         Session session = sessionNet();
 
-        String trace = getSingleTraceStatement(session, "SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9'", "Selecting");
+        String trace = getSingleTraceStatement(session, "SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9' ALLOW FILTERING", "Selecting");
 
         assertEquals("Selecting 2 indexes with cardinalities of 10, 20 out of 3 indexes", trace);
 
         setLimits(1);
 
-        trace = getSingleTraceStatement(session, "SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9'", "Selecting");
+        trace = getSingleTraceStatement(session, "SELECT * FROM %s WHERE v1 >= 0 AND v1 < 50 AND v2 = '1' AND v3 = '9' ALLOW FILTERING", "Selecting");
 
         assertEquals("Selecting 1 index with cardinality of 10 out of 3 indexes", trace);
 
