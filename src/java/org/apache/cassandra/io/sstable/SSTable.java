@@ -384,7 +384,7 @@ public abstract class SSTable
      */
     public synchronized void registerComponents(Collection<Component> newComponents, Tracker tracker)
     {
-        Collection<Component> componentsToAdd = Collections2.filter(newComponents, Predicates.not(Predicates.in(components)));
+        Collection<Component> componentsToAdd = new HashSet<>(Collections2.filter(newComponents, Predicates.not(Predicates.in(components))));
         appendTOC(descriptor, componentsToAdd);
         components.addAll(componentsToAdd);
 
