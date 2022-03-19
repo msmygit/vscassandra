@@ -853,17 +853,12 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
     @Override
     public void close()
     {
-        List<InetSocketAddress> addresses = instances.stream().map(IInstance::broadcastAddress).collect(Collectors.toList());
         FBUtilities.waitOnFutures(instances.stream()
                                            .filter(i -> !i.isShutdown())
                                            .map(IInstance::shutdown)
                                            .collect(Collectors.toList()),
                                   1L, TimeUnit.MINUTES);
 
-        addresses.forEach(address -> {
-            if (Util.isListeningOn(address))
-                throw new AssertionError("Instance " + address + " is not closed");
-        });
         instances.clear();
         instanceMap.clear();
         PathUtils.setDeletionListener(ignore -> {});
