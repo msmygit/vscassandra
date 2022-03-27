@@ -2526,14 +2526,6 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         }
     }
 
-    public void unloadCf()
-    {
-        if (keyspace.getMetadata().params.durableWrites && !memtableWritesAreDurable())  // need to clear dirty regions
-            forceBlockingFlush(ColumnFamilyStore.FlushReason.DROP);
-        else
-            FBUtilities.waitOnFuture(dumpMemtable(ColumnFamilyStore.FlushReason.DROP));
-    }
-
     public <V> V runWithCompactionsDisabled(Callable<V> callable, boolean interruptValidation, boolean interruptViews)
     {
         return runWithCompactionsDisabled(callable, (sstable) -> true, interruptValidation, interruptViews, true);

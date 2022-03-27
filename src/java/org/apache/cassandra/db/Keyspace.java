@@ -119,6 +119,10 @@ public class Keyspace
 
     private static volatile boolean initialized = false;
 
+    public static boolean isInitialized()
+    {
+        return initialized;
+    }
     public static void setInitialized()
     {
         initialized = true;
@@ -127,7 +131,7 @@ public class Keyspace
     /**
      * Never use it in production code.
      *
-     * Useful when creating a fake SchemaManager so that it does not manage Keyspace instances (and CFS)
+     * Useful when creating a fake Schema so that it does not manage Keyspace instances (and CFS)
      */
     @VisibleForTesting
     public static void unsetInitialized()
@@ -135,10 +139,6 @@ public class Keyspace
         initialized = false;
     }
 
-    public static boolean isInitialized()
-    {
-        return initialized;
-    }
 
     public static Keyspace open(String keyspaceName)
     {
@@ -394,13 +394,6 @@ public class Keyspace
         unloadCf(cfs, dropData);
     }
 
-    // disassociate a cfs from this keyspace instance.
-    private void unloadCf(ColumnFamilyStore cfs, boolean dropData)
-    {
-        cfs.unloadCf();
-        cfs.invalidate(true, dropData);
-    }
-
     /**
      * Unloads all column family stores and releases metrics.
      */
@@ -409,6 +402,16 @@ public class Keyspace
         for (ColumnFamilyStore cfs : getColumnFamilyStores())
             unloadCf(cfs, dropData);
         metric.release();
+    }
+
+    // disassociate a cfs from this keyspace instance.
+    private void unloadCf(ColumnFamilyStore cfs, boolean dropData)
+    {
+        if (getMetadata().params.durableWrites && !cfs.memtableWritesAreDurable())  // need to clear dirty regions
+            cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.DROP);
+        else
+            FBUtilities.waitOnFuture(cfs.dumpMemtable(ColumnFamilyStore.FlushReason.DROP));
+        cfs.invalidate(true, dropData);
     }
 
     /**
