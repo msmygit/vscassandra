@@ -137,7 +137,7 @@ public class Keyspace
     @VisibleForTesting
     static Keyspace open(String keyspaceName, SchemaProvider schema, boolean loadSSTables)
     {
-        return schema.getOrCreateKeyspaceInstance(keyspaceName, () -> new Keyspace(keyspaceName, schema, loadSSTables));
+        return schema.maybeAddKeyspaceInstance(keyspaceName, () -> new Keyspace(keyspaceName, schema, loadSSTables));
     }
 
     public static ColumnFamilyStore openAndGetStore(TableMetadataRef tableRef)
@@ -325,13 +325,6 @@ public class Keyspace
 
         this.repairManager = new CassandraKeyspaceRepairManager(this);
         this.writeHandler = new CassandraKeyspaceWriteHandler(this);
-
-        // If keyspace has been added, we need to recalculate pending ranges to make sure
-        // we send mutations to the correct set of bootstrapping nodes. Refer CASSANDRA-15433.
-        if (metadata.params.replication.klass != LocalStrategy.class)
-        {
-            PendingRangeCalculatorService.calculatePendingRanges(getReplicationStrategy(), keyspaceName);
-        }
     }
 
     private Keyspace(KeyspaceMetadata metadata)

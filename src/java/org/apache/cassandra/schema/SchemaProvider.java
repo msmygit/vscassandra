@@ -30,7 +30,7 @@ public interface SchemaProvider
     @Nullable
     Keyspace getKeyspaceInstance(String keyspaceName);
 
-    Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction);
+    Keyspace maybeAddKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction);
 
     @Nullable
     KeyspaceMetadata getKeyspaceMetadata(String keyspaceName);

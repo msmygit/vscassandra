@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -32,7 +30,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MapDifference;
 import org.apache.commons.lang3.ObjectUtils;
-import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +51,9 @@ import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.utils.concurrent.LoadingMap;
 
 import static com.google.common.collect.Iterables.size;
 import static java.lang.String.format;
@@ -83,7 +82,7 @@ public final class Schema implements SchemaProvider
     // do some nested calls to getOrCreateKeyspaceInstance, also using different threads, and in a blocking manner.
     // This may lead to a deadlock. The documentation of ConcurrentHashMap says that manipulating other keys inside
     // the lambda passed to the computeIfAbsent method is prohibited.
-    private final ConcurrentMap<String, CompletableFuture<Keyspace>> keyspaceInstances = new NonBlockingHashMap<>();
+    private final LoadingMap<String, Keyspace> keyspaceInstances = new LoadingMap<>();
 
     private volatile UUID version;
 
@@ -103,7 +102,7 @@ public final class Schema implements SchemaProvider
 
     /**
      * Add entries to system_schema.* for the hardcoded system keyspaces
-     *
+     * <p>
      * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
      */
     public synchronized void saveSystemKeyspace()
@@ -216,11 +215,7 @@ public final class Schema implements SchemaProvider
     @Override
     public Keyspace getKeyspaceInstance(String keyspaceName)
     {
-        CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
-        if (future != null && future.isDone())
-            return future.join();
-        else
-            return null;
+        return keyspaceInstances.getIfReady(keyspaceName);
     }
 
     public ColumnFamilyStore getColumnFamilyStoreInstance(TableId id)
@@ -239,56 +234,21 @@ public final class Schema implements SchemaProvider
     }
 
     @Override
-    public Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction)
+    public Keyspace maybeAddKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction)
     {
-        CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
-        if (future == null)
-        {
-            CompletableFuture<Keyspace> empty = new CompletableFuture<>();
-            future = keyspaceInstances.putIfAbsent(keyspaceName, empty);
-            if (future == null)
-            {
-                // We managed to create an entry for the keyspace. Now initialize it.
-                future = empty;
-                try
-                {
-                    empty.complete(loadFunction.get());
-                }
-                catch (Throwable t)
-                {
-                    empty.completeExceptionally(new Throwable(t));
-                    // Remove future so that construction can be retried later
-                    keyspaceInstances.remove(keyspaceName, future);
-                }
-            }
-            // Else some other thread beat us to it, but we now have the reference to the future which we can wait for.
-        }
-
-        // Most of the time the keyspace will be ready and this will complete immediately. If it is being created
-        // concurrently, wait for that process to complete.
-        return future.join();
+        return keyspaceInstances.blockingLoadIfAbsent(keyspaceName, loadFunction);
     }
 
-    /**
-     * Remove keyspace from schema. This puts a temporary entry in the map that throws an exception when queried.
-     * When the metadata is also deleted, that temporary entry must also be deleted using clearKeyspaceInstance below.
-     *
-     * @param keyspaceName The name of the keyspace to remove
-     */
-    private void removeKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
+    private void maybeRemoveKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
     {
-        CompletableFuture<Keyspace> droppedFuture = new CompletableFuture<>();
-        droppedFuture.completeExceptionally(new KeyspaceNotDefinedException(keyspaceName));
-
-        CompletableFuture<Keyspace> existingFuture = keyspaceInstances.put(keyspaceName, droppedFuture);
-        if (existingFuture == null || existingFuture.isCompletedExceptionally())
-            return;
-
-        Keyspace instance = existingFuture.join();
-        unloadFunction.accept(instance);
-
-        CompletableFuture<Keyspace> future = keyspaceInstances.remove(keyspaceName);
-        assert future == droppedFuture;
+        try
+        {
+            keyspaceInstances.blockingUnloadIfPresent(keyspaceName, unloadFunction);
+        }
+        catch (LoadingMap.UnloadExecutionException e)
+        {
+            throw new AssertionError("Failed to unload the keyspace " + keyspaceName);
+        }
     }
 
     /**
@@ -340,7 +300,6 @@ public final class Schema implements SchemaProvider
      * Get metadata about keyspace by its name
      *
      * @param keyspaceName The name of the keyspace
-     *
      * @return The keyspace metadata or null if it wasn't found
      */
     @Override
@@ -354,6 +313,7 @@ public final class Schema implements SchemaProvider
     /**
      * Returns all non-local keyspaces, that is, all but {@link SchemaConstants#LOCAL_SYSTEM_KEYSPACE_NAMES}
      * or virtual keyspaces.
+     *
      * @deprecated use {@link #distributedKeyspaces()}
      */
     @Deprecated
@@ -517,7 +477,7 @@ public final class Schema implements SchemaProvider
      *
      * @param name fully qualified function name
      * @return an empty list if the keyspace or the function name are not found;
-     *         a non-empty collection of {@link Function} otherwise
+     * a non-empty collection of {@link Function} otherwise
      */
     public Collection<Function> getFunctions(FunctionName name)
     {
@@ -536,7 +496,7 @@ public final class Schema implements SchemaProvider
      * @param name     fully qualified function name
      * @param argTypes function argument types
      * @return an empty {@link Optional} if the keyspace or the function name are not found;
-     *         a non-empty optional of {@link Function} otherwise
+     * a non-empty optional of {@link Function} otherwise
      */
     public Optional<Function> findFunction(FunctionName name, List<AbstractType<?>> argTypes)
     {
@@ -578,7 +538,7 @@ public final class Schema implements SchemaProvider
     /**
      * Read schema from system keyspace and calculate MD5 digest of every row, resulting digest
      * will be converted into UUID which would act as content-based version of the schema.
-     *
+     * <p>
      * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
      */
     public synchronized void updateVersion()
@@ -634,7 +594,6 @@ public final class Schema implements SchemaProvider
      * (which also involves fs operations on add/drop ks/cf)
      *
      * @param mutations the schema changes to apply
-     *
      * @throws ConfigurationException If one of metadata attributes has invalid value
      */
     public synchronized void mergeAndAnnounceVersion(Collection<Mutation> mutations)
@@ -731,17 +690,25 @@ public final class Schema implements SchemaProvider
         SchemaDiagnostics.keyspaceAltered(this, delta);
     }
 
-    private void createKeyspace(KeyspaceMetadata keyspace)
+    private void createKeyspace(KeyspaceMetadata ksm)
     {
-        SchemaDiagnostics.keyspaceCreating(this, keyspace);
-        load(keyspace);
+        SchemaDiagnostics.keyspaceCreating(this, ksm);
+        load(ksm);
+        Keyspace keyspace = null;
         if (Keyspace.isInitialized())
         {
-            Keyspace.open(keyspace.name);
+            keyspace = Keyspace.open(ksm.name);
         }
 
-        schemaChangeNotifier.notifyKeyspaceCreated(keyspace);
-        SchemaDiagnostics.keyspaceCreated(this, keyspace);
+        schemaChangeNotifier.notifyKeyspaceCreated(ksm);
+        SchemaDiagnostics.keyspaceCreated(this, ksm);
+
+        // If keyspace has been added, we need to recalculate pending ranges to make sure
+        // we send mutations to the correct set of bootstrapping nodes. Refer CASSANDRA-15433.
+        if (ksm.params.replication.klass != LocalStrategy.class && keyspace != null)
+        {
+            PendingRangeCalculatorService.calculatePendingRanges(keyspace.getReplicationStrategy(), ksm.name);
+        }
     }
 
     private void dropKeyspace(KeyspaceMetadata keyspace)
@@ -759,7 +726,7 @@ public final class Schema implements SchemaProvider
             keyspace.tables.forEach(t -> dropTable(ks, t));
 
             // remove the keyspace from the static instances
-            removeKeyspaceInstance(keyspace.name, Keyspace::unload);
+            maybeRemoveKeyspaceInstance(keyspace.name, Keyspace::unload);
         }
 
         unload(keyspace);
@@ -780,7 +747,6 @@ public final class Schema implements SchemaProvider
     }
 
     /**
-     *
      * @param keyspace
      * @param metadata
      */
