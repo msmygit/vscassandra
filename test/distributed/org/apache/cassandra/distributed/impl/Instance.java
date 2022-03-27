@@ -546,6 +546,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 }
                 else
                 {
+                    Schema.instance.startSync();
                     cluster.stream().forEach(peer -> {
                         if (cluster instanceof Cluster)
                             GossipHelper.statusToNormal((IInvokableInstance) peer).accept(this);
@@ -560,8 +561,6 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                 // Populate tokenMetadata for the second time,
                 // see org.apache.cassandra.service.CassandraDaemon.setup
                 StorageService.instance.populateTokenMetadata();
-
-                SystemKeyspace.finishStartup();
 
                 StorageService.instance.doAuthSetup(false);
                 CassandraDaemon.getInstanceForTesting().completeSetup();

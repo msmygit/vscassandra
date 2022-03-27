@@ -122,22 +122,6 @@ public final class Schema implements SchemaProvider
     }
 
     /**
-     * Add entries to system_schema.* for the hardcoded system keyspaces
-     * <p>
-     * See CASSANDRA-16856/16996. Make sure schema pulls are synchronized to prevent concurrent schema pull/writes
-     */
-    // TODO RMEOVE THIS METHODS WHEN PORTING CASSANDRA-17044 - schema keyspace should not be touched outside the schema update handler
-    public synchronized void saveSystemKeyspace()
-    {
-        SchemaKeyspace.saveSystemKeyspacesSchema();
-    }
-
-    public static KeyspaceMetadata getSystemKeyspaceMetadata()
-    {
-        return SchemaKeyspace.metadata();
-    }
-
-    /**
      * load keyspace (keyspace) definitions, but do not initialize the keyspace instances.
      * Schema version may be updated as the result.
      */

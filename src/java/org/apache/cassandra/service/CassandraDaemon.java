@@ -367,8 +367,6 @@ public class CassandraDaemon
         // Re-populate token metadata after commit log recover (new peers might be loaded onto system keyspace #10293)
         StorageService.instance.populateTokenMetadata();
 
-        SystemKeyspace.finishStartup();
-
         // Clean up system.size_estimates entries left lying around from missed keyspace drops (CASSANDRA-14905)
         StorageService.instance.cleanupSizeEstimates();
 

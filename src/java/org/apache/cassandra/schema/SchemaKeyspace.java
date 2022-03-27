@@ -62,10 +62,11 @@ import static org.apache.cassandra.schema.SchemaKeyspaceTables.*;
 /**
  * system_schema.* tables and methods for manipulating them.
  * 
- * Please notice this class is _not_ thread safe. It should be accessed through {@link org.apache.cassandra.schema.Schema}. See CASSANDRA-16856/16996
+ * Please notice this class is _not_ thread safe and all methods which reads or updates the data in schema keyspace
+ * should be accessed only from the implementation of {@link SchemaUpdateHandler} in synchronized blocks.
  */
 @NotThreadSafe
-final class SchemaKeyspace
+public final class SchemaKeyspace
 {
     private SchemaKeyspace()
     {
@@ -259,7 +260,7 @@ final class SchemaKeyspace
                                    .build();
     }
 
-    static KeyspaceMetadata metadata()
+    public static KeyspaceMetadata metadata()
     {
         return KeyspaceMetadata.create(SchemaConstants.SCHEMA_KEYSPACE_NAME, KeyspaceParams.local(), org.apache.cassandra.schema.Tables.of(ALL_TABLE_METADATA));
     }
