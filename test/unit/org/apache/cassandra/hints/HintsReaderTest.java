@@ -43,7 +43,7 @@ import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableMetadata;
 
@@ -71,7 +71,7 @@ public class HintsReaderTest
 
     private static Mutation createMutation(int index, long timestamp, String ks, String tb)
     {
-        TableMetadata table = SchemaManager.instance.getTableMetadata(ks, tb);
+        TableMetadata table = Schema.instance.getTableMetadata(ks, tb);
         return new RowUpdateBuilder(table, timestamp, bytes(index))
                .clustering(bytes(index))
                .add("val", bytes(index))

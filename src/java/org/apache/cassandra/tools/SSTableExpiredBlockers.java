@@ -26,14 +26,14 @@ import java.util.Set;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 
 /**
  * During compaction we can drop entire sstables if they only contain expired tombstones and if it is guaranteed
@@ -58,9 +58,9 @@ public class SSTableExpiredBlockers
 
         String keyspace = args[args.length - 2];
         String columnfamily = args[args.length - 1];
-        SchemaManager.instance.loadFromDisk();
+        Schema.instance.loadFromDisk();
 
-        TableMetadata metadata = SchemaManager.instance.validateTable(keyspace, columnfamily);
+        TableMetadata metadata = Schema.instance.validateTable(keyspace, columnfamily);
 
         Keyspace ks = Keyspace.openWithoutSSTables(keyspace);
         ColumnFamilyStore cfs = ks.getColumnFamilyStore(columnfamily);

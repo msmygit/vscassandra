@@ -42,7 +42,7 @@ import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.io.sstable.ScannerList;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.utils.FBUtilities;
@@ -88,7 +88,7 @@ public class CompactionTaskTest
         SchemaLoader.prepareServer();
         cfm = CreateTableStatement.parse("CREATE TABLE tbl (k INT PRIMARY KEY, v INT)", "ks").build();
         SchemaLoader.createKeyspace("ks", KeyspaceParams.simple(1), cfm);
-        cfs = SchemaManager.instance.getColumnFamilyStoreInstance(cfm.id);
+        cfs = Schema.instance.getColumnFamilyStoreInstance(cfm.id);
     }
 
     @Before

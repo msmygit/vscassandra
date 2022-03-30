@@ -26,9 +26,34 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.*;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Scanner;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.MatchResult;
@@ -36,9 +61,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
 import javax.annotation.Nullable;
-import javax.management.*;
+import javax.management.NotificationBroadcasterSupport;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.OpenDataException;
 import javax.management.openmbean.TabularData;
@@ -48,20 +72,21 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.*;
-import com.google.common.util.concurrent.*;
-
-import org.apache.cassandra.config.CassandraRelevantProperties;
-import org.apache.cassandra.config.ParameterizedClass;
-import org.apache.cassandra.cql3.QueryHandler;
-import org.apache.cassandra.dht.RangeStreamer.FetchReplica;
-import org.apache.cassandra.fql.FullQueryLogger;
-import org.apache.cassandra.fql.FullQueryLoggerOptions;
-import org.apache.cassandra.fql.FullQueryLoggerOptionsCompositeData;
-import org.apache.cassandra.index.SecondaryIndexManager;
-import org.apache.cassandra.locator.ReplicaCollection.Builder.Conflict;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Ordering;
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.RateLimiter;
+import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.commons.lang3.StringUtils;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,51 +99,104 @@ import org.apache.cassandra.concurrent.ExecutorLocals;
 import org.apache.cassandra.concurrent.NamedThreadFactory;
 import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.concurrent.Stage;
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.config.ParameterizedClass;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.cql3.QueryProcessor;
-import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.Directories;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.SizeEstimatesRecorder;
+import org.apache.cassandra.db.SnapshotDetailsTabularData;
+import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.compaction.Verifier;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
-import org.apache.cassandra.dht.*;
+import org.apache.cassandra.dht.BootStrapper;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.RangeStreamer;
+import org.apache.cassandra.dht.RangeStreamer.FetchReplica;
 import org.apache.cassandra.dht.StreamStateStore;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.dht.Token.TokenFactory;
-import org.apache.cassandra.exceptions.*;
-import org.apache.cassandra.gms.*;
+import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.exceptions.UnavailableException;
+import org.apache.cassandra.fql.FullQueryLogger;
+import org.apache.cassandra.fql.FullQueryLoggerOptions;
+import org.apache.cassandra.fql.FullQueryLoggerOptionsCompositeData;
+import org.apache.cassandra.gms.ApplicationState;
+import org.apache.cassandra.gms.EndpointState;
+import org.apache.cassandra.gms.Gossiper;
+import org.apache.cassandra.gms.IEndpointStateChangeSubscriber;
+import org.apache.cassandra.gms.IFailureDetector;
+import org.apache.cassandra.gms.VersionedValue;
 import org.apache.cassandra.hints.HintsService;
+import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.io.sstable.SSTableLoader;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.sstable.format.VersionAndType;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.locator.*;
+import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.DynamicEndpointSnitch;
+import org.apache.cassandra.locator.EndpointsByRange;
+import org.apache.cassandra.locator.EndpointsByReplica;
+import org.apache.cassandra.locator.EndpointsForRange;
+import org.apache.cassandra.locator.EndpointsForToken;
+import org.apache.cassandra.locator.IEndpointSnitch;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.LocalStrategy;
+import org.apache.cassandra.locator.NetworkTopologyStrategy;
+import org.apache.cassandra.locator.RangesAtEndpoint;
+import org.apache.cassandra.locator.RangesByEndpoint;
+import org.apache.cassandra.locator.Replica;
+import org.apache.cassandra.locator.ReplicaCollection.Builder.Conflict;
+import org.apache.cassandra.locator.Replicas;
+import org.apache.cassandra.locator.SystemReplicas;
+import org.apache.cassandra.locator.TokenMetadata;
+import org.apache.cassandra.locator.TokenMetadataProvider;
 import org.apache.cassandra.metrics.StorageMetrics;
-import org.apache.cassandra.net.*;
-import org.apache.cassandra.nodes.NodeInfo;
+import org.apache.cassandra.net.AsyncOneResponse;
+import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.nodes.Nodes;
-import org.apache.cassandra.repair.*;
+import org.apache.cassandra.repair.RepairRunnable;
+import org.apache.cassandra.repair.SystemDistributedKeyspace;
 import org.apache.cassandra.repair.messages.RepairOption;
 import org.apache.cassandra.schema.CompactionParams.TombstoneOption;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.SchemaTransformations;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.schema.ViewMetadata;
 import org.apache.cassandra.service.disk.usage.DiskUsageBroadcaster;
-import org.apache.cassandra.streaming.*;
+import org.apache.cassandra.streaming.StreamManager;
+import org.apache.cassandra.streaming.StreamOperation;
+import org.apache.cassandra.streaming.StreamPlan;
+import org.apache.cassandra.streaming.StreamResultFuture;
+import org.apache.cassandra.streaming.StreamState;
 import org.apache.cassandra.tracing.TraceKeyspace;
 import org.apache.cassandra.transport.ClientResourceLimits;
 import org.apache.cassandra.transport.ProtocolVersion;
-import org.apache.cassandra.utils.*;
+import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.JVMStabilityInspector;
+import org.apache.cassandra.utils.MBeanWrapper;
+import org.apache.cassandra.utils.MD5Digest;
+import org.apache.cassandra.utils.OutputHandler;
+import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.Throwables;
+import org.apache.cassandra.utils.WindowsTimer;
+import org.apache.cassandra.utils.WrappedRunnable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.cassandra.utils.logging.LoggingSupportFactory;
 import org.apache.cassandra.utils.progress.ProgressEvent;
@@ -974,7 +1052,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
             // gossip snitch infos (local DC and rack)
             gossipSnitchInfo();
-            SchemaManager.instance.startSync();
+            Schema.instance.startSync();
             LoadBroadcaster.instance.startBroadcasting();
             DiskUsageBroadcaster.instance.startBroadcasting();
             HintsService.instance.startDispatch();
@@ -986,10 +1064,10 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         Instant deadline = Instant.now().plus(Duration.ofMillis(ringTimeoutMillis));
 
-        while (SchemaManager.instance.isEmpty() && Instant.now().isBefore(deadline))
+        while (Schema.instance.isEmpty() && Instant.now().isBefore(deadline))
             Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
 
-        if (!SchemaManager.instance.waitUntilReady(Duration.ofMillis(schemaTimeoutMillis)))
+        if (!Schema.instance.waitUntilReady(Duration.ofMillis(schemaTimeoutMillis)))
             throw new IllegalStateException("Could not achieve schema readiness in " + Duration.ofMillis(schemaTimeoutMillis));
     }
 
@@ -1146,7 +1224,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     private void executePreJoinTasks(boolean bootstrap)
     {
         StreamSupport.stream(ColumnFamilyStore.all().spliterator(), false)
-                .filter(cfs -> SchemaManager.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
+                .filter(cfs -> Schema.instance.getUserKeyspaces().names().contains(cfs.keyspace.getName()))
                 .forEach(cfs -> cfs.indexManager.executePreJoinTasksBlocking(bootstrap));
     }
 
@@ -1169,14 +1247,14 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         {
             if (setUpSchema)
             {
-                SchemaManager.instance.transform(SchemaTransformations.updateSystemKeyspace(AuthKeyspace.metadata(), AuthKeyspace.GENERATION));
+                Schema.instance.transform(SchemaTransformations.updateSystemKeyspace(AuthKeyspace.metadata(), AuthKeyspace.GENERATION));
             }
 
             DatabaseDescriptor.getRoleManager().setup();
             DatabaseDescriptor.getAuthenticator().setup();
             DatabaseDescriptor.getAuthorizer().setup();
             DatabaseDescriptor.getNetworkAuthorizer().setup();
-            SchemaManager.instance.registerListener(new AuthSchemaChangeListener());
+            Schema.instance.registerListener(new AuthSchemaChangeListener());
             authSetupComplete = true;
         }
     }
@@ -1196,9 +1274,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @VisibleForTesting
     public void setUpDistributedSystemKeyspaces()
     {
-        SchemaManager.instance.transform(SchemaTransformations.updateSystemKeyspace(TraceKeyspace.metadata(), TraceKeyspace.GENERATION));
-        SchemaManager.instance.transform(SchemaTransformations.updateSystemKeyspace(SystemDistributedKeyspace.metadata(), SystemDistributedKeyspace.GENERATION));
-        SchemaManager.instance.transform(SchemaTransformations.updateSystemKeyspace(AuthKeyspace.metadata(), AuthKeyspace.GENERATION));
+        Schema.instance.transform(SchemaTransformations.updateSystemKeyspace(TraceKeyspace.metadata(), TraceKeyspace.GENERATION));
+        Schema.instance.transform(SchemaTransformations.updateSystemKeyspace(SystemDistributedKeyspace.metadata(), SystemDistributedKeyspace.GENERATION));
+        Schema.instance.transform(SchemaTransformations.updateSystemKeyspace(AuthKeyspace.metadata(), AuthKeyspace.GENERATION));
     }
 
     public boolean isJoined()
@@ -1245,7 +1323,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
             if (keyspace == null)
             {
-                for (String keyspaceName : SchemaManager.instance.getNonLocalStrategyKeyspaces().names())
+                for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces().names())
                     streamer.addRanges(keyspaceName, getLocalReplicas(keyspaceName));
             }
             else if (tokens == null)
@@ -1792,9 +1870,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      * All MVs have been created during bootstrap, so mark them as built
      */
     private void markViewsAsBuilt() {
-        for (String keyspace : SchemaManager.instance.getUserKeyspaces().names())
+        for (String keyspace : Schema.instance.getUserKeyspaces().names())
         {
-            for (ViewMetadata view: SchemaManager.instance.getKeyspaceMetadata(keyspace).views)
+            for (ViewMetadata view: Schema.instance.getKeyspaceMetadata(keyspace).views)
                 SystemKeyspace.finishViewBuildStatus(view.keyspace(), view.name());
         }
     }
@@ -2001,7 +2079,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // some people just want to get a visual representation of things. Allow null and set it to the first
         // non-system keyspace.
         if (keyspace == null)
-            keyspace = SchemaManager.instance.getNonLocalStrategyKeyspaces().iterator().next().name;
+            keyspace = Schema.instance.getNonLocalStrategyKeyspaces().iterator().next().name;
 
         Map<List<String>, List<String>> map = new HashMap<>();
         for (Map.Entry<Range<Token>, EndpointsForRange> entry : getTokenMetadata().getPendingRangesMM(keyspace).asMap().entrySet())
@@ -2055,7 +2133,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         // some people just want to get a visual representation of things. Allow null and set it to the first
         // non-system keyspace.
         if (keyspace == null)
-            keyspace = SchemaManager.instance.getNonLocalStrategyKeyspaces().iterator().next().name;
+            keyspace = Schema.instance.getNonLocalStrategyKeyspaces().iterator().next().name;
 
         List<Range<Token>> ranges = getAllRanges(sortedTokens);
         return constructRangeToEndpointMap(keyspace, ranges);
@@ -2122,7 +2200,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     private List<TokenRange> describeRing(String keyspace, boolean includeOnlyLocalDC, boolean withPort) throws InvalidRequestException
     {
-        if (!SchemaManager.instance.getKeyspaces().contains(keyspace))
+        if (!Schema.instance.getKeyspaces().contains(keyspace))
             throw new InvalidRequestException("No such keyspace: " + keyspace);
 
         if (keyspace == null || Keyspace.open(keyspace).getReplicationStrategy() instanceof LocalStrategy)
@@ -3049,7 +3127,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
         InetAddressAndPort myAddress = FBUtilities.getBroadcastAddressAndPort();
 
-        for (String keyspaceName : SchemaManager.instance.getNonLocalStrategyKeyspaces().names())
+        for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces().names())
         {
             logger.debug("Restoring replica count for keyspace {}", keyspaceName);
             EndpointsByReplica changedReplicas = getChangedReplicasForLeaving(keyspaceName, endpoint, getTokenMetadata(), Keyspace.open(keyspaceName).getReplicationStrategy());
@@ -3324,12 +3402,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public String getSchemaVersion()
     {
-        return SchemaManager.instance.getVersion().toString();
+        return Schema.instance.getVersion().toString();
     }
 
     public String getKeyspaceReplicationInfo(String keyspaceName)
     {
-        Keyspace keyspaceInstance = SchemaManager.instance.getKeyspaceInstance(keyspaceName);
+        Keyspace keyspaceInstance = Schema.instance.getKeyspaceInstance(keyspaceName);
         if (keyspaceInstance == null)
             throw new IllegalArgumentException(); // ideally should never happen
         ReplicationParams replicationParams = keyspaceInstance.getMetadata().params.replication;
@@ -3816,7 +3894,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (null != VirtualKeyspaceRegistry.instance.getKeyspaceNullable(keyspaceName))
             throw new IllegalArgumentException("Cannot perform any operations against virtual keyspace " + keyspaceName);
 
-        if (!SchemaManager.instance.getKeyspaces().contains(keyspaceName))
+        if (!Schema.instance.getKeyspaces().contains(keyspaceName))
             throw new IllegalArgumentException("Keyspace " + keyspaceName + " does not exist");
     }
 
@@ -4233,7 +4311,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public EndpointsForToken getNaturalReplicasForToken(String keyspaceName, String cf, String key)
     {
-        KeyspaceMetadata ksMetaData = SchemaManager.instance.getKeyspaceMetadata(keyspaceName);
+        KeyspaceMetadata ksMetaData = Schema.instance.getKeyspaceMetadata(keyspaceName);
         if (ksMetaData == null)
             throw new IllegalArgumentException("Unknown keyspace '" + keyspaceName + "'");
 
@@ -4359,7 +4437,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             if (operationMode != Mode.LEAVING) // If we're already decommissioning there is no point checking RF/pending ranges
             {
                 int rf, numNodes;
-                for (String keyspaceName : SchemaManager.instance.getPartitionedKeyspaces().names())
+                for (String keyspaceName : Schema.instance.getPartitionedKeyspaces().names())
                 {
                     if (!force)
                     {
@@ -4447,7 +4525,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         Map<String, EndpointsByReplica> rangesToStream = new HashMap<>();
 
-        for (String keyspaceName : SchemaManager.instance.getNonLocalStrategyKeyspaces().names())
+        for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces().names())
         {
             EndpointsByReplica rangesMM = getChangedReplicasForLeaving(keyspaceName, FBUtilities.getBroadcastAddressAndPort(), getTokenMetadata(), Keyspace.open(keyspaceName).getReplicationStrategy());
 
@@ -4554,7 +4632,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             throw new UnsupportedOperationException("This node has more than one token and cannot be moved thusly.");
         }
 
-        List<String> keyspacesToProcess = ImmutableList.copyOf(SchemaManager.instance.getNonLocalStrategyKeyspaces().names());
+        List<String> keyspacesToProcess = ImmutableList.copyOf(Schema.instance.getNonLocalStrategyKeyspaces().names());
 
         PendingRangeCalculatorService.instance.blockUntilFinished();
         // checking if data is moving to this node
@@ -4696,7 +4774,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         Collection<Token> tokens = getTokenMetadata().getTokens(endpoint);
 
         // Find the endpoints that are going to become responsible for data
-        for (String keyspaceName : SchemaManager.instance.getNonLocalStrategyKeyspaces().names())
+        for (String keyspaceName : Schema.instance.getNonLocalStrategyKeyspaces().names())
         {
             // if the replication factor is 1 the data is lost so we shouldn't wait for confirmation
             if (Keyspace.open(keyspaceName).getReplicationStrategy().getReplicationFactor().allReplicas == 1)
@@ -5127,7 +5205,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         AbstractReplicationStrategy strategy;
         if (keyspace != null)
         {
-            Keyspace keyspaceInstance = SchemaManager.instance.getKeyspaceInstance(keyspace);
+            Keyspace keyspaceInstance = Schema.instance.getKeyspaceInstance(keyspace);
             if (keyspaceInstance == null)
                 throw new IllegalArgumentException("The keyspace " + keyspace + ", does not exist");
 
@@ -5137,15 +5215,15 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         }
         else
         {
-            Collection<String> userKeyspaces = SchemaManager.instance.getUserKeyspaces().names();
+            Collection<String> userKeyspaces = Schema.instance.getUserKeyspaces().names();
 
             if (userKeyspaces.size() > 0)
             {
                 keyspace = userKeyspaces.iterator().next();
-                AbstractReplicationStrategy replicationStrategy = SchemaManager.instance.getKeyspaceInstance(keyspace).getReplicationStrategy();
+                AbstractReplicationStrategy replicationStrategy = Schema.instance.getKeyspaceInstance(keyspace).getReplicationStrategy();
                 for (String keyspaceName : userKeyspaces)
                 {
-                    if (!SchemaManager.instance.getKeyspaceInstance(keyspaceName).getReplicationStrategy().hasSameSettings(replicationStrategy))
+                    if (!Schema.instance.getKeyspaceInstance(keyspaceName).getReplicationStrategy().hasSameSettings(replicationStrategy))
                         throw new IllegalStateException("Non-system keyspaces don't have the same replication settings, effective ownership information is meaningless");
                 }
             }
@@ -5154,7 +5232,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 keyspace = "system_traces";
             }
 
-            Keyspace keyspaceInstance = SchemaManager.instance.getKeyspaceInstance(keyspace);
+            Keyspace keyspaceInstance = Schema.instance.getKeyspaceInstance(keyspace);
             if (keyspaceInstance == null)
                 throw new IllegalStateException("The node does not have " + keyspace + " yet, probably still bootstrapping. Effective ownership information is meaningless.");
             strategy = keyspaceInstance.getReplicationStrategy();
@@ -5208,17 +5286,17 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public List<String> getKeyspaces()
     {
-        return Lists.newArrayList(SchemaManager.instance.sharedAndLocalKeyspaces().names());
+        return Lists.newArrayList(Schema.instance.distributedAndLocalKeyspaces().names());
     }
 
     public List<String> getNonSystemKeyspaces()
     {
-        return Lists.newArrayList(SchemaManager.instance.sharedKeyspaces().names());
+        return Lists.newArrayList(Schema.instance.distributedKeyspaces().names());
     }
 
     public List<String> getNonLocalStrategyKeyspaces()
     {
-        return Lists.newArrayList(SchemaManager.instance.getNonLocalStrategyKeyspaces().names());
+        return Lists.newArrayList(Schema.instance.getNonLocalStrategyKeyspaces().names());
     }
 
     public Map<String, String> getViewBuildStatuses(String keyspace, String view, boolean withPort)
@@ -5313,7 +5391,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
             // point snitch references to the new instance
             DatabaseDescriptor.setEndpointSnitch(newSnitch);
-            for (String ks : SchemaManager.instance.getKeyspaces())
+            for (String ks : Schema.instance.getKeyspaces())
             {
                 Keyspace.open(ks).getReplicationStrategy().snitch = newSnitch;
             }
@@ -5447,7 +5525,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
             public TableMetadataRef getTableMetadata(String tableName)
             {
-                return SchemaManager.instance.getTableMetadataRef(keyspace, tableName);
+                return Schema.instance.getTableMetadataRef(keyspace, tableName);
             }
         };
 
@@ -5539,12 +5617,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
     public void resetLocalSchema() throws IOException
     {
-        SchemaManager.instance.resetLocalSchema();
+        Schema.instance.resetLocalSchema();
     }
 
     public void reloadLocalSchema()
     {
-        SchemaManager.instance.reloadSchemaAndAnnounceVersion();
+        Schema.instance.reloadSchemaAndAnnounceVersion();
     }
 
     public void setTraceProbability(double probability)
@@ -5893,7 +5971,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @Override
     public Map<String, Set<InetAddress>> getOutstandingSchemaVersions()
     {
-        Map<UUID, Set<InetAddressAndPort>> outstanding = SchemaManager.instance.getOutstandingSchemaVersions();
+        Map<UUID, Set<InetAddressAndPort>> outstanding = Schema.instance.getOutstandingSchemaVersions();
         return outstanding.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().toString(),
                                                                         e -> e.getValue().stream().map(i -> i.address).collect(Collectors.toSet())));
     }
@@ -5901,7 +5979,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     @Override
     public Map<String, Set<String>> getOutstandingSchemaVersionsWithPort()
     {
-        Map<UUID, Set<InetAddressAndPort>> outstanding = SchemaManager.instance.getOutstandingSchemaVersions();
+        Map<UUID, Set<InetAddressAndPort>> outstanding = Schema.instance.getOutstandingSchemaVersions();
         return outstanding.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().toString(),
                                                                         e -> e.getValue().stream().map(InetAddressAndPort::toString).collect(Collectors.toSet())));
     }

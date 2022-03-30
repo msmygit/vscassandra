@@ -25,31 +25,60 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.After;
+import org.junit.BeforeClass;
+
 import org.apache.cassandra.auth.AuthKeyspace;
 import org.apache.cassandra.auth.AuthSchemaChangeListener;
 import org.apache.cassandra.auth.IAuthenticator;
 import org.apache.cassandra.auth.IAuthorizer;
 import org.apache.cassandra.auth.INetworkAuthorizer;
 import org.apache.cassandra.auth.IRoleManager;
-import org.apache.cassandra.config.*;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
 import org.apache.cassandra.cql3.statements.schema.CreateTypeStatement;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.RowUpdateBuilder;
-import org.apache.cassandra.db.marshal.*;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.AsciiType;
+import org.apache.cassandra.db.marshal.BytesType;
+import org.apache.cassandra.db.marshal.CompositeType;
+import org.apache.cassandra.db.marshal.CounterColumnType;
+import org.apache.cassandra.db.marshal.DoubleType;
+import org.apache.cassandra.db.marshal.DynamicCompositeType;
+import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.IntegerType;
+import org.apache.cassandra.db.marshal.LongType;
+import org.apache.cassandra.db.marshal.ReversedType;
+import org.apache.cassandra.db.marshal.TimeUUIDType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.UUIDType;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.index.StubIndex;
 import org.apache.cassandra.index.sasi.SASIIndex;
 import org.apache.cassandra.index.sasi.disk.OnDiskIndexBuilder;
-import org.apache.cassandra.schema.*;
+import org.apache.cassandra.schema.CachingParams;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.CompactionParams;
+import org.apache.cassandra.schema.CompressionParams;
+import org.apache.cassandra.schema.Functions;
+import org.apache.cassandra.schema.IndexMetadata;
+import org.apache.cassandra.schema.Indexes;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaTestUtil;
+import org.apache.cassandra.schema.SchemaTransformation;
+import org.apache.cassandra.schema.SchemaTransformations;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.Tables;
+import org.apache.cassandra.schema.Types;
+import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
-
-import org.junit.After;
-import org.junit.BeforeClass;
 
 public class SchemaLoader
 {
@@ -287,7 +316,7 @@ public class SchemaLoader
         DatabaseDescriptor.getAuthenticator().setup();
         DatabaseDescriptor.getAuthorizer().setup();
         DatabaseDescriptor.getNetworkAuthorizer().setup();
-        SchemaManager.instance.registerListener(new AuthSchemaChangeListener());
+        Schema.instance.registerListener(new AuthSchemaChangeListener());
     }
 
     public static ColumnMetadata integerColumn(String ksName, String cfName)
@@ -734,7 +763,7 @@ public static TableMetadata.Builder clusteringSASICFMD(String ksName, String cfN
 
     public static void insertData(String keyspace, String columnFamily, int offset, int numberOfRows)
     {
-        TableMetadata cfm = SchemaManager.instance.getTableMetadata(keyspace, columnFamily);
+        TableMetadata cfm = Schema.instance.getTableMetadata(keyspace, columnFamily);
 
         for (int i = offset; i < offset + numberOfRows; i++)
         {
@@ -769,19 +798,19 @@ public static TableMetadata.Builder clusteringSASICFMD(String ksName, String cfN
                                                        Views.none(),
                                                        Types.none(),
                                                        Functions.none());
-        SchemaManager.instance.transform(SchemaTransformations.addKeyspace(ksm, true));
+        Schema.instance.transform(SchemaTransformations.addKeyspace(ksm, true));
 
         for (String typeCQL : typesCQL)
         {
-            Types types = SchemaManager.instance.getKeyspaceMetadata(keyspace).types;
+            Types types = Schema.instance.getKeyspaceMetadata(keyspace).types;
             SchemaTransformation t = SchemaTransformations.addOrUpdateType(CreateTypeStatement.parse(typeCQL,
                                                                                                      keyspace, types));
-            SchemaManager.instance.transform(t);
+            Schema.instance.transform(t);
         }
 
-        Types types = SchemaManager.instance.getKeyspaceMetadata(keyspace).types;
+        Types types = Schema.instance.getKeyspaceMetadata(keyspace).types;
         TableMetadata metadata = CreateTableStatement.parse(schemaCQL, keyspace, types).build();
-        SchemaManager.instance.transform(SchemaTransformations.addTable(metadata, true));
+        Schema.instance.transform(SchemaTransformations.addTable(metadata, true));
     }
 
     private static CompressionParams compressionParams(int chunkLength)

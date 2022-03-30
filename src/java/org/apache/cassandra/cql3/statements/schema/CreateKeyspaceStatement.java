@@ -22,7 +22,6 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 
 import com.google.common.collect.ImmutableSet;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +39,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams.Option;
 import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.transport.Event.SchemaChange;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
@@ -115,7 +114,7 @@ public final class CreateKeyspaceStatement extends AlterSchemaStatement
     Set<String> clientWarnings(KeyspacesDiff diff)
     {
         HashSet<String> clientWarnings = new HashSet<>();
-        int keyspaceCount = SchemaManager.instance.getKeyspaces().size();
+        int keyspaceCount = Schema.instance.getKeyspaces().size();
         if (keyspaceCount > DatabaseDescriptor.keyspaceCountWarnThreshold())
         {
             String msg = String.format("Cluster already contains %d keyspaces. Having a large number of keyspaces will significantly slow down schema dependent cluster operations.",

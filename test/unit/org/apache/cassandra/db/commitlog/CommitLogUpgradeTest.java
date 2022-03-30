@@ -26,7 +26,6 @@ import java.nio.ByteBuffer;
 import java.util.Properties;
 
 import com.google.common.base.Predicate;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -45,7 +44,7 @@ import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileInputStreamPlus;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
@@ -127,7 +126,7 @@ public class CommitLogUpgradeTest
         if (cfidString != null)
         {
             TableId tableId = TableId.fromString(cfidString);
-            if (SchemaManager.instance.getTableMetadata(tableId) == null)
+            if (Schema.instance.getTableMetadata(tableId) == null)
                 SchemaTestUtil.addOrUpdateKeyspace(KeyspaceMetadata.create(KEYSPACE,
                                                                            KeyspaceParams.simple(1),
                                                                            Tables.of(metadata.unbuild().id(tableId).build())),

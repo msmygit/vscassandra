@@ -29,7 +29,7 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableMetadata;
 
@@ -54,12 +54,12 @@ public class OptionalTasksTest
     public void shouldIgnoreDroppedKeyspace()
     {
         // Set the initial sampling state...
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
-        ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(Objects.requireNonNull(metadata).id);
+        TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
+        ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(Objects.requireNonNull(metadata).id);
         Objects.requireNonNull(cfs).metric.coordinatorReadLatency.update(100, TimeUnit.NANOSECONDS);
 
         // Remove the Keyspace name to make it invisible to the updater...
-        KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(KEYSPACE);
         SchemaTestUtil.dropKeyspaceIfExist(KEYSPACE, true);
 
         try
@@ -82,8 +82,8 @@ public class OptionalTasksTest
     public void shouldUpdateSpeculationThreshold()
     {
         // Set the initial sampling state...
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
-        ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(Objects.requireNonNull(metadata).id);
+        TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
+        ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(Objects.requireNonNull(metadata).id);
         Objects.requireNonNull(cfs).metric.coordinatorReadLatency.update(100, TimeUnit.NANOSECONDS);
 
         long originalValue = cfs.sampleReadLatencyNanos;

@@ -21,6 +21,8 @@ package org.apache.cassandra.schema;
 import java.io.IOException;
 import java.util.List;
 
+import org.junit.Test;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.QueryOptions;
@@ -29,8 +31,6 @@ import org.apache.cassandra.transport.Message;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.transport.SimpleClient;
 import org.apache.cassandra.transport.messages.QueryMessage;
-
-import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -64,8 +64,8 @@ public class CreateTableValidationTest extends CQLTester
         requireNetwork();
         int tableCountWarn = DatabaseDescriptor.tableCountWarnThreshold();
         int keyspaceCountWarn = DatabaseDescriptor.keyspaceCountWarnThreshold();
-        DatabaseDescriptor.setTableCountWarnThreshold(SchemaManager.instance.getNumberOfTables());
-        DatabaseDescriptor.setKeyspaceCountWarnThreshold(SchemaManager.instance.getKeyspaces().size());
+        DatabaseDescriptor.setTableCountWarnThreshold(Schema.instance.getNumberOfTables());
+        DatabaseDescriptor.setKeyspaceCountWarnThreshold(Schema.instance.getKeyspaces().size());
 
         try (SimpleClient client = newSimpleClient(ProtocolVersion.CURRENT).connect(false))
         {
@@ -77,7 +77,7 @@ public class CreateTableValidationTest extends CQLTester
             assertTrue(warns.size() > 0);
             assertTrue(warns.get(0).contains("Having a large number of keyspaces will significantly"));
 
-            DatabaseDescriptor.setKeyspaceCountWarnThreshold(SchemaManager.instance.getKeyspaces().size() + 2);
+            DatabaseDescriptor.setKeyspaceCountWarnThreshold(Schema.instance.getKeyspaces().size() + 2);
             query = new QueryMessage(String.format(createKeyspace, 2), QueryOptions.DEFAULT);
             resp = client.execute(query);
             warns = resp.getWarnings();
@@ -92,7 +92,7 @@ public class CreateTableValidationTest extends CQLTester
             assertTrue(warns.size() > 0);
             assertTrue(warns.get(0).contains("Having a large number of tables"));
 
-            DatabaseDescriptor.setTableCountWarnThreshold(SchemaManager.instance.getNumberOfTables() + 1);
+            DatabaseDescriptor.setTableCountWarnThreshold(Schema.instance.getNumberOfTables() + 1);
             query = new QueryMessage(String.format("CREATE TABLE %s.%s (id int primary key, x int)", KEYSPACE, "test2"), QueryOptions.DEFAULT);
             resp = client.execute(query);
             assertTrue(resp.getWarnings() == null || resp.getWarnings().isEmpty());

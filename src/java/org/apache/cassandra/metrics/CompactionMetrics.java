@@ -17,7 +17,10 @@
  */
 package org.apache.cassandra.metrics;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -27,7 +30,6 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.DerivativeGauge;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
-
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.compaction.AbstractTableOperation;
@@ -35,7 +37,7 @@ import org.apache.cassandra.db.compaction.CompactionAggregateStatistics;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.compaction.CompactionStrategyStatistics;
 import org.apache.cassandra.db.compaction.TableOperation;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
@@ -104,7 +106,7 @@ public class CompactionMetrics
         pendingTasks = Metrics.register(factory.createMetricName("PendingTasks"), () -> {
             int n = 0;
             // add estimate number of compactions need to be done
-            for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+            for (String keyspaceName : Schema.instance.getKeyspaces())
             {
                 for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
                     n += cfs.getCompactionStrategy().getEstimatedRemainingTasks();
@@ -116,7 +118,7 @@ public class CompactionMetrics
         pendingTasksByTableName = Metrics.register(factory.createMetricName("PendingTasksByTableName"), () -> {
             Map<String, Map<String, Integer>> resultMap = new HashMap<>();
             // estimation of compactions need to be done
-            for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+            for (String keyspaceName : Schema.instance.getKeyspaces())
             {
                 for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
                 {
@@ -164,7 +166,7 @@ public class CompactionMetrics
         writeAmplificationByTableName = Metrics.register(factory.createMetricName("WriteAmplificationByTableName"), () -> {
             Map<String, Map<String, Double>> resultMap = new HashMap<>();
 
-            for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+            for (String keyspaceName : Schema.instance.getKeyspaces())
             {
                 Map<String, Double> ksMap = new HashMap<>();
                 resultMap.put(keyspaceName, ksMap);
@@ -205,7 +207,7 @@ public class CompactionMetrics
                                                     protected List<CompactionStrategyStatistics> loadValue()
                                                     {
                                                         List<CompactionStrategyStatistics> ret = new ArrayList<>();
-                                                        for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+                                                        for (String keyspaceName : Schema.instance.getKeyspaces())
                                                         {
                                                             // Scan all the compactions strategies of all tables and find those that have compactions in progress.
                                                             for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())

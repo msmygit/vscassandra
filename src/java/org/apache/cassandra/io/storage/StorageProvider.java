@@ -28,7 +28,7 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.PathUtils;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.CUSTOM_STORAGE_PROVIDER;
@@ -87,7 +87,7 @@ public interface StorageProvider
      * Create data directories for given table
      *
      * @param ksMetadata The keyspace metadata, can be null. This is used when schema metadata is
-     *                   not available in {@link SchemaManager}, eg. CNDB backup & restore
+     *                   not available in {@link Schema}, eg. CNDB backup & restore
      * @param keyspaceName the name of the keyspace
      * @param dirs current local data directories
      * @return data directories that are created

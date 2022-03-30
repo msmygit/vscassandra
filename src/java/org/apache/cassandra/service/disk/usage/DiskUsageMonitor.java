@@ -38,7 +38,7 @@ import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.guardrails.Guardrails;
 import org.apache.cassandra.guardrails.GuardrailsConfig;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 
 /**
  * Schedule periodic task to monitor local disk usage and notify {@link DiskUsageBroadcaster} if local state changed.
@@ -139,7 +139,7 @@ public class DiskUsageMonitor
     {
         long size = 0;
 
-        for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+        for (String keyspaceName : Schema.instance.getKeyspaces())
         {
             Keyspace keyspace = Keyspace.open(keyspaceName);
 

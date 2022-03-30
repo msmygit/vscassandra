@@ -26,7 +26,8 @@ import com.google.common.reflect.TypeToken;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.datastax.driver.core.*;
+import com.datastax.driver.core.TypeTokens;
+import com.datastax.driver.core.UDTValue;
 import com.datastax.driver.core.exceptions.InvalidQueryException;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.QueryProcessor;
@@ -37,7 +38,7 @@ import org.apache.cassandra.cql3.functions.UDFunction;
 import org.apache.cassandra.db.marshal.CollectionType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
@@ -152,7 +153,7 @@ public class UFTest extends CQLTester
 
         FunctionName fSinName = parseFunctionName(fSin);
 
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(parseFunctionName(fSin)).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(parseFunctionName(fSin)).size());
 
         assertRows(execute("SELECT function_name, language FROM system_schema.functions WHERE keyspace_name=?", KEYSPACE_PER_TEST),
                    row(fSinName.name, "java"));
@@ -161,7 +162,7 @@ public class UFTest extends CQLTester
 
         assertRows(execute("SELECT function_name, language FROM system_schema.functions WHERE keyspace_name=?", KEYSPACE_PER_TEST));
 
-        Assert.assertEquals(0, SchemaManager.instance.getFunctions(fSinName).size());
+        Assert.assertEquals(0, Schema.instance.getFunctions(fSinName).size());
     }
 
     @Test
@@ -178,7 +179,7 @@ public class UFTest extends CQLTester
 
         FunctionName fSinName = parseFunctionName(fSin);
 
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(parseFunctionName(fSin)).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(parseFunctionName(fSin)).size());
 
         // create a pairs of Select and Inserts. One statement in each pair uses the function so when we
         // drop it those statements should be removed from the cache in QueryProcessor. The other statements
@@ -216,7 +217,7 @@ public class UFTest extends CQLTester
                 "LANGUAGE java " +
                 "AS 'return Double.valueOf(Math.sin(input));'");
 
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(fSinName).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(fSinName).size());
 
         preparedSelect1= QueryProcessor.instance.prepare(
                                          String.format("SELECT key, %s(d) FROM %s.%s", fSin, KEYSPACE, currentTable()),
@@ -331,7 +332,7 @@ public class UFTest extends CQLTester
                                         "RETURNS double " +
                                         "LANGUAGE javascript " +
                                         "AS 'input'");
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(parseFunctionName(function)).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(parseFunctionName(function)).size());
 
         List<ResultMessage.Prepared> prepared = new ArrayList<>();
         // prepare statements which use the function to provide a DelayedValue
@@ -765,7 +766,7 @@ public class UFTest extends CQLTester
 
         FunctionName fNameName = parseFunctionName(fName);
 
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(fNameName).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(fNameName).size());
 
         ResultMessage.Prepared prepared = QueryProcessor.instance.prepare(String.format("SELECT key, %s(udt) FROM %s.%s", fName, KEYSPACE, currentTable()),
                                                                  ClientState.forInternalCalls());
@@ -782,7 +783,7 @@ public class UFTest extends CQLTester
         Assert.assertNull(QueryProcessor.instance.getPrepared(prepared.statementId));
 
         // function stays
-        Assert.assertEquals(1, SchemaManager.instance.getFunctions(fNameName).size());
+        Assert.assertEquals(1, Schema.instance.getFunctions(fNameName).size());
     }
 
     @Test
@@ -850,7 +851,7 @@ public class UFTest extends CQLTester
                                       "LANGUAGE JAVA\n" +
                                       "AS 'throw new RuntimeException();';");
 
-        KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE_PER_TEST);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(KEYSPACE_PER_TEST);
         UDFunction f = (UDFunction) ksm.functions.get(parseFunctionName(fName)).iterator().next();
 
         UDFunction broken = UDFunction.createBrokenFunction(f.name(),

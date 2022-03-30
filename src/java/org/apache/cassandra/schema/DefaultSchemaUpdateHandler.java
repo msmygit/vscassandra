@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.schema;
 
-import java.lang.management.ManagementFactory;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
@@ -62,7 +61,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
 
     private final boolean requireSchemas;
     private final BiConsumer<SchemaTransformationResult, Boolean> updateCallback;
-    private volatile SharedSchema schema = SharedSchema.EMPTY;
+    private volatile DistributedSchema schema = DistributedSchema.EMPTY;
 
     private MigrationCoordinator createMigrationCoordinator(MessagingService messagingService)
     {
@@ -115,7 +114,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
         logger.warn("There are nodes in the cluster with a different schema version than us, from which we did not merge schemas: " +
                     "our version: ({}), outstanding versions -> endpoints: {}. Use -D{}}=true to ignore this, " +
                     "-D{}=<ep1[,epN]> to skip specific endpoints, or -D{}=<ver1[,verN]> to skip specific schema versions",
-                    SchemaManager.instance.getVersion(),
+                    Schema.instance.getVersion(),
                     migrationCoordinator.outstandingVersions(),
                     CassandraRelevantProperties.BOOTSTRAP_SKIP_SCHEMA_CHECK.getKey(),
                     MigrationCoordinator.IGNORED_ENDPOINTS_PROP, MigrationCoordinator.IGNORED_VERSIONS_PROP);
@@ -183,7 +182,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
     private synchronized SchemaTransformationResult applyMutations(Collection<Mutation> schemaMutations)
     {
         // fetch the current state of schema for the affected keyspaces only
-        SharedSchema before = schema;
+        DistributedSchema before = schema;
 
         // apply the schema mutations
         SchemaKeyspace.applyChanges(schemaMutations);
@@ -198,7 +197,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
 
         Keyspaces.KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), afterKeyspaces);
         UUID version = SchemaKeyspace.calculateSchemaDigest();
-        SharedSchema after = new SharedSchema(afterKeyspaces, version);
+        DistributedSchema after = new DistributedSchema(afterKeyspaces, version);
         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
 
         updateSchema(update, false);
@@ -208,7 +207,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
     @Override
     public synchronized SchemaTransformationResult apply(SchemaTransformation transformation, boolean local)
     {
-        SharedSchema before = schema;
+        DistributedSchema before = schema;
         Keyspaces afterKeyspaces = transformation.apply(before.getKeyspaces());
         Keyspaces.KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), afterKeyspaces);
 
@@ -218,7 +217,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
         Collection<Mutation> mutations = SchemaKeyspace.convertSchemaDiffToMutations(diff, transformation.fixedTimestampMicros().orElse(FBUtilities.timestampMicros()));
         SchemaKeyspace.applyChanges(mutations);
 
-        SharedSchema after = new SharedSchema(afterKeyspaces, SchemaKeyspace.calculateSchemaDigest());
+        DistributedSchema after = new DistributedSchema(afterKeyspaces, SchemaKeyspace.calculateSchemaDigest());
         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
 
         updateSchema(update, local);
@@ -246,8 +245,8 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
 
     private synchronized SchemaTransformationResult reload()
     {
-        SharedSchema before = this.schema;
-        SharedSchema after = new SharedSchema(SchemaKeyspace.fetchNonSystemKeyspaces(), SchemaKeyspace.calculateSchemaDigest());
+        DistributedSchema before = this.schema;
+        DistributedSchema after = new DistributedSchema(SchemaKeyspace.fetchNonSystemKeyspaces(), SchemaKeyspace.calculateSchemaDigest());
         Keyspaces.KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), after.getKeyspaces());
         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
 
@@ -267,7 +266,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
     public synchronized void clear()
     {
         SchemaKeyspace.truncate();
-        this.schema = SharedSchema.EMPTY;
+        this.schema = DistributedSchema.EMPTY;
     }
 
     private synchronized Collection<Mutation> getSchemaMutations()

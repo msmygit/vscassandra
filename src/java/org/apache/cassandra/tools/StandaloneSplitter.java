@@ -47,7 +47,7 @@ import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTable;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 
 import static org.apache.cassandra.tools.BulkLoader.CmdLineOptions;
@@ -73,7 +73,7 @@ public class StandaloneSplitter
         try
         {
             // load keyspace descriptions.
-            SchemaManager.instance.loadFromDisk();
+            Schema.instance.loadFromDisk();
 
             String ksName = null;
             String cfName = null;

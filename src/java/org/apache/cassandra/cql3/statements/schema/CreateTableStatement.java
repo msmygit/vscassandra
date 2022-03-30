@@ -17,13 +17,20 @@
  */
 package org.apache.cassandra.cql3.statements.schema;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.UnaryOperator;
 
 import com.google.common.collect.ImmutableSet;
-
 import org.apache.commons.lang3.StringUtils;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,14 +40,32 @@ import org.apache.cassandra.auth.DataResource;
 import org.apache.cassandra.auth.IResource;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.cql3.*;
+import org.apache.cassandra.cql3.CQL3Type;
+import org.apache.cassandra.cql3.CQLFragmentParser;
+import org.apache.cassandra.cql3.ColumnIdentifier;
+import org.apache.cassandra.cql3.Constants;
+import org.apache.cassandra.cql3.CqlParser;
+import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.statements.RawKeyspaceAwareStatement;
 import org.apache.cassandra.db.Keyspace;
-import org.apache.cassandra.db.marshal.*;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.BytesType;
+import org.apache.cassandra.db.marshal.CounterColumnType;
+import org.apache.cassandra.db.marshal.EmptyType;
+import org.apache.cassandra.db.marshal.ReversedType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.UserType;
 import org.apache.cassandra.exceptions.AlreadyExistsException;
 import org.apache.cassandra.guardrails.Guardrails;
-import org.apache.cassandra.schema.*;
+import org.apache.cassandra.schema.CompactionParams;
+import org.apache.cassandra.schema.DroppedColumn;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.TableParams;
+import org.apache.cassandra.schema.Types;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.reads.repair.ReadRepairStrategy;
@@ -120,9 +145,9 @@ public final class CreateTableStatement extends AlterSchemaStatement
             if (Guardrails.tablesLimit.enabled(state))
             {
                 // guardrails on number of tables
-                int totalUserTables = SchemaManager.instance.getNonInternalKeyspaces().names().stream().map(Keyspace::open)
-                                                            .mapToInt(keyspace -> keyspace.getColumnFamilyStores().size())
-                                                            .sum();
+                int totalUserTables = Schema.instance.getNonInternalKeyspaces().names().stream().map(Keyspace::open)
+                                                     .mapToInt(keyspace -> keyspace.getColumnFamilyStores().size())
+                                                     .sum();
                 Guardrails.tablesLimit.guard(totalUserTables + 1, tableName, false, state);
             }
         }
@@ -412,12 +437,12 @@ public final class CreateTableStatement extends AlterSchemaStatement
     {
         ImmutableSet.Builder<String> warnings = ImmutableSet.builder();
 
-        int tableCount = SchemaManager.instance.getNumberOfTables();
+        int tableCount = Schema.instance.getNumberOfTables();
         if (tableCount > DatabaseDescriptor.tableCountWarnThreshold())
         {
             String msg = String.format("Cluster already contains %d tables in %d keyspaces. Having a large number of tables will significantly slow down schema dependent cluster operations.",
                                        tableCount,
-                                       SchemaManager.instance.getKeyspaces().size());
+                                       Schema.instance.getKeyspaces().size());
             logger.warn(msg);
             warnings.add(msg);
         }

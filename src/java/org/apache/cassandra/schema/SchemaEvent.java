@@ -87,7 +87,7 @@ public final class SchemaEvent extends DiagnosticEvent
         SCHEMATA_CLEARED
     }
 
-    SchemaEvent(SchemaEventType type, SchemaManager schemaManager, @Nullable KeyspaceMetadata ksUpdate,
+    SchemaEvent(SchemaEventType type, Schema schema, @Nullable KeyspaceMetadata ksUpdate,
                 @Nullable KeyspaceMetadata previous, @Nullable KeyspaceMetadata.KeyspaceDiff ksDiff,
                 @Nullable TableMetadata tableUpdate, @Nullable Tables.TablesDiff tablesDiff,
                 @Nullable Views.ViewsDiff viewsDiff, @Nullable MapDifference<String, TableMetadata> indexesDiff)
@@ -101,21 +101,21 @@ public final class SchemaEvent extends DiagnosticEvent
         this.viewsDiff = viewsDiff;
         this.indexesDiff = indexesDiff;
 
-        this.keyspaces = schemaManager.sharedAndLocalKeyspaces().names();
-        this.nonSystemKeyspaces = schemaManager.sharedKeyspaces().names();
-        this.userKeyspaces = schemaManager.getUserKeyspaces().names();
-        this.numberOfTables = schemaManager.getNumberOfTables();
-        this.version = schemaManager.getVersion();
+        this.keyspaces = schema.distributedAndLocalKeyspaces().names();
+        this.nonSystemKeyspaces = schema.distributedKeyspaces().names();
+        this.userKeyspaces = schema.getUserKeyspaces().names();
+        this.numberOfTables = schema.getNumberOfTables();
+        this.version = schema.getVersion();
 
-        this.indexTables = schemaManager.sharedKeyspaces().stream()
-                                        .flatMap(ks -> ks.tables.indexTables().entrySet().stream())
-                                        .collect(Collectors3.toImmutableMap(e -> String.format("%s,%s", e.getValue().keyspace, e.getKey()),
+        this.indexTables = schema.distributedKeyspaces().stream()
+                                 .flatMap(ks -> ks.tables.indexTables().entrySet().stream())
+                                 .collect(Collectors3.toImmutableMap(e -> String.format("%s,%s", e.getValue().keyspace, e.getKey()),
                                                                             e -> String.format("%s,%s,%s", e.getValue().id.toHexString(), e.getValue().keyspace, e.getValue().name)));
 
-        this.tables = schemaManager.sharedKeyspaces().stream()
-                                   .flatMap(ks -> StreamSupport.stream(ks.tablesAndViews().spliterator(), false))
-                                   .map(e -> String.format("%s,%s,%s", e.id.toHexString(), e.keyspace, e.name))
-                                   .collect(Collectors3.toImmutableList());
+        this.tables = schema.distributedKeyspaces().stream()
+                            .flatMap(ks -> StreamSupport.stream(ks.tablesAndViews().spliterator(), false))
+                            .map(e -> String.format("%s,%s,%s", e.id.toHexString(), e.keyspace, e.name))
+                            .collect(Collectors3.toImmutableList());
     }
 
     public SchemaEventType getType()

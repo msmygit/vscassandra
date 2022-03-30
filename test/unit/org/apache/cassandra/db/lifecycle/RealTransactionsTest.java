@@ -43,7 +43,7 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.format.SSTableWriter;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -159,7 +159,7 @@ public class RealTransactionsTest extends SchemaLoader
                 long lastCheckObsoletion = System.nanoTime();
                 File directory = txn.originals().iterator().next().descriptor.directory;
                 Descriptor desc = cfs.newSSTableDescriptor(directory);
-                TableMetadataRef metadata = SchemaManager.instance.getTableMetadataRef(desc);
+                TableMetadataRef metadata = Schema.instance.getTableMetadataRef(desc);
                 rewriter.switchWriter(SSTableWriter.create(metadata,
                                                            desc,
                                                            0,

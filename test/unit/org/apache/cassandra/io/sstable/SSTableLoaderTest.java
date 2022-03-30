@@ -30,7 +30,10 @@ import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.Util;
-import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.Clustering;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.Directories;
+import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.partitions.FilteredPartition;
 import org.apache.cassandra.io.FSWriteError;
@@ -38,9 +41,9 @@ import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.streaming.StreamEvent;
 import org.apache.cassandra.streaming.StreamEventHandler;
@@ -120,7 +123,7 @@ public class SSTableLoaderTest
 
         public TableMetadataRef getTableMetadata(String tableName)
         {
-            return SchemaManager.instance.getTableMetadataRef(keyspace, tableName);
+            return Schema.instance.getTableMetadataRef(keyspace, tableName);
         }
     }
 
@@ -128,7 +131,7 @@ public class SSTableLoaderTest
     public void testLoadingSSTable() throws Exception
     {
         File dataDir = dataDir(CF_STANDARD1);
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE1, CF_STANDARD1);
+        TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE1, CF_STANDARD1);
 
         try (CQLSSTableWriter writer = CQLSSTableWriter.builder()
                                                        .inDirectory(dataDir)
@@ -214,7 +217,7 @@ public class SSTableLoaderTest
     {
         File dataDir = new File(tmpdir.absolutePath() + File.pathSeparator() + KEYSPACE1 + File.pathSeparator() + CF_STANDARD1);
         assert dataDir.tryCreateDirectories();
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE1, CF_STANDARD1);
+        TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE1, CF_STANDARD1);
 
         String schema = "CREATE TABLE %s.%s (key ascii, name ascii, val ascii, val1 ascii, PRIMARY KEY (key, name))";
         String query = "INSERT INTO %s.%s (key, name, val) VALUES (?, ?, ?)";
@@ -256,7 +259,7 @@ public class SSTableLoaderTest
     public void testLoadingBackupsTable() throws Exception
     {
         File dataDir = dataDir(CF_BACKUPS);
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE1, CF_BACKUPS);
+        TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE1, CF_BACKUPS);
 
         try (CQLSSTableWriter writer = CQLSSTableWriter.builder()
                                                        .inDirectory(dataDir)

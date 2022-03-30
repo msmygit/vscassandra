@@ -25,9 +25,9 @@ import org.apache.cassandra.cql3.AbstractMarker;
 import org.apache.cassandra.cql3.AssignmentTestable;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.ColumnSpecification;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.schema.Schema;
 
 import static java.util.stream.Collectors.joining;
 import static org.apache.cassandra.cql3.statements.RequestValidations.invalidRequest;
@@ -94,7 +94,7 @@ public final class FunctionResolver
         Collection<Function> candidates = new ArrayList<>();
 
         if (name.equalsNativeFunction(TOKEN_FUNCTION_NAME))
-            candidates.add(new TokenFct(SchemaManager.instance.getTableMetadata(receiverKs, receiverCf)));
+            candidates.add(new TokenFct(Schema.instance.getTableMetadata(receiverKs, receiverCf)));
 
         // The toJson() function can accept any type of argument, so instances of it are not pre-declared.  Instead,
         // we create new instances as needed while handling selectors (which is the only place that toJson() is supported,
@@ -114,14 +114,14 @@ public final class FunctionResolver
         {
             // function name not fully qualified
             // add 'SYSTEM' (native) candidates
-            candidates.addAll(SchemaManager.instance.getFunctions(name.asNativeFunction()));
+            candidates.addAll(Schema.instance.getFunctions(name.asNativeFunction()));
             // add 'current keyspace' candidates
-            candidates.addAll(SchemaManager.instance.getFunctions(new FunctionName(keyspace, name.name)));
+            candidates.addAll(Schema.instance.getFunctions(new FunctionName(keyspace, name.name)));
         }
         else
         {
             // function name is fully qualified (keyspace + name)
-            candidates.addAll(SchemaManager.instance.getFunctions(name));
+            candidates.addAll(Schema.instance.getFunctions(name));
         }
 
         return candidates;

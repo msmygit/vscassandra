@@ -26,14 +26,14 @@ import com.google.common.base.Preconditions;
 /**
  * Immutable snapshot of the current schema along with its version.
  */
-public class SharedSchema
+public class DistributedSchema
 {
-    public static final SharedSchema EMPTY = new SharedSchema(Keyspaces.none(), SchemaConstants.emptyVersion);
+    public static final DistributedSchema EMPTY = new DistributedSchema(Keyspaces.none(), SchemaConstants.emptyVersion);
 
     private final Keyspaces keyspaces;
     private final UUID version;
 
-    public SharedSchema(Keyspaces keyspaces, UUID version)
+    public DistributedSchema(Keyspaces keyspaces, UUID version)
     {
         Objects.requireNonNull(keyspaces);
         Objects.requireNonNull(version);
@@ -75,7 +75,7 @@ public class SharedSchema
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        SharedSchema schema = (SharedSchema) o;
+        DistributedSchema schema = (DistributedSchema) o;
         return keyspaces.equals(schema.keyspaces) && version.equals(schema.version);
     }
 

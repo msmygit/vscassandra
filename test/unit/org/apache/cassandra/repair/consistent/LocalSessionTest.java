@@ -34,7 +34,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -44,17 +43,14 @@ import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
-import org.apache.cassandra.locator.RangesAtEndpoint;
-import org.apache.cassandra.net.Message;
-import org.apache.cassandra.repair.AbstractRepairTest;
-import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.repair.KeyspaceRepairManager;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.SystemKeyspace;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.RangesAtEndpoint;
+import org.apache.cassandra.net.Message;
+import org.apache.cassandra.repair.AbstractRepairTest;
+import org.apache.cassandra.repair.KeyspaceRepairManager;
 import org.apache.cassandra.repair.messages.FailSession;
 import org.apache.cassandra.repair.messages.FinalizeCommit;
 import org.apache.cassandra.repair.messages.FinalizePromise;
@@ -65,11 +61,19 @@ import org.apache.cassandra.repair.messages.RepairMessage;
 import org.apache.cassandra.repair.messages.StatusRequest;
 import org.apache.cassandra.repair.messages.StatusResponse;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.UUIDGen;
 
-import static org.apache.cassandra.repair.consistent.ConsistentSession.State.*;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FAILED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FINALIZED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FINALIZE_PROMISED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.PREPARED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.PREPARING;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.REPAIRING;
 import static org.psjava.util.AssertStatus.assertTrue;
 
 public class LocalSessionTest extends AbstractRepairTest
@@ -217,7 +221,7 @@ public class LocalSessionTest extends AbstractRepairTest
         SchemaLoader.prepareServer();
         cfm = CreateTableStatement.parse("CREATE TABLE tbl (k INT PRIMARY KEY, v INT)", "localsessiontest").build();
         SchemaLoader.createKeyspace("localsessiontest", KeyspaceParams.simple(1), cfm);
-        cfs = SchemaManager.instance.getColumnFamilyStoreInstance(cfm.id);
+        cfs = Schema.instance.getColumnFamilyStoreInstance(cfm.id);
     }
 
     @Before

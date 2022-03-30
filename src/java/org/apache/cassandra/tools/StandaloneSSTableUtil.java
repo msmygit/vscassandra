@@ -30,7 +30,7 @@ import org.apache.commons.cli.ParseException;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.OutputHandler;
 
@@ -53,9 +53,9 @@ public class StandaloneSSTableUtil
         {
             // load keyspace descriptions.
             Util.initDatabaseDescriptor();
-            SchemaManager.instance.loadFromDisk();
+            Schema.instance.loadFromDisk();
 
-            TableMetadata metadata = SchemaManager.instance.getTableMetadata(options.keyspaceName, options.cfName);
+            TableMetadata metadata = Schema.instance.getTableMetadata(options.keyspaceName, options.cfName);
             if (metadata == null)
                 throw new IllegalArgumentException(String.format("Unknown keyspace/table %s.%s",
                                                                  options.keyspaceName,

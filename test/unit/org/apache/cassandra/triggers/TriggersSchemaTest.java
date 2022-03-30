@@ -22,17 +22,19 @@ import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.schema.SchemaTestUtil;
-import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaTestUtil;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.schema.TriggerMetadata;
 import org.apache.cassandra.schema.Triggers;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class TriggersSchemaTest
 {
@@ -59,7 +61,7 @@ public class TriggersSchemaTest
         KeyspaceMetadata ksm = KeyspaceMetadata.create(ksName, KeyspaceParams.simple(1), Tables.of(tm));
         SchemaTestUtil.announceNewKeyspace(ksm);
 
-        TableMetadata tm2 = SchemaManager.instance.getTableMetadata(ksName, cfName);
+        TableMetadata tm2 = Schema.instance.getTableMetadata(ksName, cfName);
         assertFalse(tm2.triggers.isEmpty());
         assertEquals(1, tm2.triggers.size());
         assertEquals(td, tm2.triggers.get(triggerName).get());
@@ -78,7 +80,7 @@ public class TriggersSchemaTest
 
         SchemaTestUtil.announceNewTable(metadata);
 
-        metadata = SchemaManager.instance.getTableMetadata(ksName, cfName);
+        metadata = Schema.instance.getTableMetadata(ksName, cfName);
         assertFalse(metadata.triggers.isEmpty());
         assertEquals(1, metadata.triggers.size());
         assertEquals(TriggerMetadata.create(triggerName, triggerClass), metadata.triggers.get(triggerName).get());
@@ -95,14 +97,14 @@ public class TriggersSchemaTest
 
         TriggerMetadata td = TriggerMetadata.create(triggerName, triggerClass);
         TableMetadata tm2 =
-            SchemaManager.instance
+            Schema.instance
                   .getTableMetadata(ksName, cfName)
                   .unbuild()
                   .triggers(Triggers.of(td))
                   .build();
         SchemaTestUtil.announceTableUpdate(tm2);
 
-        TableMetadata tm3 = SchemaManager.instance.getTableMetadata(ksName, cfName);
+        TableMetadata tm3 = Schema.instance.getTableMetadata(ksName, cfName);
         assertFalse(tm3.triggers.isEmpty());
         assertEquals(1, tm3.triggers.size());
         assertEquals(td, tm3.triggers.get(triggerName).get());
@@ -119,14 +121,14 @@ public class TriggersSchemaTest
         KeyspaceMetadata ksm = KeyspaceMetadata.create(ksName, KeyspaceParams.simple(1), Tables.of(tm));
         SchemaTestUtil.announceNewKeyspace(ksm);
 
-        TableMetadata tm1 = SchemaManager.instance.getTableMetadata(ksName, cfName);
+        TableMetadata tm1 = Schema.instance.getTableMetadata(ksName, cfName);
         TableMetadata tm2 =
             tm1.unbuild()
                .triggers(tm1.triggers.without(triggerName))
                .build();
         SchemaTestUtil.announceTableUpdate(tm2);
 
-        TableMetadata tm3 = SchemaManager.instance.getTableMetadata(ksName, cfName);
+        TableMetadata tm3 = Schema.instance.getTableMetadata(ksName, cfName);
         assertTrue(tm3.triggers.isEmpty());
     }
 }

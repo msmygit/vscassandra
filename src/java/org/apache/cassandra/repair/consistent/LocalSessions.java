@@ -53,41 +53,38 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-
-import org.apache.cassandra.cql3.PageSize;
-import org.apache.cassandra.db.compaction.CleanupTask;
-import org.apache.cassandra.db.compaction.OperationType;
-import org.apache.cassandra.db.compaction.RepairFinishedCompactionTask;
-import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
-import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.locator.Replica;
-import org.apache.cassandra.repair.KeyspaceRepairManager;
-import org.apache.cassandra.repair.consistent.admin.CleanupSummary;
-import org.apache.cassandra.repair.consistent.admin.PendingStat;
-import org.apache.cassandra.repair.consistent.admin.PendingStats;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.db.marshal.UTF8Type;
-import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.cql3.PageSize;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.SystemKeyspace;
+import org.apache.cassandra.db.compaction.CleanupTask;
+import org.apache.cassandra.db.compaction.OperationType;
+import org.apache.cassandra.db.compaction.RepairFinishedCompactionTask;
+import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.marshal.BytesType;
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.gms.IFailureDetector;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.RangesAtEndpoint;
+import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.repair.KeyspaceRepairManager;
+import org.apache.cassandra.repair.consistent.admin.CleanupSummary;
+import org.apache.cassandra.repair.consistent.admin.PendingStat;
+import org.apache.cassandra.repair.consistent.admin.PendingStats;
 import org.apache.cassandra.repair.messages.FailSession;
 import org.apache.cassandra.repair.messages.FinalizeCommit;
 import org.apache.cassandra.repair.messages.FinalizePromise;
@@ -97,6 +94,8 @@ import org.apache.cassandra.repair.messages.PrepareConsistentResponse;
 import org.apache.cassandra.repair.messages.RepairMessage;
 import org.apache.cassandra.repair.messages.StatusRequest;
 import org.apache.cassandra.repair.messages.StatusResponse;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.service.StorageService;
@@ -108,7 +107,12 @@ import static org.apache.cassandra.net.Verb.FINALIZE_PROMISE_MSG;
 import static org.apache.cassandra.net.Verb.PREPARE_CONSISTENT_RSP;
 import static org.apache.cassandra.net.Verb.STATUS_REQ;
 import static org.apache.cassandra.net.Verb.STATUS_RSP;
-import static org.apache.cassandra.repair.consistent.ConsistentSession.State.*;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FAILED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FINALIZED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.FINALIZE_PROMISED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.PREPARED;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.PREPARING;
+import static org.apache.cassandra.repair.consistent.ConsistentSession.State.REPAIRING;
 
 /**
  * Manages all consistent repair sessions a node is participating in.
@@ -273,7 +277,7 @@ public class LocalSessions
 
     public PendingStats getPendingStats(TableId tid, Collection<Range<Token>> ranges)
     {
-        ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+        ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(tid);
         Preconditions.checkArgument(cfs != null);
 
         PendingStat.Builder pending = new PendingStat.Builder();
@@ -322,7 +326,7 @@ public class LocalSessions
                                                                    && ls.tableIds.contains(tid)
                                                                    && Range.intersects(ls.ranges, ranges));
 
-        ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+        ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(tid);
         Preconditions.checkNotNull(cfs);
 
         Set<UUID> sessionIds = Sets.newHashSet(Iterables.transform(candidates, s -> s.sessionID));
@@ -659,8 +663,8 @@ public class LocalSessions
 
     private void syncTable()
     {
-        TableId tid = SchemaManager.instance.getTableMetadata(keyspace, table).id;
-        ColumnFamilyStore cfm = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+        TableId tid = Schema.instance.getTableMetadata(keyspace, table).id;
+        ColumnFamilyStore cfm = Schema.instance.getColumnFamilyStoreInstance(tid);
         cfm.forceBlockingFlush(ColumnFamilyStore.FlushReason.INTERNALLY_FORCED);
     }
 
@@ -971,7 +975,7 @@ public class LocalSessions
     {
         for (TableId tid: session.tableIds)
         {
-            ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+            ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(tid);
             if (cfs != null)
             {
                 cfs.getRepairManager().incrementalSessionCompleted(session.sessionID);
@@ -1092,7 +1096,7 @@ public class LocalSessions
     protected boolean sessionHasData(LocalSession session)
     {
         Predicate<TableId> predicate = tid -> {
-            ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+            ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(tid);
             return cfs != null && cfs.hasPendingRepairSSTables(session.sessionID);
 
         };

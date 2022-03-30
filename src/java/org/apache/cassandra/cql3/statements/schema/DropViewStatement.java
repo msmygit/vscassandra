@@ -24,8 +24,11 @@ import org.apache.cassandra.audit.AuditLogEntryType;
 import org.apache.cassandra.auth.Permission;
 import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.statements.RawKeyspaceAwareStatement;
-import org.apache.cassandra.schema.*;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Keyspaces;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.ViewMetadata;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.transport.Event.SchemaChange;
 import org.apache.cassandra.transport.Event.SchemaChange.Change;
@@ -70,7 +73,7 @@ public final class DropViewStatement extends AlterSchemaStatement
 
     public void authorize(ClientState client)
     {
-        ViewMetadata view = SchemaManager.instance.getView(keyspaceName, viewName);
+        ViewMetadata view = Schema.instance.getView(keyspaceName, viewName);
         if (null != view)
             client.ensureTablePermission(keyspaceName, view.baseTableName, Permission.ALTER);
     }

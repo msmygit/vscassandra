@@ -27,7 +27,7 @@ import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -141,7 +141,7 @@ public abstract class StorageHandler
     public static StorageHandler create(TableMetadataRef metadata, Directories directories, Tracker dataTracker)
     {
         // local keyspaces are always local so don't use the remote handler even if it has been configured
-        if (remoteStorageHandler == null || SchemaManager.isKeyspaceWithLocalStrategy(metadata.keyspace))
+        if (remoteStorageHandler == null || Schema.isKeyspaceWithLocalStrategy(metadata.keyspace))
             return new DefaultStorageHandler(metadata, directories, dataTracker);
 
         Class<StorageHandler> factoryClass =  FBUtilities.classForName(remoteStorageHandler, "Remote storage handler");

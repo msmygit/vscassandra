@@ -84,7 +84,7 @@ import org.apache.cassandra.io.util.FileDataInput;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileInputStreamPlus;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.tracing.Tracing;
@@ -679,7 +679,7 @@ public class TrieIndexSSTableReader extends SSTableReader
     @Override
     public void setupOnline()
     {
-        final ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(metadata().id);
+        final ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(metadata().id);
         setupOnline(cfs);
     }
 

@@ -280,8 +280,8 @@ public class MigrationCoordinator
             logger.debug("Not pulling schema for version {}, because schema versions match: " +
                          "local={}, remote={}",
                          version,
-                         SharedSchema.schemaVersionToString(localSchemaVersion),
-                         SharedSchema.schemaVersionToString(version));
+                         DistributedSchema.schemaVersionToString(localSchemaVersion),
+                         DistributedSchema.schemaVersionToString(version));
             return false;
         }
         return true;
@@ -335,8 +335,8 @@ public class MigrationCoordinator
             logger.debug("Immediately submitting migration task for {}, " +
                          "schema versions: local={}, remote={}",
                          endpoint,
-                         SharedSchema.schemaVersionToString(localSchemaVersion),
-                         SharedSchema.schemaVersionToString(version));
+                         DistributedSchema.schemaVersionToString(localSchemaVersion),
+                         DistributedSchema.schemaVersionToString(version));
             return true;
         }
         return false;
@@ -455,7 +455,7 @@ public class MigrationCoordinator
     {
         if (gossiper.isEnabled())
             gossiper.addLocalApplicationState(ApplicationState.SCHEMA, StorageService.instance.valueFactory.schema(schemaVersion));
-        SchemaDiagnostics.versionAnnounced(SchemaManager.instance);
+        SchemaDiagnostics.versionAnnounced(Schema.instance);
     }
 
     private CompletableFuture<Void> submitToMigrationIfNotShutdown(Runnable task)

@@ -21,15 +21,15 @@ import java.io.PrintStream;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 
 /**
@@ -65,12 +65,12 @@ public class SSTableLevelResetter
         try
         {
             // load keyspace descriptions.
-            SchemaManager.instance.loadFromDisk();
+            Schema.instance.loadFromDisk();
 
             String keyspaceName = args[1];
             String columnfamily = args[2];
             // validate columnfamily
-            if (SchemaManager.instance.getTableMetadataRef(keyspaceName, columnfamily) == null)
+            if (Schema.instance.getTableMetadataRef(keyspaceName, columnfamily) == null)
             {
                 System.err.println("ColumnFamily not found: " + keyspaceName + "/" + columnfamily);
                 System.exit(1);

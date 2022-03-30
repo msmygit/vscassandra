@@ -18,19 +18,10 @@
 
 package org.apache.cassandra.metrics;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.service.EmbeddedCassandraService;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -38,6 +29,14 @@ import org.junit.Test;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.Session;
+import org.apache.cassandra.SchemaLoader;
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.service.EmbeddedCassandraService;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class KeyspaceMetricsTest extends SchemaLoader
 {
@@ -46,7 +45,7 @@ public class KeyspaceMetricsTest extends SchemaLoader
     @BeforeClass
     public static void setup() throws ConfigurationException, IOException
     {
-        SchemaManager.instance.clear();
+        Schema.instance.clear();
 
         EmbeddedCassandraService cassandra = new EmbeddedCassandraService();
         cassandra.start();

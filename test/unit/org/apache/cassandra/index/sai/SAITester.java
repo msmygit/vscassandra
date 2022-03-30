@@ -64,10 +64,10 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
@@ -82,7 +82,7 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Throwables;
@@ -459,13 +459,13 @@ public class SAITester extends CQLTester
 
     protected int getOpenIndexFiles()
     {
-        ColumnFamilyStore cfs = SchemaManager.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = Schema.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
         return StorageAttachedIndexGroup.getIndexGroup(cfs).openIndexFiles();
     }
 
     protected long getDiskUsage()
     {
-        ColumnFamilyStore cfs = SchemaManager.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = Schema.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
         return StorageAttachedIndexGroup.getIndexGroup(cfs).diskUsage();
     }
 
@@ -733,7 +733,7 @@ public class SAITester extends CQLTester
 
     private void verifySSTableComponents(String table, boolean indexComponentsExist) throws Exception
     {
-        ColumnFamilyStore cfs = Objects.requireNonNull(SchemaManager.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(table);
+        ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(table);
         for (SSTable sstable : cfs.getLiveSSTables())
         {
             Set<Component> components = sstable.components;

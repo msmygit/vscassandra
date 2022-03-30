@@ -30,13 +30,13 @@ import org.junit.Test;
 
 import org.apache.cassandra.cache.KeyCacheKey;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.io.sstable.format.SSTableFormat;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.metrics.CacheMetrics;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.schema.CachingParams;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaTestUtil;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.service.CacheService;
@@ -316,7 +316,7 @@ public class KeyCacheCqlTest extends CQLTester
         }
 
         dropTable("DROP TABLE %s");
-        assert SchemaManager.instance.isSameVersion(SchemaTestUtil.calculateSchemaDigest());
+        assert Schema.instance.isSameVersion(SchemaTestUtil.calculateSchemaDigest());
 
         //Test loading for a dropped 2i/table
         CacheService.instance.keyCache.clear();
@@ -403,7 +403,7 @@ public class KeyCacheCqlTest extends CQLTester
         while(iter.hasNext())
         {
             KeyCacheKey key = iter.next();
-            TableMetadataRef tableMetadataRef = SchemaManager.instance.getTableMetadataRef(key.tableId);
+            TableMetadataRef tableMetadataRef = Schema.instance.getTableMetadataRef(key.tableId);
             Assert.assertFalse(tableMetadataRef.keyspace.equals("KEYSPACE_PER_TEST"));
             Assert.assertFalse(tableMetadataRef.name.startsWith(table));
         }

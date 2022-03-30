@@ -42,7 +42,7 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 
 /**
  * Create a decent leveling for the given keyspace/column family
@@ -91,9 +91,9 @@ public class SSTableOfflineRelevel
         boolean dryRun = args[0].equals("--dry-run");
         String keyspace = args[args.length - 2];
         String columnfamily = args[args.length - 1];
-        SchemaManager.instance.loadFromDisk();
+        Schema.instance.loadFromDisk();
 
-        if (SchemaManager.instance.getTableMetadataRef(keyspace, columnfamily) == null)
+        if (Schema.instance.getTableMetadataRef(keyspace, columnfamily) == null)
             throw new IllegalArgumentException(String.format("Unknown keyspace/table %s.%s",
                     keyspace,
                     columnfamily));

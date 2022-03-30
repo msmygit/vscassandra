@@ -33,8 +33,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
-import org.apache.cassandra.cql3.statements.schema.CreateTypeStatement;
 import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
@@ -44,8 +42,9 @@ import org.apache.cassandra.cql3.functions.types.TypeCodec;
 import org.apache.cassandra.cql3.functions.types.UserType;
 import org.apache.cassandra.cql3.statements.ModificationStatement;
 import org.apache.cassandra.cql3.statements.UpdateStatement;
+import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
+import org.apache.cassandra.cql3.statements.schema.CreateTypeStatement;
 import org.apache.cassandra.db.Clustering;
-import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
@@ -53,7 +52,17 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.SyntaxException;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.schema.*;
+import org.apache.cassandra.schema.Functions;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.SchemaTransformations;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.TableMetadataRef;
+import org.apache.cassandra.schema.Tables;
+import org.apache.cassandra.schema.Types;
+import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -310,7 +319,7 @@ public class CQLSSTableWriter implements Closeable
      */
     public UserType getUDType(String dataType)
     {
-        KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceMetadata(insert.keyspace());
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(insert.keyspace());
         org.apache.cassandra.db.marshal.UserType userType = ksm.types.getNullable(ByteBufferUtil.bytes(dataType));
         return (UserType) UDHelper.driverType(userType);
     }
@@ -515,29 +524,29 @@ public class CQLSSTableWriter implements Closeable
             if (insertStatement == null)
                 throw new IllegalStateException("No insert statement specified, you should provide an insert statement through using()");
 
-            Preconditions.checkState(Sets.difference(SchemaConstants.LOCAL_SYSTEM_KEYSPACE_NAMES, SchemaManager.instance.getKeyspaces()).isEmpty(),
-                                     "Local keyspaces were not loaded. If this is running as a client, please make sure to add %s=true system property.", SchemaManager.FORCE_LOAD_LOCAL_KEYSPACES_PROP);
+            Preconditions.checkState(Sets.difference(SchemaConstants.LOCAL_SYSTEM_KEYSPACE_NAMES, Schema.instance.getKeyspaces()).isEmpty(),
+                                     "Local keyspaces were not loaded. If this is running as a client, please make sure to add %s=true system property.", Schema.FORCE_LOAD_LOCAL_KEYSPACES_PROP);
             synchronized (CQLSSTableWriter.class)
             {
 
                 String keyspaceName = schemaStatement.keyspace();
 
-                SchemaManager.instance.transform(SchemaTransformations.addKeyspace(KeyspaceMetadata.create(keyspaceName,
-                                                                                                           KeyspaceParams.simple(1),
-                                                                                                           Tables.none(),
-                                                                                                           Views.none(),
-                                                                                                           Types.none(),
-                                                                                                           Functions.none()), true));
+                Schema.instance.transform(SchemaTransformations.addKeyspace(KeyspaceMetadata.create(keyspaceName,
+                                                                                                    KeyspaceParams.simple(1),
+                                                                                                    Tables.none(),
+                                                                                                    Views.none(),
+                                                                                                    Types.none(),
+                                                                                                    Functions.none()), true));
 
-                KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceMetadata(keyspaceName);
+                KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(keyspaceName);
 
                 TableMetadata tableMetadata = ksm.tables.getNullable(schemaStatement.table());
                 if (tableMetadata == null)
                 {
                     Types types = createTypes(keyspaceName);
-                    SchemaManager.instance.transform(SchemaTransformations.addTypes(types, true));
+                    Schema.instance.transform(SchemaTransformations.addTypes(types, true));
                     tableMetadata = createTable(types);
-                    SchemaManager.instance.transform(SchemaTransformations.addTable(tableMetadata, true));
+                    Schema.instance.transform(SchemaTransformations.addTable(tableMetadata, true));
                 }
 
                 UpdateStatement preparedInsert = prepareInsert();

@@ -17,7 +17,10 @@
  */
 package org.apache.cassandra.db;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -30,7 +33,7 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.locator.TokenMetadata;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaChangeListener;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
@@ -55,7 +58,7 @@ public class SizeEstimatesRecorder implements SchemaChangeListener, Runnable
 
     private SizeEstimatesRecorder()
     {
-        SchemaManager.instance.registerListener(this);
+        Schema.instance.registerListener(this);
     }
 
     public void run()

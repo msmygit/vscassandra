@@ -31,12 +31,12 @@ import com.datastax.driver.core.Session;
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.service.EmbeddedCassandraService;
 import org.apache.cassandra.metrics.DecayingEstimatedHistogramReservoir.EstimatedHistogramReservoirSnapshot;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.service.EmbeddedCassandraService;
 
 import static org.apache.cassandra.cql3.statements.BatchStatement.metrics;
-import static org.apache.cassandra.metrics.DecayingEstimatedHistogramReservoir.*;
+import static org.apache.cassandra.metrics.DecayingEstimatedHistogramReservoir.Range;
 import static org.junit.Assert.assertEquals;
 import static org.quicktheories.QuickTheory.qt;
 import static org.quicktheories.generators.Generate.intArrays;
@@ -63,7 +63,7 @@ public class BatchMetricsTest extends SchemaLoader
     @BeforeClass()
     public static void setup() throws ConfigurationException, IOException
     {
-        SchemaManager.instance.clear();
+        Schema.instance.clear();
 
         cassandra = new EmbeddedCassandraService();
         cassandra.start();

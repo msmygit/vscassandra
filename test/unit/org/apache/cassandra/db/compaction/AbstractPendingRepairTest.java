@@ -36,7 +36,7 @@ import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.repair.AbstractRepairTest;
 import org.apache.cassandra.repair.consistent.LocalSessionAccessor;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.service.StorageService;
@@ -76,7 +76,7 @@ public abstract class AbstractPendingRepairTest extends AbstractRepairTest
         ks = "ks_" + System.currentTimeMillis();
         cfm = CreateTableStatement.parse(createTableCql(), ks).build();
         SchemaLoader.createKeyspace(ks, KeyspaceParams.simple(1), cfm);
-        cfs = SchemaManager.instance.getColumnFamilyStoreInstance(cfm.id);
+        cfs = Schema.instance.getColumnFamilyStoreInstance(cfm.id);
         strategyFactory = cfs.getCompactionFactory();
         compactionStrategyContainer = cfs.getCompactionStrategyContainer();
         nextSSTableKey = 0;

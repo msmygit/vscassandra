@@ -37,8 +37,6 @@ import java.util.stream.Stream;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.RateLimiter;
-import org.apache.cassandra.locator.LocalStrategy;
-import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,16 +55,18 @@ import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.metrics.KeyspaceMetrics;
 import org.apache.cassandra.repair.KeyspaceRepairManager;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.SchemaProvider;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
+import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
@@ -143,18 +143,18 @@ public class Keyspace
     public static Keyspace open(String keyspaceName)
     {
         assert initialized || SchemaConstants.isLocalSystemKeyspace(keyspaceName) : "Initialized: " + initialized;
-        return open(keyspaceName, SchemaManager.instance, true);
+        return open(keyspaceName, Schema.instance, true);
     }
 
     // to only be used by org.apache.cassandra.tools.Standalone* classes
     public static Keyspace openWithoutSSTables(String keyspaceName) throws UnknownKeyspaceException
     {
-        return open(keyspaceName, SchemaManager.instance, false);
+        return open(keyspaceName, Schema.instance, false);
     }
 
     public static Keyspace open(String keyspaceName, SchemaProvider schema, boolean loadSSTables) throws UnknownKeyspaceException
     {
-        return schema.getOrCreateKeyspaceInstance(keyspaceName, () -> new Keyspace(keyspaceName, schema, loadSSTables));
+        return schema.maybeAddKeyspaceInstance(keyspaceName, () -> new Keyspace(keyspaceName, schema, loadSSTables));
     }
 
     public static ColumnFamilyStore openAndGetStore(TableMetadataRef tableRef)
@@ -354,7 +354,7 @@ public class Keyspace
 
     private Keyspace(KeyspaceMetadata metadata)
     {
-        this.schema = SchemaManager.instance;
+        this.schema = Schema.instance;
         this.metadata = metadata;
         createReplicationStrategy(metadata);
         this.metric = new KeyspaceMetrics(this);
@@ -760,7 +760,7 @@ public class Keyspace
 
     public static Iterable<Keyspace> all()
     {
-        return Iterables.transform(SchemaManager.instance.getKeyspaces(), Keyspace::open);
+        return Iterables.transform(Schema.instance.getKeyspaces(), Keyspace::open);
     }
 
     /**
@@ -768,17 +768,17 @@ public class Keyspace
      */
     public static Stream<Keyspace> allExisting()
     {
-        return SchemaManager.instance.getKeyspaces().stream().map(SchemaManager.instance::getKeyspaceInstance).filter(Objects::nonNull);
+        return Schema.instance.getKeyspaces().stream().map(Schema.instance::getKeyspaceInstance).filter(Objects::nonNull);
     }
 
     public static Iterable<Keyspace> nonSystem()
     {
-        return Iterables.transform(SchemaManager.instance.getNonSystemKeyspaces().names(), Keyspace::open);
+        return Iterables.transform(Schema.instance.getNonSystemKeyspaces().names(), Keyspace::open);
     }
 
     public static Iterable<Keyspace> nonLocalStrategy()
     {
-        return Iterables.transform(SchemaManager.instance.getNonLocalStrategyKeyspaces().names(), Keyspace::open);
+        return Iterables.transform(Schema.instance.getNonLocalStrategyKeyspaces().names(), Keyspace::open);
     }
 
     public static Iterable<Keyspace> system()

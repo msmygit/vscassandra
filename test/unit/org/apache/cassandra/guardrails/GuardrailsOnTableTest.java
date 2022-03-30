@@ -32,7 +32,7 @@ import org.junit.Test;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.statements.schema.TableAttributes;
 import org.apache.cassandra.db.Keyspace;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
@@ -89,8 +89,8 @@ public class GuardrailsOnTableTest extends GuardrailTester
             Thread.sleep(1000);
         }
 
-        int currentTables = SchemaManager.instance.getNonInternalKeyspaces().stream().map(ksm -> Keyspace.open(ksm.name))
-                                                  .mapToInt(keyspace -> keyspace.getColumnFamilyStores().size()).sum();
+        int currentTables = Schema.instance.getNonInternalKeyspaces().stream().map(ksm -> Keyspace.open(ksm.name))
+                                           .mapToInt(keyspace -> keyspace.getColumnFamilyStores().size()).sum();
         long warn = currentTables + 1;
         long fail = currentTables + 3;
         DatabaseDescriptor.getGuardrailsConfig().tables_warn_threshold = warn;

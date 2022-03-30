@@ -68,7 +68,7 @@ public interface SchemaUpdateHandler
     SchemaTransformationResult reset(boolean local);
 
     /**
-     * Clears the locally stored schema entirely. After this operation the schema is equal to {@link SharedSchema#EMPTY}.
+     * Clears the locally stored schema entirely. After this operation the schema is equal to {@link DistributedSchema#EMPTY}.
      * The method does not execute any callback. It is indended to reinitialize the schema later using the method
      * {@link #reset(boolean)}.
      */

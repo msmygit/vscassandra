@@ -29,7 +29,7 @@ import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 
 public class SchemaArgsParserTest
@@ -47,7 +47,7 @@ public class SchemaArgsParserTest
             cfm[i] = CreateTableStatement.parse("CREATE TABLE tbl" + i + " (k INT PRIMARY KEY, v INT)", KEYSPACE).build();
         SchemaLoader.createKeyspace(KEYSPACE, KeyspaceParams.simple(1), cfm);
         for (int i=0; i<NUM_TBL; i++)
-            cfs[i] = SchemaManager.instance.getColumnFamilyStoreInstance(cfm[i].id);
+            cfs[i] = Schema.instance.getColumnFamilyStoreInstance(cfm[i].id);
     }
 
     /**

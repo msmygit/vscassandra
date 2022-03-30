@@ -33,26 +33,26 @@ import org.junit.Test;
 
 import com.datastax.driver.core.utils.MoreFutures;
 import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.net.NoPayload;
-import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.gms.IFailureDetectionEventListener;
 import org.apache.cassandra.gms.IFailureDetector;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.metrics.StorageMetrics;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.MockMessagingService;
 import org.apache.cassandra.net.MockMessagingSpy;
+import org.apache.cassandra.net.NoPayload;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
 
 import static org.apache.cassandra.Util.dk;
+import static org.apache.cassandra.net.MockMessagingService.verb;
 import static org.apache.cassandra.net.Verb.HINT_REQ;
 import static org.apache.cassandra.net.Verb.HINT_RSP;
-import static org.apache.cassandra.net.MockMessagingService.verb;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -203,7 +203,7 @@ public class HintsServiceTest
         {
             long now = System.currentTimeMillis();
             DecoratedKey dkey = dk(String.valueOf(i));
-            TableMetadata metadata = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
+            TableMetadata metadata = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
             PartitionUpdate.SimpleBuilder builder = PartitionUpdate.simpleBuilder(metadata, dkey).timestamp(now);
             builder.row("column0").add("val", "value0");
             Hint hint = Hint.create(builder.buildAsMutation(), now);

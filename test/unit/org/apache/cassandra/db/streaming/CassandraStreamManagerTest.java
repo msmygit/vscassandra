@@ -33,8 +33,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
-
-import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -52,8 +50,9 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.RangesAtEndpoint;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.streaming.DefaultConnectionFactory;
@@ -90,7 +89,7 @@ public class CassandraStreamManagerTest
         keyspace = String.format("ks_%s", System.currentTimeMillis());
         tbm = CreateTableStatement.parse(String.format("CREATE TABLE %s (k INT PRIMARY KEY, v INT)", table), keyspace).build();
         SchemaLoader.createKeyspace(keyspace, KeyspaceParams.simple(1), tbm);
-        cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tbm.id);
+        cfs = Schema.instance.getColumnFamilyStoreInstance(tbm.id);
     }
 
     private static StreamSession session(UUID pendingRepair)

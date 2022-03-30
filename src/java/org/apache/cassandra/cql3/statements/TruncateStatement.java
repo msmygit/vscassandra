@@ -21,24 +21,29 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.UnaryOperator;
 
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.apache.commons.lang3.builder.ToStringStyle;
+
 import org.apache.cassandra.audit.AuditLogContext;
 import org.apache.cassandra.audit.AuditLogEntryType;
 import org.apache.cassandra.auth.Permission;
-import org.apache.cassandra.cql3.*;
+import org.apache.cassandra.cql3.CQLStatement;
+import org.apache.cassandra.cql3.QualifiedName;
+import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
-import org.apache.cassandra.exceptions.*;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.exceptions.TruncateException;
+import org.apache.cassandra.exceptions.UnauthorizedException;
+import org.apache.cassandra.exceptions.UnavailableException;
 import org.apache.cassandra.guardrails.Guardrails;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.StorageProxy;
 import org.apache.cassandra.transport.messages.ResultMessage;
 import org.apache.cassandra.utils.FBUtilities;
-
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.apache.commons.lang3.builder.ToStringStyle;
 
 import static org.apache.cassandra.config.CassandraRelevantProperties.TRUNCATE_STATEMENT_PROVIDER;
 
@@ -80,14 +85,14 @@ public class TruncateStatement implements CQLStatement, CQLStatement.SingleKeysp
     {
         Guardrails.truncateTableEnabled.ensureEnabled(state);
 
-        SchemaManager.instance.validateTable(keyspace(), name());
+        Schema.instance.validateTable(keyspace(), name());
     }
 
     public ResultMessage execute(QueryState state, QueryOptions options, long queryStartNanoTime) throws InvalidRequestException, TruncateException
     {
         try
         {
-            TableMetadata metaData = SchemaManager.instance.getTableMetadata(keyspace(), name());
+            TableMetadata metaData = Schema.instance.getTableMetadata(keyspace(), name());
             if (metaData.isView())
                 throw new InvalidRequestException("Cannot TRUNCATE materialized view directly; must truncate base table instead");
 
@@ -107,7 +112,7 @@ public class TruncateStatement implements CQLStatement, CQLStatement.SingleKeysp
     {
         try
         {
-            TableMetadata metaData = SchemaManager.instance.getTableMetadata(keyspace(), name());
+            TableMetadata metaData = Schema.instance.getTableMetadata(keyspace(), name());
             if (metaData.isView())
                 throw new InvalidRequestException("Cannot TRUNCATE materialized view directly; must truncate base table instead");
 

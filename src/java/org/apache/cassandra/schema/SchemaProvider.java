@@ -32,7 +32,7 @@ public interface SchemaProvider
     @Nullable
     Keyspace getKeyspaceInstance(String keyspaceName);
 
-    Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction) throws UnknownKeyspaceException;
+    Keyspace maybeAddKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction) throws UnknownKeyspaceException;
 
     @Nullable
     KeyspaceMetadata getKeyspaceMetadata(String keyspaceName);

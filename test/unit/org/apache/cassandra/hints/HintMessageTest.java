@@ -24,8 +24,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.db.RowUpdateBuilder;
 import org.apache.cassandra.io.util.DataInputBuffer;
@@ -33,6 +31,8 @@ import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 
 import static org.apache.cassandra.hints.HintsTestUtil.assertHintsEqual;
@@ -57,7 +57,7 @@ public class HintMessageTest
     {
         UUID hostId = UUID.randomUUID();
         long now = FBUtilities.timestampMicros();
-        TableMetadata table = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
+        TableMetadata table = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
         
         Mutation mutation = 
             new RowUpdateBuilder(table, now, bytes("key")).clustering("column").add("val", "val" + 1234).build();
@@ -90,7 +90,7 @@ public class HintMessageTest
     {
         UUID hostId = UUID.randomUUID();
         long now = FBUtilities.timestampMicros();
-        TableMetadata table = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
+        TableMetadata table = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
         
         Mutation mutation =
             new RowUpdateBuilder(table, now, bytes("key")).clustering("column").add("val", "val" + 1234) .build();

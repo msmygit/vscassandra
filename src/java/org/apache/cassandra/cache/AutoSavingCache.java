@@ -23,7 +23,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.NoSuchFileException;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -32,29 +35,35 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import org.apache.cassandra.io.util.File;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.cliffc.high_scale_lib.NonBlockingHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
-
 import org.apache.cassandra.concurrent.ScheduledExecutors;
-import org.apache.cassandra.db.compaction.AbstractTableOperation;
-import org.apache.cassandra.schema.SchemaManager;
-import org.apache.cassandra.schema.TableId;
-import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.compaction.AbstractTableOperation;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.io.FSWriteError;
-import org.apache.cassandra.io.util.*;
+import org.apache.cassandra.io.util.ChecksummedRandomAccessReader;
+import org.apache.cassandra.io.util.ChecksummedSequentialWriter;
 import org.apache.cassandra.io.util.CorruptFileException;
+import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataInputPlus.DataInputStreamPlus;
+import org.apache.cassandra.io.util.DataOutputPlus;
+import org.apache.cassandra.io.util.File;
+import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.io.util.LengthAvailableInputStream;
+import org.apache.cassandra.io.util.SequentialWriterOption;
+import org.apache.cassandra.io.util.WrappedDataOutputStreamPlus;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.TableId;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.CacheService;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Pair;
@@ -213,11 +222,11 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
 
                 //Check the schema has not changed since CFs are looked up by name which is ambiguous
                 UUID schemaVersion = new UUID(in.readLong(), in.readLong());
-                if (!schemaVersion.equals(SchemaManager.instance.getVersion()))
+                if (!schemaVersion.equals(Schema.instance.getVersion()))
                     throw new RuntimeException("Cache schema version "
                                                + schemaVersion
                                                + " does not match current schema version "
-                                               + SchemaManager.instance.getVersion());
+                                               + Schema.instance.getVersion());
 
                 ArrayDeque<Future<Pair<K, V>>> futures = new ArrayDeque<>();
                 long loadByNanos = start + TimeUnit.SECONDS.toNanos(DatabaseDescriptor.getCacheLoadTimeout());
@@ -231,7 +240,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
                     if (indexName.isEmpty())
                         indexName = null;
 
-                    ColumnFamilyStore cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tableId);
+                    ColumnFamilyStore cfs = Schema.instance.getColumnFamilyStoreInstance(tableId);
                     if (indexName != null && cfs != null)
                         cfs = cfs.indexManager.getIndexByName(indexName).getBackingTable().orElse(null);
 
@@ -367,7 +376,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
             try (WrappedDataOutputStreamPlus writer = new WrappedDataOutputStreamPlus(streamFactory.getOutputStream(cacheFilePaths.left, cacheFilePaths.right)))
             {
                 //Need to be able to check schema version because CF names are ambiguous
-                UUID schemaVersion = SchemaManager.instance.getVersion();
+                UUID schemaVersion = Schema.instance.getVersion();
                 writer.writeLong(schemaVersion.getMostSignificantBits());
                 writer.writeLong(schemaVersion.getLeastSignificantBits());
 
@@ -375,7 +384,7 @@ public class AutoSavingCache<K extends CacheKey, V> extends InstrumentingCache<K
                 {
                     K key = keyIterator.next();
                     ColumnFamilyStore cfs;
-                    if ((keyFilter == null || keyFilter.test(key)) && (cfs = SchemaManager.instance.getColumnFamilyStoreInstance(key.tableId)) != null)
+                    if ((keyFilter == null || keyFilter.test(key)) && (cfs = Schema.instance.getColumnFamilyStoreInstance(key.tableId)) != null)
                     {
                         if (key.indexName != null)
                             cfs = cfs.indexManager.getIndexByName(key.indexName).getBackingTable().orElse(null);

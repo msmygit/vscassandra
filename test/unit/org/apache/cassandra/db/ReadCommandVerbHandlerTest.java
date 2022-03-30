@@ -39,13 +39,13 @@ import org.apache.cassandra.net.Message;
 import org.apache.cassandra.net.MessageFlag;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.net.ParamType;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 
-import static org.apache.cassandra.net.Verb.*;
+import static org.apache.cassandra.net.Verb.READ_REQ;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -68,8 +68,8 @@ public class ReadCommandVerbHandlerTest
     {
         SchemaLoader.loadSchema();
         SchemaLoader.schemaDefinition(TEST_NAME);
-        metadata = SchemaManager.instance.getTableMetadata(KEYSPACE, TABLE);
-        metadata_with_transient = SchemaManager.instance.getTableMetadata(KEYSPACE_WITH_TRANSIENT, TABLE);
+        metadata = Schema.instance.getTableMetadata(KEYSPACE, TABLE);
+        metadata_with_transient = Schema.instance.getTableMetadata(KEYSPACE_WITH_TRANSIENT, TABLE);
         KEY = key(metadata, 1);
 
         TokenMetadata tmd = StorageService.instance.getTokenMetadata();

@@ -36,7 +36,6 @@ import org.mockito.Mockito;
 
 import static org.apache.cassandra.cql3.QueryProcessor.executeInternal;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.InstanceOfAssertFactories.list;
 
 public class RemoveWithoutDroppingTest
 {
@@ -49,7 +48,7 @@ public class RemoveWithoutDroppingTest
     {
         System.setProperty(SchemaUpdateHandlerFactoryProvider.SUH_FACTORY_CLASS_PROPERTY, TestSchemaUpdateHandlerFactory.class.getName());
         CQLTester.prepareServer();
-        SchemaManager.instance.registerListener(listener);
+        Schema.instance.registerListener(listener);
     }
 
     @Before
@@ -83,8 +82,8 @@ public class RemoveWithoutDroppingTest
         ColumnFamilyStore cfs = ColumnFamilyStore.getIfExists(ks, tab);
         cfs.forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS).get();
 
-        KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceMetadata(ks);
-        TableMetadata tm = SchemaManager.instance.getTableMetadata(ks, tab);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ks);
+        TableMetadata tm = Schema.instance.getTableMetadata(ks, tab);
 
         List<File> directories = cfs.getDirectories().getCFDirectories();
         Set<File> filesBefore = directories.stream().flatMap(d -> Arrays.stream(d.tryList(f -> !f.isDirectory()))).collect(Collectors.toSet());

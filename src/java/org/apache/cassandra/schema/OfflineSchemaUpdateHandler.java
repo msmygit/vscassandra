@@ -38,7 +38,7 @@ public class OfflineSchemaUpdateHandler implements SchemaUpdateHandler
 
     private final BiConsumer<SchemaTransformationResult, Boolean> updateCallback;
 
-    private volatile SharedSchema schema = SharedSchema.EMPTY;
+    private volatile DistributedSchema schema = DistributedSchema.EMPTY;
 
     public OfflineSchemaUpdateHandler(BiConsumer<SchemaTransformationResult, Boolean> updateCallback)
     {
@@ -60,14 +60,14 @@ public class OfflineSchemaUpdateHandler implements SchemaUpdateHandler
     @Override
     public synchronized SchemaTransformationResult apply(SchemaTransformation transformation, boolean local)
     {
-        SharedSchema before = schema;
+        DistributedSchema before = schema;
         Keyspaces afterKeyspaces = transformation.apply(before.getKeyspaces());
         Keyspaces.KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), afterKeyspaces);
 
         if (diff.isEmpty())
             return new SchemaTransformationResult(before, before, diff);
 
-        SharedSchema after = new SharedSchema(afterKeyspaces, UUID.nameUUIDFromBytes(ByteArrayUtil.bytes(afterKeyspaces.hashCode())));
+        DistributedSchema after = new DistributedSchema(afterKeyspaces, UUID.nameUUIDFromBytes(ByteArrayUtil.bytes(afterKeyspaces.hashCode())));
         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
         this.schema = after;
         logger.debug("Schema updated: {}", update);
@@ -88,6 +88,6 @@ public class OfflineSchemaUpdateHandler implements SchemaUpdateHandler
     @Override
     public synchronized void clear()
     {
-        this.schema = SharedSchema.EMPTY;
+        this.schema = DistributedSchema.EMPTY;
     }
 }

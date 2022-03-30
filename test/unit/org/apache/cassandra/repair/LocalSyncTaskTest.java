@@ -30,6 +30,7 @@ import com.google.common.collect.Iterables;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -41,13 +42,13 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.service.ActiveRepairService;
-import org.apache.cassandra.streaming.StreamCoordinator;
 import org.apache.cassandra.streaming.DefaultConnectionFactory;
-import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.PreviewKind;
+import org.apache.cassandra.streaming.StreamCoordinator;
+import org.apache.cassandra.streaming.StreamPlan;
 import org.apache.cassandra.streaming.StreamSession;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.MerkleTree;
@@ -56,7 +57,6 @@ import org.apache.cassandra.utils.UUIDGen;
 import org.assertj.core.api.Assertions;
 
 import static org.apache.cassandra.service.ActiveRepairService.NO_PENDING_REPAIR;
-
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -80,8 +80,8 @@ public class LocalSyncTaskTest extends AbstractRepairTest
                                     KeyspaceParams.simple(1),
                                     SchemaLoader.standardCFMD(KEYSPACE1, CF_STANDARD));
 
-        TableId tid = SchemaManager.instance.getTableMetadata(KEYSPACE1, CF_STANDARD).id;
-        cfs = SchemaManager.instance.getColumnFamilyStoreInstance(tid);
+        TableId tid = Schema.instance.getTableMetadata(KEYSPACE1, CF_STANDARD).id;
+        cfs = Schema.instance.getColumnFamilyStoreInstance(tid);
     }
 
     @AfterClass

@@ -21,7 +21,14 @@ package org.apache.cassandra.io.sstable.format;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -53,8 +60,8 @@ import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.schema.SchemaManager;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.FBUtilities;
@@ -142,7 +149,7 @@ public abstract class SSTableWriter extends SSTable implements Transactional
                                        Collection<Index.Group> indexGroups,
                                        LifecycleNewTracker lifecycleNewTracker)
     {
-        TableMetadataRef metadata = SchemaManager.instance.getTableMetadataRef(descriptor);
+        TableMetadataRef metadata = Schema.instance.getTableMetadataRef(descriptor);
         return create(metadata, descriptor, keyCount, repairedAt, pendingRepair, isTransient, sstableLevel, header, indexGroups, lifecycleNewTracker);
     }
 

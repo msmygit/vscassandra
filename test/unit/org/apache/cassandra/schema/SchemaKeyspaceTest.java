@@ -124,7 +124,7 @@ public class SchemaKeyspaceTest
     @Test
     public void testConversionsInverses() throws Exception
     {
-        for (String keyspaceName : SchemaManager.instance.getNonSystemKeyspaces().names())
+        for (String keyspaceName : Schema.instance.getNonSystemKeyspaces().names())
         {
             for (ColumnFamilyStore cfs : Keyspace.open(keyspaceName).getColumnFamilyStores())
             {
@@ -144,7 +144,7 @@ public class SchemaKeyspaceTest
 
         createTable(keyspace, "CREATE TABLE test (a text primary key, b int, c int)");
 
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata(keyspace, "test");
+        TableMetadata metadata = Schema.instance.getTableMetadata(keyspace, "test");
         assertTrue("extensions should be empty", metadata.params.extensions.isEmpty());
 
         ImmutableMap<String, ByteBuffer> extensions = ImmutableMap.of("From ... with Love",
@@ -154,7 +154,7 @@ public class SchemaKeyspaceTest
 
         updateTable(keyspace, metadata, copy);
 
-        metadata = SchemaManager.instance.getTableMetadata(keyspace, "test");
+        metadata = Schema.instance.getTableMetadata(keyspace, "test");
         assertEquals(extensions, metadata.params.extensions);
     }
 
@@ -162,14 +162,14 @@ public class SchemaKeyspaceTest
     public void testReadRepair()
     {
         createTable("ks", "CREATE TABLE tbl (a text primary key, b int, c int) WITH read_repair='none'");
-        TableMetadata metadata = SchemaManager.instance.getTableMetadata("ks", "tbl");
+        TableMetadata metadata = Schema.instance.getTableMetadata("ks", "tbl");
         Assert.assertEquals(ReadRepairStrategy.NONE, metadata.params.readRepair);
 
     }
 
     private static void updateTable(String keyspace, TableMetadata oldTable, TableMetadata newTable)
     {
-        KeyspaceMetadata ksm = SchemaManager.instance.getKeyspaceInstance(keyspace).getMetadata();
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceInstance(keyspace).getMetadata();
         Mutation mutation = SchemaKeyspace.makeUpdateTableMutation(ksm, oldTable, newTable, FBUtilities.timestampMicros()).build();
         SchemaTestUtil.mergeAndAnnounceLocally(Collections.singleton(mutation));
     }
@@ -185,12 +185,12 @@ public class SchemaKeyspaceTest
 
     private static void checkInverses(TableMetadata metadata) throws Exception
     {
-        KeyspaceMetadata keyspace = SchemaManager.instance.getKeyspaceMetadata(metadata.keyspace);
+        KeyspaceMetadata keyspace = Schema.instance.getKeyspaceMetadata(metadata.keyspace);
 
         // Test schema conversion
         Mutation rm = SchemaKeyspace.makeCreateTableMutation(keyspace, metadata, FBUtilities.timestampMicros()).build();
-        PartitionUpdate serializedCf = rm.getPartitionUpdate(SchemaManager.instance.getTableMetadata(SchemaConstants.SCHEMA_KEYSPACE_NAME, SchemaKeyspaceTables.TABLES));
-        PartitionUpdate serializedCD = rm.getPartitionUpdate(SchemaManager.instance.getTableMetadata(SchemaConstants.SCHEMA_KEYSPACE_NAME, SchemaKeyspaceTables.COLUMNS));
+        PartitionUpdate serializedCf = rm.getPartitionUpdate(Schema.instance.getTableMetadata(SchemaConstants.SCHEMA_KEYSPACE_NAME, SchemaKeyspaceTables.TABLES));
+        PartitionUpdate serializedCD = rm.getPartitionUpdate(Schema.instance.getTableMetadata(SchemaConstants.SCHEMA_KEYSPACE_NAME, SchemaKeyspaceTables.COLUMNS));
 
         UntypedResultSet.Row tableRow = QueryProcessor.resultify(String.format("SELECT * FROM %s.%s", SchemaConstants.SCHEMA_KEYSPACE_NAME, SchemaKeyspaceTables.TABLES),
                                                                  UnfilteredRowIterators.filter(serializedCf.unfilteredIterator(), FBUtilities.nowInSeconds()))
@@ -238,22 +238,22 @@ public class SchemaKeyspaceTest
     @Test
     public void testIsKeyspaceWithLocalStrategy()
     {
-        assertTrue(SchemaManager.isKeyspaceWithLocalStrategy("system"));
-        assertTrue(SchemaManager.isKeyspaceWithLocalStrategy(SchemaManager.instance.getKeyspaceMetadata("system")));
-        assertFalse(SchemaManager.isKeyspaceWithLocalStrategy("non_existing"));
+        assertTrue(Schema.isKeyspaceWithLocalStrategy("system"));
+        assertTrue(Schema.isKeyspaceWithLocalStrategy(Schema.instance.getKeyspaceMetadata("system")));
+        assertFalse(Schema.isKeyspaceWithLocalStrategy("non_existing"));
 
         SchemaLoader.createKeyspace("local_ks", KeyspaceParams.local());
         SchemaLoader.createKeyspace("simple_ks", KeyspaceParams.simple(3));
 
-        assertTrue(SchemaManager.isKeyspaceWithLocalStrategy("local_ks"));
-        assertTrue(SchemaManager.isKeyspaceWithLocalStrategy(SchemaManager.instance.getKeyspaceMetadata("local_ks")));
-        assertFalse(SchemaManager.isKeyspaceWithLocalStrategy("simple_ks"));
+        assertTrue(Schema.isKeyspaceWithLocalStrategy("local_ks"));
+        assertTrue(Schema.isKeyspaceWithLocalStrategy(Schema.instance.getKeyspaceMetadata("local_ks")));
+        assertFalse(Schema.isKeyspaceWithLocalStrategy("simple_ks"));
     }
 
     @Test
     public void testEverywhere()
     {
         SchemaLoader.createKeyspace("everywhereKeyspace", KeyspaceParams.everywhere());
-        assertFalse(SchemaManager.isKeyspaceWithLocalStrategy("everywhereKeyspace"));
+        assertFalse(Schema.isKeyspaceWithLocalStrategy("everywhereKeyspace"));
     }
 }

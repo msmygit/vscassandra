@@ -50,7 +50,7 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.net.AsyncStreamingInputPlus;
 import org.apache.cassandra.schema.CachingParams;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Pair;
@@ -149,7 +149,7 @@ public class SSTableZeroCopyWriterTest
     {
         File dir = store.getDirectories().getDirectoryForNewSSTables();
         Descriptor desc = store.newSSTableDescriptor(dir);
-        TableMetadataRef metadata = SchemaManager.instance.getTableMetadataRef(desc);
+        TableMetadataRef metadata = Schema.instance.getTableMetadataRef(desc);
 
         LifecycleTransaction txn = LifecycleTransaction.offline(OperationType.STREAM, metadata);
         Set<Component> componentsToWrite = desc.getFormat().requiredComponents();

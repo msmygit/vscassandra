@@ -164,15 +164,15 @@ public class MigrationManagerTest
     {
         final String ksName = KEYSPACE1;
         final String tableName = "anewtable";
-        KeyspaceMetadata original = SchemaManager.instance.getKeyspaceMetadata(ksName);
+        KeyspaceMetadata original = Schema.instance.getKeyspaceMetadata(ksName);
 
         TableMetadata cfm = addTestTable(original.name, tableName, "A New Table");
 
-        assertFalse(SchemaManager.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).isPresent());
+        assertFalse(Schema.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).isPresent());
         SchemaTestUtil.announceNewTable(cfm);
 
-        assertTrue(SchemaManager.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).isPresent());
-        assertEquals(cfm, SchemaManager.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).get());
+        assertTrue(Schema.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).isPresent());
+        assertEquals(cfm, Schema.instance.getKeyspaceMetadata(ksName).tables.get(cfm.name).get());
 
         // now read and write to it.
         QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, col, val) VALUES (?, ?, ?)",
@@ -193,7 +193,7 @@ public class MigrationManagerTest
     public void dropCf() throws ConfigurationException
     {
         // sanity
-        final KeyspaceMetadata ks = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE1);
+        final KeyspaceMetadata ks = Schema.instance.getKeyspaceMetadata(KEYSPACE1);
         assertNotNull(ks);
         final TableMetadata cfm = ks.tables.getNullable(TABLE1);
         assertNotNull(cfm);
@@ -210,7 +210,7 @@ public class MigrationManagerTest
 
         SchemaTestUtil.announceTableDrop(ks.name, cfm.name);
 
-        assertFalse(SchemaManager.instance.getKeyspaceMetadata(ks.name).tables.get(cfm.name).isPresent());
+        assertFalse(Schema.instance.getKeyspaceMetadata(ks.name).tables.get(cfm.name).isPresent());
 
         // any write should fail.
         boolean success = true;
@@ -246,8 +246,8 @@ public class MigrationManagerTest
         KeyspaceMetadata newKs = KeyspaceMetadata.create(cfm.keyspace, KeyspaceParams.simple(5), Tables.of(cfm));
         SchemaTestUtil.announceNewKeyspace(newKs);
 
-        assertNotNull(SchemaManager.instance.getKeyspaceMetadata(cfm.keyspace));
-        assertEquals(SchemaManager.instance.getKeyspaceMetadata(cfm.keyspace), newKs);
+        assertNotNull(Schema.instance.getKeyspaceMetadata(cfm.keyspace));
+        assertEquals(Schema.instance.getKeyspaceMetadata(cfm.keyspace), newKs);
 
         // test reads and writes.
         QueryProcessor.executeInternal("INSERT INTO newkeyspace1.newstandard1 (key, col, val) VALUES (?, ?, ?)",
@@ -264,7 +264,7 @@ public class MigrationManagerTest
     public void dropKS() throws ConfigurationException
     {
         // sanity
-        final KeyspaceMetadata ks = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE2);
+        final KeyspaceMetadata ks = Schema.instance.getKeyspaceMetadata(KEYSPACE2);
         assertNotNull(ks);
         final TableMetadata cfm = ks.tables.getNullable(TABLE2);
         assertNotNull(cfm);
@@ -281,7 +281,7 @@ public class MigrationManagerTest
 
         SchemaTestUtil.announceKeyspaceDrop(ks.name);
 
-        assertNull(SchemaManager.instance.getKeyspaceMetadata(ks.name));
+        assertNull(Schema.instance.getKeyspaceMetadata(ks.name));
 
         // write should fail.
         boolean success = true;
@@ -314,7 +314,7 @@ public class MigrationManagerTest
     public void dropKSUnflushed() throws ConfigurationException
     {
         // sanity
-        final KeyspaceMetadata ks = SchemaManager.instance.getKeyspaceMetadata(KEYSPACE3);
+        final KeyspaceMetadata ks = Schema.instance.getKeyspaceMetadata(KEYSPACE3);
         assertNotNull(ks);
         final TableMetadata cfm = ks.tables.getNullable(TABLE1);
         assertNotNull(cfm);
@@ -327,28 +327,28 @@ public class MigrationManagerTest
 
         SchemaTestUtil.announceKeyspaceDrop(ks.name);
 
-        assertNull(SchemaManager.instance.getKeyspaceMetadata(ks.name));
+        assertNull(Schema.instance.getKeyspaceMetadata(ks.name));
     }
 
     @Test
     public void createEmptyKsAddNewCf() throws ConfigurationException
     {
-        assertNull(SchemaManager.instance.getKeyspaceMetadata(EMPTY_KEYSPACE));
+        assertNull(Schema.instance.getKeyspaceMetadata(EMPTY_KEYSPACE));
         KeyspaceMetadata newKs = KeyspaceMetadata.create(EMPTY_KEYSPACE, KeyspaceParams.simple(5));
         SchemaTestUtil.announceNewKeyspace(newKs);
-        assertNotNull(SchemaManager.instance.getKeyspaceMetadata(EMPTY_KEYSPACE));
+        assertNotNull(Schema.instance.getKeyspaceMetadata(EMPTY_KEYSPACE));
 
         String tableName = "added_later";
         TableMetadata newCf = addTestTable(EMPTY_KEYSPACE, tableName, "A new CF to add to an empty KS");
 
         //should not exist until apply
-        assertFalse(SchemaManager.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).isPresent());
+        assertFalse(Schema.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).isPresent());
 
         //add the new CF to the empty space
         SchemaTestUtil.announceNewTable(newCf);
 
-        assertTrue(SchemaManager.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).isPresent());
-        assertEquals(SchemaManager.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).get(), newCf);
+        assertTrue(Schema.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).isPresent());
+        assertEquals(Schema.instance.getKeyspaceMetadata(newKs.name).tables.get(newCf.name).get(), newCf);
 
         // now read and write to it.
         QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, col, val) VALUES (?, ?, ?)",
@@ -372,8 +372,8 @@ public class MigrationManagerTest
 
         SchemaTestUtil.announceNewKeyspace(oldKs);
 
-        assertNotNull(SchemaManager.instance.getKeyspaceMetadata(cf.keyspace));
-        assertEquals(SchemaManager.instance.getKeyspaceMetadata(cf.keyspace), oldKs);
+        assertNotNull(Schema.instance.getKeyspaceMetadata(cf.keyspace));
+        assertEquals(Schema.instance.getKeyspaceMetadata(cf.keyspace), oldKs);
 
         // names should match.
         KeyspaceMetadata newBadKs2 = KeyspaceMetadata.create(cf.keyspace + "trash", KeyspaceParams.simple(4));
@@ -394,7 +394,7 @@ public class MigrationManagerTest
         KeyspaceMetadata newKs = KeyspaceMetadata.create(cf.keyspace, KeyspaceParams.create(true, replicationMap));
         SchemaTestUtil.announceKeyspaceUpdate(newKs);
 
-        KeyspaceMetadata newFetchedKs = SchemaManager.instance.getKeyspaceMetadata(newKs.name);
+        KeyspaceMetadata newFetchedKs = Schema.instance.getKeyspaceMetadata(newKs.name);
         assertEquals(newFetchedKs.params.replication.klass, newKs.params.replication.klass);
         assertFalse(newFetchedKs.params.replication.klass.equals(oldKs.params.replication.klass));
     }
@@ -501,7 +501,7 @@ public class MigrationManagerTest
     public void testDropIndex() throws ConfigurationException
     {
         // persist keyspace definition in the system keyspace
-        SchemaKeyspace.makeCreateKeyspaceMutation(SchemaManager.instance.getKeyspaceMetadata(KEYSPACE6), FBUtilities.timestampMicros()).build().applyUnsafe();
+        SchemaKeyspace.makeCreateKeyspaceMutation(Schema.instance.getKeyspaceMetadata(KEYSPACE6), FBUtilities.timestampMicros()).build().applyUnsafe();
         ColumnFamilyStore cfs = Keyspace.open(KEYSPACE6).getColumnFamilyStore(TABLE1i);
         String indexName = TABLE1i + "_birthdate_key_index";
 

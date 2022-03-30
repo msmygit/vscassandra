@@ -73,17 +73,17 @@ import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.cassandra.metrics.StorageMetrics;
 import org.apache.cassandra.net.StartupClusterConnectivityChecker;
 import org.apache.cassandra.nodes.Nodes;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.security.ThreadAwareSecurityManager;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.INativeLibrary;
 import org.apache.cassandra.utils.JMXServerUtils;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.MBeanWrapper;
 import org.apache.cassandra.utils.Mx4jTool;
-import org.apache.cassandra.utils.INativeLibrary;
 import org.apache.cassandra.utils.WindowsTimer;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -280,7 +280,7 @@ public class CassandraDaemon
         try
         {
             // load schema from disk
-            SchemaManager.instance.loadFromDisk();
+            Schema.instance.loadFromDisk();
         }
         catch (Exception e)
         {
@@ -293,13 +293,13 @@ public class CassandraDaemon
         SSTableHeaderFix.fixNonFrozenUDTIfUpgradeFrom30();
 
         // clean up debris in the rest of the keyspaces
-        for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+        for (String keyspaceName : Schema.instance.getKeyspaces())
         {
             // Skip system as we've already cleaned it
             if (keyspaceName.equals(SchemaConstants.SYSTEM_KEYSPACE_NAME))
                 continue;
 
-            for (TableMetadata cfm : SchemaManager.instance.getTablesAndViews(keyspaceName))
+            for (TableMetadata cfm : Schema.instance.getTablesAndViews(keyspaceName))
             {
                 try
                 {
@@ -315,7 +315,7 @@ public class CassandraDaemon
         Keyspace.setInitialized();
 
         // initialize keyspaces
-        for (String keyspaceName : SchemaManager.instance.getKeyspaces())
+        for (String keyspaceName : Schema.instance.getKeyspaces())
         {
             if (logger.isDebugEnabled())
                 logger.debug("opening keyspace {}", keyspaceName);

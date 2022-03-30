@@ -46,7 +46,6 @@ import org.apache.cassandra.cql3.functions.FunctionName;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.KeyspaceNotDefinedException;
-import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
@@ -59,7 +58,6 @@ import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
-import org.apache.cassandra.service.PendingRangeCalculatorService;
 
 import static com.google.common.collect.Iterables.size;
 import static java.lang.String.format;
@@ -80,16 +78,16 @@ import static org.apache.cassandra.config.DatabaseDescriptor.isToolInitialized;
  * the registered callback is executed which performs the remaining updates for tables metadata refs and keyspace
  * instances (see {@link #mergeAndUpdateVersion(SchemaTransformationResult, boolean)}).
  */
-public final class SchemaManager implements SchemaProvider
+public final class Schema implements SchemaProvider
 {
-    private static final Logger logger = LoggerFactory.getLogger(SchemaManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(Schema.class);
 
     public static final String FORCE_LOAD_LOCAL_KEYSPACES_PROP = "cassandra.schema.force_load_local_keyspaces";
     private static final boolean FORCE_LOAD_LOCAL_KEYSPACES = Boolean.getBoolean(FORCE_LOAD_LOCAL_KEYSPACES_PROP);
 
-    public static final SchemaManager instance = new SchemaManager();
+    public static final Schema instance = new Schema();
 
-    private volatile Keyspaces sharedKeyspaces = Keyspaces.none();
+    private volatile Keyspaces distributedKeyspaces = Keyspaces.none();
 
     private final LocalKeyspaces localKeyspaces;
 
@@ -115,7 +113,7 @@ public final class SchemaManager implements SchemaProvider
     /**
      * Initialize empty schema object and load the hardcoded system tables
      */
-    private SchemaManager()
+    private Schema()
     {
         this.online = isDaemonInitialized();
         this.localKeyspaces = new LocalKeyspaces(FORCE_LOAD_LOCAL_KEYSPACES || isDaemonInitialized() || isToolInitialized());
@@ -124,7 +122,7 @@ public final class SchemaManager implements SchemaProvider
     }
 
     @VisibleForTesting
-    public SchemaManager(boolean online, LocalKeyspaces localKeyspaces, SchemaUpdateHandler updateHandler)
+    public Schema(boolean online, LocalKeyspaces localKeyspaces, SchemaUpdateHandler updateHandler)
     {
         this.online = online;
         this.localKeyspaces = localKeyspaces;
@@ -178,14 +176,14 @@ public final class SchemaManager implements SchemaProvider
     private synchronized void load(KeyspaceMetadata ksm)
     {
         Preconditions.checkArgument(!SchemaConstants.isLocalSystemKeyspace(ksm.name));
-        KeyspaceMetadata previous = sharedKeyspaces.getNullable(ksm.name);
+        KeyspaceMetadata previous = distributedKeyspaces.getNullable(ksm.name);
 
         if (previous == null)
             loadNew(ksm);
         else
             reload(previous, ksm);
 
-        sharedKeyspaces = sharedKeyspaces.withAddedOrUpdated(ksm);
+        distributedKeyspaces = distributedKeyspaces.withAddedOrUpdated(ksm);
     }
 
     private void loadNew(KeyspaceMetadata ksm)
@@ -254,7 +252,7 @@ public final class SchemaManager implements SchemaProvider
     }
 
     @Override
-    public Keyspace getOrCreateKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction) throws UnknownKeyspaceException
+    public Keyspace maybeAddKeyspaceInstance(String keyspaceName, Supplier<Keyspace> loadFunction) throws UnknownKeyspaceException
     {
         CompletableFuture<Keyspace> future = keyspaceInstances.get(keyspaceName);
         if (future == null)
@@ -302,7 +300,7 @@ public final class SchemaManager implements SchemaProvider
      * @param keyspaceName The name of the keyspace to remove
      */
     @VisibleForTesting
-    public void removeKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
+    public void maybeRemoveKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
     {
         CompletableFuture<Keyspace> droppedFuture = new CompletableFuture<>();
         droppedFuture.completeExceptionally(new KeyspaceNotDefinedException(keyspaceName));
@@ -319,22 +317,22 @@ public final class SchemaManager implements SchemaProvider
     }
 
     /**
-     * @deprecated use {@link #sharedAndLocalKeyspaces()}
+     * @deprecated use {@link #distributedAndLocalKeyspaces()}
      */
     @Deprecated
     public Keyspaces snapshot()
     {
-        return sharedAndLocalKeyspaces();
+        return distributedAndLocalKeyspaces();
     }
 
-    public Keyspaces sharedAndLocalKeyspaces()
+    public Keyspaces distributedAndLocalKeyspaces()
     {
-        return Keyspaces.builder().add(localKeyspaces.getAll()).add(sharedKeyspaces).build();
+        return Keyspaces.builder().add(localKeyspaces.getAll()).add(distributedKeyspaces).build();
     }
 
-    public Keyspaces sharedKeyspaces()
+    public Keyspaces distributedKeyspaces()
     {
-        return sharedKeyspaces;
+        return distributedKeyspaces;
     }
 
     /**
@@ -344,7 +342,7 @@ public final class SchemaManager implements SchemaProvider
      */
     private synchronized void unload(KeyspaceMetadata ksm)
     {
-        sharedKeyspaces = sharedKeyspaces.without(ksm.name);
+        distributedKeyspaces = distributedKeyspaces.without(ksm.name);
 
         tableMetadataRefCache.removeRefs(ksm);
 
@@ -381,12 +379,12 @@ public final class SchemaManager implements SchemaProvider
      * Returns all non-local keyspaces, that is, all but {@link SchemaConstants#LOCAL_SYSTEM_KEYSPACE_NAMES}
      * or virtual keyspaces.
      *
-     * @deprecated use {@link #sharedKeyspaces()}
+     * @deprecated use {@link #distributedKeyspaces()}
      */
     @Deprecated
     public Keyspaces getNonSystemKeyspaces()
     {
-        return sharedKeyspaces;
+        return distributedKeyspaces;
     }
 
     /**
@@ -394,7 +392,7 @@ public final class SchemaManager implements SchemaProvider
      */
     public Keyspaces getNonLocalStrategyKeyspaces()
     {
-        return sharedKeyspaces.filter(keyspace -> keyspace.params.replication.klass != LocalStrategy.class);
+        return distributedKeyspaces.filter(keyspace -> keyspace.params.replication.klass != LocalStrategy.class);
     }
 
     /**
@@ -402,7 +400,7 @@ public final class SchemaManager implements SchemaProvider
      */
     public Keyspaces getPartitionedKeyspaces()
     {
-        return sharedKeyspaces.filter(keyspace -> Keyspace.open(keyspace.name, this, true).getReplicationStrategy().isPartitioned());
+        return distributedKeyspaces.filter(keyspace -> Keyspace.open(keyspace.name, this, true).getReplicationStrategy().isPartitioned());
     }
 
     /**
@@ -411,7 +409,7 @@ public final class SchemaManager implements SchemaProvider
      */
     public Keyspaces getUserKeyspaces()
     {
-        return sharedKeyspaces.without(SchemaConstants.REPLICATED_SYSTEM_KEYSPACE_NAMES);
+        return distributedKeyspaces.without(SchemaConstants.REPLICATED_SYSTEM_KEYSPACE_NAMES);
     }
 
     /**
@@ -431,7 +429,7 @@ public final class SchemaManager implements SchemaProvider
     public Iterable<TableMetadata> getTablesAndViews(String keyspaceName)
     {
         Preconditions.checkNotNull(keyspaceName);
-        KeyspaceMetadata ksm = ObjectUtils.getFirstNonNull(() -> sharedKeyspaces.getNullable(keyspaceName),
+        KeyspaceMetadata ksm = ObjectUtils.getFirstNonNull(() -> distributedKeyspaces.getNullable(keyspaceName),
                                                            () -> localKeyspaces.get(keyspaceName));
         Preconditions.checkNotNull(ksm, "Keyspace %s not found", keyspaceName);
         return ksm.tablesAndViews();
@@ -511,7 +509,7 @@ public final class SchemaManager implements SchemaProvider
     @Override
     public TableMetadata getTableMetadata(TableId id)
     {
-        return ObjectUtils.getFirstNonNull(() -> sharedKeyspaces.getTableOrViewNullable(id),
+        return ObjectUtils.getFirstNonNull(() -> distributedKeyspaces.getTableOrViewNullable(id),
                                            () -> localKeyspaces.getTableOrView(id),
                                            () -> VirtualKeyspaceRegistry.instance.getTableMetadataNullable(id));
     }
@@ -619,7 +617,7 @@ public final class SchemaManager implements SchemaProvider
      */
     public synchronized void clear()
     {
-        sharedKeyspaces.forEach(this::unload);
+        distributedKeyspaces.forEach(this::unload);
         updateVersion(SchemaConstants.emptyVersion);
         SchemaDiagnostics.schemaCleared(this);
     }
@@ -627,10 +625,10 @@ public final class SchemaManager implements SchemaProvider
     /**
      * When we receive {@link SchemaTransformationResult} in a callback invocation, the transformation result includes
      * pre-transformation and post-transformation schema metadata and versions, and a diff between them. Basically
-     * we expect that the local image of the schema metadata ({@link #sharedKeyspaces}) and version ({@link #version})
+     * we expect that the local image of the schema metadata ({@link #distributedKeyspaces}) and version ({@link #version})
      * are the same as pre-transformation. However, it might not always be true because some changes might not be
      * applied completely due to some errors. This methods is to emit warning in such case and recalculate diff so that
-     * it contains the changes between the local schema image ({@link #sharedKeyspaces} and the post-transformation
+     * it contains the changes between the local schema image ({@link #distributedKeyspaces} and the post-transformation
      * schema. That recalculation allows the following updates in the callback to recover the schema.
      *
      * @param result the incoming transformation result
@@ -638,7 +636,7 @@ public final class SchemaManager implements SchemaProvider
      */
     private synchronized SchemaTransformationResult localDiff(SchemaTransformationResult result)
     {
-        Keyspaces localBefore = sharedKeyspaces;
+        Keyspaces localBefore = distributedKeyspaces;
         UUID localVersion = version;
         boolean needNewDiff = false;
 
@@ -655,7 +653,7 @@ public final class SchemaManager implements SchemaProvider
         }
 
         if (needNewDiff)
-            return new SchemaTransformationResult(new SharedSchema(localBefore, localVersion),
+            return new SchemaTransformationResult(new DistributedSchema(localBefore, localVersion),
                                                   result.after,
                                                   Keyspaces.diff(localBefore, result.after.getKeyspaces()));
 
@@ -786,7 +784,7 @@ public final class SchemaManager implements SchemaProvider
             keyspace.tables.forEach(t -> dropTable(ks, t, dropData));
 
             // remove the keyspace from the static instances
-            removeKeyspaceInstance(keyspace.name, instance -> instance.unload(dropData));
+            maybeRemoveKeyspaceInstance(keyspace.name, instance -> instance.unload(dropData));
         }
 
         unload(keyspace);

@@ -65,7 +65,7 @@ import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileInputStreamPlus;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.security.EncryptionContext;
 import org.apache.cassandra.security.EncryptionContextGenerator;
 
@@ -230,7 +230,7 @@ public abstract class CommitLogStressTest
             }
             verifySizes(commitLog);
 
-            commitLog.discardCompletedSegments(SchemaManager.instance.getTableMetadata("Keyspace1", "Standard1").id,
+            commitLog.discardCompletedSegments(Schema.instance.getTableMetadata("Keyspace1", "Standard1").id,
                                                CommitLogPosition.NONE, discardedPos);
             threads.clear();
 
@@ -412,7 +412,7 @@ public abstract class CommitLogStressTest
                     rl.acquire();
                 ByteBuffer key = randomBytes(16, rand);
 
-                UpdateBuilder builder = UpdateBuilder.create(SchemaManager.instance.getTableMetadata("Keyspace1", "Standard1"), Util.dk(key));
+                UpdateBuilder builder = UpdateBuilder.create(Schema.instance.getTableMetadata("Keyspace1", "Standard1"), Util.dk(key));
                 for (int ii = 0; ii < numCells; ii++)
                 {
                     int sz = randomSize ? rand.nextInt(cellSize) : cellSize;

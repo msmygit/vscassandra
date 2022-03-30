@@ -24,24 +24,23 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.stream.Collectors;
 
-import org.apache.cassandra.db.ConsistencyLevel;
-
-import org.apache.cassandra.locator.EndpointsForToken;
-import org.apache.cassandra.locator.ReplicaPlan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.IMutation;
 import org.apache.cassandra.db.WriteType;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.exceptions.WriteFailureException;
 import org.apache.cassandra.exceptions.WriteTimeoutException;
+import org.apache.cassandra.locator.EndpointsForToken;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.net.RequestCallback;
+import org.apache.cassandra.locator.ReplicaPlan;
 import org.apache.cassandra.net.Message;
-import org.apache.cassandra.schema.SchemaManager;
+import org.apache.cassandra.net.RequestCallback;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.utils.concurrent.SimpleCondition;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -306,7 +305,7 @@ public abstract class AbstractWriteResponseHandler<T> implements RequestCallback
 
         long timeout = Long.MAX_VALUE;
         List<ColumnFamilyStore> cfs = mutation.getTableIds().stream()
-                                              .map(SchemaManager.instance::getColumnFamilyStoreInstance)
+                                              .map(Schema.instance::getColumnFamilyStoreInstance)
                                               .collect(Collectors.toList());
         for (ColumnFamilyStore cf : cfs)
             timeout = Math.min(timeout, cf.additionalWriteLatencyNanos);
