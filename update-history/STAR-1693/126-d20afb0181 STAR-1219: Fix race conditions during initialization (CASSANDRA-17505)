@@ -1,0 +1,71 @@
+--- a/build.xml
++++ b/build.xml
+@@ -1173,11 +1173,11 @@
+     </target>
+ 
+     <!-- creates release tarballs -->
+-<<<<<<<
+-    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
+-=======
++<<<<<<< HEAD
+     <target name="artifacts" depends="_artifacts-init,gen-doc,sources-jar"
+->>>>>>>
++=======
++    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
++>>>>>>> 2c63a3b936 (STAR-1147: Improve unit-test performance (#360))
+             description="Create DSE DB release artifacts">
+       <tar compression="gzip" longfile="gnu"
+         destfile="${build.dir}/${final.name}-bin.tar.gz">
+--- a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
++++ b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+@@ -22,11 +22,11 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-<<<<<<<
++<<<<<<< HEAD
+ import com.google.common.annotations.VisibleForTesting;
+ =======
+ import com.google.common.base.Preconditions;
+->>>>>>>
++>>>>>>> 6e77c155f2 (STAR-985: allow substituting StorageProxy::mutateAtomically implementation (#316))
+ import com.google.common.collect.Iterables;
+ import com.google.common.collect.Lists;
+ import net.openhft.chronicle.core.util.ThrowingFunction;
+--- a/test/distributed/org/apache/cassandra/distributed/impl/Instance.java
++++ b/test/distributed/org/apache/cassandra/distributed/impl/Instance.java
+@@ -572,24 +572,10 @@
+ 
+                 if (config.has(NETWORK))
+                     MessagingService.instance().listen();
+-<<<<<<<
+-=======
+-                }
+                 else
+-                {
+-                    // Even though we don't use MessagingService, access the static SocketFactory
+-                    // instance here so that we start the static event loop state
+-                    //  -- not sure what that means?  SocketFactory.instance.getClass();
+-                    registerMockMessaging(cluster);
+-                }
+-                registerInboundFilter(cluster);
+-                registerOutboundFilter(cluster);
+-                if (!config.has(NETWORK))
+-                {
+                     propagateMessagingVersions(cluster); // fake messaging needs to know messaging version for filters
+-                }
++
+                 internodeMessagingStarted = true;
+->>>>>>>
+ 
+                 JVMStabilityInspector.replaceKiller(new InstanceKiller());
+ 
+@@ -828,7 +814,7 @@
+             // (ex. A Mutation stage thread may attempt to add a mutation to the CommitLog.)
+             error = parallelRun(error, executor, CommitLog.instance::shutdownBlocking);
+             error = parallelRun(error, executor, () -> shutdownAndWait(Collections.singletonList(JMXBroadcastExecutor.executor)));
+-            
++
+             // ScheduledExecutors shuts down after MessagingService, as MessagingService may issue tasks to it.
+             error = parallelRun(error, executor, () -> ScheduledExecutors.shutdownAndWait(1L, MINUTES));
+ 
