@@ -33,10 +33,10 @@ import org.mockito.Mockito;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(Parameterized.class)
-public class SSTableUniqueIdentifierTest
+public class SSTableIdTest
 {
     @Parameterized.Parameter(0)
-    public SSTableUniqueIdentifier.Builder<? extends SSTableUniqueIdentifier> builder;
+    public SSTableId.Builder<? extends SSTableId> builder;
 
     @Parameterized.Parameter(1)
     public int defaultComparisonResult;
@@ -44,8 +44,8 @@ public class SSTableUniqueIdentifierTest
     @Parameterized.Parameters
     public static Collection<Object[]> parameters()
     {
-        return Arrays.asList(new Object[]{ SequenceBasedSSTableUniqueIdentifier.Builder.instance, -1 },
-                             new Object[]{ ULIDBasedSSTableUniqueIdentifier.Builder.instance, 1 });
+        return Arrays.asList(new Object[]{ SequenceBasedSSTableId.Builder.instance, -1 },
+                             new Object[]{ UUIDBasedSSTableId.Builder.instance, 1 });
     }
 
     @Test
@@ -55,8 +55,8 @@ public class SSTableUniqueIdentifierTest
             try
             {
                 ByteBuffer serialized = id.asBytes();
-                SSTableUniqueIdentifier deserialized = builder.fromBytes(serialized);
-                SSTableUniqueIdentifier fromFactory = SSTableUniqueIdentifierFactory.instance.fromBytes(serialized);
+                SSTableId deserialized = builder.fromBytes(serialized);
+                SSTableId fromFactory = SSTableIdFactory.instance.fromBytes(serialized);
                 assertThat(deserialized).isEqualTo(id);
                 assertThat(fromFactory).isEqualTo(id);
             }
@@ -74,8 +74,8 @@ public class SSTableUniqueIdentifierTest
             try
             {
                 String serialized = id.asString();
-                SSTableUniqueIdentifier deserialized = builder.fromString(serialized);
-                SSTableUniqueIdentifier fromFactory = SSTableUniqueIdentifierFactory.instance.fromString(serialized);
+                SSTableId deserialized = builder.fromString(serialized);
+                SSTableId fromFactory = SSTableIdFactory.instance.fromString(serialized);
                 assertThat(deserialized).isEqualTo(id);
                 assertThat(fromFactory).isEqualTo(id);
             }
@@ -89,12 +89,12 @@ public class SSTableUniqueIdentifierTest
     @Test
     public void testComparison()
     {
-        Supplier<? extends SSTableUniqueIdentifier> gen = builder.generator(Stream.empty());
+        Supplier<? extends SSTableId> gen = builder.generator(Stream.empty());
         Stream.generate(gen).limit(100).forEachOrdered(id -> {
             try
             {
-                assertThat(id.compareTo(Mockito.mock(SSTableUniqueIdentifier.class))).isEqualTo(defaultComparisonResult);
-                SSTableUniqueIdentifier another = gen.get();
+                assertThat(id.compareTo(Mockito.mock(SSTableId.class))).isEqualTo(defaultComparisonResult);
+                SSTableId another = gen.get();
                 assertThat(id.compareTo(another)).isEqualTo(-another.compareTo(id));
                 assertThat(id).isNotEqualTo(another);
             }

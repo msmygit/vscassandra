@@ -110,7 +110,7 @@ import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IFailureDetector;
 import org.apache.cassandra.gms.VersionedValue;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -845,9 +845,9 @@ public class Util
     {
         LifecycleTransaction.waitForDeletions();
         assertEquals(expectedSSTableCount, cfs.getLiveSSTables().size());
-        Set<SSTableUniqueIdentifier> liveGenerations = cfs.getLiveSSTables().stream()
-                                                          .map(sstable -> sstable.descriptor.generation)
-                                                          .collect(Collectors.toSet());
+        Set<SSTableId> liveIdentifiers = cfs.getLiveSSTables().stream()
+                                            .map(sstable -> sstable.descriptor.id)
+                                            .collect(Collectors.toSet());
         int fileCount = 0;
         for (File f : cfs.getDirectories().getCFDirectories())
         {
@@ -856,7 +856,7 @@ public class Util
                 if (sst.name().contains("Data"))
                 {
                     Descriptor d = Descriptor.fromFilename(sst.absolutePath());
-                    assertTrue(liveGenerations.contains(d.generation));
+                    assertTrue(liveIdentifiers.contains(d.id));
                     fileCount++;
                 }
             }

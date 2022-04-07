@@ -190,7 +190,7 @@ public class LeveledManifest
         {
             builder.append(sstable.getColumnFamilyName())
                    .append('-')
-                   .append(sstable.getGeneration())
+                   .append(sstable.getId())
                    .append("(L")
                    .append(sstable.getSSTableLevel())
                    .append("), ");

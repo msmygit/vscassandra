@@ -35,7 +35,7 @@ import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.CompactionParams;
 import org.apache.cassandra.schema.CompactionParams.TombstoneOption;
@@ -175,7 +175,7 @@ public class GcCompactionTest extends CQLTester
       flush();
       assertEquals(1, cfs.getLiveSSTables().size());
       SSTableReader table = cfs.getLiveSSTables().iterator().next();
-      SSTableUniqueIdentifier gen = table.descriptor.generation;
+      SSTableId gen = table.descriptor.id;
       assertEquals(KEY_COUNT * CLUSTERING_COUNT, countRows(table));
 
       assertEquals(0, table.getSSTableLevel()); // flush writes to L0
@@ -186,7 +186,7 @@ public class GcCompactionTest extends CQLTester
 
       assertEquals(1, cfs.getLiveSSTables().size());
       SSTableReader collected = cfs.getLiveSSTables().iterator().next();
-      SSTableUniqueIdentifier collectedGen = collected.descriptor.generation;
+      SSTableId collectedGen = collected.descriptor.id;
       assertTrue(collectedGen.compareTo(gen) > 0);
       assertEquals(KEY_COUNT * CLUSTERING_COUNT, countRows(collected));
 
@@ -196,7 +196,7 @@ public class GcCompactionTest extends CQLTester
 
       assertEquals(1, cfs.getLiveSSTables().size());
       SSTableReader compacted = cfs.getLiveSSTables().iterator().next();
-      SSTableUniqueIdentifier compactedGen = compacted.descriptor.generation;
+      SSTableId compactedGen = compacted.descriptor.id;
       assertTrue(compactedGen.compareTo(collectedGen) > 0);
       assertEquals(KEY_COUNT * CLUSTERING_COUNT, countRows(compacted));
 
@@ -207,7 +207,7 @@ public class GcCompactionTest extends CQLTester
 
       assertEquals(1, cfs.getLiveSSTables().size());
       SSTableReader collected2 = cfs.getLiveSSTables().iterator().next();
-      assertTrue(collected2.descriptor.generation.compareTo(compactedGen) > 0);
+      assertTrue(collected2.descriptor.id.compareTo(compactedGen) > 0);
       assertEquals(KEY_COUNT * CLUSTERING_COUNT, countRows(collected2));
 
       assertEquals(1, collected2.getSSTableLevel()); // garbagecollect should leave the LCS level where it was
@@ -266,7 +266,7 @@ public class GcCompactionTest extends CQLTester
         assertEquals(CompactionManager.AllSSTableOpStatus.SUCCESSFUL, status);
 
         SSTableReader[] tables = cfs.getLiveSSTables().toArray(new SSTableReader[0]);
-        Arrays.sort(tables, Comparator.comparing(o -> o.descriptor.generation));  // by order of compaction
+        Arrays.sort(tables, Comparator.comparing(o -> o.descriptor.id));  // by order of compaction
 
         // Make sure deleted data was removed
         assertTrue(rowCount0 > countRows(tables[0]));

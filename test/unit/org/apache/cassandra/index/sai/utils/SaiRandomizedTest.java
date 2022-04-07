@@ -37,7 +37,7 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.SequentialWriterOption;
 import org.apache.cassandra.schema.TableMetadata;
@@ -81,7 +81,7 @@ public class SaiRandomizedTest extends RandomizedTest
         return indexInputLeakDetector.newIndexDescriptor(new Descriptor(new File(temporaryFolder.newFolder()),
                                                                         randomSimpleString(5, 13),
                                                                         randomSimpleString(3, 17),
-                                                                        new SequenceBasedSSTableUniqueIdentifier(randomIntBetween(0, 128))),
+                                                                        new SequenceBasedSSTableId(randomIntBetween(0, 128))),
                                                          metadata,
                                                          SequentialWriterOption.newBuilder()
                                                                                .bufferSize(randomIntBetween(17, 1 << 13))

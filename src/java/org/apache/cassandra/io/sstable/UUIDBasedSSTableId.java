@@ -34,14 +34,14 @@ import org.apache.cassandra.utils.ByteBufferUtil;
  * <p>
  * Uses the ULID identifiers which are lexicographically sortable by time: https://github.com/ulid/spec
  */
-public final class ULIDBasedSSTableUniqueIdentifier implements SSTableUniqueIdentifier
+public final class UUIDBasedSSTableId implements SSTableId
 {
     public final static int STRING_LEN = 26;
     public final static int BYTES_LEN = 16;
 
     private final ULID.Value ulid;
 
-    ULIDBasedSSTableUniqueIdentifier(ULID.Value ulid)
+    UUIDBasedSSTableId(ULID.Value ulid)
     {
         this.ulid = ulid;
     }
@@ -65,10 +65,10 @@ public final class ULIDBasedSSTableUniqueIdentifier implements SSTableUniqueIden
     }
 
     @Override
-    public int compareTo(SSTableUniqueIdentifier o)
+    public int compareTo(SSTableId o)
     {
         //Assumed sstables with a diff identifier are old
-        return o instanceof ULIDBasedSSTableUniqueIdentifier ? ulid.compareTo(((ULIDBasedSSTableUniqueIdentifier) o).ulid) : +1;
+        return o instanceof UUIDBasedSSTableId ? ulid.compareTo(((UUIDBasedSSTableId) o).ulid) : +1;
     }
 
     @Override
@@ -76,7 +76,7 @@ public final class ULIDBasedSSTableUniqueIdentifier implements SSTableUniqueIden
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ULIDBasedSSTableUniqueIdentifier that = (ULIDBasedSSTableUniqueIdentifier) o;
+        UUIDBasedSSTableId that = (UUIDBasedSSTableId) o;
         return ulid.equals(that.ulid);
     }
 
@@ -86,7 +86,7 @@ public final class ULIDBasedSSTableUniqueIdentifier implements SSTableUniqueIden
         return Objects.hash(ulid);
     }
 
-    public static class Builder implements SSTableUniqueIdentifier.Builder<ULIDBasedSSTableUniqueIdentifier>
+    public static class Builder implements SSTableId.Builder<UUIDBasedSSTableId>
     {
         public static final Builder instance = new Builder();
 
@@ -98,21 +98,21 @@ public final class ULIDBasedSSTableUniqueIdentifier implements SSTableUniqueIden
          * @param existingIdentifiers not used by ULID based generator
          */
         @Override
-        public Supplier<ULIDBasedSSTableUniqueIdentifier> generator(Stream<SSTableUniqueIdentifier> existingIdentifiers)
+        public Supplier<UUIDBasedSSTableId> generator(Stream<SSTableId> existingIdentifiers)
         {
-            return () -> new ULIDBasedSSTableUniqueIdentifier(ulid.nextValue());
+            return () -> new UUIDBasedSSTableId(ulid.nextValue());
         }
 
         @Override
-        public ULIDBasedSSTableUniqueIdentifier fromString(@Nonnull String s) throws IllegalArgumentException
+        public UUIDBasedSSTableId fromString(@Nonnull String s) throws IllegalArgumentException
         {
-            return new ULIDBasedSSTableUniqueIdentifier(ULID.parseULID(s));
+            return new UUIDBasedSSTableId(ULID.parseULID(s));
         }
 
         @Override
-        public ULIDBasedSSTableUniqueIdentifier fromBytes(@Nonnull ByteBuffer byteBuffer) throws IllegalArgumentException
+        public UUIDBasedSSTableId fromBytes(@Nonnull ByteBuffer byteBuffer) throws IllegalArgumentException
         {
-            return new ULIDBasedSSTableUniqueIdentifier(ULID.fromBytes(ByteBufferUtil.getArray(byteBuffer)));
+            return new UUIDBasedSSTableId(ULID.fromBytes(ByteBufferUtil.getArray(byteBuffer)));
         }
     }
 }

@@ -29,7 +29,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.dht.BootStrapper;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.TokenMetadata;
@@ -122,7 +122,7 @@ public class DiskBoundaryManagerTest extends CQLTester
     {
         MockCFS(ColumnFamilyStore cfs, Directories dirs)
         {
-            super(cfs.keyspace, cfs.getTableName(), SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()), cfs.metadata, dirs, false, false, true);
+            super(cfs.keyspace, cfs.getTableName(), SequenceBasedSSTableId.Builder.instance.generator(Stream.empty()), cfs.metadata, dirs, false, false, true);
         }
     }
 }

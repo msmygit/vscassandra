@@ -90,7 +90,6 @@ import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.AbstractIterator;
 import org.apache.cassandra.utils.BloomFilter;
-import org.apache.cassandra.utils.BloomFilterSerializer;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.FilterFactory;
@@ -327,7 +326,7 @@ public class TrieIndexSSTableReader extends SSTableReader
         if (!bf.isPresent(dk))
         {
             listener.onSSTableSkipped(this, SkippingReason.BLOOM_FILTER);
-            Tracing.trace("Bloom filter allows skipping sstable {}", descriptor.generation);
+            Tracing.trace("Bloom filter allows skipping sstable {}", descriptor.id);
             if (updateStats)
                 getBloomFilterTracker().addTrueNegative();
             return null;

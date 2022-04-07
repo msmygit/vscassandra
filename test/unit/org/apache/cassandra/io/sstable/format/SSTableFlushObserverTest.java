@@ -57,7 +57,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.FSReadError;
 import org.apache.cassandra.io.FSWriteError;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.sstable.metadata.MetadataCollector;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
@@ -319,7 +319,7 @@ public class SSTableFlushObserverTest
                                                directory,
                                                metadata.keyspace,
                                                metadata.name,
-                                               new SequenceBasedSSTableUniqueIdentifier(0),
+                                               new SequenceBasedSSTableId(0),
                                                type);
 
         SSTableWriter writer = format.getWriterFactory()

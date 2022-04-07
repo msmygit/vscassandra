@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.db.compaction;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.UUID;
@@ -34,7 +33,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.CorruptSSTableException;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
 
 /**
  * An SSTable abstraction used by compaction. Implemented by {@link SSTableReader} and provided by
@@ -52,7 +51,7 @@ public interface CompactionSSTable
     Comparator<CompactionSSTable> firstKeyComparator = (o1, o2) -> o1.getFirst().compareTo(o2.getFirst());
     Ordering<CompactionSSTable> firstKeyOrdering = Ordering.from(firstKeyComparator);
     Comparator<CompactionSSTable> sizeComparator = (o1, o2) -> Long.compare(o1.onDiskLength(), o2.onDiskLength());
-    Comparator<CompactionSSTable> generationReverseComparator = (o1, o2) -> o2.getGeneration().compareTo(o1.getGeneration());
+    Comparator<CompactionSSTable> idReverseComparator = (o1, o2) -> o2.getId().compareTo(o1.getId());
 
     /**
      * @return the position of the first partition in the sstable
@@ -210,9 +209,9 @@ public interface CompactionSSTable
     {
         return getDescriptor().ksname;
     }
-    default SSTableUniqueIdentifier getGeneration()
+    default SSTableId getId()
     {
-        return getDescriptor().generation;
+        return getDescriptor().id;
     }
 
     /**

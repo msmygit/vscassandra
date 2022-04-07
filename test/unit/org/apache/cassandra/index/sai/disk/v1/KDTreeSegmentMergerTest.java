@@ -44,9 +44,8 @@ import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDTreeRamBuffer;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.MutableOneDimPointValues;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
-
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.index.PointValues;
@@ -252,7 +251,7 @@ public class KDTreeSegmentMergerTest extends SAITester
         IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(new File(temporaryFolder.newFolder()),
                                                                                 "test",
                                                                                 "test",
-                                                                                new SequenceBasedSSTableUniqueIdentifier(20)),
+                                                                                new SequenceBasedSSTableId(20)),
                                                                  Murmur3Partitioner.instance,
                                                                  SAITester.EMPTY_COMPARATOR);
         IndexContext indexContext = SAITester.createIndexContext("test", Int32Type.instance);
@@ -303,7 +302,7 @@ public class KDTreeSegmentMergerTest extends SAITester
         IndexDescriptor indexDescriptor = IndexDescriptor.create(new Descriptor(new File(temporaryFolder.newFolder()),
                                                                                 "test",
                                                                                 "test",
-                                                                                new SequenceBasedSSTableUniqueIdentifier(generation)),
+                                                                                new SequenceBasedSSTableId(generation)),
                                                                  Murmur3Partitioner.instance,
                                                                  SAITester.EMPTY_COMPARATOR);
 

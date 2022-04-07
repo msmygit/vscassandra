@@ -43,7 +43,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Splitter;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
@@ -237,7 +237,7 @@ public class BaseCompactionStrategyTest
         when(ret.getPendingRepair()).thenReturn(pendingRepair);
         when(ret.isPendingRepair()).thenReturn(pendingRepair != null);
         when(ret.getColumnFamilyName()).thenReturn(table);
-        when(ret.getGeneration()).thenReturn(new SequenceBasedSSTableUniqueIdentifier(level));
+        when(ret.getId()).thenReturn(new SequenceBasedSSTableId(level));
         when(ret.toString()).thenReturn(String.format("Bytes on disk: %s, level %d, hotness %f, timestamp %d, first %s, last %s, disk index: %d, repaired: %b, pend. repair: %b",
                                                       FBUtilities.prettyPrintMemory(bytesOnDisk), level, hotness, timestamp, first, last, diskIndex, repaired, pendingRepair));
         int deletionTime;

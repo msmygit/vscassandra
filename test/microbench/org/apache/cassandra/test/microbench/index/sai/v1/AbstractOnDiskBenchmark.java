@@ -46,7 +46,7 @@ import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifierFactory;
+import org.apache.cassandra.io.sstable.SSTableIdFactory;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
@@ -124,7 +124,7 @@ public abstract class AbstractOnDiskBenchmark
         descriptor = new Descriptor(new File(Files.createTempDirectory("jmh").toFile()),
                                     metadata.keyspace,
                                     metadata.name,
-                                    SSTableUniqueIdentifierFactory.instance.defaultBuilder().generator(Stream.empty()).get());
+                                    SSTableIdFactory.instance.defaultBuilder().generator(Stream.empty()).get());
         indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
         index = "test";
         indexContext = SAITester.createIndexContext(index, IntegerType.instance);

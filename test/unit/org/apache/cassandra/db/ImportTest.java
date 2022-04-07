@@ -41,7 +41,7 @@ import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.dht.BootStrapper;
 import org.apache.cassandra.io.sstable.Component;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -667,7 +667,7 @@ public class ImportTest extends CQLTester
     {
         public MockCFS(ColumnFamilyStore cfs, Directories dirs)
         {
-            super(cfs.keyspace, cfs.getTableName(), SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()), cfs.metadata, dirs, false, false, true);
+            super(cfs.keyspace, cfs.getTableName(), SequenceBasedSSTableId.Builder.instance.generator(Stream.empty()), cfs.metadata, dirs, false, false, true);
         }
     }
 }

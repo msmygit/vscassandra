@@ -72,7 +72,7 @@ import org.apache.cassandra.dht.LocalPartitioner;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -1084,7 +1084,7 @@ public final class SystemKeyspace
      * @param table the table the sstable belongs to
      * @param generation the generation id for the sstable
      */
-    public static RestorableMeter getSSTableReadMeter(String keyspace, String table, SSTableUniqueIdentifier generation)
+    public static RestorableMeter getSSTableReadMeter(String keyspace, String table, SSTableId generation)
     {
         String cql = "SELECT * FROM system.%s WHERE keyspace_name=? and columnfamily_name=? and generation=?";
         UntypedResultSet results = executeInternal(format(cql, SSTABLE_ACTIVITY_V2), keyspace, table, generation.asBytes());
@@ -1101,7 +1101,7 @@ public final class SystemKeyspace
     /**
      * Writes the current read rates for a given SSTable to system.sstable_activity
      */
-    public static void persistSSTableReadMeter(String keyspace, String table, SSTableUniqueIdentifier generation, RestorableMeter meter)
+    public static void persistSSTableReadMeter(String keyspace, String table, SSTableId generation, RestorableMeter meter)
     {
         // Store values with a one-day TTL to handle corner cases where cleanup might not occur
         String cql = "INSERT INTO system.%s (keyspace_name, columnfamily_name, generation, rate_15m, rate_120m) VALUES (?, ?, ?, ?, ?) USING TTL 864000";
@@ -1116,7 +1116,7 @@ public final class SystemKeyspace
     /**
      * Clears persisted read rates from system.sstable_activity for SSTables that have been deleted.
      */
-    public static void clearSSTableReadMeter(String keyspace, String table, SSTableUniqueIdentifier generation)
+    public static void clearSSTableReadMeter(String keyspace, String table, SSTableId generation)
     {
         String cql = "DELETE FROM system.%s WHERE keyspace_name=? AND columnfamily_name=? and generation=?";
         executeInternal(format(cql, SSTABLE_ACTIVITY_V2), keyspace, table, generation.asBytes());

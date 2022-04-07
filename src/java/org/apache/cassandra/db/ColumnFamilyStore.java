@@ -132,8 +132,8 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTable;
 import org.apache.cassandra.io.sstable.SSTableMultiWriter;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifierFactory;
+import org.apache.cassandra.io.sstable.SSTableId;
+import org.apache.cassandra.io.sstable.SSTableIdFactory;
 import org.apache.cassandra.io.sstable.StorageHandler;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -298,7 +298,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
     public final OpOrder readOrdering = new OpOrder();
 
     /* This is used to generate the next index for a SSTable */
-    private final java.util.function.Supplier<? extends SSTableUniqueIdentifier> fileIndexGenerator;
+    private final java.util.function.Supplier<? extends SSTableId> sstableIdGenerator;
 
     private final StorageHandler storageHandler;
     public final SecondaryIndexManager indexManager;
@@ -480,7 +480,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
     @VisibleForTesting
     public ColumnFamilyStore(Keyspace keyspace,
                              String columnFamilyName,
-                             java.util.function.Supplier<? extends SSTableUniqueIdentifier> fileIndexGenerator,
+                             java.util.function.Supplier<? extends SSTableId> sstableIdGenerator,
                              TableMetadataRef metadata,
                              Directories directories,
                              boolean loadSSTables,
@@ -497,7 +497,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         maxCompactionThreshold = new DefaultValue<>(metadata.get().params.compaction.maxCompactionThreshold());
         crcCheckChance = new DefaultValue<>(metadata.get().params.crcCheckChance);
         viewManager = keyspace.viewManager.forTable(metadata.id);
-        this.fileIndexGenerator = fileIndexGenerator;
+        this.sstableIdGenerator = sstableIdGenerator;
         sampleReadLatencyNanos = DatabaseDescriptor.getReadRpcTimeout(NANOSECONDS) / 2;
         additionalWriteLatencyNanos = DatabaseDescriptor.getWriteRpcTimeout(NANOSECONDS) / 2;
         memtableFactory = metadata.get().params.memtable.factory;
@@ -811,7 +811,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                                                                          boolean offline)
     {
         return new ColumnFamilyStore(keyspace, columnFamily,
-                                     directories.getUIDGenerator(SSTableUniqueIdentifierFactory.instance.defaultBuilder()),
+                                     directories.getUIDGenerator(SSTableIdFactory.instance.defaultBuilder()),
                                      metadata, directories, loadSSTables, registerBookkeeping, offline);
     }
 
@@ -937,11 +937,11 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
     Descriptor getUniqueDescriptorFor(Descriptor descriptor, File targetDirectory)
     {
         Descriptor newDescriptor = new Descriptor(descriptor.version,
-                                           targetDirectory,
-                                           descriptor.ksname,
-                                           descriptor.cfname,
-                                           fileIndexGenerator.get(),
-                                           descriptor.formatType);
+                                                  targetDirectory,
+                                                  descriptor.ksname,
+                                                  descriptor.cfname,
+                                                  sstableIdGenerator.get(),
+                                                  descriptor.formatType);
         assert !newDescriptor.fileFor(Component.DATA).exists();
         return newDescriptor;
     }
@@ -991,7 +991,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                               directory,
                               keyspace.getName(),
                               name,
-                              fileIndexGenerator.get(),
+                              sstableIdGenerator.get(),
                               format);
     }
 
@@ -2095,9 +2095,9 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
 
     public Refs<SSTableReader> getSnapshotSSTableReaders(String tag) throws IOException
     {
-        Map<SSTableUniqueIdentifier, SSTableReader> active = new HashMap<>();
+        Map<SSTableId, SSTableReader> active = new HashMap<>();
         for (SSTableReader sstable : getSSTables(SSTableSet.CANONICAL))
-            active.put(sstable.descriptor.generation, sstable);
+            active.put(sstable.descriptor.id, sstable);
         Map<Descriptor, Set<Component>> snapshots = getDirectories().sstableLister(Directories.OnTxnErr.IGNORE).snapshots(tag).list();
         Refs<SSTableReader> refs = new Refs<>();
         try
@@ -2106,7 +2106,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
             {
                 // Try acquire reference to an active sstable instead of snapshot if it exists,
                 // to avoid opening new sstables. If it fails, use the snapshot reference instead.
-                SSTableReader sstable = active.get(entries.getKey().generation);
+                SSTableReader sstable = active.get(entries.getKey().id);
                 if (sstable == null || !refs.tryRef(sstable))
                 {
                     if (logger.isTraceEnabled())

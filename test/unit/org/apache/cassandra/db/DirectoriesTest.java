@@ -59,7 +59,6 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.auth.AuthKeyspace;
 import org.apache.cassandra.config.Config.DiskFailurePolicy;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.Directories.DataDirectories;
 import org.apache.cassandra.db.Directories.DataDirectory;
@@ -68,9 +67,9 @@ import org.apache.cassandra.index.internal.CassandraIndex;
 import org.apache.cassandra.io.FSWriteError;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
-import org.apache.cassandra.io.sstable.ULIDBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
+import org.apache.cassandra.io.sstable.UUIDBasedSSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileOutputStreamPlus;
@@ -95,19 +94,19 @@ public class DirectoriesTest
     private static Set<TableMetadata> CFM;
     private static Map<String, List<File>> files;
 
-    private ConcurrentMap<Integer, SSTableUniqueIdentifier> ids = new ConcurrentHashMap<>();
+    private ConcurrentMap<Integer, SSTableId> ids = new ConcurrentHashMap<>();
 
     @Parameterized.Parameter(0)
-    public SSTableUniqueIdentifier.Builder<? extends SSTableUniqueIdentifier> idBuilder;
+    public SSTableId.Builder<? extends SSTableId> idBuilder;
 
     @Parameterized.Parameter(1)
-    public Supplier<? extends SSTableUniqueIdentifier> idGenerator;
+    public Supplier<? extends SSTableId> idGenerator;
 
     @Parameterized.Parameters
     public static Collection<Object[]> idBuilders()
     {
-        return Arrays.asList(new Object[]{ SequenceBasedSSTableUniqueIdentifier.Builder.instance, SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()) },
-                             new Object[]{ ULIDBasedSSTableUniqueIdentifier.Builder.instance, ULIDBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()) });
+        return Arrays.asList(new Object[]{ SequenceBasedSSTableId.Builder.instance, SequenceBasedSSTableId.Builder.instance.generator(Stream.empty()) },
+                             new Object[]{ UUIDBasedSSTableId.Builder.instance, UUIDBasedSSTableId.Builder.instance.generator(Stream.empty()) });
     }
 
     @BeforeClass
@@ -117,7 +116,7 @@ public class DirectoriesTest
         FileUtils.setFSErrorHandler(new DefaultFSErrorHandler());
     }
 
-    public SSTableUniqueIdentifier getId(int idx)
+    public SSTableId getId(int idx)
     {
         return ids.computeIfAbsent(idx, ignored -> idGenerator.get());
     }
@@ -222,7 +221,7 @@ public class DirectoriesTest
             File backupsDir = new File(cfDir(cfm),  File.pathSeparator() + Directories.BACKUPS_SUBDIR);
             assertEquals(backupsDir.toCanonical(), Directories.getBackupsDirectory(desc));
 
-            Supplier<? extends SSTableUniqueIdentifier> uidGen = directories.getUIDGenerator(idBuilder);
+            Supplier<? extends SSTableId> uidGen = directories.getUIDGenerator(idBuilder);
             assertThat(Stream.generate(uidGen).limit(100).filter(generated -> ids.containsValue(generated)).collect(Collectors.toList())).isEmpty();
         }
     }
@@ -239,7 +238,7 @@ public class DirectoriesTest
         assertEquals(cfm.name, resolved.cfname);
         assertEquals(SSTableFormat.Type.BIG, resolved.formatType);
         assertEquals(BigFormat.instance.getVersion("me"), resolved.version);
-        assertEquals("123", resolved.generation.asString());
+        assertEquals("123", resolved.id.asString());
     }
 
 

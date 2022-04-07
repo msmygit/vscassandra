@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -188,7 +187,7 @@ public class SASIIndexTest
                 Descriptor snapshotSSTable = new Descriptor(snapshotDirectory,
                                                             sstable.getKeyspaceName(),
                                                             sstable.getColumnFamilyName(),
-                                                            sstable.descriptor.generation,
+                                                            sstable.descriptor.id,
                                                             sstable.descriptor.formatType);
 
                 Set<Component> components = snapshotSSTables.get(snapshotSSTable);

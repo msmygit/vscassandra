@@ -154,7 +154,7 @@ public class IndexViewManagerTest extends SAITester
         getCurrentColumnFamilyStore().getLiveSSTables().stream().map(t -> t.descriptor).forEach(descriptors::add);
 
         List<SSTableReader> sstables = descriptors.stream()
-                                                  .map(desc -> new Descriptor(new File(tmpDir), KEYSPACE, tableName, desc.generation))
+                                                  .map(desc -> new Descriptor(new File(tmpDir), KEYSPACE, tableName, desc.id))
                                                   .map(desc -> desc.getFormat().getReaderFactory().open(desc))
                                                   .collect(Collectors.toList());
         assertThat(sstables).hasSize(4);

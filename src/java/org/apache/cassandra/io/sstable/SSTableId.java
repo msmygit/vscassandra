@@ -31,7 +31,7 @@ import java.util.stream.Stream;
  * - String representation must *not* include the '-' character see {@link Descriptor#filenameSplitter}
  * <p>
  */
-public interface SSTableUniqueIdentifier extends Comparable<SSTableUniqueIdentifier>
+public interface SSTableId extends Comparable<SSTableId>
 {
     /**
      * Creates a byte format of the identifier that can be parsed by
@@ -49,15 +49,15 @@ public interface SSTableUniqueIdentifier extends Comparable<SSTableUniqueIdentif
     String asString();
 
     /**
-     * Builder that can create instances of certain implementation of {@link SSTableUniqueIdentifier}.
+     * Builder that can create instances of certain implementation of {@link SSTableId}.
      */
-    interface Builder<T extends SSTableUniqueIdentifier>
+    interface Builder<T extends SSTableId>
     {
         /**
          * Creates a new generator of identifiers. Each supplied value must be different to all the previously generated
          * values and different to all the provided existing identifiers.
          */
-        Supplier<T> generator(Stream<SSTableUniqueIdentifier> existingIdentifiers);
+        Supplier<T> generator(Stream<SSTableId> existingIdentifiers);
 
         /**
          * Creates an identifier instance from its string representation

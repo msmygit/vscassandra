@@ -59,7 +59,7 @@ public class Descriptor
     public final Version version;
     public final String ksname;
     public final String cfname;
-    public final SSTableUniqueIdentifier generation;
+    public final SSTableId id;
     public final SSTableFormat.Type formatType;
     private final int hashCode;
 
@@ -70,52 +70,52 @@ public class Descriptor
      * A descriptor that assumes CURRENT_VERSION.
      */
     @VisibleForTesting
-    public Descriptor(File directory, String ksname, String cfname, SSTableUniqueIdentifier generation)
+    public Descriptor(File directory, String ksname, String cfname, SSTableId id)
     {
-        this(SSTableFormat.Type.current().info.getLatestVersion(), directory, ksname, cfname, generation, SSTableFormat.Type.current());
+        this(SSTableFormat.Type.current().info.getLatestVersion(), directory, ksname, cfname, id, SSTableFormat.Type.current());
     }
 
     /**
      * Constructor for sstable writers only.
      */
-    public Descriptor(File directory, String ksname, String cfname, SSTableUniqueIdentifier generation, SSTableFormat.Type formatType)
+    public Descriptor(File directory, String ksname, String cfname, SSTableId id, SSTableFormat.Type formatType)
     {
-        this(formatType.info.getLatestVersion(), directory, ksname, cfname, generation, formatType);
+        this(formatType.info.getLatestVersion(), directory, ksname, cfname, id, formatType);
     }
 
     @VisibleForTesting
-    public Descriptor(String version, File directory, String ksname, String cfname, SSTableUniqueIdentifier generation, SSTableFormat.Type formatType)
+    public Descriptor(String version, File directory, String ksname, String cfname, SSTableId id, SSTableFormat.Type formatType)
     {
-        this(formatType.info.getVersion(version), directory, ksname, cfname, generation, formatType);
+        this(formatType.info.getVersion(version), directory, ksname, cfname, id, formatType);
     }
 
-    public Descriptor(Version version, File directory, String ksname, String cfname, SSTableUniqueIdentifier generation, SSTableFormat.Type formatType)
+    public Descriptor(Version version, File directory, String ksname, String cfname, SSTableId id, SSTableFormat.Type formatType)
     {
         assert version != null && directory != null && ksname != null && cfname != null && formatType.info.getLatestVersion().getClass().equals(version.getClass());
         this.version = version;
         this.directory = directory.toCanonical();
         this.ksname = ksname;
         this.cfname = cfname;
-        this.generation = generation;
+        this.id = id;
         this.formatType = formatType;
 
-        hashCode = Objects.hashCode(version, this.directory, generation, ksname, cfname, formatType);
+        hashCode = Objects.hashCode(version, this.directory, id, ksname, cfname, formatType);
 
-        filenamePart = version.toString() + separator + generation + separator + formatType.name;
+        filenamePart = version.toString() + separator + id + separator + formatType.name;
         String locationURI = directory.toUri().toString();
         if (!locationURI.endsWith(java.io.File.separator))
             locationURI = locationURI + java.io.File.separatorChar;
         baseFileURI = locationURI + filenamePart;
     }
 
-    public Descriptor withGeneration(SSTableUniqueIdentifier newGeneration)
+    public Descriptor withGeneration(SSTableId newId)
     {
-        return new Descriptor(version, directory, ksname, cfname, newGeneration, formatType);
+        return new Descriptor(version, directory, ksname, cfname, newId, formatType);
     }
 
     public Descriptor withFormatType(SSTableFormat.Type newType)
     {
-        return new Descriptor(newType.info.getLatestVersion(), directory, ksname, cfname, generation, newType);
+        return new Descriptor(newType.info.getLatestVersion(), directory, ksname, cfname, id, newType);
     }
 
     public File tmpFileFor(Component component)
@@ -247,14 +247,14 @@ public class Descriptor
         if (!Version.validate(versionString))
             throw invalidSSTable(name, "invalid version %s", versionString);
 
-        SSTableUniqueIdentifier generation;
+        SSTableId id;
         try
         {
-            generation = SSTableUniqueIdentifierFactory.instance.fromString(tokens.get(1));
+            id = SSTableIdFactory.instance.fromString(tokens.get(1));
         }
         catch (RuntimeException e)
         {
-            throw invalidSSTable(name, "the 'generation' part of the name doesn't parse as a valid unique identifier");
+            throw invalidSSTable(name, "the 'id' part of the name doesn't parse as a valid unique identifier");
         }
 
         String formatString = tokens.get(2);
@@ -294,7 +294,7 @@ public class Descriptor
         String table = tableDir.name().split("-")[0] + indexName;
         String keyspace = parentOf(name, tableDir).name();
 
-        return Pair.create(new Descriptor(version, directory, keyspace, table, generation, format), component);
+        return Pair.create(new Descriptor(version, directory, keyspace, table, id, format), component);
     }
 
     public static Component validFilenameWithComponent(String name)
@@ -307,7 +307,7 @@ public class Descriptor
             if (!Version.validate(versionString))
                 return null;
 
-            SSTableUniqueIdentifierFactory.instance.fromString(tokens.get(1));
+            SSTableIdFactory.instance.fromString(tokens.get(1));
 
             String formatString = tokens.get(2);
             SSTableFormat.Type.validate(formatString);
@@ -387,7 +387,7 @@ public class Descriptor
             return false;
         Descriptor that = (Descriptor)o;
         return that.directory.equals(this.directory)
-                       && that.generation.equals(this.generation)
+                       && that.id.equals(this.id)
                        && that.ksname.equals(this.ksname)
                        && that.cfname.equals(this.cfname)
                        && that.version.equals(this.version)

@@ -36,7 +36,7 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.utils.UUIDGen;
 
@@ -259,7 +259,7 @@ public class SystemKeyspaceMigrator40Test extends CQLTester
             rowCount++;
             assertEquals("ks", row.getString("keyspace_name"));
             assertEquals("tab", row.getString("columnfamily_name"));
-            assertEquals(new SequenceBasedSSTableUniqueIdentifier(5).asBytes(), row.getBytes("generation"));
+            assertEquals(new SequenceBasedSSTableId(5).asBytes(), row.getBytes("generation"));
             assertEquals(123.234d, row.getDouble("rate_120m"), 0.001d);
             assertEquals(345.456d, row.getDouble("rate_15m"), 0.001d);
         }

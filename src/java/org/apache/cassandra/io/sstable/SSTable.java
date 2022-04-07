@@ -189,9 +189,9 @@ public abstract class SSTable
         return descriptor.ksname;
     }
 
-    public SSTableUniqueIdentifier getGeneration()
+    public SSTableId getId()
     {
-        return descriptor.generation;
+        return descriptor.id;
     }
 
     public Set<Component> getComponents()

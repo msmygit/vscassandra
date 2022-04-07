@@ -36,7 +36,7 @@ import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.schema.SchemaConstants;
 
 /**
@@ -143,7 +143,7 @@ public class SystemKeyspaceMigrator40
                      row ->
                      Collections.singletonList(new Object[]{ row.getString("keyspace_name"),
                                                              row.getString("columnfamily_name"),
-                                                             new SequenceBasedSSTableUniqueIdentifier(row.getInt("generation")).asBytes(),
+                                                             new SequenceBasedSSTableId(row.getInt("generation")).asBytes(),
                                                              row.has("rate_120m") ? row.getDouble("rate_120m") : null,
                                                              row.has("rate_15m") ? row.getDouble("rate_15m") : null
                      })

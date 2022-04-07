@@ -30,11 +30,11 @@ import com.google.common.base.Preconditions;
  * Generation identifier based on sequence of integers.
  * This has been the standard implementation in C* since inception.
  */
-public class SequenceBasedSSTableUniqueIdentifier implements SSTableUniqueIdentifier
+public class SequenceBasedSSTableId implements SSTableId
 {
     public final int generation;
 
-    public SequenceBasedSSTableUniqueIdentifier(final int generation)
+    public SequenceBasedSSTableId(final int generation)
     {
         assert generation >= 0;
 
@@ -42,10 +42,10 @@ public class SequenceBasedSSTableUniqueIdentifier implements SSTableUniqueIdenti
     }
 
     @Override
-    public int compareTo(SSTableUniqueIdentifier o)
+    public int compareTo(SSTableId o)
     {
-        if (o instanceof SequenceBasedSSTableUniqueIdentifier)
-            return Integer.compare(this.generation, ((SequenceBasedSSTableUniqueIdentifier) o).generation);
+        if (o instanceof SequenceBasedSSTableId)
+            return Integer.compare(this.generation, ((SequenceBasedSSTableId) o).generation);
 
         return -1;
     }
@@ -55,7 +55,7 @@ public class SequenceBasedSSTableUniqueIdentifier implements SSTableUniqueIdenti
     {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        SequenceBasedSSTableUniqueIdentifier that = (SequenceBasedSSTableUniqueIdentifier) o;
+        SequenceBasedSSTableId that = (SequenceBasedSSTableId) o;
         return generation == that.generation;
     }
 
@@ -85,7 +85,7 @@ public class SequenceBasedSSTableUniqueIdentifier implements SSTableUniqueIdenti
         return asString();
     }
 
-    public static class Builder implements SSTableUniqueIdentifier.Builder<SequenceBasedSSTableUniqueIdentifier>
+    public static class Builder implements SSTableId.Builder<SequenceBasedSSTableId>
     {
         public final static Builder instance = new Builder();
 
@@ -94,29 +94,29 @@ public class SequenceBasedSSTableUniqueIdentifier implements SSTableUniqueIdenti
          * greater by one than the largest generation number found across the provided existing identifiers.
          */
         @Override
-        public Supplier<SequenceBasedSSTableUniqueIdentifier> generator(Stream<SSTableUniqueIdentifier> existingIdentifiers)
+        public Supplier<SequenceBasedSSTableId> generator(Stream<SSTableId> existingIdentifiers)
         {
-            int value = existingIdentifiers.filter(SequenceBasedSSTableUniqueIdentifier.class::isInstance)
-                                           .map(SequenceBasedSSTableUniqueIdentifier.class::cast)
+            int value = existingIdentifiers.filter(SequenceBasedSSTableId.class::isInstance)
+                                           .map(SequenceBasedSSTableId.class::cast)
                                            .mapToInt(id -> id.generation)
                                            .max()
                                            .orElse(0);
 
             AtomicInteger fileIndexGenerator = new AtomicInteger(value);
-            return () -> new SequenceBasedSSTableUniqueIdentifier(fileIndexGenerator.incrementAndGet());
+            return () -> new SequenceBasedSSTableId(fileIndexGenerator.incrementAndGet());
         }
 
         @Override
-        public SequenceBasedSSTableUniqueIdentifier fromString(String token) throws IllegalArgumentException
+        public SequenceBasedSSTableId fromString(String token) throws IllegalArgumentException
         {
-            return new SequenceBasedSSTableUniqueIdentifier(Integer.parseInt(token));
+            return new SequenceBasedSSTableId(Integer.parseInt(token));
         }
 
         @Override
-        public SequenceBasedSSTableUniqueIdentifier fromBytes(ByteBuffer bytes) throws IllegalArgumentException
+        public SequenceBasedSSTableId fromBytes(ByteBuffer bytes) throws IllegalArgumentException
         {
             Preconditions.checkArgument(bytes.remaining() >= Integer.BYTES, "Buffer does not have enough data: %s", bytes.remaining());
-            return new SequenceBasedSSTableUniqueIdentifier(bytes.getInt(0));
+            return new SequenceBasedSSTableId(bytes.getInt(0));
         }
     }
 }

@@ -2331,7 +2331,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
                 return;
             }
 
-            readMeter = SystemKeyspace.getSSTableReadMeter(desc.ksname, desc.cfname, desc.generation);
+            readMeter = SystemKeyspace.getSSTableReadMeter(desc.ksname, desc.cfname, desc.id);
             // sync the average read rate to system.sstable_activity every five minutes, starting one minute from now
             readMeterSyncFuture = new WeakReference<>(syncExecutor.scheduleAtFixedRate(new Runnable()
             {
@@ -2340,7 +2340,7 @@ public abstract class SSTableReader extends SSTable implements SelfRefCounted<SS
                     if (obsoletion == null)
                     {
                         meterSyncThrottle.acquire();
-                        SystemKeyspace.persistSSTableReadMeter(desc.ksname, desc.cfname, desc.generation, readMeter);
+                        SystemKeyspace.persistSSTableReadMeter(desc.ksname, desc.cfname, desc.id, readMeter);
                     }
                 }
             }, 1, 5, TimeUnit.MINUTES));

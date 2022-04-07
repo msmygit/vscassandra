@@ -43,7 +43,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.google.common.collect.Iterators;
 import org.apache.cassandra.*;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.compaction.OperationType;
@@ -62,9 +61,6 @@ import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.WrappedRunnable;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
 
 import static junit.framework.Assert.assertNotNull;
 
@@ -297,7 +293,7 @@ public class ColumnFamilyStoreTest
         for (SSTableReader liveSSTable : cfs.getLiveSSTables())
         {
             Descriptor existing = liveSSTable.descriptor;
-            Descriptor desc = new Descriptor(Directories.getBackupsDirectory(existing), KEYSPACE2, CF_STANDARD1, liveSSTable.descriptor.generation, liveSSTable.descriptor.formatType);
+            Descriptor desc = new Descriptor(Directories.getBackupsDirectory(existing), KEYSPACE2, CF_STANDARD1, liveSSTable.descriptor.id, liveSSTable.descriptor.formatType);
             for (Component c : liveSSTable.components)
                 assertTrue("Cannot find backed-up file:" + desc.fileFor(c), desc.fileFor(c).exists());
         }

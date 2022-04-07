@@ -384,7 +384,7 @@ final class LogTransaction extends AbstractLogTransaction
         public void commit()
         {
             if (onlineTxn && DatabaseDescriptor.supportsSSTableReadMeter())
-                SystemKeyspace.clearSSTableReadMeter(desc.ksname, desc.cfname, desc.generation);
+                SystemKeyspace.clearSSTableReadMeter(desc.ksname, desc.cfname, desc.id);
 
             synchronized (lock)
             {

@@ -73,7 +73,7 @@ class LeveledGenerations
     private static final Comparator<CompactionSSTable> nonL0Comparator = (o1, o2) -> {
         int cmp = CompactionSSTable.firstKeyComparator.compare(o1, o2);
         if (cmp == 0)
-            cmp = o1.getGeneration().compareTo(o2.getGeneration());
+            cmp = o1.getId().compareTo(o2.getId());
         return cmp;
     };
 

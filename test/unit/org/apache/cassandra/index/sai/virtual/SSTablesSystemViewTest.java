@@ -32,7 +32,7 @@ import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
 import org.apache.cassandra.io.sstable.SSTable;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -89,7 +89,7 @@ public class SSTablesSystemViewTest extends SAITester
 
         // flush the memtable and verify the new record in the virtual table
         flush();
-        SSTableUniqueIdentifier id1 = currentIdsSorted()[0];
+        SSTableId id1 = currentIdsSorted()[0];
         Object[] row1 = readRow(v1IndexName, id1, "v1", 1L, 0L, 0L);
         assertRows(execute(SELECT), row1);
 
@@ -97,7 +97,7 @@ public class SSTablesSystemViewTest extends SAITester
         execute(insert, 2, 20, 200, 2000);
         execute(insert, 3, 30, 300, 3000);
         flush();
-        SSTableUniqueIdentifier id2 = currentIdsSorted()[1];
+        SSTableId id2 = currentIdsSorted()[1];
         assertThat(id2).isGreaterThan(id1);
         Object[] row2 = readRow(v1IndexName, id2, "v1", 2L, 0L, 1L);
         assertRows(execute(SELECT), row1, row2);
@@ -112,7 +112,7 @@ public class SSTablesSystemViewTest extends SAITester
         // create a new sstable that only contains data for the second index, this should add only one new entry
         execute(insert, 4, 40, null, 4000);
         flush();
-        SSTableUniqueIdentifier id3 = currentIdsSorted()[2];
+        SSTableId id3 = currentIdsSorted()[2];
         assertThat(id3).isGreaterThan(id2);
         Object[] row5 = readRow(v2IndexName, id3, "v2", 1L, 0L, 0L);
         assertRows(execute(SELECT), row1, row2, row3, row4, row5);
@@ -121,7 +121,7 @@ public class SSTablesSystemViewTest extends SAITester
         execute(insert, 5, 50, 500, null);
         execute(insert, 6, 60, null, 6000);
         flush();
-        SSTableUniqueIdentifier id4 = currentIdsSorted()[3];
+        SSTableId id4 = currentIdsSorted()[3];
         assertThat(id4).isGreaterThan(id3);
         Object[] row6 = readRow(v1IndexName, id4, "v1", 1L, 0L, 0L);
         Object[] row7 = readRow(v2IndexName, id4, "v2", 1L, 1L, 1L);
@@ -131,7 +131,7 @@ public class SSTablesSystemViewTest extends SAITester
         compact();
         waitForCompactions();
 
-        SSTableUniqueIdentifier[] ids5 = currentIdsSorted();
+        SSTableId[] ids5 = currentIdsSorted();
         assertThat(ids5[0]).isGreaterThan(id4);
 
         // Compaction may result in sstables with generation 5 or 6. Try both.
@@ -150,19 +150,19 @@ public class SSTablesSystemViewTest extends SAITester
         assertEmpty(execute(SELECT));
     }
 
-    private SSTableUniqueIdentifier[] currentIdsSorted()
+    private SSTableId[] currentIdsSorted()
     {
-        return getCurrentColumnFamilyStore().getLiveSSTables().stream().map(SSTable::getGeneration).sorted().toArray(SSTableUniqueIdentifier[]::new);
+        return getCurrentColumnFamilyStore().getLiveSSTables().stream().map(SSTable::getId).sorted().toArray(SSTableId[]::new);
     }
 
     private Object[] readRow(String indexName,
-                             SSTableUniqueIdentifier[] generations,
+                             SSTableId[] generations,
                              String columnName,
                              long cellCount,
                              long minSSTableRowId,
                              long maxSSTableRowId) throws Exception
     {
-        for (SSTableUniqueIdentifier generation : generations)
+        for (SSTableId generation : generations)
         {
             Object[] row = readRow(indexName, generation, columnName, cellCount, minSSTableRowId, maxSSTableRowId);
             if (row != null)
@@ -172,7 +172,7 @@ public class SSTablesSystemViewTest extends SAITester
     }
 
     private Object[] readRow(String indexName,
-                             SSTableUniqueIdentifier generation,
+                             SSTableId generation,
                              String columnName,
                              long cellCount,
                              long minSSTableRowId,
@@ -185,7 +185,7 @@ public class SSTablesSystemViewTest extends SAITester
         {
             SSTableReader sstable = sstableIndex.getSSTable();
 
-            if (sstable.descriptor.generation.equals(generation))
+            if (sstable.descriptor.id.equals(generation))
             {
                 Token.TokenFactory tokenFactory = cfs.metadata().partitioner.getTokenFactory();
                 AbstractBounds<Token> bounds = sstable.getBounds();

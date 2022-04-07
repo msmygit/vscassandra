@@ -42,7 +42,7 @@ abstract class AbstractSSTableSimpleWriter implements Closeable
     protected final TableMetadataRef metadata;
     protected final RegularAndStaticColumns columns;
     protected SSTableFormat.Type formatType = SSTableFormat.Type.current();
-    protected static AtomicInteger generation = new AtomicInteger(0);
+    protected static AtomicInteger id = new AtomicInteger(0);
     protected boolean makeRangeAware = false;
 
     protected AbstractSSTableSimpleWriter(File directory, TableMetadataRef metadata, RegularAndStaticColumns columns)
@@ -82,18 +82,18 @@ abstract class AbstractSSTableSimpleWriter implements Closeable
 
     private static Descriptor createDescriptor(File directory, final String keyspace, final String columnFamily, final SSTableFormat.Type fmt) throws IOException
     {
-        SSTableUniqueIdentifier nextGen = getNextGeneration(directory, columnFamily);
+        SSTableId nextGen = getNextId(directory, columnFamily);
         return new Descriptor(directory, keyspace, columnFamily, nextGen, fmt);
     }
 
-    private static SSTableUniqueIdentifier getNextGeneration(File directory, final String columnFamily) throws IOException
+    private static SSTableId getNextId(File directory, final String columnFamily) throws IOException
     {
-        try (Stream<SSTableUniqueIdentifier> existingIds = Arrays.stream(directory.tryList())
-                                                                .map(SSTable::tryDescriptorFromFilename)
-                                                                .filter(d -> d != null && d.cfname.equals(columnFamily))
-                                                                .map(d -> d.generation))
+        try (Stream<SSTableId> existingIds = Arrays.stream(directory.tryList())
+                                                   .map(SSTable::tryDescriptorFromFilename)
+                                                   .filter(d -> d != null && d.cfname.equals(columnFamily))
+                                                   .map(d -> d.id))
         {
-            return SSTableUniqueIdentifierFactory.instance.defaultBuilder().generator(existingIds).get();
+            return SSTableIdFactory.instance.defaultBuilder().generator(existingIds).get();
         }
     }
 

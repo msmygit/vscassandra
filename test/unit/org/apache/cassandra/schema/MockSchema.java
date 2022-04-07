@@ -46,9 +46,9 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.IndexSummary;
-import org.apache.cassandra.io.sstable.SSTableUniqueIdentifier;
-import org.apache.cassandra.io.sstable.SequenceBasedSSTableUniqueIdentifier;
-import org.apache.cassandra.io.sstable.ULIDBasedSSTableUniqueIdentifier;
+import org.apache.cassandra.io.sstable.SSTableId;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
+import org.apache.cassandra.io.sstable.UUIDBasedSSTableId;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.metadata.MetadataCollector;
@@ -66,19 +66,19 @@ import static org.apache.cassandra.service.ActiveRepairService.UNREPAIRED_SSTABL
 
 public class MockSchema
 {
-    public static Supplier<? extends SSTableUniqueIdentifier> sstableIdGenerator = SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty());
+    public static Supplier<? extends SSTableId> sstableIdGenerator = SequenceBasedSSTableId.Builder.instance.generator(Stream.empty());
 
-    private static final ConcurrentMap<Integer, SSTableUniqueIdentifier> sstableIds = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<Integer, SSTableId> sstableIds = new ConcurrentHashMap<>();
 
-    public static SSTableUniqueIdentifier sstableId(int idx)
+    public static SSTableId sstableId(int idx)
     {
         return sstableIds.computeIfAbsent(idx, ignored -> sstableIdGenerator.get());
     }
 
     public static Collection<Object[]> sstableIdGenerators()
     {
-        return Arrays.asList(new Object[]{ SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()) },
-                             new Object[]{ ULIDBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()) });
+        return Arrays.asList(new Object[]{ SequenceBasedSSTableId.Builder.instance.generator(Stream.empty()) },
+                             new Object[]{ UUIDBasedSSTableId.Builder.instance.generator(Stream.empty()) });
     }
 
     static
@@ -208,7 +208,7 @@ public class MockSchema
 
     public static ColumnFamilyStore newCFS(TableMetadata metadata)
     {
-        return new ColumnFamilyStore(ks, metadata.name, SequenceBasedSSTableUniqueIdentifier.Builder.instance.generator(Stream.empty()), new TableMetadataRef(metadata), new Directories(metadata), false, false, false);
+        return new ColumnFamilyStore(ks, metadata.name, SequenceBasedSSTableId.Builder.instance.generator(Stream.empty()), new TableMetadataRef(metadata), new Directories(metadata), false, false, false);
     }
 
     public static TableMetadata newTableMetadata(String ksname)

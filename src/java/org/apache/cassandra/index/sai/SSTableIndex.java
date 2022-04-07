@@ -48,7 +48,7 @@ public class SSTableIndex
     // sort sstable index by first key then last key
     public static final Comparator<SSTableIndex> COMPARATOR = Comparator.comparing((SSTableIndex s) -> s.getSSTable().first)
                                                                         .thenComparing(s -> s.getSSTable().last)
-                                                                        .thenComparing(s -> s.getSSTable().descriptor.generation);
+                                                                        .thenComparing(s -> s.getSSTable().descriptor.id);
 
     private final SSTableContext sstableContext;
     private final IndexContext indexContext;
