@@ -28,6 +28,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.PrimaryKeys;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.utils.Pair;
@@ -41,7 +42,7 @@ public class MemtableIndex
 
     public MemtableIndex(IndexContext indexContext)
     {
-        this.index = new TrieMemoryIndex(indexContext);
+        this.index = new MultiBlockIndex(indexContext);
     }
 
     public long writeCount()
@@ -85,7 +86,7 @@ public class MemtableIndex
         return index.search(expression, keyRange);
     }
 
-    public Iterator<Pair<ByteComparable, PrimaryKeys>> iterator()
+    public Iterator<Pair<ByteComparable, Iterable<ByteComparable>>> iterator()
     {
         return index.iterator();
     }
