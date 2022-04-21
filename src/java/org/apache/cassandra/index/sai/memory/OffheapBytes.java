@@ -61,4 +61,10 @@ public class OffheapBytes implements Comparable<OffheapBytes>
     {
         return ByteBufferUtil.compareUnsigned(buffer, o.buffer);
     }
+
+    // for testing
+    BytesRef toBytesRef()
+    {
+        return new BytesRef(ByteBufferUtil.getArray(buffer));
+    }
 }

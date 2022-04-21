@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.common.collect.Iterators;
+import com.google.common.primitives.Bytes;
 import com.google.common.primitives.UnsignedBytes;
 import org.junit.Before;
 import org.junit.Test;
@@ -74,90 +75,91 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         DatabaseDescriptor.daemonInitialization();
     }
+    @Test
+    public void testRadixSort() throws Exception
+    {
+        for (int x = 0; x < 500; x++)
+        {
+            doTestRadixSort();
+        }
+    }
 
-//    @Test
-//    @Seed("9259628EDBB9EB3B")
-//    public void testRadixSort() throws Exception
-//    {
-//        for (int x = 0; x < 500; x++)
-//        {
-//            doTestRadixSort();
-//        }
-//    }
-//
-//    private void doTestRadixSort() throws Exception
-//    {
-//        int size = nextInt(1, 5000);
-//
-//        OffheapBytes[] values = new OffheapBytes[size];
-//        OffheapBytes[] keys = new OffheapBytes[size];
-//
-//        OffheapBytes[] valuesKeys = new OffheapBytes[size];
-//
-//        int maxLen = -1;
-//
-//        for (int x = 0; x < size; x++)
-//        {
-//            int valuelen = nextInt(1, 50);
-//            byte[] value = new byte[valuelen];
-//            nextBytes(value);
-//            values[x] = new OffheapBytes(value);
-//
-//            int keylen = nextInt(1, 50);
-//            byte[] key = new byte[keylen];
-//            nextBytes(key);
-//            keys[x] = new OffheapBytes(key);
-//
-//            maxLen = Math.max(valuelen + keylen, maxLen);
-//
-//            valuesKeys[x] = new OffheapBytes(Bytes.concat(value, key));
-//        }
-//
-//        MultiBlockIndex.ValuesKeysMSBRadixSorter sorter = new MultiBlockIndex.ValuesKeysMSBRadixSorter(Integer.MAX_VALUE, values, keys);
-//
-//        StringMSBRadixSorter luceneSorter = new StringMSBRadixSorter()
-//        {
-//            @Override
-//            protected void swap(int i, int j)
-//            {
-//                OffheapBytes tmp = valuesKeys[i];
-//                valuesKeys[i] = valuesKeys[j];
-//                valuesKeys[j] = tmp;
-//            }
-//
-//            @Override
-//            protected BytesRef get(int i)
-//            {
-//                return valuesKeys[i];
-//            }
-//        };
-//
-//        // check byteAt is the same
-//        for (int x = 0; x < size; x++)
-//        {
-//            for (int i = 0; i < Integer.MAX_VALUE; i++)
-//            {
-//                int b = sorter.byteAt(x, i);
-//                int b2 = luceneSorter.byteAt(x, i);
-//
-//                assertEquals(b, b2);
-//                if (b == -1)
-//                    break;
-//            }
-//        }
-//
-//        sorter.sort(0, size);
-//        luceneSorter.sort(0, size);
-//
-//        Arrays.sort(valuesKeys);
-//
-//        for (int x = 0; x < size; x++)
-//        {
-//            byte[] allBytes = Bytes.concat(values[x].bytes, keys[x].bytes);
-//
-//            assertEquals(valuesKeys[x], new BytesRef(allBytes));
-//        }
-//    }
+    private void doTestRadixSort() throws Exception
+    {
+        int size = nextInt(1, 5000);
+
+        OffheapBytes[] values = new OffheapBytes[size];
+        OffheapBytes[] keys = new OffheapBytes[size];
+
+        OffheapBytes[] valuesKeys = new OffheapBytes[size];
+
+        int maxLen = -1;
+
+        for (int x = 0; x < size; x++)
+        {
+            int valuelen = nextInt(1, 50);
+            byte[] value = new byte[valuelen];
+            nextBytes(value);
+            values[x] = new OffheapBytes(value);
+
+            int keylen = nextInt(1, 50);
+            byte[] key = new byte[keylen];
+            nextBytes(key);
+            keys[x] = new OffheapBytes(key);
+
+            maxLen = Math.max(valuelen + keylen, maxLen);
+
+            valuesKeys[x] = new OffheapBytes(Bytes.concat(value, key));
+        }
+
+        MultiBlockIndex.ValuesKeysMSBRadixSorter sorter = new MultiBlockIndex.ValuesKeysMSBRadixSorter(Integer.MAX_VALUE, values, keys);
+
+        StringMSBRadixSorter luceneSorter = new StringMSBRadixSorter()
+        {
+            @Override
+            protected void swap(int i, int j)
+            {
+                OffheapBytes tmp = valuesKeys[i];
+                valuesKeys[i] = valuesKeys[j];
+                valuesKeys[j] = tmp;
+            }
+
+            @Override
+            protected BytesRef get(int i)
+            {
+                return valuesKeys[i].toBytesRef();
+            }
+        };
+
+        // check byteAt is the same
+        for (int x = 0; x < size; x++)
+        {
+            for (int i = 0; i < Integer.MAX_VALUE; i++)
+            {
+                int b = sorter.byteAt(x, i);
+                int b2 = luceneSorter.byteAt(x, i);
+
+                assertEquals(b, b2);
+                if (b == -1)
+                    break;
+            }
+        }
+
+        sorter.sort(0, size);
+        luceneSorter.sort(0, size);
+
+        Arrays.sort(valuesKeys);
+
+        for (int x = 0; x < size; x++)
+        {
+            byte[] allBytes = Bytes.concat(BytesRef.deepCopyOf(values[x].toBytesRef()).bytes,
+                                           BytesRef.deepCopyOf(keys[x].toBytesRef()).bytes);
+
+            OffheapBytes offheap = new OffheapBytes(allBytes);
+
+            assertEquals(valuesKeys[x], offheap);
+        }
+    }
 
     @Test
     public void testNudge()
