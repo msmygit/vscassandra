@@ -80,6 +80,7 @@ class BlockIndex extends MemoryIndex
 {
     private static final Logger logger = LoggerFactory.getLogger(BlockIndex.class);
 
+    // offheap bytes primary key -> offheap bytes attached values
     private final ConcurrentSkipListMap<OffheapBytes,Values> map = new ConcurrentSkipListMap<>();
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
     private final AbstractType<?> validator;

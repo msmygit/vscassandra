@@ -23,17 +23,23 @@ import java.nio.ByteBuffer;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 
+/**
+ * Creates byte buffer objects to parts of direct/offheap byte buffer blocks.
+ *
+ * If the added bytes length exceeds the remaining of the current byte block,
+ * the bytes are added to the next block.
+ *
+ * The byte block size is 64kb.
+ */
 public class OffheapBytesArray
 {
     public final static int BYTE_BLOCK_SHIFT = 16;
-    public final static int BYTE_BLOCK_SIZE = 1 << BYTE_BLOCK_SHIFT;
+    public final static int BYTE_BLOCK_SIZE = 1 << BYTE_BLOCK_SHIFT; // 64kb
 
     private int currentBlockIndex = 0;
     private int count = 0;
-
     private ByteBuffer[] byteBuffers = new ByteBuffer[10];
     private ByteBuffer currentBuffer = null;
-
     private int currentOffset = 0;
 
     public OffheapBytesArray()

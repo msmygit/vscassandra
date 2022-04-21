@@ -90,6 +90,7 @@ public class MultiBlockIndex extends MemoryIndex
 
             final long bytesUsed = currentIndex.add(key, clustering, value);
 
+            // the count may go over the block size from tokenized values
             if (currentIndex.count() >= BLOCK_SIZE)
             {
                 existingBlocks.add(currentIndex);
