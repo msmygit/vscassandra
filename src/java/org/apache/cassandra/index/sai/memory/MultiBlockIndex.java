@@ -28,6 +28,9 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import org.apache.commons.lang3.mutable.MutableInt;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
@@ -60,6 +63,8 @@ import org.apache.lucene.util.Sorter;
 @ThreadSafe
 public class MultiBlockIndex extends MemoryIndex
 {
+    private static final Logger logger = LoggerFactory.getLogger(MultiBlockIndex.class);
+
     public static final int BLOCK_SIZE = 4000;
     final Object writeLock = new Object();
     protected final ConcurrentLinkedQueue<BlockIndex> existingBlocks = new ConcurrentLinkedQueue<>();
@@ -68,6 +73,7 @@ public class MultiBlockIndex extends MemoryIndex
     public MultiBlockIndex(IndexContext indexContext)
     {
         super(indexContext);
+        logger.debug(indexContext.logMessage("Creating new MultiBlockIndex"));
     }
 
     /**
@@ -81,6 +87,7 @@ public class MultiBlockIndex extends MemoryIndex
     @Override
     public long add(DecoratedKey key, Clustering clustering, ByteBuffer value)
     {
+        logger.debug(indexContext.logMessage("Adding new row"));
         synchronized (writeLock)
         {
             BlockIndex currentIndex = current.get();
