@@ -90,7 +90,7 @@ public class MultiBlockIndex extends MemoryIndex
 
             final long bytesUsed = currentIndex.add(key, clustering, value);
 
-            if (currentIndex.count() == BLOCK_SIZE)
+            if (currentIndex.count() >= BLOCK_SIZE)
             {
                 existingBlocks.add(currentIndex);
                 current.lazySet(null);

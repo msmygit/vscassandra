@@ -24,6 +24,9 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.util.BytesRef;
 
+/**
+ * Offheap unsigned bytes comparable wrapper for ByteBuffer
+ */
 public class OffheapBytes implements Comparable<OffheapBytes>
 {
     public final ByteBuffer buffer;
