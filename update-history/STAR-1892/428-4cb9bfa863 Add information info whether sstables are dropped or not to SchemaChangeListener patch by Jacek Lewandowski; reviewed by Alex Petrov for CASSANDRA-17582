@@ -1,0 +1,147 @@
+--- a/CHANGES.txt
++++ b/CHANGES.txt
+@@ -1,10 +1,3 @@
+-<<<<<<<
+-4.1
+- * Add information whether sstables are dropped to SchemaChangeListener (CASSANDRA-17582)
+-
+-
+-4.0.12
+-=======
+ 5.0-alpha2
+  * Remove deprecated properties in CompressionParams (CASSANDRA-18742)
+  * Add support for repair coordinator to retry messages that timeout (CASSANDRA-18816)
+@@ -243,7 +236,6 @@
+ Merged from 4.0:
+  * Fix NTS log message when an unrecognized strategy option is passed (CASSANDRA-18679)
+  * Fix BulkLoader ignoring cipher suites options (CASSANDRA-18582)
+->>>>>>>
+  * Migrate Python optparse to argparse (CASSANDRA-17914)
+ Merged from 3.11:
+ Merged from 3.0:
+--- a/src/java/org/apache/cassandra/schema/Schema.java
++++ b/src/java/org/apache/cassandra/schema/Schema.java
+@@ -740,13 +740,8 @@
+             unload(keyspaceMetadata);
+         }
+ 
+-<<<<<<<
+-        schemaChangeNotifier.notifyKeyspaceDropped(keyspace, dropData);
+-        SchemaDiagnostics.keyspaceDropped(this, keyspace);
+-=======
+         schemaChangeNotifier.notifyKeyspaceDropped(keyspaceMetadata, dropData);
+         SchemaDiagnostics.keyspaceDropped(this, keyspaceMetadata);
+->>>>>>>
+     }
+ 
+     private void dropView(Keyspace keyspace, ViewMetadata metadata, boolean dropData)
+--- a/src/java/org/apache/cassandra/schema/SchemaChangeNotifier.java
++++ b/src/java/org/apache/cassandra/schema/SchemaChangeNotifier.java
+@@ -84,13 +84,8 @@
+ 
+     public void notifyKeyspaceDropped(KeyspaceMetadata keyspace, boolean dropData)
+     {
+-<<<<<<<
+-        keyspace.functions.udas().forEach(this::notifyDropAggregate);
+-        keyspace.functions.udfs().forEach(this::notifyDropFunction);
+-=======
+         keyspace.userFunctions.udas().forEach(this::notifyDropAggregate);
+         keyspace.userFunctions.udfs().forEach(this::notifyDropFunction);
+->>>>>>>
+         keyspace.views.forEach(view -> notifyDropView(view, dropData));
+         keyspace.tables.forEach(metadata -> notifyDropTable(metadata, dropData));
+         keyspace.types.forEach(this::notifyDropType);
+--- a/src/java/org/apache/cassandra/schema/SchemaUpdateHandlerFactoryProvider.java
++++ b/src/java/org/apache/cassandra/schema/SchemaUpdateHandlerFactoryProvider.java
+@@ -34,11 +34,8 @@
+  */
+ public class SchemaUpdateHandlerFactoryProvider implements Provider<SchemaUpdateHandlerFactory>
+ {
+-<<<<<<<
+-=======
+     /** @deprecated Use CassandraRelevantProperties.SCHEMA_UPDATE_HANDLER_FACTORY_CLASS instead. */
+     @Deprecated
+->>>>>>>
+     public static final String SUH_FACTORY_CLASS_PROPERTY = "cassandra.schema.update_handler_factory.class";
+ 
+     public final static SchemaUpdateHandlerFactoryProvider instance = new SchemaUpdateHandlerFactoryProvider();
+--- a/test/unit/org/apache/cassandra/schema/RemoveWithoutDroppingTest.java
++++ b/test/unit/org/apache/cassandra/schema/RemoveWithoutDroppingTest.java
+@@ -18,10 +18,6 @@
+ 
+ package org.apache.cassandra.schema;
+ 
+-<<<<<<<
+-=======
+-import java.io.File;
+->>>>>>>
+ import java.util.Arrays;
+ import java.util.List;
+ import java.util.Set;
+@@ -32,7 +28,6 @@
+ import org.junit.BeforeClass;
+ import org.junit.Test;
+ 
+-<<<<<<<
+ import org.apache.cassandra.ServerTestUtils;
+ import org.apache.cassandra.cql3.CQLTester;
+ import org.apache.cassandra.db.ColumnFamilyStore;
+@@ -41,13 +36,6 @@
+ import org.mockito.Mockito;
+ 
+ import static org.apache.cassandra.config.CassandraRelevantProperties.SCHEMA_UPDATE_HANDLER_FACTORY_CLASS;
+-=======
+-import org.apache.cassandra.cql3.CQLTester;
+-import org.apache.cassandra.db.ColumnFamilyStore;
+-import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+-import org.mockito.Mockito;
+-
+->>>>>>>
+ import static org.apache.cassandra.cql3.QueryProcessor.executeInternal;
+ import static org.assertj.core.api.Assertions.assertThat;
+ 
+@@ -60,13 +48,9 @@
+     @BeforeClass
+     public static void beforeClass()
+     {
+-<<<<<<<
+         ServerTestUtils.daemonInitialization();
+ 
+         SCHEMA_UPDATE_HANDLER_FACTORY_CLASS.setString(TestSchemaUpdateHandlerFactory.class.getName());
+-=======
+-        System.setProperty(SchemaUpdateHandlerFactoryProvider.SUH_FACTORY_CLASS_PROPERTY, TestSchemaUpdateHandlerFactory.class.getName());
+->>>>>>>
+         CQLTester.prepareServer();
+         Schema.instance.registerListener(listener);
+     }
+@@ -100,30 +84,18 @@
+         executeInternal(String.format("INSERT INTO %s.%s (id, v) VALUES (?, ?)", ks, tab), 1, 2);
+         executeInternal(String.format("INSERT INTO %s.%s (id, v) VALUES (?, ?)", ks, tab), 3, 4);
+         ColumnFamilyStore cfs = ColumnFamilyStore.getIfExists(ks, tab);
+-<<<<<<<
+-        cfs.forceFlush().get();
+-=======
+         cfs.forceFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS).get();
+->>>>>>>
+ 
+         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ks);
+         TableMetadata tm = Schema.instance.getTableMetadata(ks, tab);
+ 
+         List<File> directories = cfs.getDirectories().getCFDirectories();
+-<<<<<<<
+-        Set<File> filesBefore = directories.stream().flatMap(d -> Arrays.stream(d.listFiles()).filter(f -> !f.isDirectory())).collect(Collectors.toSet());
+-=======
+         Set<File> filesBefore = directories.stream().flatMap(d -> Arrays.stream(d.tryList(f -> !f.isDirectory()))).collect(Collectors.toSet());
+->>>>>>>
+         assertThat(filesBefore).isNotEmpty();
+ 
+         executeInternal(String.format("DROP KEYSPACE %s", ks));
+ 
+-<<<<<<<
+-        Set<File> filesAfter = directories.stream().flatMap(d -> Arrays.stream(d.listFiles()).filter(f -> !f.isDirectory())).collect(Collectors.toSet());
+-=======
+         Set<File> filesAfter = directories.stream().flatMap(d -> Arrays.stream(d.tryList(f -> !f.isDirectory()))).collect(Collectors.toSet());
+->>>>>>>
+         if (expectDropped)
+             assertThat(filesAfter).isEmpty();
+         else
