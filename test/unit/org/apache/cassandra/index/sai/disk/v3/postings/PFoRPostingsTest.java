@@ -25,10 +25,15 @@ import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.Lucene8xIndexInput;
 import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.LuceneMMap;
+import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.junit.Test;
 
@@ -154,8 +159,7 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
 
         try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);//comps.createFileHandle(comps.postingLists);
              Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
-            input.seek(fp);
-            PFoRPostingsReader reader = new PFoRPostingsReader(input);
+            PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
 
             long result = reader.advance(150);
             long ordinal = reader.getOrdinal() - 2;
@@ -203,8 +207,7 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
 
         try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
              Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
-            input.seek(fp);
-            PFoRPostingsReader reader = new PFoRPostingsReader(input);
+            PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
             LongArrayList list = toList(reader);
             // System.out.println("list="+list);
             assertArrayEquals(array, list.toArray());
@@ -212,7 +215,57 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
     }
 
     @Test
-    public void testNext2() throws Exception {
+    public void testRandomAdvance() throws Exception {
+        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+        final String index = newIndex();
+        final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
+
+        final PFoRPostingsWriter writer = new PFoRPostingsWriter();
+
+        int[] array = new int[nextInt(1, 10_000)];
+        int rowid = -1;
+        for (int x = 0; x < array.length; x++) {
+            rowid = nextInt(rowid + 1, rowid + 10);
+            array[x] = rowid;
+            writer.add(rowid);
+        }
+
+        long fp = -1;
+        long fp2 = -1;
+
+        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
+        {
+            fp = writer.finish(postingsOut);
+        }
+
+        try (final PostingsWriter postingsWriter = new PostingsWriter(indexDescriptor, indexContext, false))
+        {
+            fp2 = postingsWriter.write(new ArrayPostingList(array));
+        }
+
+        long advRowid = -1;
+        try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
+             PFoRPostingsReader reader = new PFoRPostingsReader(fp, LuceneMMap.openLuceneInput(fileHandle));
+             IndexInput input2 = indexDescriptor.openPerIndexInput(IndexComponent.POSTING_LISTS, indexContext);
+             PostingsReader reader2 = new PostingsReader(input2, fp2, QueryEventListener.PostingListEventListener.NO_OP))
+        {
+            advRowid += nextLong(1, 10);
+
+            if (advRowid > array[array.length - 1]) {
+                long adv = reader.advance(advRowid);
+                long adv2 = reader2.advance(advRowid);
+
+                long ordinal = reader.getOrdinal();
+                long ordinal2 = reader2.getOrdinal();
+
+                assertEquals(adv2, adv);
+                assertEquals(ordinal2, ordinal);
+            }
+        }
+    }
+
+    @Test
+    public void testRandomNext() throws Exception {
         final PFoRPostingsWriter writer = new PFoRPostingsWriter();
 
         long[] array = new long[1000];
@@ -233,8 +286,7 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
 
         try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
              Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
-            input.seek(fp);
-            PFoRPostingsReader reader = new PFoRPostingsReader(input);
+            PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
             LongArrayList list = toList(reader);
             System.out.println("list=" + list);
             assertArrayEquals(array, list.toArray());

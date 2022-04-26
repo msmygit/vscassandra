@@ -37,8 +37,9 @@ public class PFoRPostingsReader implements OrdinalPostingList
     private ForBlockPostingsReader blockMaxRowids, blockFilePointers; // lazy init'd
     private int lastBlockIdx = -1;
 
-    public PFoRPostingsReader(Lucene8xIndexInput input) throws IOException
+    public PFoRPostingsReader(long fp, Lucene8xIndexInput input) throws IOException
     {
+        input.seek(fp);
         this.input = input;
         blockMaxRowidsBytes = input.readVInt();
         blockFilePointersBytes = input.readVInt();
