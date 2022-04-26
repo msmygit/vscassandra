@@ -1,0 +1,21 @@
+--- a/CHANGES.txt
++++ b/CHANGES.txt
+@@ -1,4 +1,6 @@
+-<<<<<<<
++4.1
++ * Add information whether sstables are dropped to SchemaChangeListener (CASSANDRA-17582)
++
+ 4.0.7
+  * Fix StorageService.getNativeaddress handling of IPv6 addresses (CASSANDRA-17945)
+  * Mitigate direct buffer memory OOM on replacements (CASSANDRA-17895)
+@@ -31,10 +33,6 @@
+ Merged from 3.0:
+  * Improve libjemalloc resolution in bin/cassandra (CASSANDRA-15767)
+  * Fix restarting of services on gossipping-only member (CASSANDRA-17752)
+-=======
+-4.1
+- * Add information whether sstables are dropped to SchemaChangeListener (CASSANDRA-17582)
+->>>>>>>
+ 
+ 4.0.5
+  * Utilise BTree improvements to reduce garbage and improve throughput (CASSANDRA-15511)
