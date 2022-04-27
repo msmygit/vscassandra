@@ -35,10 +35,10 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
 
   /** Default buffer size set to {@value #BUFFER_SIZE}. */
   public static final int BUFFER_SIZE = 1024;
-  
+
   /** Minimum buffer size allowed */
   public static final int MIN_BUFFER_SIZE = 8;
-  
+
   // The normal read buffer size defaults to 1024, but
   // increasing this during merging seems to yield
   // performance gains.  However we don't want to increase
@@ -51,7 +51,7 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   public static final int MERGE_BUFFER_SIZE = 4096;
 
   private int bufferSize = BUFFER_SIZE;
-  
+
   private ByteBuffer buffer = EMPTY_BYTEBUFFER;
 
   private long bufferStart = 0;       // position in file of buffer
@@ -80,18 +80,22 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   }
 
   /** Change the buffer size used by this IndexInput */
-  public final void setBufferSize(int newSize) {
+  public final void setBufferSize(int newSize)
+  {
     assert buffer == EMPTY_BYTEBUFFER || bufferSize == buffer.capacity(): "buffer=" + buffer + " bufferSize=" + bufferSize + " buffer.length=" + (buffer != null ? buffer.capacity() : 0);
-    if (newSize != bufferSize) {
+    if (newSize != bufferSize)
+    {
       checkBufferSize(newSize);
       bufferSize = newSize;
-      if (buffer != EMPTY_BYTEBUFFER) {
+      if (buffer != EMPTY_BYTEBUFFER)
+      {
         // Resize the existing buffer and carefully save as
         // many bytes as possible starting from the current
         // bufferPosition
         ByteBuffer newBuffer = ByteBuffer.allocate(newSize);
         assert newBuffer.order() == ByteOrder.BIG_ENDIAN;
-        if (buffer.remaining() > newBuffer.capacity()) {
+        if (buffer.remaining() > newBuffer.capacity())
+        {
           buffer.limit(buffer.position() + newBuffer.capacity());
         }
         assert buffer.remaining() <= newBuffer.capacity();
@@ -107,44 +111,57 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
     return bufferSize;
   }
 
-  private void checkBufferSize(int bufferSize) {
+  private void checkBufferSize(int bufferSize)
+  {
     if (bufferSize < MIN_BUFFER_SIZE)
       throw new IllegalArgumentException("bufferSize must be at least MIN_BUFFER_SIZE (got " + bufferSize + ")");
   }
 
   @Override
-  public final void readBytes(byte[] b, int offset, int len) throws IOException {
+  public final void readBytes(byte[] b, int offset, int len) throws IOException
+  {
     readBytes(b, offset, len, true);
   }
 
   @Override
-  public final void readBytes(byte[] b, int offset, int len, boolean useBuffer) throws IOException {
+  public final void readBytes(byte[] b, int offset, int len, boolean useBuffer) throws IOException
+  {
     int available = buffer.remaining();
-    if(len <= available){
+    if(len <= available)
+    {
       // the buffer contains enough data to satisfy this request
       if(len>0) // to allow b to be null if len is 0...
         buffer.get(b, offset, len);
-    } else {
+    }
+    else
+    {
       // the buffer does not have enough data. First serve all we've got.
-      if(available > 0){
+      if(available > 0)
+      {
         buffer.get(b, offset, available);
         offset += available;
         len -= available;
       }
       // and now, read the remaining 'len' bytes:
-      if (useBuffer && len<bufferSize){
+      if (useBuffer && len<bufferSize)
+      {
         // If the amount left to read is small enough, and
         // we are allowed to use our buffer, do it in the usual
         // buffered way: fill the buffer and copy from it:
         refill();
-        if(buffer.remaining()<len){
+        if(buffer.remaining()<len)
+        {
           // Throw an exception when refill() could not read len bytes:
           buffer.get(b, offset, buffer.remaining());
           throw new EOFException("read past EOF: " + this);
-        } else {
+        }
+        else
+        {
           buffer.get(b, offset, len);
         }
-      } else {
+      }
+      else
+      {
         // The amount left to read is larger than the buffer
         // or we've been asked to not use our buffer -
         // there's no performance reason not to read it all
@@ -163,35 +180,46 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   }
 
   @Override
-  public final short readShort() throws IOException {
-    if (Short.BYTES <= buffer.remaining()) {
+  public final short readShort() throws IOException
+  {
+    if (Short.BYTES <= buffer.remaining())
+    {
       return buffer.getShort();
-    } else {
+    }
+    else
+    {
       return super.readShort();
     }
   }
-  
+
   @Override
   public final int readInt() throws IOException {
-    if (Integer.BYTES <= buffer.remaining()) {
+    if (Integer.BYTES <= buffer.remaining())
+    {
       return buffer.getInt();
-    } else {
+    }
+    else {
       return super.readInt();
     }
   }
-  
+
   @Override
   public final long readLong() throws IOException {
-    if (Long.BYTES <= buffer.remaining()) {
+    if (Long.BYTES <= buffer.remaining())
+    {
       return buffer.getLong();
-    } else {
+    }
+    else
+    {
       return super.readLong();
     }
   }
 
   @Override
-  public final int readVInt() throws IOException {
-    if (5 <= buffer.remaining()) {
+  public final int readVInt() throws IOException
+  {
+    if (5 <= buffer.remaining())
+    {
       byte b = buffer.get();
       if (b >= 0) return b;
       int i = b & 0x7F;
@@ -209,14 +237,18 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
       i |= (b & 0x0F) << 28;
       if ((b & 0xF0) == 0) return i;
       throw new IOException("Invalid vInt detected (too many bits)");
-    } else {
+    }
+    else
+    {
       return super.readVInt();
     }
   }
-  
+
   @Override
-  public final long readVLong() throws IOException {
-    if (9 <= buffer.remaining()) {
+  public final long readVLong() throws IOException
+  {
+    if (9 <= buffer.remaining())
+    {
       byte b = buffer.get();
       if (b >= 0) return b;
       long i = b & 0x7FL;
@@ -245,15 +277,18 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
       i |= (b & 0x7FL) << 56;
       if (b >= 0) return i;
       throw new IOException("Invalid vLong detected (negative values disallowed)");
-    } else {
+    }
+    else
+    {
       return super.readVLong();
     }
   }
-  
+
   @Override
   public final byte readByte(long pos) throws IOException {
     long index = pos - bufferStart;
-    if (index < 0 || index >= buffer.limit()) {
+    if (index < 0 || index >= buffer.limit())
+    {
       bufferStart = pos;
       buffer.limit(0);  // trigger refill() on read
       seekInternal(pos);
@@ -266,7 +301,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   @Override
   public final short readShort(long pos) throws IOException {
     long index = pos - bufferStart;
-    if (index < 0 || index >= buffer.limit()-1) {
+    if (index < 0 || index >= buffer.limit()-1)
+    {
       bufferStart = pos;
       buffer.limit(0);  // trigger refill() on read
       seekInternal(pos);
@@ -279,7 +315,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   @Override
   public final int readInt(long pos) throws IOException {
     long index = pos - bufferStart;
-    if (index < 0 || index >= buffer.limit()-3) {
+    if (index < 0 || index >= buffer.limit()-3)
+    {
       bufferStart = pos;
       buffer.limit(0);  // trigger refill() on read
       seekInternal(pos);
@@ -292,7 +329,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   @Override
   public final long readLong(long pos) throws IOException {
     long index = pos - bufferStart;
-    if (index < 0 || index >= buffer.limit()-7) {
+    if (index < 0 || index >= buffer.limit()-7)
+    {
       bufferStart = pos;
       buffer.limit(0);  // trigger refill() on read
       seekInternal(pos);
@@ -301,7 +339,7 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
     }
     return buffer.getLong((int) index);
   }
-  
+
   private void refill() throws IOException {
     long start = bufferStart + buffer.position();
     long end = start + bufferSize;
@@ -311,7 +349,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
     if (newLength <= 0)
       throw new EOFException("read past EOF: " + this);
 
-    if (buffer == EMPTY_BYTEBUFFER) {
+    if (buffer == EMPTY_BYTEBUFFER)
+    {
       buffer = ByteBuffer.allocate(bufferSize);  // allocate buffer lazily
       seekInternal(bufferStart);
     }
@@ -339,7 +378,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   public final void seek(long pos) throws IOException {
     if (pos >= bufferStart && pos < (bufferStart + buffer.limit()))
       buffer.position((int)(pos - bufferStart));  // seek within buffer
-    else {
+    else
+    {
       bufferStart = pos;
       buffer.limit(0);  // trigger refill() on read
       seekInternal(pos);
@@ -353,7 +393,8 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
   protected abstract void seekInternal(long pos) throws IOException;
 
   @Override
-  public BufferedIndexInput clone() {
+  public BufferedIndexInput clone()
+  {
     BufferedIndexInput clone = (BufferedIndexInput)super.clone();
 
     clone.buffer = EMPTY_BYTEBUFFER;
@@ -361,61 +402,69 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
 
     return clone;
   }
-  
+
   @Override
-  public Lucene8xIndexInput slice(String sliceDescription, long offset, long length) throws IOException {
+  public Lucene8xIndexInput slice(String sliceDescription, long offset, long length) throws IOException
+  {
     return wrap(sliceDescription, this, offset, length);
   }
-  
+
   /**
    * Returns default buffer sizes for the given {@link IOContext}
    */
-  public static int bufferSize(IOContext context) {
-    switch (context.context) {
+  public static int bufferSize(IOContext context)
+  {
+    switch (context.context)
+    {
     case MERGE:
       return MERGE_BUFFER_SIZE;
     default:
       return BUFFER_SIZE;
     }
   }
-  
-  /** 
+
+  /**
    * Wraps a portion of another IndexInput with buffering.
    * <p><b>Please note:</b> This is in most cases ineffective, because it may double buffer!
    */
-  public static BufferedIndexInput wrap(String sliceDescription, Lucene8xIndexInput other, long offset, long length) {
+  public static BufferedIndexInput wrap(String sliceDescription, Lucene8xIndexInput other, long offset, long length)
+  {
     return new SlicedIndexInput(sliceDescription, other, offset, length);
   }
-  
-  /** 
+
+  /**
    * Implementation of an IndexInput that reads from a portion of a file.
    */
   private static final class SlicedIndexInput extends BufferedIndexInput {
     Lucene8xIndexInput base;
     long fileOffset;
     long length;
-    
-    SlicedIndexInput(String sliceDescription, Lucene8xIndexInput base, long offset, long length) {
+
+    SlicedIndexInput(String sliceDescription, Lucene8xIndexInput base, long offset, long length)
+    {
       super((sliceDescription == null) ? base.toString() : (base.toString() + " [slice=" + sliceDescription + "]"), BufferedIndexInput.BUFFER_SIZE);
-      if (offset < 0 || length < 0 || offset + length > base.length()) {
+      if (offset < 0 || length < 0 || offset + length > base.length())
+      {
         throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: "  + base);
       }
       this.base = base.clone();
       this.fileOffset = offset;
       this.length = length;
     }
-    
+
     @Override
-    public SlicedIndexInput clone() {
+    public SlicedIndexInput clone()
+    {
       SlicedIndexInput clone = (SlicedIndexInput)super.clone();
       clone.base = base.clone();
       clone.fileOffset = fileOffset;
       clone.length = length;
       return clone;
     }
-    
+
     @Override
-    protected void readInternal(ByteBuffer b) throws IOException {
+    protected void readInternal(ByteBuffer b) throws IOException
+    {
       long start = getFilePointer();
       if (start + b.remaining() > length) {
         throw new EOFException("read past EOF: " + this);
@@ -424,17 +473,19 @@ public abstract class BufferedIndexInput extends Lucene8xIndexInput implements R
       base.readBytes(b.array(), b.position(), b.remaining());
       b.position(b.position() + b.remaining());
     }
-    
+
     @Override
     protected void seekInternal(long pos) {}
-    
+
     @Override
-    public void close() throws IOException {
+    public void close() throws IOException
+    {
       base.close();
     }
-    
+
     @Override
-    public long length() {
+    public long length()
+    {
       return length;
     }
   }

@@ -26,69 +26,76 @@ import java.io.IOException;
 /**
  * Utility class to encode/decode increasing sequences of 128 integers.
  */
-public class ForDeltaUtil {
+public class ForDeltaUtil
+{
 
-  // IDENTITY_PLUS_ONE[i] == i+1
-  private static final long[] IDENTITY_PLUS_ONE = new long[ForUtil.BLOCK_SIZE];
-  static {
-    for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
-      IDENTITY_PLUS_ONE[i] = i+1;
+    // IDENTITY_PLUS_ONE[i] == i+1
+    private static final long[] IDENTITY_PLUS_ONE = new long[ForUtil.BLOCK_SIZE];
+
+    static {
+        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
+            IDENTITY_PLUS_ONE[i] = i + 1;
+        }
     }
-  }
 
-  private static void prefixSumOfOnes(long[] arr, long base) {
-    System.arraycopy(IDENTITY_PLUS_ONE, 0, arr, 0, ForUtil.BLOCK_SIZE);
-    // This loop gets auto-vectorized
-    for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
-      arr[i] += base;
+    private static void prefixSumOfOnes(long[] arr, long base)
+    {
+        System.arraycopy(IDENTITY_PLUS_ONE, 0, arr, 0, ForUtil.BLOCK_SIZE);
+        // This loop gets auto-vectorized
+        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
+            arr[i] += base;
+        }
     }
-  }
 
-  public final ForUtil forUtil;
+    public final ForUtil forUtil;
 
-  public ForDeltaUtil(ForUtil forUtil) {
-    this.forUtil = forUtil;
-  }
-
-  /**
-   * Encode deltas of a strictly monotonically increasing sequence of integers.
-   * The provided {@code longs} are expected to be deltas between consecutive values.
-   */
-  public void encodeDeltas(long[] longs, DataOutput out) throws IOException {
-    if (longs[0] == 1 && PForUtil.allEqual(longs)) { // happens with very dense postings
-      out.writeByte((byte) 0);
-    } else {
-      long or = 0;
-      for (long l : longs) {
-        or |= l;
-      }
-      assert or != 0;
-      final int bitsPerValue = PackedInts.bitsRequired(or);
-      out.writeByte((byte) bitsPerValue);
-      forUtil.encode(longs, bitsPerValue, out);
+    public ForDeltaUtil(ForUtil forUtil)
+    {
+        this.forUtil = forUtil;
     }
-  }
 
-  /**
-   * Decode deltas, compute the prefix sum and add {@code base} to all decoded longs.
-   */
-  public void decodeAndPrefixSum(Lucene8xDataInput in, long base, long[] longs) throws IOException {
-    final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
-    if (bitsPerValue == 0) {
-      prefixSumOfOnes(longs, base);
-    } else {
-      forUtil.decodeAndPrefixSum(bitsPerValue, in, base, longs);
+    /**
+     * Encode deltas of a strictly monotonically increasing sequence of integers.
+     * The provided {@code longs} are expected to be deltas between consecutive values.
+     */
+    public void encodeDeltas(long[] longs, DataOutput out) throws IOException
+    {
+        if (longs[0] == 1 && PForUtil.allEqual(longs)) { // happens with very dense postings
+            out.writeByte((byte) 0);
+        } else {
+            long or = 0;
+            for (long l : longs) {
+                or |= l;
+            }
+            assert or != 0;
+            final int bitsPerValue = PackedInts.bitsRequired(or);
+            out.writeByte((byte) bitsPerValue);
+            forUtil.encode(longs, bitsPerValue, out);
+        }
     }
-  }
 
-  /**
-   * Skip a sequence of 128 longs.
-   */
-  void skip(DataInput in) throws IOException {
-    final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
-    if (bitsPerValue != 0) {
-      in.skipBytes(forUtil.numBytes(bitsPerValue));
+    /**
+     * Decode deltas, compute the prefix sum and add {@code base} to all decoded longs.
+     */
+    public void decodeAndPrefixSum(Lucene8xDataInput in, long base, long[] longs) throws IOException
+    {
+        final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
+        if (bitsPerValue == 0) {
+            prefixSumOfOnes(longs, base);
+        } else {
+            forUtil.decodeAndPrefixSum(bitsPerValue, in, base, longs);
+        }
     }
-  }
+
+    /**
+     * Skip a sequence of 128 longs.
+     */
+    void skip(DataInput in) throws IOException
+    {
+        final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
+        if (bitsPerValue != 0) {
+            in.skipBytes(forUtil.numBytes(bitsPerValue));
+        }
+    }
 
 }
