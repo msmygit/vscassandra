@@ -56,7 +56,6 @@ public class PFoRPostingsReader implements OrdinalPostingList
 
     public long block()
     {
-        // return lastBlockIdx;
         return postings.block() - 1;
     }
 
@@ -66,7 +65,6 @@ public class PFoRPostingsReader implements OrdinalPostingList
         return postings.getOrdinal();
     }
 
-    //@Override
     public long currentPosting()
     {
         return currentPosting;

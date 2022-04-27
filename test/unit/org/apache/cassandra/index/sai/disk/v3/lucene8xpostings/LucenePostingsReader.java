@@ -15,15 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings;
+package org.apache.cassandra.index.sai.disk.v3.lucene8xpostings;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.ForDeltaUtil;
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.ForUtil;
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.Lucene8xIndexInput;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 
-import static org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.LuceneSkipWriter.MAX_SKIP_LEVELS;
+import static org.apache.cassandra.index.sai.disk.v3.lucene8xpostings.LuceneSkipWriter.MAX_SKIP_LEVELS;
 
 @NotThreadSafe
 public class LucenePostingsReader implements PostingList

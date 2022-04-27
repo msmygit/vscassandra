@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings;
+package org.apache.cassandra.index.sai.disk.v3.lucene8xpostings;
 
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.Lucene8xIndexInput;
 import org.apache.lucene.util.FixedBitSet;
 
 import java.io.IOException;

@@ -15,9 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings;
+package org.apache.cassandra.index.sai.disk.v3.lucene8xpostings;
 
 
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.BufferedIndexInput;
+import org.apache.cassandra.index.sai.disk.v3.postings.lucene8xpostings.Lucene8xIndexInput;
 import org.apache.lucene.codecs.MultiLevelSkipListWriter;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.FixedBitSet;

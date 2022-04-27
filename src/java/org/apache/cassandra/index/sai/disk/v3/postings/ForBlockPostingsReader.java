@@ -61,7 +61,6 @@ public class ForBlockPostingsReader implements OrdinalPostingList
         return prevLastRowID;
     }
 
-    //@Override
     public long currentPosting()
     {
         return lastRowID;
