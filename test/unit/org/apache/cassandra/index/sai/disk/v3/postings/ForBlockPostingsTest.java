@@ -119,88 +119,49 @@ public class ForBlockPostingsTest extends SaiRandomizedTest
         return rowids;
     }
 
-//    @Test
-//    public void testNext() throws Exception
-//    {
-//        IndexComponents comps = newIndexComponents();
-//
-//        long postingsFP = -1;
-//        long[] array = new long[1000];
-//        for (int x = 0; x < array.length; x++)
-//        {
-//            array[x] = x;
-//        }
-//
-//        try (IndexOutput postingsOut = comps.createOutput(comps.postingLists))
-//        {
-//            ForBlockPostingsWriter postingsWriter = new ForBlockPostingsWriter();
-//
-//            for (int x = 0; x < array.length; x++)
-//            {
-//                postingsWriter.add(x);
-//            }
-//            postingsWriter.finish();
-//            postingsFP = postingsWriter.complete(postingsOut);
-//        }
-//
-//        try (FileHandle fileHandle = comps.createFileHandle(comps.postingLists);
-//             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle))
-//        {
-//            PForUtil forEncoder = new PForUtil(new ForUtil());
-//            ForBlockPostingsReader reader = new ForBlockPostingsReader(postingsFP, input, forEncoder);
-//
-//            LongArrayList rowids = new LongArrayList();
-//            while (true)
-//            {
-//                long rowid = reader.nextPosting();
-//                if (rowid == PostingList.END_OF_STREAM)
-//                {
-//                    break;
-//                }
-//                System.out.println("rowid="+rowid);
-//                rowids.add(rowid);
-//            }
-//            System.out.println("array=" + Arrays.toString(array)+" rowids="+rowids);
-//            assertArrayEquals(array, rowids.toArray());
-//        }
-//    }
+    @Test
+    public void testNext() throws Exception
+    {
+        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+        final String index = newIndex();
+        final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
 
-//
-//    public static LongArrayList readList(Lucene8xIndexInput input,
-//                                         int size,
-//                                         ForDeltaUtil forEncoder) throws IOException
-//    {
-//        long[] deltaBuffer = new long[BLOCK_SIZE];
-//        LongArrayList list = new LongArrayList();
-//        int blockIdx = 0;
-//        for (int x = 0; x < size; x++)
-//        {
-//            if (blockIdx == BLOCK_SIZE)
-//            {
-//                forEncoder.decodeAndPrefixSum(input, input.getFilePointer(), deltaBuffer);
-//                blockIdx = 0;
-//            }
-//            list.add(deltaBuffer[blockIdx]);
-//            blockIdx++;
-//        }
-//        return list;
-//    }
+        long postingsFP = -1;
+        long[] array = new long[1000];
+        for (int x = 0; x < array.length; x++)
+        {
+            array[x] = x;
+        }
 
-//    public static void flushList(LongArrayList list,
-//                                 IndexOutput out,
-//                                 ForDeltaUtil forEncoder) throws IOException
-//    {
-//        long[] deltaBuffer = new long[BLOCK_SIZE];
-//        long last = 0;
-//        for (int x = 0; x < list.size(); x++)
-//        {
-//            long value = list.getLong(x);
-//            long delta = value - last;
-//            deltaBuffer[x % BLOCK_SIZE] = delta;
-//            if (x > 0 && x % BLOCK_SIZE == 0)
-//            {
-//                forEncoder.encodeDeltas(deltaBuffer, out);
-//            }
-//        }
-//    }
+        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext))
+        {
+            ForBlockPostingsWriter postingsWriter = new ForBlockPostingsWriter();
+
+            for (int x = 0; x < array.length; x++)
+            {
+                postingsWriter.add(x);
+            }
+            postingsWriter.finish();
+            postingsFP = postingsWriter.complete(postingsOut);
+        }
+
+        try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle))
+        {
+            PForUtil forEncoder = new PForUtil(new ForUtil());
+            ForBlockPostingsReader reader = new ForBlockPostingsReader(postingsFP, input, forEncoder);
+
+            LongArrayList rowids = new LongArrayList();
+            while (true)
+            {
+                long rowid = reader.nextPosting();
+                if (rowid == PostingList.END_OF_STREAM)
+                {
+                    break;
+                }
+                rowids.add(rowid);
+            }
+            assertArrayEquals(array, rowids.toArray());
+        }
+    }
 }

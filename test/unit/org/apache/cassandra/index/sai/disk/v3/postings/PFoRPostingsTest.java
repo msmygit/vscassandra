@@ -39,160 +39,15 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-public class PFoRPostingsTest extends SaiRandomizedTest {
-//    @Test
-//    public void testAdvanceFilter() throws Exception
-//    {
-//        ZZZPostingsWriter writer = new ZZZPostingsWriter();
-//
-//        long[] array = new long[1000];
-//        for (int x = 0; x < array.length; x++)
-//        {
-//            array[x] = x;
-//            writer.add(x);
-//        }
-//
-//        long fp = -1;
-//        // IndexComponents comps = newIndexComponents();
-//        final IndexDescriptor indexDescriptor = newIndexDescriptor();
-//        final String index = newIndex();
-//        final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
-//        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext))
-//        {
-//            fp = writer.finish(postingsOut);
-//        }
-//
-////        try (IndexOutput postingsOut = comps.createOutput(comps.postingLists))
-////        {
-////            fp = writer.finish(postingsOut);
-////        }
-//
-//        long[] filter = new long[] {1, 3, 5};
-//
-//        ForBlockPostingsWriter filterWriter = new ForBlockPostingsWriter();
-//        long filterFP = -1;
-//        try (IndexOutput postingsOut = comps.createOutput(comps.kdTreePostingLists))
-//        {
-//            for (long id : filter)
-//            {
-//                filterWriter.add(id);
-//            }
-//            filterWriter.finish();
-//            filterFP = filterWriter.complete(postingsOut);
-//        }
-//
-//        try (FileHandle fileHandle = comps.createFileHandle(comps.postingLists);
-//             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle);
-//             FileHandle filterHandle = comps.createFileHandle(comps.kdTreePostingLists);
-//             Lucene8xIndexInput filterInput = LuceneMMap.openLuceneInput(filterHandle))
-//        {
-//            filterInput.seek(filterFP);
-//            PForUtil forEncoder = new PForUtil(new ForUtil());
-//            ForBlockPostingsReader filterReader = new ForBlockPostingsReader(filterFP,
-//                                                                             filterInput,
-//                                                                             forEncoder);
-//
-//            input.seek(fp);
-//            ZZZPostingsFilterReader reader = new ZZZPostingsFilterReader(input, filterReader);
-//
-//            for (int x = 0; x < 10; x++)
-//            {
-//                long result = reader.nextPosting();
-//                long ordinal = reader.getOrdinal() - 2;
-//                System.out.println("result="+result+" ordinal="+ordinal+" block="+reader.block());
-//            }
-//
-//            long result = reader.advance(400);
-//            long ordinal = reader.getOrdinal() - 2;
-//            System.out.println("result="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-//            result = reader.advance(480);
-//            ordinal = reader.getOrdinal() - 2;
-//            System.out.println("result2="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-//            result = reader.advance(500);
-//            ordinal = reader.getOrdinal() - 2;
-//            System.out.println("result3="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-////            result = reader.advance(666);
-////            ordinal = reader.getOrdinal() - 2;
-////            System.out.println("result3="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-//            result = reader.advance(700);
-//            ordinal = reader.getOrdinal() - 2;
-//            System.out.println("result4="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-//            result = reader.advance(733);
-//            ordinal = reader.getOrdinal() - 2;
-//            System.out.println("result5="+result+" ordinal="+ordinal+" block="+reader.block());
-//
-//            while (true)
-//            {
-//                long rowid = reader.nextPosting();
-//                if (rowid == PostingList.END_OF_STREAM) break;
-//                System.out.println("nextPosting rowid="+rowid);
-//            }
-//
-////            result = reader.advance(988);
-////            ordinal = reader.getOrdinal() - 2;
-////            System.out.println("result6="+result+" ordinal="+ordinal+" block="+reader.block());
-//        }
-//    }
-
-    @Test
-    public void testAdvanceSimple() throws Exception {
-        final PFoRPostingsWriter writer = new PFoRPostingsWriter();
-
-        long[] array = new long[1000];
-        for (int x = 0; x < array.length; x++) {
-            array[x] = x;
-            writer.add(x);
-        }
-
-        long fp = -1;
-        final IndexDescriptor indexDescriptor = newIndexDescriptor();
-        final String index = newIndex();
-        final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
-        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext)) {
-            fp = writer.finish(postingsOut);
-        }
-
-        try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);//comps.createFileHandle(comps.postingLists);
-             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
-            PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
-
-            long result = reader.advance(150);
-            long ordinal = reader.getOrdinal() - 2;
-            System.out.println("result=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-
-            result = reader.advance(660);
-            ordinal = reader.getOrdinal() - 2;
-            System.out.println("result2=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-
-            result = reader.advance(666);
-            ordinal = reader.getOrdinal() - 2;
-            System.out.println("result3=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-
-            result = reader.advance(866);
-            ordinal = reader.getOrdinal() - 2;
-            System.out.println("result4=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-
-            result = reader.advance(966);
-            ordinal = reader.getOrdinal() - 2;
-            System.out.println("result5=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-
-            result = reader.advance(988);
-            ordinal = reader.getOrdinal() - 2;
-            System.out.println("result6=" + result + " ordinal=" + ordinal + " block=" + reader.block());
-        }
-    }
-
+public class PFoRPostingsTest extends SaiRandomizedTest
+{
     @Test
     public void testNext() throws Exception {
         PFoRPostingsWriter writer = new PFoRPostingsWriter();
 
         long[] array = new long[1000];
-        for (int x = 0; x < array.length; x++) {
+        for (int x = 0; x < array.length; x++)
+        {
             array[x] = x;
             writer.add(x);
         }
@@ -201,12 +56,14 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
         final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
-        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext)) {
+        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext))
+        {
             fp = writer.finish(postingsOut);
         }
 
         try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
-             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle))
+        {
             PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
             LongArrayList list = toList(reader);
             // System.out.println("list="+list);
@@ -215,7 +72,8 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
     }
 
     @Test
-    public void testRandomAdvance() throws Exception {
+    public void testRandomAdvance() throws Exception
+    {
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
         final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
@@ -224,7 +82,8 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
 
         int[] array = new int[nextInt(1, 10_000)];
         int rowid = -1;
-        for (int x = 0; x < array.length; x++) {
+        for (int x = 0; x < array.length; x++)
+        {
             rowid = nextInt(rowid + 1, rowid + 10);
             array[x] = rowid;
             writer.add(rowid);
@@ -251,7 +110,8 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
         {
             advRowid += nextLong(1, 10);
 
-            if (advRowid > array[array.length - 1]) {
+            if (advRowid > array[array.length - 1])
+            {
                 long adv = reader.advance(advRowid);
                 long adv2 = reader2.advance(advRowid);
 
@@ -265,12 +125,14 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
     }
 
     @Test
-    public void testRandomNext() throws Exception {
+    public void testRandomNext() throws Exception
+    {
         final PFoRPostingsWriter writer = new PFoRPostingsWriter();
 
         long[] array = new long[1000];
         long rowid = -1;
-        for (int x = 0; x < array.length; x++) {
+        for (int x = 0; x < array.length; x++)
+        {
             rowid = nextLong(rowid + 1, rowid + 100);
             array[x] = rowid;
             writer.add(rowid);
@@ -280,12 +142,14 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
         final IndexContext indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
-        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext)) {
+        try (IndexOutput postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.POSTING_LISTS, indexContext))
+        {
             fp = writer.finish(postingsOut);
         }
 
         try (FileHandle fileHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext);
-             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle)) {
+             Lucene8xIndexInput input = LuceneMMap.openLuceneInput(fileHandle))
+        {
             PFoRPostingsReader reader = new PFoRPostingsReader(fp, input);
             LongArrayList list = toList(reader);
             System.out.println("list=" + list);
@@ -293,11 +157,13 @@ public class PFoRPostingsTest extends SaiRandomizedTest {
         }
     }
 
-    public static LongArrayList toList(PostingList reader) throws IOException {
+    public static LongArrayList toList(PostingList reader) throws IOException
+    {
         LongArrayList rowids = new LongArrayList();
         while (true) {
             long rowid = reader.nextPosting();
-            if (rowid == PostingList.END_OF_STREAM) {
+            if (rowid == PostingList.END_OF_STREAM)
+            {
                 break;
             }
             rowids.add(rowid);
