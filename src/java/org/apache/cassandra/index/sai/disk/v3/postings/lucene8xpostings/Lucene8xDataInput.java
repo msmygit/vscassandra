@@ -192,7 +192,8 @@ public abstract class Lucene8xDataInput implements Cloneable
     public void readLELongs(long[] dst, int offset, int length) throws IOException
     {
         FutureObjects.checkFromIndexSize(offset, length, dst.length);
-        for (int i = 0; i < length; ++i) {
+        for (int i = 0; i < length; ++i)
+        {
             dst[offset + i] = Long.reverseBytes(readLong());
         }
     }
@@ -251,12 +252,14 @@ public abstract class Lucene8xDataInput implements Cloneable
         b = readByte();
         i |= (b & 0x7FL) << 56;
         if (b >= 0) return i;
-        if (allowNegative) {
+        if (allowNegative)
+        {
             b = readByte();
             i |= (b & 0x7FL) << 63;
             if (b == 0 || b == 1) return i;
             throw new IOException("Invalid vLong detected (more than 64 bits)");
-        } else {
+        } else
+        {
             throw new IOException("Invalid vLong detected (negative values disallowed)");
         }
     }
@@ -299,9 +302,11 @@ public abstract class Lucene8xDataInput implements Cloneable
     @Override
     public Lucene8xDataInput clone()
     {
-        try {
+        try
+        {
             return (Lucene8xDataInput) super.clone();
-        } catch (CloneNotSupportedException e) {
+        } catch (CloneNotSupportedException e)
+        {
             throw new Error("This cannot happen: Failing to clone DataInput");
         }
     }
@@ -315,13 +320,19 @@ public abstract class Lucene8xDataInput implements Cloneable
     public Map<String, String> readMapOfStrings() throws IOException
     {
         int count = readVInt();
-        if (count == 0) {
+        if (count == 0)
+        {
             return Collections.emptyMap();
-        } else if (count == 1) {
+        }
+        else if (count == 1)
+        {
             return Collections.singletonMap(readString(), readString());
-        } else {
+        }
+        else
+        {
             Map<String, String> map = count > 10 ? new HashMap<>() : new TreeMap<>();
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count; i++)
+            {
                 final String key = readString();
                 final String val = readString();
                 map.put(key, val);
@@ -339,13 +350,17 @@ public abstract class Lucene8xDataInput implements Cloneable
     public Set<String> readSetOfStrings() throws IOException
     {
         int count = readVInt();
-        if (count == 0) {
+        if (count == 0)
+        {
             return Collections.emptySet();
-        } else if (count == 1) {
+        } else if (count == 1)
+        {
             return Collections.singleton(readString());
-        } else {
+        } else
+        {
             Set<String> set = count > 10 ? new HashSet<>() : new TreeSet<>();
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count; i++)
+            {
                 set.add(readString());
             }
             return Collections.unmodifiableSet(set);
@@ -360,14 +375,17 @@ public abstract class Lucene8xDataInput implements Cloneable
      */
     public void skipBytes(final long numBytes) throws IOException
     {
-        if (numBytes < 0) {
+        if (numBytes < 0)
+        {
             throw new IllegalArgumentException("numBytes must be >= 0, got " + numBytes);
         }
-        if (skipBuffer == null) {
+        if (skipBuffer == null)
+        {
             skipBuffer = new byte[SKIP_BUFFER_SIZE];
         }
         assert skipBuffer.length == SKIP_BUFFER_SIZE;
-        for (long skipped = 0; skipped < numBytes; ) {
+        for (long skipped = 0; skipped < numBytes; )
+        {
             final int step = (int) Math.min(SKIP_BUFFER_SIZE, numBytes - skipped);
             readBytes(skipBuffer, 0, step, false);
             skipped += step;

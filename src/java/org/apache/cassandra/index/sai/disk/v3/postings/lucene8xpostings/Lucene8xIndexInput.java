@@ -56,7 +56,8 @@ public abstract class Lucene8xIndexInput extends Lucene8xDataInput implements Cl
      */
     protected Lucene8xIndexInput(String resourceDescription)
     {
-        if (resourceDescription == null) {
+        if (resourceDescription == null)
+        {
             throw new IllegalArgumentException("resourceDescription must not be null");
         }
         this.resourceDescription = resourceDescription;
@@ -126,10 +127,12 @@ public abstract class Lucene8xIndexInput extends Lucene8xDataInput implements Cl
      */
     protected String getFullSliceDescription(String sliceDescription)
     {
-        if (sliceDescription == null) {
+        if (sliceDescription == null)
+        {
             // Clones pass null sliceDescription:
             return toString();
-        } else {
+        } else
+        {
             return toString() + " [slice=" + sliceDescription + "]";
         }
     }
@@ -143,10 +146,12 @@ public abstract class Lucene8xIndexInput extends Lucene8xDataInput implements Cl
     public RandomAccessInput randomAccessSlice(long offset, long length) throws IOException
     {
         final Lucene8xIndexInput slice = slice("randomaccess", offset, length);
-        if (slice instanceof RandomAccessInput) {
+        if (slice instanceof RandomAccessInput)
+        {
             // slice() already supports random access
             return (RandomAccessInput) slice;
-        } else {
+        } else
+        {
             // return default impl
             return new RandomAccessInput()
             {

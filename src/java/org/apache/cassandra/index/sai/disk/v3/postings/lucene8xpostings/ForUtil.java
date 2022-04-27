@@ -67,7 +67,8 @@ public final class ForUtil
 
     private static void expand8(long[] arr)
     {
-        for (int i = 0; i < 16; ++i) {
+        for (int i = 0; i < 16; ++i)
+        {
             long l = arr[i];
             arr[i] = (l >>> 56) & 0xFFL;
             arr[16 + i] = (l >>> 48) & 0xFFL;
@@ -82,7 +83,8 @@ public final class ForUtil
 
     private static void expand8To32(long[] arr)
     {
-        for (int i = 0; i < 16; ++i) {
+        for (int i = 0; i < 16; ++i)
+        {
             long l = arr[i];
             arr[i] = (l >>> 24) & 0x000000FF000000FFL;
             arr[16 + i] = (l >>> 16) & 0x000000FF000000FFL;
@@ -93,14 +95,16 @@ public final class ForUtil
 
     private static void collapse8(long[] arr)
     {
-        for (int i = 0; i < 16; ++i) {
+        for (int i = 0; i < 16; ++i)
+        {
             arr[i] = (arr[i] << 56) | (arr[16 + i] << 48) | (arr[32 + i] << 40) | (arr[48 + i] << 32) | (arr[64 + i] << 24) | (arr[80 + i] << 16) | (arr[96 + i] << 8) | arr[112 + i];
         }
     }
 
     private static void expand16(long[] arr)
     {
-        for (int i = 0; i < 32; ++i) {
+        for (int i = 0; i < 32; ++i)
+        {
             long l = arr[i];
             arr[i] = (l >>> 48) & 0xFFFFL;
             arr[32 + i] = (l >>> 32) & 0xFFFFL;
@@ -111,7 +115,8 @@ public final class ForUtil
 
     private static void expand16To32(long[] arr)
     {
-        for (int i = 0; i < 32; ++i) {
+        for (int i = 0; i < 32; ++i)
+        {
             long l = arr[i];
             arr[i] = (l >>> 16) & 0x0000FFFF0000FFFFL;
             arr[32 + i] = l & 0x0000FFFF0000FFFFL;
@@ -120,14 +125,16 @@ public final class ForUtil
 
     private static void collapse16(long[] arr)
     {
-        for (int i = 0; i < 32; ++i) {
+        for (int i = 0; i < 32; ++i)
+        {
             arr[i] = (arr[i] << 48) | (arr[32 + i] << 32) | (arr[64 + i] << 16) | arr[96 + i];
         }
     }
 
     private static void expand32(long[] arr)
     {
-        for (int i = 0; i < 64; ++i) {
+        for (int i = 0; i < 64; ++i)
+        {
             long l = arr[i];
             arr[i] = l >>> 32;
             arr[64 + i] = l & 0xFFFFFFFFL;
@@ -136,7 +143,8 @@ public final class ForUtil
 
     private static void collapse32(long[] arr)
     {
-        for (int i = 0; i < 64; ++i) {
+        for (int i = 0; i < 64; ++i)
+        {
             arr[i] = (arr[i] << 32) | arr[64 + i];
         }
     }
@@ -160,7 +168,8 @@ public final class ForUtil
         innerPrefixSum32(arr);
         expand32(arr);
         final long l = arr[BLOCK_SIZE / 2 - 1];
-        for (int i = BLOCK_SIZE / 2; i < BLOCK_SIZE; ++i) {
+        for (int i = BLOCK_SIZE / 2; i < BLOCK_SIZE; ++i)
+        {
             arr[i] += l;
         }
     }
@@ -242,15 +251,18 @@ public final class ForUtil
     {
         final int nextPrimitive;
         final int numLongs;
-        if (bitsPerValue <= 8) {
+        if (bitsPerValue <= 8)
+        {
             nextPrimitive = 8;
             numLongs = BLOCK_SIZE / 8;
             collapse8(longs);
-        } else if (bitsPerValue <= 16) {
+        } else if (bitsPerValue <= 16)
+        {
             nextPrimitive = 16;
             numLongs = BLOCK_SIZE / 4;
             collapse16(longs);
-        } else {
+        } else
+        {
             nextPrimitive = 32;
             numLongs = BLOCK_SIZE / 2;
             collapse32(longs);
@@ -259,44 +271,57 @@ public final class ForUtil
         final int numLongsPerShift = bitsPerValue * 2;
         int idx = 0;
         int shift = nextPrimitive - bitsPerValue;
-        for (int i = 0; i < numLongsPerShift; ++i) {
+        for (int i = 0; i < numLongsPerShift; ++i)
+        {
             tmp[i] = longs[idx++] << shift;
         }
-        for (shift = shift - bitsPerValue; shift >= 0; shift -= bitsPerValue) {
-            for (int i = 0; i < numLongsPerShift; ++i) {
+        for (shift = shift - bitsPerValue; shift >= 0; shift -= bitsPerValue)
+        {
+            for (int i = 0; i < numLongsPerShift; ++i)
+            {
                 tmp[i] |= longs[idx++] << shift;
             }
         }
 
         final int remainingBitsPerLong = shift + bitsPerValue;
         final long maskRemainingBitsPerLong;
-        if (nextPrimitive == 8) {
+        if (nextPrimitive == 8)
+        {
             maskRemainingBitsPerLong = MASKS8[remainingBitsPerLong];
-        } else if (nextPrimitive == 16) {
+        } else if (nextPrimitive == 16)
+        {
             maskRemainingBitsPerLong = MASKS16[remainingBitsPerLong];
-        } else {
+        } else
+        {
             maskRemainingBitsPerLong = MASKS32[remainingBitsPerLong];
         }
 
         int tmpIdx = 0;
         int remainingBitsPerValue = bitsPerValue;
-        while (idx < numLongs) {
-            if (remainingBitsPerValue >= remainingBitsPerLong) {
+        while (idx < numLongs)
+        {
+            if (remainingBitsPerValue >= remainingBitsPerLong)
+            {
                 remainingBitsPerValue -= remainingBitsPerLong;
                 tmp[tmpIdx++] |= (longs[idx] >>> remainingBitsPerValue) & maskRemainingBitsPerLong;
-                if (remainingBitsPerValue == 0) {
+                if (remainingBitsPerValue == 0)
+                {
                     idx++;
                     remainingBitsPerValue = bitsPerValue;
                 }
-            } else {
+            } else
+            {
                 final long mask1, mask2;
-                if (nextPrimitive == 8) {
+                if (nextPrimitive == 8)
+                {
                     mask1 = MASKS8[remainingBitsPerValue];
                     mask2 = MASKS8[remainingBitsPerLong - remainingBitsPerValue];
-                } else if (nextPrimitive == 16) {
+                } else if (nextPrimitive == 16)
+                {
                     mask1 = MASKS16[remainingBitsPerValue];
                     mask2 = MASKS16[remainingBitsPerLong - remainingBitsPerValue];
-                } else {
+                } else
+                {
                     mask1 = MASKS32[remainingBitsPerValue];
                     mask2 = MASKS32[remainingBitsPerLong - remainingBitsPerValue];
                 }
@@ -306,7 +331,8 @@ public final class ForUtil
             }
         }
 
-        for (int i = 0; i < numLongsPerShift; ++i) {
+        for (int i = 0; i < numLongsPerShift; ++i)
+        {
             // Java longs are big endian and we want to read little endian longs, so we need to reverse bytes
             long l = Long.reverseBytes(tmp[i]);
             out.writeLong(l);
@@ -328,7 +354,8 @@ public final class ForUtil
         final long mask = MASKS32[bitsPerValue];
         int longsIdx = 0;
         int shift = 32 - bitsPerValue;
-        for (; shift >= 0; shift -= bitsPerValue) {
+        for (; shift >= 0; shift -= bitsPerValue)
+        {
             shiftLongs(tmp, numLongs, longs, longsIdx, shift, mask);
             longsIdx += numLongs;
         }
@@ -336,17 +363,21 @@ public final class ForUtil
         final long mask32RemainingBitsPerLong = MASKS32[remainingBitsPerLong];
         int tmpIdx = 0;
         int remainingBits = remainingBitsPerLong;
-        for (; longsIdx < BLOCK_SIZE / 2; ++longsIdx) {
+        for (; longsIdx < BLOCK_SIZE / 2; ++longsIdx)
+        {
             int b = bitsPerValue - remainingBits;
             long l = (tmp[tmpIdx++] & MASKS32[remainingBits]) << b;
-            while (b >= remainingBitsPerLong) {
+            while (b >= remainingBitsPerLong)
+            {
                 b -= remainingBitsPerLong;
                 l |= (tmp[tmpIdx++] & mask32RemainingBitsPerLong) << b;
             }
-            if (b > 0) {
+            if (b > 0)
+            {
                 l |= (tmp[tmpIdx] >>> (remainingBitsPerLong - b)) & MASKS32[b];
                 remainingBits = remainingBitsPerLong - b;
-            } else {
+            } else
+            {
                 remainingBits = remainingBitsPerLong;
             }
             longs[longsIdx] = l;
@@ -360,7 +391,8 @@ public final class ForUtil
      */
     private static void shiftLongs(long[] a, int count, long[] b, int bi, int shift, long mask)
     {
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             b[bi + i] = (a[i] >>> shift) & mask;
         }
     }
@@ -369,14 +401,18 @@ public final class ForUtil
     private static final long[] MASKS16 = new long[16];
     private static final long[] MASKS32 = new long[32];
 
-    static {
-        for (int i = 0; i < 8; ++i) {
+    static
+    {
+        for (int i = 0; i < 8; ++i)
+        {
             MASKS8[i] = mask8(i);
         }
-        for (int i = 0; i < 16; ++i) {
+        for (int i = 0; i < 16; ++i)
+        {
             MASKS16[i] = mask16(i);
         }
-        for (int i = 0; i < 32; ++i) {
+        for (int i = 0; i < 32; ++i)
+        {
             MASKS32[i] = mask32(i);
         }
     }
@@ -433,7 +469,8 @@ public final class ForUtil
      */
     void decode(int bitsPerValue, Lucene8xDataInput in, long[] longs) throws IOException
     {
-        switch (bitsPerValue) {
+        switch (bitsPerValue)
+        {
             case 1:
                 decode1(in, tmp, longs);
                 expand8(longs);
@@ -542,7 +579,8 @@ public final class ForUtil
      */
     void decodeAndPrefixSum(int bitsPerValue, Lucene8xDataInput in, long base, long[] longs) throws IOException
     {
-        switch (bitsPerValue) {
+        switch (bitsPerValue)
+        {
             case 1:
                 decode1(in, tmp, longs);
                 prefixSum8(longs, base);
@@ -673,7 +711,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 6);
         shiftLongs(tmp, 6, longs, 0, 5, MASK8_3);
         shiftLongs(tmp, 6, longs, 6, 2, MASK8_3);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 12; iter < 2; ++iter, tmpIdx += 3, longsIdx += 2) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 12; iter < 2; ++iter, tmpIdx += 3, longsIdx += 2)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK8_2) << 1;
             l0 |= (tmp[tmpIdx + 1] >>> 1) & MASK8_1;
             longs[longsIdx + 0] = l0;
@@ -694,7 +733,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 10);
         shiftLongs(tmp, 10, longs, 0, 3, MASK8_5);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 10; iter < 2; ++iter, tmpIdx += 5, longsIdx += 3) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 10; iter < 2; ++iter, tmpIdx += 5, longsIdx += 3)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK8_3) << 2;
             l0 |= (tmp[tmpIdx + 1] >>> 1) & MASK8_2;
             longs[longsIdx + 0] = l0;
@@ -713,7 +753,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 12);
         shiftLongs(tmp, 12, longs, 0, 2, MASK8_6);
         shiftLongs(tmp, 12, tmp, 0, 0, MASK8_2);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 12; iter < 4; ++iter, tmpIdx += 3, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 12; iter < 4; ++iter, tmpIdx += 3, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 4;
             l0 |= tmp[tmpIdx + 1] << 2;
             l0 |= tmp[tmpIdx + 2] << 0;
@@ -726,7 +767,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 14);
         shiftLongs(tmp, 14, longs, 0, 1, MASK8_7);
         shiftLongs(tmp, 14, tmp, 0, 0, MASK8_1);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 14; iter < 2; ++iter, tmpIdx += 7, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 14; iter < 2; ++iter, tmpIdx += 7, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 6;
             l0 |= tmp[tmpIdx + 1] << 5;
             l0 |= tmp[tmpIdx + 2] << 4;
@@ -747,7 +789,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 18);
         shiftLongs(tmp, 18, longs, 0, 7, MASK16_9);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 18; iter < 2; ++iter, tmpIdx += 9, longsIdx += 7) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 18; iter < 2; ++iter, tmpIdx += 9, longsIdx += 7)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK16_7) << 2;
             l0 |= (tmp[tmpIdx + 1] >>> 5) & MASK16_2;
             longs[longsIdx + 0] = l0;
@@ -777,7 +820,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 20);
         shiftLongs(tmp, 20, longs, 0, 6, MASK16_10);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 20; iter < 4; ++iter, tmpIdx += 5, longsIdx += 3) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 20; iter < 4; ++iter, tmpIdx += 5, longsIdx += 3)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK16_6) << 4;
             l0 |= (tmp[tmpIdx + 1] >>> 2) & MASK16_4;
             longs[longsIdx + 0] = l0;
@@ -795,7 +839,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 22);
         shiftLongs(tmp, 22, longs, 0, 5, MASK16_11);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 22; iter < 2; ++iter, tmpIdx += 11, longsIdx += 5) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 22; iter < 2; ++iter, tmpIdx += 11, longsIdx += 5)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK16_5) << 6;
             l0 |= (tmp[tmpIdx + 1] & MASK16_5) << 1;
             l0 |= (tmp[tmpIdx + 2] >>> 4) & MASK16_1;
@@ -824,7 +869,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 24);
         shiftLongs(tmp, 24, longs, 0, 4, MASK16_12);
         shiftLongs(tmp, 24, tmp, 0, 0, MASK16_4);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 24; iter < 8; ++iter, tmpIdx += 3, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 24; iter < 8; ++iter, tmpIdx += 3, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 8;
             l0 |= tmp[tmpIdx + 1] << 4;
             l0 |= tmp[tmpIdx + 2] << 0;
@@ -836,7 +882,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 26);
         shiftLongs(tmp, 26, longs, 0, 3, MASK16_13);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 26; iter < 2; ++iter, tmpIdx += 13, longsIdx += 3) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 26; iter < 2; ++iter, tmpIdx += 13, longsIdx += 3)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK16_3) << 10;
             l0 |= (tmp[tmpIdx + 1] & MASK16_3) << 7;
             l0 |= (tmp[tmpIdx + 2] & MASK16_3) << 4;
@@ -863,7 +910,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 28);
         shiftLongs(tmp, 28, longs, 0, 2, MASK16_14);
         shiftLongs(tmp, 28, tmp, 0, 0, MASK16_2);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 28; iter < 4; ++iter, tmpIdx += 7, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 28; iter < 4; ++iter, tmpIdx += 7, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 12;
             l0 |= tmp[tmpIdx + 1] << 10;
             l0 |= tmp[tmpIdx + 2] << 8;
@@ -880,7 +928,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 30);
         shiftLongs(tmp, 30, longs, 0, 1, MASK16_15);
         shiftLongs(tmp, 30, tmp, 0, 0, MASK16_1);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 30; iter < 2; ++iter, tmpIdx += 15, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 30; iter < 2; ++iter, tmpIdx += 15, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 14;
             l0 |= tmp[tmpIdx + 1] << 13;
             l0 |= tmp[tmpIdx + 2] << 12;
@@ -909,7 +958,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 34);
         shiftLongs(tmp, 34, longs, 0, 15, MASK32_17);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 34; iter < 2; ++iter, tmpIdx += 17, longsIdx += 15) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 34; iter < 2; ++iter, tmpIdx += 17, longsIdx += 15)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_15) << 2;
             l0 |= (tmp[tmpIdx + 1] >>> 13) & MASK32_2;
             longs[longsIdx + 0] = l0;
@@ -963,7 +1013,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 36);
         shiftLongs(tmp, 36, longs, 0, 14, MASK32_18);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 36; iter < 4; ++iter, tmpIdx += 9, longsIdx += 7) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 36; iter < 4; ++iter, tmpIdx += 9, longsIdx += 7)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_14) << 4;
             l0 |= (tmp[tmpIdx + 1] >>> 10) & MASK32_4;
             longs[longsIdx + 0] = l0;
@@ -993,7 +1044,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 38);
         shiftLongs(tmp, 38, longs, 0, 13, MASK32_19);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 38; iter < 2; ++iter, tmpIdx += 19, longsIdx += 13) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 38; iter < 2; ++iter, tmpIdx += 19, longsIdx += 13)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_13) << 6;
             l0 |= (tmp[tmpIdx + 1] >>> 7) & MASK32_6;
             longs[longsIdx + 0] = l0;
@@ -1045,7 +1097,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 40);
         shiftLongs(tmp, 40, longs, 0, 12, MASK32_20);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 40; iter < 8; ++iter, tmpIdx += 5, longsIdx += 3) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 40; iter < 8; ++iter, tmpIdx += 5, longsIdx += 3)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_12) << 8;
             l0 |= (tmp[tmpIdx + 1] >>> 4) & MASK32_8;
             longs[longsIdx + 0] = l0;
@@ -1063,7 +1116,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 42);
         shiftLongs(tmp, 42, longs, 0, 11, MASK32_21);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 42; iter < 2; ++iter, tmpIdx += 21, longsIdx += 11) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 42; iter < 2; ++iter, tmpIdx += 21, longsIdx += 11)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_11) << 10;
             l0 |= (tmp[tmpIdx + 1] >>> 1) & MASK32_10;
             longs[longsIdx + 0] = l0;
@@ -1113,7 +1167,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 44);
         shiftLongs(tmp, 44, longs, 0, 10, MASK32_22);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 44; iter < 4; ++iter, tmpIdx += 11, longsIdx += 5) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 44; iter < 4; ++iter, tmpIdx += 11, longsIdx += 5)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_10) << 12;
             l0 |= (tmp[tmpIdx + 1] & MASK32_10) << 2;
             l0 |= (tmp[tmpIdx + 2] >>> 8) & MASK32_2;
@@ -1141,7 +1196,8 @@ public final class ForUtil
     {
         in.readLELongs(tmp, 0, 46);
         shiftLongs(tmp, 46, longs, 0, 9, MASK32_23);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 46; iter < 2; ++iter, tmpIdx += 23, longsIdx += 9) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 46; iter < 2; ++iter, tmpIdx += 23, longsIdx += 9)
+        {
             long l0 = (tmp[tmpIdx + 0] & MASK32_9) << 14;
             l0 |= (tmp[tmpIdx + 1] & MASK32_9) << 5;
             l0 |= (tmp[tmpIdx + 2] >>> 4) & MASK32_5;
@@ -1190,7 +1246,8 @@ public final class ForUtil
         in.readLELongs(tmp, 0, 48);
         shiftLongs(tmp, 48, longs, 0, 8, MASK32_24);
         shiftLongs(tmp, 48, tmp, 0, 0, MASK32_8);
-        for (int iter = 0, tmpIdx = 0, longsIdx = 48; iter < 16; ++iter, tmpIdx += 3, longsIdx += 1) {
+        for (int iter = 0, tmpIdx = 0, longsIdx = 48; iter < 16; ++iter, tmpIdx += 3, longsIdx += 1)
+        {
             long l0 = tmp[tmpIdx + 0] << 16;
             l0 |= tmp[tmpIdx + 1] << 8;
             l0 |= tmp[tmpIdx + 2] << 0;

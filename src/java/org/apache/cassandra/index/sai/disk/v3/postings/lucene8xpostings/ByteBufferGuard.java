@@ -73,7 +73,8 @@ public final class ByteBufferGuard
      */
     public void invalidateAndUnmap(ByteBuffer... bufs) throws IOException
     {
-        if (cleaner != null) {
+        if (cleaner != null)
+        {
             invalidated = true;
             // This call should hopefully flush any CPU caches and as a result make
             // the "invalidated" field update visible to other threads. We specifically
@@ -86,7 +87,8 @@ public final class ByteBufferGuard
             // we give other threads a bit of time to finish reads on their ByteBuffer...:
             Thread.yield();
             // finally unmap the ByteBuffers:
-            for (ByteBuffer b : bufs) {
+            for (ByteBuffer b : bufs)
+            {
                 cleaner.freeBuffer(resourceDescription, b);
             }
         }
@@ -94,7 +96,8 @@ public final class ByteBufferGuard
 
     private void ensureValid()
     {
-        if (invalidated) {
+        if (invalidated)
+        {
             // this triggers an AlreadyClosedException in ByteBufferIndexInput:
             throw new NullPointerException();
         }

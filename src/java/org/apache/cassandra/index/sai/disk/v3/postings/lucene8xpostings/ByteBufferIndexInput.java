@@ -57,9 +57,11 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
 
     public static ByteBufferIndexInput newInstance(String resourceDescription, ByteBuffer[] buffers, long length, int chunkSizePower, ByteBufferGuard guard)
     {
-        if (buffers.length == 1) {
+        if (buffers.length == 1)
+        {
             return new SingleBufferImpl(resourceDescription, buffers[0], length, chunkSizePower, guard);
-        } else {
+        } else
+        {
             return new MultiBufferImpl(resourceDescription, buffers, 0, length, chunkSizePower, guard);
         }
     }
@@ -85,19 +87,24 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final byte readByte() throws IOException
     {
-        try {
+        try
+        {
             return guard.getByte(curBuf);
-        } catch (BufferUnderflowException e) {
-            do {
+        } catch (BufferUnderflowException e)
+        {
+            do
+            {
                 curBufIndex++;
-                if (curBufIndex >= buffers.length) {
+                if (curBufIndex >= buffers.length)
+                {
                     throw new EOFException("read past EOF: " + this);
                 }
                 setCurBuf(buffers[curBufIndex]);
                 curBuf.position(0);
             } while (!curBuf.hasRemaining());
             return guard.getByte(curBuf);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -105,16 +112,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final void readBytes(byte[] b, int offset, int len) throws IOException
     {
-        try {
+        try
+        {
             guard.getBytes(curBuf, b, offset, len);
-        } catch (BufferUnderflowException e) {
+        } catch (BufferUnderflowException e)
+        {
             int curAvail = curBuf.remaining();
-            while (len > curAvail) {
+            while (len > curAvail)
+            {
                 guard.getBytes(curBuf, b, offset, curAvail);
                 len -= curAvail;
                 offset += curAvail;
                 curBufIndex++;
-                if (curBufIndex >= buffers.length) {
+                if (curBufIndex >= buffers.length)
+                {
                     throw new EOFException("read past EOF: " + this);
                 }
                 setCurBuf(buffers[curBufIndex]);
@@ -122,7 +133,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
                 curAvail = curBuf.remaining();
             }
             guard.getBytes(curBuf, b, offset, len);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -134,34 +146,41 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         // is no ByteBuffer#getLongs to read multiple longs at once. So we use the
         // below trick in order to be able to leverage LongBuffer#get(long[]) to
         // read multiple longs at once with as little overhead as possible.
-        if (curLongBufferViews == null) {
+        if (curLongBufferViews == null)
+        {
             // readLELongs is only used for postings today, so we compute the long
             // views lazily so that other data-structures don't have to pay for the
             // associated initialization/memory overhead.
             curLongBufferViews = new LongBuffer[Long.BYTES];
-            for (int i = 0; i < Long.BYTES; ++i) {
+            for (int i = 0; i < Long.BYTES; ++i)
+            {
                 // Compute a view for each possible alignment. We cache these views
                 // because #asLongBuffer() has some cost that we don't want to pay on
                 // each invocation of #readLELongs.
-                if (i < curBuf.limit()) {
+                if (i < curBuf.limit())
+                {
                     ByteBuffer dup = curBuf.duplicate().order(ByteOrder.LITTLE_ENDIAN);
                     dup.position(i);
                     curLongBufferViews[i] = dup.asLongBuffer();
-                } else {
+                } else
+                {
                     curLongBufferViews[i] = EMPTY_LONGBUFFER;
                 }
             }
         }
-        try {
+        try
+        {
             final int position = curBuf.position();
             LongBuffer longBuffer = curLongBufferViews[position & 0x07];
             longBuffer.position(position >>> 3);
             guard.getLongs(longBuffer, dst, offset, length);
             // if the above call succeeded, then we know the below sum cannot overflow
             curBuf.position(position + (length << 3));
-        } catch (BufferUnderflowException e) {
+        } catch (BufferUnderflowException e)
+        {
             super.readLELongs(dst, offset, length);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -169,11 +188,14 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final short readShort() throws IOException
     {
-        try {
+        try
+        {
             return guard.getShort(curBuf);
-        } catch (BufferUnderflowException e) {
+        } catch (BufferUnderflowException e)
+        {
             return super.readShort();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -181,11 +203,14 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final int readInt() throws IOException
     {
-        try {
+        try
+        {
             return guard.getInt(curBuf);
-        } catch (BufferUnderflowException e) {
+        } catch (BufferUnderflowException e)
+        {
             return super.readInt();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -193,11 +218,14 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final long readLong() throws IOException
     {
-        try {
+        try
+        {
             return guard.getLong(curBuf);
-        } catch (BufferUnderflowException e) {
+        } catch (BufferUnderflowException e)
+        {
             return super.readLong();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -205,9 +233,11 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public long getFilePointer()
     {
-        try {
+        try
+        {
             return (((long) curBufIndex) << chunkSizePower) + curBuf.position();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -218,19 +248,24 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         // we use >> here to preserve negative, so we will catch AIOOBE,
         // in case pos + offset overflows.
         final int bi = (int) (pos >> chunkSizePower);
-        try {
-            if (bi == curBufIndex) {
+        try
+        {
+            if (bi == curBufIndex)
+            {
                 curBuf.position((int) (pos & chunkSizeMask));
-            } else {
+            } else
+            {
                 final ByteBuffer b = buffers[bi];
                 b.position((int) (pos & chunkSizeMask));
                 // write values, on exception all is unchanged
                 this.curBufIndex = bi;
                 setCurBuf(b);
             }
-        } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
+        } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException e)
+        {
             throw new EOFException("seek past EOF: " + this);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -238,12 +273,15 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public byte readByte(long pos) throws IOException
     {
-        try {
+        try
+        {
             final int bi = (int) (pos >> chunkSizePower);
             return guard.getByte(buffers[bi], (int) (pos & chunkSizeMask));
-        } catch (IndexOutOfBoundsException ioobe) {
+        } catch (IndexOutOfBoundsException ioobe)
+        {
             throw new EOFException("seek past EOF: " + this);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -251,14 +289,17 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     // used only by random access methods to handle reads across boundaries
     private void setPos(long pos, int bi) throws IOException
     {
-        try {
+        try
+        {
             final ByteBuffer b = buffers[bi];
             b.position((int) (pos & chunkSizeMask));
             this.curBufIndex = bi;
             setCurBuf(b);
-        } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException aioobe) {
+        } catch (ArrayIndexOutOfBoundsException | IllegalArgumentException aioobe)
+        {
             throw new EOFException("seek past EOF: " + this);
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -267,13 +308,16 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     public short readShort(long pos) throws IOException
     {
         final int bi = (int) (pos >> chunkSizePower);
-        try {
+        try
+        {
             return guard.getShort(buffers[bi], (int) (pos & chunkSizeMask));
-        } catch (IndexOutOfBoundsException ioobe) {
+        } catch (IndexOutOfBoundsException ioobe)
+        {
             // either it's a boundary, or read past EOF, fall back:
             setPos(pos, bi);
             return readShort();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -282,13 +326,16 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     public int readInt(long pos) throws IOException
     {
         final int bi = (int) (pos >> chunkSizePower);
-        try {
+        try
+        {
             return guard.getInt(buffers[bi], (int) (pos & chunkSizeMask));
-        } catch (IndexOutOfBoundsException ioobe) {
+        } catch (IndexOutOfBoundsException ioobe)
+        {
             // either it's a boundary, or read past EOF, fall back:
             setPos(pos, bi);
             return readInt();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -297,13 +344,16 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     public long readLong(long pos) throws IOException
     {
         final int bi = (int) (pos >> chunkSizePower);
-        try {
+        try
+        {
             return guard.getLong(buffers[bi], (int) (pos & chunkSizeMask));
-        } catch (IndexOutOfBoundsException ioobe) {
+        } catch (IndexOutOfBoundsException ioobe)
+        {
             // either it's a boundary, or read past EOF, fall back:
             setPos(pos, bi);
             return readLong();
-        } catch (NullPointerException npe) {
+        } catch (NullPointerException npe)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
     }
@@ -318,9 +368,11 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     public final ByteBufferIndexInput clone()
     {
         final ByteBufferIndexInput clone = buildSlice((String) null, 0L, this.length);
-        try {
+        try
+        {
             clone.seek(getFilePointer());
-        } catch (IOException ioe) {
+        } catch (IOException ioe)
+        {
             throw new AssertionError(ioe);
         }
 
@@ -333,7 +385,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final ByteBufferIndexInput slice(String sliceDescription, long offset, long length)
     {
-        if (offset < 0 || length < 0 || offset + length > this.length) {
+        if (offset < 0 || length < 0 || offset + length > this.length)
+        {
             throw new IllegalArgumentException("slice() " + sliceDescription + " out of bounds: offset=" + offset + ",length=" + length + ",fileLength=" + this.length + ": " + this);
         }
 
@@ -345,7 +398,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
      **/
     protected ByteBufferIndexInput buildSlice(String sliceDescription, long offset, long length)
     {
-        if (buffers == null) {
+        if (buffers == null)
+        {
             throw new AlreadyClosedException("Already closed: " + this);
         }
 
@@ -364,10 +418,12 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @SuppressWarnings("resource")
     protected ByteBufferIndexInput newCloneInstance(String newResourceDescription, ByteBuffer[] newBuffers, int offset, long length)
     {
-        if (newBuffers.length == 1) {
+        if (newBuffers.length == 1)
+        {
             newBuffers[0].position(offset);
             return new SingleBufferImpl(newResourceDescription, newBuffers[0].slice(), length, chunkSizePower, this.guard);
-        } else {
+        } else
+        {
             return new MultiBufferImpl(newResourceDescription, newBuffers, offset, length, chunkSizePower, guard);
         }
     }
@@ -387,7 +443,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         // we always allocate one more slice, the last one may be a 0 byte one
         final ByteBuffer slices[] = new ByteBuffer[endIndex - startIndex + 1];
 
-        for (int i = 0; i < slices.length; i++) {
+        for (int i = 0; i < slices.length; i++)
+        {
             slices[i] = buffers[startIndex + i].duplicate();
         }
 
@@ -400,7 +457,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
     @Override
     public final void close() throws IOException
     {
-        try {
+        try
+        {
             if (buffers == null) return;
 
             // make local copy, then un-set early
@@ -411,7 +469,8 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
 
             // tell the guard to invalidate and later unmap the bytebuffers (if supported):
             guard.invalidateAndUnmap(bufs);
-        } finally {
+        } finally
+        {
             unsetBuffers();
         }
     }
@@ -446,15 +505,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public void seek(long pos) throws IOException
         {
-            try {
+            try
+            {
                 curBuf.position((int) pos);
-            } catch (IllegalArgumentException e) {
-                if (pos < 0) {
+            } catch (IllegalArgumentException e)
+            {
+                if (pos < 0)
+                {
                     throw new IllegalArgumentException("Seeking to negative position: " + this, e);
-                } else {
+                } else
+                {
                     throw new EOFException("seek past EOF: " + this);
                 }
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -462,9 +526,11 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public long getFilePointer()
         {
-            try {
+            try
+            {
                 return curBuf.position();
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -472,15 +538,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public byte readByte(long pos) throws IOException
         {
-            try {
+            try
+            {
                 return guard.getByte(curBuf, (int) pos);
-            } catch (IllegalArgumentException e) {
-                if (pos < 0) {
+            } catch (IllegalArgumentException e)
+            {
+                if (pos < 0)
+                {
                     throw new IllegalArgumentException("Seeking to negative position: " + this, e);
-                } else {
+                } else
+                {
                     throw new EOFException("seek past EOF: " + this);
                 }
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -488,15 +559,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public short readShort(long pos) throws IOException
         {
-            try {
+            try
+            {
                 return guard.getShort(curBuf, (int) pos);
-            } catch (IllegalArgumentException e) {
-                if (pos < 0) {
+            } catch (IllegalArgumentException e)
+            {
+                if (pos < 0)
+                {
                     throw new IllegalArgumentException("Seeking to negative position: " + this, e);
-                } else {
+                } else
+                {
                     throw new EOFException("seek past EOF: " + this);
                 }
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -504,15 +580,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public int readInt(long pos) throws IOException
         {
-            try {
+            try
+            {
                 return guard.getInt(curBuf, (int) pos);
-            } catch (IllegalArgumentException e) {
-                if (pos < 0) {
+            } catch (IllegalArgumentException e)
+            {
+                if (pos < 0)
+                {
                     throw new IllegalArgumentException("Seeking to negative position: " + this, e);
-                } else {
+                } else
+                {
                     throw new EOFException("seek past EOF: " + this);
                 }
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -520,15 +601,20 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         @Override
         public long readLong(long pos) throws IOException
         {
-            try {
+            try
+            {
                 return guard.getLong(curBuf, (int) pos);
-            } catch (IllegalArgumentException e) {
-                if (pos < 0) {
+            } catch (IllegalArgumentException e)
+            {
+                if (pos < 0)
+                {
                     throw new IllegalArgumentException("Seeking to negative position: " + this, e);
-                } else {
+                } else
+                {
                     throw new EOFException("seek past EOF: " + this);
                 }
-            } catch (NullPointerException npe) {
+            } catch (NullPointerException npe)
+            {
                 throw new AlreadyClosedException("Already closed: " + this);
             }
         }
@@ -547,9 +633,11 @@ public abstract class ByteBufferIndexInput extends Lucene8xIndexInput implements
         {
             super(resourceDescription, buffers, length, chunkSizePower, guard);
             this.offset = offset;
-            try {
+            try
+            {
                 seek(0L);
-            } catch (IOException ioe) {
+            } catch (IOException ioe)
+            {
                 throw new AssertionError(ioe);
             }
         }

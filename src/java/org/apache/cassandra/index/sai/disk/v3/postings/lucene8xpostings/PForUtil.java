@@ -32,8 +32,10 @@ public final class PForUtil
 
     public static boolean allEqual(long[] l)
     {
-        for (int i = 1; i < ForUtil.BLOCK_SIZE; ++i) {
-            if (l[i] != l[0]) {
+        for (int i = 1; i < ForUtil.BLOCK_SIZE; ++i)
+        {
+            if (l[i] != l[0])
+            {
                 return false;
             }
         }
@@ -55,8 +57,10 @@ public final class PForUtil
         // At most 7 exceptions
         final long[] top8 = new long[8];
         Arrays.fill(top8, -1L);
-        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
-            if (longs[i] > top8[0]) {
+        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i)
+        {
+            if (longs[i] > top8[0])
+            {
                 top8[0] = longs[i];
                 Arrays.sort(top8); // For only 8 entries we just sort on every iteration instead of maintaining a PQ
             }
@@ -67,16 +71,21 @@ public final class PForUtil
         final int patchedBitsRequired = Math.max(PackedInts.bitsRequired(top8[0]), maxBitsRequired - 8);
         int numExceptions = 0;
         final long maxUnpatchedValue = (1L << patchedBitsRequired) - 1;
-        for (int i = 1; i < 8; ++i) {
-            if (top8[i] > maxUnpatchedValue) {
+        for (int i = 1; i < 8; ++i)
+        {
+            if (top8[i] > maxUnpatchedValue)
+            {
                 numExceptions++;
             }
         }
         final byte[] exceptions = new byte[numExceptions * 2];
-        if (numExceptions > 0) {
+        if (numExceptions > 0)
+        {
             int exceptionCount = 0;
-            for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
-                if (longs[i] > maxUnpatchedValue) {
+            for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i)
+            {
+                if (longs[i] > maxUnpatchedValue)
+                {
                     exceptions[exceptionCount * 2] = (byte) i;
                     exceptions[exceptionCount * 2 + 1] = (byte) (longs[i] >>> patchedBitsRequired);
                     longs[i] &= maxUnpatchedValue;
@@ -86,13 +95,16 @@ public final class PForUtil
             assert exceptionCount == numExceptions : exceptionCount + " " + numExceptions;
         }
 
-        if (allEqual(longs) && maxBitsRequired <= 8) {
-            for (int i = 0; i < numExceptions; ++i) {
+        if (allEqual(longs) && maxBitsRequired <= 8)
+        {
+            for (int i = 0; i < numExceptions; ++i)
+            {
                 exceptions[2 * i + 1] = (byte) (Byte.toUnsignedLong(exceptions[2 * i + 1]) << patchedBitsRequired);
             }
             out.writeByte((byte) (numExceptions << 5));
             out.writeVLong(longs[0]);
-        } else {
+        } else
+        {
             final int token = (numExceptions << 5) | patchedBitsRequired;
             out.writeByte((byte) token);
             forUtil.encode(longs, patchedBitsRequired, out);
@@ -108,12 +120,15 @@ public final class PForUtil
         final int token = Byte.toUnsignedInt(in.readByte());
         final int bitsPerValue = token & 0x1f;
         final int numExceptions = token >>> 5;
-        if (bitsPerValue == 0) {
+        if (bitsPerValue == 0)
+        {
             Arrays.fill(longs, 0, ForUtil.BLOCK_SIZE, in.readVLong());
-        } else {
+        } else
+        {
             forUtil.decode(bitsPerValue, in, longs);
         }
-        for (int i = 0; i < numExceptions; ++i) {
+        for (int i = 0; i < numExceptions; ++i)
+        {
             longs[Byte.toUnsignedInt(in.readByte())] |= Byte.toUnsignedLong(in.readByte()) << bitsPerValue;
         }
     }
@@ -126,10 +141,12 @@ public final class PForUtil
         final int token = Byte.toUnsignedInt(in.readByte());
         final int bitsPerValue = token & 0x1f;
         final int numExceptions = token >>> 5;
-        if (bitsPerValue == 0) {
+        if (bitsPerValue == 0)
+        {
             in.readVLong();
             in.skipBytes((numExceptions << 1));
-        } else {
+        } else
+        {
             in.skipBytes(forUtil.numBytes(bitsPerValue) + (numExceptions << 1));
         }
     }

@@ -32,8 +32,10 @@ public class ForDeltaUtil
     // IDENTITY_PLUS_ONE[i] == i+1
     private static final long[] IDENTITY_PLUS_ONE = new long[ForUtil.BLOCK_SIZE];
 
-    static {
-        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
+    static
+    {
+        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i)
+        {
             IDENTITY_PLUS_ONE[i] = i + 1;
         }
     }
@@ -42,7 +44,8 @@ public class ForDeltaUtil
     {
         System.arraycopy(IDENTITY_PLUS_ONE, 0, arr, 0, ForUtil.BLOCK_SIZE);
         // This loop gets auto-vectorized
-        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
+        for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i)
+        {
             arr[i] += base;
         }
     }
@@ -60,11 +63,14 @@ public class ForDeltaUtil
      */
     public void encodeDeltas(long[] longs, DataOutput out) throws IOException
     {
-        if (longs[0] == 1 && PForUtil.allEqual(longs)) { // happens with very dense postings
+        if (longs[0] == 1 && PForUtil.allEqual(longs))
+        { // happens with very dense postings
             out.writeByte((byte) 0);
-        } else {
+        } else
+        {
             long or = 0;
-            for (long l : longs) {
+            for (long l : longs)
+            {
                 or |= l;
             }
             assert or != 0;
@@ -80,9 +86,11 @@ public class ForDeltaUtil
     public void decodeAndPrefixSum(Lucene8xDataInput in, long base, long[] longs) throws IOException
     {
         final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
-        if (bitsPerValue == 0) {
+        if (bitsPerValue == 0)
+        {
             prefixSumOfOnes(longs, base);
-        } else {
+        } else
+        {
             forUtil.decodeAndPrefixSum(bitsPerValue, in, base, longs);
         }
     }
@@ -93,7 +101,8 @@ public class ForDeltaUtil
     void skip(DataInput in) throws IOException
     {
         final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
-        if (bitsPerValue != 0) {
+        if (bitsPerValue != 0)
+        {
             in.skipBytes(forUtil.numBytes(bitsPerValue));
         }
     }

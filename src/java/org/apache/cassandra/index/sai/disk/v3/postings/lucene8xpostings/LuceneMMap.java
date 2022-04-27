@@ -48,7 +48,8 @@ public class LuceneMMap
 {
     public static Lucene8xIndexInput openLuceneInput(Path path) throws IOException
     {
-        try (FileChannel c = FileChannel.open(path, StandardOpenOption.READ)) {
+        try (FileChannel c = FileChannel.open(path, StandardOpenOption.READ))
+        {
             int chunkSizePower = 31 - Integer.numberOfLeadingZeros(DEFAULT_MAX_CHUNK_SIZE);
             final String resourceDescription = "MMapIndexInput(path=\"" + path.toString() + "\")";
             final boolean useUnmap = UNMAP_SUPPORTED;
@@ -60,7 +61,8 @@ public class LuceneMMap
 
     public static Lucene8xIndexInput openLuceneInput(FileHandle handle) throws IOException
     {
-        if (DEFAULT_MAX_CHUNK_SIZE <= 0) {
+        if (DEFAULT_MAX_CHUNK_SIZE <= 0)
+        {
             throw new IllegalArgumentException("Maximum chunk size for mmap must be >0");
         }
         int chunkSizePower = 31 - Integer.numberOfLeadingZeros(DEFAULT_MAX_CHUNK_SIZE);
@@ -89,13 +91,16 @@ public class LuceneMMap
      */
     private static final ByteBufferGuard.BufferCleaner CLEANER;
 
-    static {
+    static
+    {
         final Object hack = AccessController.doPrivileged((PrivilegedAction<Object>) LuceneMMap::unmapHackImpl);
-        if (hack instanceof ByteBufferGuard.BufferCleaner) {
+        if (hack instanceof ByteBufferGuard.BufferCleaner)
+        {
             CLEANER = (ByteBufferGuard.BufferCleaner) hack;
             UNMAP_SUPPORTED = true;
             UNMAP_NOT_SUPPORTED_REASON = null;
-        } else {
+        } else
+        {
             CLEANER = null;
             UNMAP_SUPPORTED = false;
             UNMAP_NOT_SUPPORTED_REASON = hack.toString();
@@ -106,8 +111,10 @@ public class LuceneMMap
     private static Object unmapHackImpl()
     {
         final MethodHandles.Lookup lookup = lookup();
-        try {
-            try {
+        try
+        {
+            try
+            {
                 // *** sun.misc.Unsafe unmapping (Java 9+) ***
                 final Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
                 // first check if Unsafe has the right method, otherwise we can give up
@@ -119,10 +126,12 @@ public class LuceneMMap
                 f.setAccessible(true);
                 final Object theUnsafe = f.get(null);
                 return newBufferCleaner(ByteBuffer.class, unmapper.bindTo(theUnsafe));
-            } catch (SecurityException se) {
+            } catch (SecurityException se)
+            {
                 // rethrow to report errors correctly (we need to catch it here, as we also catch RuntimeException below!):
                 throw se;
-            } catch (ReflectiveOperationException | RuntimeException e) {
+            } catch (ReflectiveOperationException | RuntimeException e)
+            {
                 // *** sun.misc.Cleaner unmapping (Java 8) ***
                 final Class<?> directBufferClass = Class.forName("java.nio.DirectByteBuffer");
 
@@ -149,11 +158,13 @@ public class LuceneMMap
                         .asType(methodType(void.class, ByteBuffer.class));
                 return newBufferCleaner(directBufferClass, unmapper);
             }
-        } catch (SecurityException se) {
+        } catch (SecurityException se)
+        {
             return "Unmapping is not supported, because not all required permissions are given to the Lucene JAR file: " + se +
                     " [Please grant at least the following permissions: RuntimePermission(\"accessClassInPackage.sun.misc\") " +
                     " and ReflectPermission(\"suppressAccessChecks\")]";
-        } catch (ReflectiveOperationException | RuntimeException e) {
+        } catch (ReflectiveOperationException | RuntimeException e)
+        {
             return "Unmapping is not supported on this platform, because internal Java APIs are not compatible with this Lucene version: " + e;
         }
     }
@@ -163,22 +174,27 @@ public class LuceneMMap
         assert Objects.equals(methodType(void.class, ByteBuffer.class), unmapper.type());
         return (String resourceDescription, ByteBuffer buffer) ->
         {
-            if (!buffer.isDirect()) {
+            if (!buffer.isDirect())
+            {
                 throw new IllegalArgumentException("unmapping only works with direct buffers");
             }
-            if (!unmappableBufferClass.isInstance(buffer)) {
+            if (!unmappableBufferClass.isInstance(buffer))
+            {
                 throw new IllegalArgumentException("buffer is not an instance of " + unmappableBufferClass.getName());
             }
             final Throwable error = AccessController.doPrivileged((PrivilegedAction<Throwable>) () ->
             {
-                try {
+                try
+                {
                     unmapper.invokeExact(buffer);
                     return null;
-                } catch (Throwable t) {
+                } catch (Throwable t)
+                {
                     return t;
                 }
             });
-            if (error != null) {
+            if (error != null)
+            {
                 throw new IOException("Unable to unmap the mapped buffer: " + resourceDescription, error);
             }
         };
@@ -201,15 +217,18 @@ public class LuceneMMap
         ByteBuffer buffers[] = new ByteBuffer[nrBuffers];
 
         long bufferStart = 0L;
-        for (int bufNr = 0; bufNr < nrBuffers; bufNr++) {
+        for (int bufNr = 0; bufNr < nrBuffers; bufNr++)
+        {
             int bufSize = (int) ((length > (bufferStart + chunkSize))
                     ? chunkSize
                     : (length - bufferStart)
             );
             MappedByteBuffer buffer;
-            try {
+            try
+            {
                 buffer = fc.map(FileChannel.MapMode.READ_ONLY, offset + bufferStart, bufSize);
-            } catch (IOException ioe) {
+            } catch (IOException ioe)
+            {
                 throw convertMapFailedIOException(ioe, resourceDescription, bufSize);
             }
             buffers[bufNr] = buffer;
@@ -223,22 +242,28 @@ public class LuceneMMap
     {
         final String originalMessage;
         final Throwable originalCause;
-        if (ioe.getCause() instanceof OutOfMemoryError) {
+        if (ioe.getCause() instanceof OutOfMemoryError)
+        {
             // nested OOM confuses users, because it's "incorrect", just print a plain message:
             originalMessage = "Map failed";
             originalCause = null;
-        } else {
+        } else
+        {
             originalMessage = ioe.getMessage();
             originalCause = ioe.getCause();
         }
         final String moreInfo;
-        if (!Constants.JRE_IS_64BIT) {
+        if (!Constants.JRE_IS_64BIT)
+        {
             moreInfo = "MMapDirectory should only be used on 64bit platforms, because the address space on 32bit operating systems is too small. ";
-        } else if (Constants.WINDOWS) {
+        } else if (Constants.WINDOWS)
+        {
             moreInfo = "Windows is unfortunately very limited on virtual address space. If your index size is several hundred Gigabytes, consider changing to Linux. ";
-        } else if (Constants.LINUX) {
+        } else if (Constants.LINUX)
+        {
             moreInfo = "Please review 'ulimit -v', 'ulimit -m' (both should return 'unlimited'), and 'sysctl vm.max_map_count'. ";
-        } else {
+        } else
+        {
             moreInfo = "Please review 'ulimit -v', 'ulimit -m' (both should return 'unlimited'). ";
         }
         final IOException newIoe = new IOException(String.format(Locale.ENGLISH,
