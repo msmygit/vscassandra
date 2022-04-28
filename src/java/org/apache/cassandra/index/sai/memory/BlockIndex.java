@@ -315,10 +315,9 @@ class BlockIndex extends MemoryIndex
         {
             upperBound = encode(expression.upper.value.encoded);
             upperInclusive = expression.upper.inclusive;
-            if (!upperInclusive)
-            {
-                upperBound = nudgeReverse(upperBound, maxTermLength.get());
-            }
+            final int maxTermLen = maxTermLength.get();
+            if (!upperInclusive && maxTermLen > 0)
+                upperBound = nudgeReverse(upperBound, maxTermLen);
         }
 
         final ByteComparable encodedMinTerm = encode(getMinTerm());
