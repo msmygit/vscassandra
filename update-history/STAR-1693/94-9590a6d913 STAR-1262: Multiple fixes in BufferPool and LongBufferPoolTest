@@ -1,0 +1,122 @@
+--- a/build.xml
++++ b/build.xml
+@@ -1184,11 +1184,11 @@
+     </target>
+ 
+     <!-- creates release tarballs -->
+-<<<<<<<
+-    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
+-=======
++<<<<<<< HEAD
+     <target name="artifacts" depends="_artifacts-init,gen-doc,sources-jar"
+->>>>>>>
++=======
++    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
++>>>>>>> 2c63a3b936 (STAR-1147: Improve unit-test performance (#360))
+             description="Create DSE DB release artifacts">
+       <tar compression="gzip" longfile="gnu"
+         destfile="${build.dir}/${final.name}-bin.tar.gz">
+--- a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
++++ b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+@@ -22,11 +22,11 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-<<<<<<<
++<<<<<<< HEAD
+ import com.google.common.annotations.VisibleForTesting;
+ =======
+ import com.google.common.base.Preconditions;
+->>>>>>>
++>>>>>>> 6e77c155f2 (STAR-985: allow substituting StorageProxy::mutateAtomically implementation (#316))
+ import com.google.common.collect.Iterables;
+ import com.google.common.collect.Lists;
+ import net.openhft.chronicle.core.util.ThrowingFunction;
+--- a/test/burn/org/apache/cassandra/utils/memory/LongBufferPoolTest.java
++++ b/test/burn/org/apache/cassandra/utils/memory/LongBufferPoolTest.java
+@@ -344,10 +344,7 @@
+             {
+                 // request all threads to release all buffers to the bufferPool
+                 testEnv.shouldFreeMemoryAndSuspend = true;
+-<<<<<<<
+-=======
+                 // wait until allocations stop
+->>>>>>>
+                 testEnv.stopAllocationsBarrier.await(10, TimeUnit.SECONDS);
+                 // wait until all memory released
+                 testEnv.freedAllMemoryBarrier.await(10, TimeUnit.SECONDS);
+@@ -361,11 +358,8 @@
+             }
+             catch (TimeoutException e)
+             {
+-<<<<<<<
+-=======
+                 // a thread that is done will not reach the barriers, so timeout is unexpected only if
+                 // all threads are still running
+->>>>>>>
+                 if (testEnv.countDoneThreads() == 0)
+                 {
+                     logger.error("Some threads have stalled and didn't reach the barrier", e);
+@@ -410,12 +404,8 @@
+ 
+             void testOne() throws Exception
+             {
+-<<<<<<<
+                 if (testEnv.shouldFreeMemoryAndSuspend)
+                     freeAllAndSuspend();
+-=======
+-                testEnv.maybeSuspendAndFreeMemory(this::freeAll);
+->>>>>>>
+ 
+                 long currentTargetSize = rand.nextInt(testEnv.poolSize / 1024) == 0 ? 0 : targetSize;
+                 int spinCount = 0;
+@@ -506,18 +496,13 @@
+                 while (recycleFromNeighbour());
+             }
+ 
+-<<<<<<<
+             /**
+              * Returns all allocated buffers back to the buffer pool.
+              */
+-            void freeAll()
+-            {
+-=======
+             void freeAllAndSuspend() throws BrokenBarrierException, InterruptedException
+             {
+                 testEnv.stopAllocationsBarrier.await();   // make sure other threads don't allocate any more buffers
+ 
+->>>>>>>
+                 while (checks.size() > 0)
+                 {
+                     BufferCheck check = sample();
+@@ -534,12 +519,9 @@
+                 }
+ 
+                 bufferPool.releaseLocal();
+-<<<<<<<
+-=======
+ 
+                 testEnv.freedAllMemoryBarrier.await();    // notify others we freed everything
+                 testEnv.resumeAllocationsBarrier.await(); // wait until the main thread is done with all the checks
+->>>>>>>
+             }
+ 
+             void cleanup()
+@@ -628,7 +610,6 @@
+                     if (pendingBuffersCount.get() == 0)
+                     {
+                         count = 0;
+-<<<<<<<
+                         if (testEnv.shouldFreeMemoryAndSuspend)
+                         {
+                             testEnv.stopAllocationsBarrier.await();
+@@ -636,9 +617,6 @@
+                             testEnv.freedAllMemoryBarrier.await();
+                             testEnv.resumeAllocationsBarrier.await();
+                         }
+-=======
+-                        testEnv.maybeSuspendAndFreeMemory(bufferPool::releaseLocal);
+->>>>>>>
+                     } else
+                     {
+                         Thread.yield();
