@@ -42,27 +42,6 @@ import static org.apache.cassandra.index.sai.disk.v3.BlockTermsTest.toBytes;
 public class UpperPostingsTest extends SaiRandomizedTest
 {
     @Test
-    // TODO: remove
-    public void baseUnitLevel() throws Exception
-    {
-        final int blockSize = 1024;
-        final long pointCount = 60_882_340;
-        final int baseUnit = 10;
-
-        int levelBlockSize = blockSize;
-        int level = 0;
-
-        while (true)
-        {
-            level++;
-            levelBlockSize *= baseUnit;
-
-            if (levelBlockSize >= pointCount)
-                break;
-        }
-    }
-
-    @Test
     // TODO: remove?
     public void test() throws Exception
     {
@@ -177,7 +156,7 @@ public class UpperPostingsTest extends SaiRandomizedTest
     }
 
     @Test
-    public void test2() throws Exception
+    public void testRandom() throws Exception
     {
         final IndexDescriptor indexDescriptor = newIndexDescriptor();
         final String index = newIndex();
@@ -188,10 +167,9 @@ public class UpperPostingsTest extends SaiRandomizedTest
         final int count = nextInt(1, 100_000);
 
         int value = 0;
-
         int rowCount = 0;
-
         long rowid = 0;
+
         for (int i = 0; i < count; i++)
         {
             int valueCount = nextInt(1, 50);

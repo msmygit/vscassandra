@@ -704,7 +704,6 @@ public class BlockTerms
                     postingLists.add(lastFilterPostings.peekable());
             }
 
-            // System.out.println("postingLists.size="+postingLists.size());
             return MergePostingList.merge(postingLists);
         }
 
@@ -1420,6 +1419,9 @@ public class BlockTerms
                 }
             }
 
+            // the upper postings crc's are available
+            // after writing the upper postings
+            // a new meta is created
             meta = new Meta(pointId,
                             postingsBlockSize,
                             maxTermLength,
@@ -1440,6 +1442,7 @@ public class BlockTerms
                             minRowId,
                             maxRowId);
 
+            // replace relevant components with the new meta string map
             if (upperPostingsMetaCRC != null)
             {
                 final Map<String, String> map = meta.stringMap();
@@ -1727,9 +1730,7 @@ public class BlockTerms
             postingsBlockSameTerms = LongBitSet.ensureCapacity(postingsBlockSameTerms, postingsBlockCount + 1);
 
             if (!currentPostingsBlock.isEmpty() && currentPostingsBlock.sameTerms())
-            {
                 postingsBlockSameTerms.set(postingsBlockCount);
-            }
 
             flushPostingsBlock();
 
@@ -1778,7 +1779,6 @@ public class BlockTerms
             private final BytesRefBuilder spare = new BytesRefBuilder();
             private final LongArrayList postings = new LongArrayList();
             private int count = 0;
-            private int blockId;
             private boolean sameTerms = true;
 
             public boolean isEmpty()

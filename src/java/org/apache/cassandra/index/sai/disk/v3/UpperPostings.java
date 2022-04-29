@@ -131,8 +131,6 @@ public class UpperPostings
                 final int startDerivedIdx = (int)(startPoint / levelLength);
                 final int endDerivedIdx = (int)(endPoint / levelLength);
 
-                final LongArray fps = levelFPMap.get(level);
-
                 final long levelGatheredStart = gatheredStart;
                 final long levelGatheredEnd = gatheredEnd;
 
@@ -140,7 +138,7 @@ public class UpperPostings
                 // iterate forwards over the level file pointers
                 // process the first section
                 // then skip to the last section
-                for (int x = startDerivedIdx; x < fps.length(); x++)
+                for (int x = startDerivedIdx; x < levelPostingFPs.length(); x++)
                 {
                     if (x > endDerivedIdx)
                         break;
@@ -338,6 +336,7 @@ public class UpperPostings
             {
                 for (Map.Entry<Integer,LongArray> entry : levelFPMap.entrySet())
                 {
+                    @SuppressWarnings("resource")
                     final SegmentNumericValuesWriter numericWriter = new SegmentNumericValuesWriter(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,
                                                                                                     output,
                                                                                                     null,
