@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -946,12 +947,25 @@ public abstract class AbstractCluster<I extends IInstance> implements ICluster<I
         return findClassesMarkedWith(Isolated.class);
     }
 
+    private static Reflections reflections;
+    private static Map<String, Set<String>> scanCache;
+
     private static Set<String> findClassesMarkedWith(Class<? extends Annotation> annotation)
     {
-        return new Reflections(ConfigurationBuilder.build("org.apache.cassandra").setExpandSuperTypes(false))
-               .getTypesAnnotatedWith(annotation).stream()
-               .map(Class::getName)
-               .collect(Collectors.toSet());
+        if (reflections == null)
+            reflections = new Reflections(ConfigurationBuilder.build("org.apache.cassandra").setExpandSuperTypes(false));
+
+        if (scanCache == null)
+            scanCache = new HashMap<>(2);
+
+        if (scanCache.containsKey(annotation.getName()))
+            return scanCache.get(annotation.getName());
+
+        Set<String> result = reflections.getTypesAnnotatedWith(annotation).stream()
+                                        .map(Class::getName)
+                                        .collect(Collectors.toSet());
+        scanCache.put(annotation.getName(), result);
+        return result;
     }
 }
 
