@@ -118,7 +118,6 @@ public class OffheapBytesTest extends SaiRandomizedTest
         slice3.position(position);
         slice3.limit(position + bytes3.length);
 
-        OffheapBytes offheapBytes = new OffheapBytes(slice);
         OffheapBytes offheapBytes2 = new OffheapBytes(slice2);
         OffheapBytes offheapBytes3 = new OffheapBytes(slice3);
 

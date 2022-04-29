@@ -37,14 +37,32 @@ public class OffheapBytesArray
     public final static int BYTE_BLOCK_SIZE = 1 << BYTE_BLOCK_SHIFT; // 64kb
 
     private int currentBlockIndex = 0;
-    private int count = 0;
     private ByteBuffer[] byteBuffers = new ByteBuffer[10];
     private ByteBuffer currentBuffer = null;
-    private int currentOffset = 0;
 
     public OffheapBytesArray()
     {
         allocateBuffer();
+    }
+
+    public OffheapBytes add(BytesRef bytes)
+    {
+        if (bytes.length > BYTE_BLOCK_SIZE)
+            throw new IllegalArgumentException("Bytes length cannot be greater than the block size bytes.length=" + bytes.length + " byteblocksize=" + BYTE_BLOCK_SIZE);
+
+        if (bytes.length > currentBuffer.remaining())
+        {
+            allocateBuffer();
+            return add(bytes);
+        }
+        int position = currentBuffer.position();
+        currentBuffer.put(bytes.bytes, bytes.offset, bytes.length);
+
+        ByteBuffer slice = currentBuffer.duplicate();
+        slice.position(position);
+        slice.limit(position + bytes.length);
+
+        return new OffheapBytes(slice);
     }
 
     private void allocateBuffer()
@@ -52,29 +70,6 @@ public class OffheapBytesArray
         currentBuffer = ByteBuffer.allocateDirect(BYTE_BLOCK_SIZE);
         byteBuffers = ArrayUtil.grow(byteBuffers, currentBlockIndex + 1);
         byteBuffers[currentBlockIndex] = currentBuffer;
-        currentOffset = BYTE_BLOCK_SIZE * currentBlockIndex;
         currentBlockIndex++;
-    }
-
-    public OffheapBytes add(BytesRef bytes)
-    {
-        if (bytes.length > currentBuffer.remaining())
-        {
-            allocateBuffer();
-            return add(bytes);
-        }
-        else
-        {
-            int position = currentBuffer.position();
-            currentBuffer.put(bytes.bytes, bytes.offset, bytes.length);
-
-            ByteBuffer slice = currentBuffer.duplicate();
-            slice.position(position);
-            slice.limit(position + bytes.length);
-
-            count++;
-
-            return new OffheapBytes(slice);
-        }
     }
 }

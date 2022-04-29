@@ -546,15 +546,15 @@ class BlockIndex extends MemoryIndex
      */
     public static byte[] nudge(byte[] orig)
     {
-        byte[] bytes = Arrays.copyOf(orig, orig.length + 1);
+        final byte[] bytes = Arrays.copyOf(orig, orig.length + 1);
         bytes[orig.length] = (int) 0; // unsigned requires cast
         return bytes;
     }
 
     public static ByteComparable nudgeReverse(ByteComparable comp, int maxTermLength)
     {
-        byte[] bytes = ByteSourceInverse.readBytes(comp.asComparableBytes(ByteComparable.Version.OSS41));
-        byte[] bytes2 = nudgeReverse(bytes, maxTermLength);
+        final byte[] bytes = ByteSourceInverse.readBytes(comp.asComparableBytes(ByteComparable.Version.OSS41));
+        final byte[] bytes2 = nudgeReverse(bytes, maxTermLength);
         return ByteComparable.fixedLength(bytes2);
     }
 
