@@ -27,6 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
+
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.transport.ClientResourceLimits.Overload;
 import org.apache.cassandra.utils.concurrent.NonBlockingRateLimiter;
 import org.slf4j.Logger;
@@ -56,6 +58,8 @@ import static org.apache.cassandra.utils.concurrent.NonBlockingRateLimiter.NO_OP
 
 public class SimpleClient implements Closeable
 {
+    private static final long QUIET_PERIOD_MS = CassandraRelevantProperties.SIMPLE_CLIENT_QUIET_PERIOD_MS.getLong();
+    private static final long SHUTDOWN_TIMEOUT_MS = CassandraRelevantProperties.SIMPLE_CLIENT_SHUTDOWN_TIMEOUT_MS.getLong();
 
     public static final int TIMEOUT_SECONDS = 10;
 
@@ -231,7 +235,7 @@ public class SimpleClient implements Closeable
         channel = future.awaitUninterruptibly().channel();
         if (!future.isSuccess())
         {
-            bootstrap.group().shutdownGracefully();
+            bootstrap.group().shutdownGracefully(QUIET_PERIOD_MS, SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             throw new IOException("Connection Error", future.cause());
         }
     }
@@ -273,7 +277,7 @@ public class SimpleClient implements Closeable
         channel.close().awaitUninterruptibly();
 
         // Shut down all thread pools to exit.
-        bootstrap.group().shutdownGracefully();
+        bootstrap.group().shutdownGracefully(QUIET_PERIOD_MS, SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
     public Message.Response execute(Message.Request request)

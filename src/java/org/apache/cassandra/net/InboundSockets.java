@@ -20,6 +20,7 @@ package org.apache.cassandra.net;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -36,11 +37,15 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import io.netty.util.concurrent.PromiseNotifier;
 import io.netty.util.concurrent.SucceededFuture;
 import org.apache.cassandra.concurrent.NamedThreadFactory;
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.FBUtilities;
 
 class InboundSockets
 {
+    private final static long QUIET_PERIOD_MS = CassandraRelevantProperties.INBOUND_SOCKET_QUIET_PERIOD_MS.getLong();
+    private final static long SHUTDOWN_TIMEOUT_MS = CassandraRelevantProperties.INBOUND_SOCKET_SHUTDOWN_TIMEOUT_MS.getLong();
+
     /**
      * A simple struct to wrap up the components needed for each listening socket.
      */
@@ -127,7 +132,7 @@ class InboundSockets
                 closing.add(connections.close());
                 new FutureCombiner(closing)
                        .addListener(future -> {
-                           executor.shutdownGracefully();
+                           executor.shutdownGracefully(QUIET_PERIOD_MS, SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                            shutdownExecutors.accept(executor);
                        })
                        .addListener(new PromiseNotifier<>(done));

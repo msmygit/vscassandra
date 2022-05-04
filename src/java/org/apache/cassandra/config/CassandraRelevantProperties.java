@@ -269,6 +269,12 @@ public enum CassandraRelevantProperties
     SYSTEM_DISTRIBUTED_NTS_RF_OVERRIDE_PROPERTY("cassandra.system_distributed_replication_per_dc"),
     SYSTEM_DISTRIBUTED_NTS_DC_OVERRIDE_PROPERTY("cassandra.system_distributed_replication_dc_names"),
 
+    // the defaults come from netty.util.concurrent.AbstractEventExecutor
+    INBOUND_SOCKET_QUIET_PERIOD_MS("cassandra.inbound_socket.quiet_period_ms", "2000"),
+    INBOUND_SOCKET_SHUTDOWN_TIMEOUT_MS("cassandra.inbound_socket.shutdown_timeout_ms", "15000"),
+    SIMPLE_CLIENT_QUIET_PERIOD_MS("cassandra.simple_client.quiet_period_ms", "2000"),
+    SIMPLE_CLIENT_SHUTDOWN_TIMEOUT_MS("cassandra.simple_client.shutdown_timeout_ms", "15000"),
+
     ;
 
 
