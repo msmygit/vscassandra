@@ -47,6 +47,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
@@ -64,6 +65,7 @@ import static org.junit.Assert.fail;
 
 //TODO This test needs rethinking because we always now end up with a single segment after a flush
 // and we are not restricted to Integer.MAX_VALUE in the segments
+@RequiresVersion(version="ba")
 public class SegmentFlushTest
 {
     private static long segmentRowIdOffset;

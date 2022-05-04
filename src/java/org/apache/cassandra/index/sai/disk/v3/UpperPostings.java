@@ -114,8 +114,6 @@ public class UpperPostings
             final int firstLevel = 0;
             final int lastLevel = levelFPMap.lastKey();
 
-            //System.out.println("firstLevel="+firstLevel+" lastLevel="+lastLevel);
-
             long gatheredStart = Integer.MAX_VALUE;
             long gatheredEnd = -1;
 
