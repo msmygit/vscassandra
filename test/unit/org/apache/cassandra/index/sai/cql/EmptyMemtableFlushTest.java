@@ -25,9 +25,11 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 
 import static org.junit.Assert.assertEquals;
 
+@RequiresVersion(version="ba")
 public class EmptyMemtableFlushTest extends SAITester
 {
     @Test
