@@ -64,7 +64,6 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.Counter;
 
 /**
  * A block sorted primary key -> values map that implements
@@ -76,16 +75,16 @@ import org.apache.lucene.util.Counter;
  *
  */
 @NotThreadSafe // #add is not locked, BlockIndex should be used by MultiBlockIndex only
-class BlockIndex extends MemoryIndex
+class BlockRangeIndex extends MemoryIndex
 {
-    private static final Logger logger = LoggerFactory.getLogger(BlockIndex.class);
+    private static final Logger logger = LoggerFactory.getLogger(BlockRangeIndex.class);
 
     // offheap bytes primary key -> offheap bytes attached values
     private final ConcurrentSkipListMap<OffheapBytes,Values> map = new ConcurrentSkipListMap<>();
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
     private final AbstractType<?> validator;
     private final boolean isLiteral;
-    private final MultiBlockIndex parent;
+    private final MultiBlockRangeIndex parent;
     private final AtomicInteger maxTermLength = new AtomicInteger();
     private final OffheapBytesArray bytesArray = new OffheapBytesArray();
     private final BytesRef addBytesBuffer = new BytesRef(new byte[50]);
@@ -93,7 +92,7 @@ class BlockIndex extends MemoryIndex
     private final AtomicReference<PrimaryKey> maxKeyRef = new AtomicReference<>();
     private final AtomicInteger count = new AtomicInteger(0);
 
-    public BlockIndex(IndexContext indexContext, MultiBlockIndex parent)
+    public BlockRangeIndex(IndexContext indexContext, MultiBlockRangeIndex parent)
     {
         super(indexContext);
         this.analyzerFactory = indexContext.getAnalyzerFactory();
@@ -103,7 +102,7 @@ class BlockIndex extends MemoryIndex
     }
 
     @VisibleForTesting
-    public BlockIndex(IndexContext indexContext)
+    public BlockRangeIndex(IndexContext indexContext)
     {
         super(indexContext);
         this.analyzerFactory = indexContext.getAnalyzerFactory();
@@ -321,7 +320,12 @@ class BlockIndex extends MemoryIndex
         }
 
         final ByteComparable encodedMinTerm = encode(getMinTerm());
+        if (encodedMinTerm == null)
+            return false;
+
         final ByteComparable encodedMaxTerm = encode(getMaxTerm());
+        if (encodedMaxTerm == null)
+            return false;
 
         final Range<ByteCompObject> range = Range.between(new ByteCompObject(encodedMinTerm), new ByteCompObject(encodedMaxTerm));
 
@@ -330,6 +334,9 @@ class BlockIndex extends MemoryIndex
 
         if (upperBound == null)
             upperBound = encodedMaxTerm;
+
+        assert encodedMinTerm != null;
+        assert encodedMaxTerm != null;
 
         return range.isOverlappedBy(Range.between(new ByteCompObject(lowerBound), new ByteCompObject(upperBound)));
     }
@@ -507,6 +514,8 @@ class BlockIndex extends MemoryIndex
 
     private ByteComparable encode(ByteBuffer input)
     {
+        if (input == null)
+            return null;
         return isLiteral ? version -> append(ByteSource.of(input, version), ByteSource.TERMINATOR)
                          : version -> TypeUtil.asComparableBytes(input, validator, version);
     }

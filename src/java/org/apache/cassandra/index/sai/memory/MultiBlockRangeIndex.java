@@ -52,20 +52,20 @@ import org.apache.lucene.util.Sorter;
  * At query time, blocks that fall within the key and value range are iterated on in merged primary key
  * order until a match is found.
  *
- * @see BlockIndex
+ * @see BlockRangeIndex
  * <p>
  * Implements:
  * @see MemoryIndex
  */
 @ThreadSafe
-public class MultiBlockIndex extends MemoryIndex
+public class MultiBlockRangeIndex extends MemoryIndex
 {
     public static final int BLOCK_SIZE = 4000;
     final Object writeLock = new Object();
-    protected final ConcurrentLinkedQueue<BlockIndex> existingBlocks = new ConcurrentLinkedQueue<>();
-    protected final AtomicReference<BlockIndex> current = new AtomicReference<>();
+    protected final ConcurrentLinkedQueue<BlockRangeIndex> existingBlocks = new ConcurrentLinkedQueue<>();
+    protected final AtomicReference<BlockRangeIndex> current = new AtomicReference<>();
 
-    public MultiBlockIndex(IndexContext indexContext)
+    public MultiBlockRangeIndex(IndexContext indexContext)
     {
         super(indexContext);
     }
@@ -83,10 +83,10 @@ public class MultiBlockIndex extends MemoryIndex
     {
         synchronized (writeLock)
         {
-            BlockIndex currentIndex = current.get();
+            BlockRangeIndex currentIndex = current.get();
 
             if (currentIndex == null)
-                current.lazySet(currentIndex = new BlockIndex(indexContext, this));
+                current.lazySet(currentIndex = new BlockRangeIndex(indexContext, this));
 
             final long bytesUsed = currentIndex.add(key, clustering, value);
 
@@ -109,7 +109,7 @@ public class MultiBlockIndex extends MemoryIndex
     @Override
     public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange)
     {
-        final BlockIndex currentIndex = current.get();
+        final BlockRangeIndex currentIndex = current.get();
 
         final List<RangeIterator> iterators = new ArrayList<>();
 
@@ -120,7 +120,7 @@ public class MultiBlockIndex extends MemoryIndex
                 iterators.add(iterator);
         }
 
-        for (BlockIndex blockIndex : existingBlocks)
+        for (BlockRangeIndex blockIndex : existingBlocks)
         {
             // avoid duplicate block indexes
             if (blockIndex != currentIndex && blockIndex.contains(expression))
@@ -152,7 +152,7 @@ public class MultiBlockIndex extends MemoryIndex
         }
 
         int totalSize = 0;
-        for (BlockIndex blockIndex : existingBlocks)
+        for (BlockRangeIndex blockIndex : existingBlocks)
             totalSize += blockIndex.count();
 
         final OffheapBytes[] values = new OffheapBytes[totalSize];
@@ -160,7 +160,7 @@ public class MultiBlockIndex extends MemoryIndex
         final MutableInt index = new MutableInt(0);
 
         int maxLength = -1;
-        for (BlockIndex blockIndex : existingBlocks)
+        for (BlockRangeIndex blockIndex : existingBlocks)
         {
             blockIndex.gatherAllValuesAndKeysBytes(values, keys, index);
             maxLength = Math.max(maxLength, blockIndex.maxTermLength());

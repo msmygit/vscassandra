@@ -58,8 +58,8 @@ import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.lucene.util.BytesRef;
 
-import static org.apache.cassandra.index.sai.memory.BlockIndex.nudge;
-import static org.apache.cassandra.index.sai.memory.BlockIndex.nudgeReverse;
+import static org.apache.cassandra.index.sai.memory.BlockRangeIndex.nudge;
+import static org.apache.cassandra.index.sai.memory.BlockRangeIndex.nudgeReverse;
 
 public class BlockIndexTest extends SaiRandomizedTest
 {
@@ -75,6 +75,21 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         DatabaseDescriptor.daemonInitialization();
     }
+
+    @Test
+    public void testEmptyIndex() throws Exception
+    {
+        IndexContext indexContext = createContext();
+
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
+
+        Expression expression = new Expression(indexContext);
+        expression.add(Operator.GTE, Int32Type.instance.decompose(100));
+        expression.add(Operator.LTE, Int32Type.instance.decompose(200));
+        int hits = countHits(expression, blockIndex);
+        assertEquals(0, hits);
+    }
+
     @Test
     public void testRadixSort() throws Exception
     {
@@ -112,7 +127,7 @@ public class BlockIndexTest extends SaiRandomizedTest
             valuesKeys[x] = new OffheapBytes(Bytes.concat(value, key));
         }
 
-        MultiBlockIndex.ValuesKeysMSBRadixSorter sorter = new MultiBlockIndex.ValuesKeysMSBRadixSorter(Integer.MAX_VALUE, values, keys);
+        MultiBlockRangeIndex.ValuesKeysMSBRadixSorter sorter = new MultiBlockRangeIndex.ValuesKeysMSBRadixSorter(Integer.MAX_VALUE, values, keys);
 
         StringMSBRadixSorter luceneSorter = new StringMSBRadixSorter()
         {
@@ -323,7 +338,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     public void testRandom() throws Exception
     {
         IndexContext indexContext = createContext();
-        MultiBlockIndex blockIndex = new MultiBlockIndex(indexContext);
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
 
         TrieMemoryIndex trieIndex = new TrieMemoryIndex(indexContext);
 
@@ -370,7 +385,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        MultiBlockIndex blockIndex = new MultiBlockIndex(indexContext);
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
         for (int x = 0; x < 6000; x++)
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
@@ -412,7 +427,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        MultiBlockIndex blockIndex = new MultiBlockIndex(indexContext);
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
         for (int x = 0; x < 100; x++)
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
@@ -438,7 +453,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        MultiBlockIndex blockIndex = new MultiBlockIndex(indexContext);
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
 
         TrieMemoryIndex trieIndex = new TrieMemoryIndex(indexContext);
 
@@ -490,7 +505,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        MultiBlockIndex blockIndex = new MultiBlockIndex(indexContext);
+        MultiBlockRangeIndex blockIndex = new MultiBlockRangeIndex(indexContext);
         // more than the block size to yield 2 internal blocks
         for (int x = 0; x < 6000; x++)
         {
@@ -515,7 +530,7 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        BlockIndex blockIndex = new BlockIndex(indexContext);
+        BlockRangeIndex blockIndex = new BlockRangeIndex(indexContext);
         for (int x = 0; x < 100; x++)
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
@@ -553,33 +568,33 @@ public class BlockIndexTest extends SaiRandomizedTest
     {
         IndexContext indexContext = createContext();
 
-        BlockIndex blockIndex = new BlockIndex(indexContext);
+        BlockRangeIndex blockRangeIndex = new BlockRangeIndex(indexContext);
         for (int x = 50; x < 100; x++)
         {
             DecoratedKey key = Murmur3Partitioner.instance.decorateKey(Int32Type.instance.decompose(x));
             ByteBuffer value = Int32Type.instance.decompose(x);
-            blockIndex.add(key, Clustering.EMPTY, value);
+            blockRangeIndex.add(key, Clustering.EMPTY, value);
         }
 
         Expression expression = new Expression(indexContext);
         expression.add(Operator.GTE, Int32Type.instance.decompose(10));
         expression.add(Operator.LTE, Int32Type.instance.decompose(20));
-        assertFalse(blockIndex.contains(expression));
+        assertFalse(blockRangeIndex.contains(expression));
 
         expression = new Expression(indexContext);
         expression.add(Operator.GTE, Int32Type.instance.decompose(60));
         expression.add(Operator.LTE, Int32Type.instance.decompose(80));
-        assertTrue(blockIndex.contains(expression));
+        assertTrue(blockRangeIndex.contains(expression));
 
         expression = new Expression(indexContext);
         expression.add(Operator.GTE, Int32Type.instance.decompose(90));
         expression.add(Operator.LTE, Int32Type.instance.decompose(150));
-        assertTrue(blockIndex.contains(expression));
+        assertTrue(blockRangeIndex.contains(expression));
 
         expression = new Expression(indexContext);
         expression.add(Operator.GTE, Int32Type.instance.decompose(150));
         expression.add(Operator.LTE, Int32Type.instance.decompose(200));
-        assertFalse(blockIndex.contains(expression));
+        assertFalse(blockRangeIndex.contains(expression));
     }
 
     public IndexContext createContext()
@@ -599,7 +614,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         return new IndexContext(metadata, indexMetadata);
     }
 
-    public static int countHits(Expression expression, MultiBlockIndex blockIndex)
+    public static int countHits(Expression expression, MultiBlockRangeIndex blockIndex)
     {
         int hits = 0;
         RangeIterator rangeIterator = blockIndex.search(expression, null);
@@ -617,7 +632,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         return hits;
     }
 
-    public static int countHits(Expression expression, MultiBlockIndex blockIndex, int expectedIteratorCount)
+    public static int countHits(Expression expression, MultiBlockRangeIndex blockIndex, int expectedIteratorCount)
     {
         int hits = 0;
         RangeIterator rangeIterator = blockIndex.search(expression, null);
@@ -631,7 +646,7 @@ public class BlockIndexTest extends SaiRandomizedTest
         {
             if (expectedIteratorCount == 1)
             {
-                assertTrue(rangeIterator instanceof BlockIndex.ValuesRangeIterator);
+                assertTrue(rangeIterator instanceof BlockRangeIndex.ValuesRangeIterator);
             }
             else
             {

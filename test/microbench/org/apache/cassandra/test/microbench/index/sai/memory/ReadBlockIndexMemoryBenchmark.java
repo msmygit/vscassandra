@@ -28,7 +28,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.index.sai.memory.MultiBlockIndex;
+import org.apache.cassandra.index.sai.memory.MultiBlockRangeIndex;
 import org.apache.cassandra.index.sai.memory.TrieMemoryIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -66,7 +66,7 @@ public class ReadBlockIndexMemoryBenchmark extends AbstractTrieMemoryIndexBenchm
     private Expression[] integerEqualityExpressions;
     private Expression[] integerRangeExpressions;
 
-    private MultiBlockIndex integerBlockIndex;
+    private MultiBlockRangeIndex integerBlockIndex;
 
     @Setup(Level.Iteration)
     public void initialiseIndexes()
@@ -75,7 +75,7 @@ public class ReadBlockIndexMemoryBenchmark extends AbstractTrieMemoryIndexBenchm
         stringIndex = new TrieMemoryIndex(stringContext);
         integerIndex = new TrieMemoryIndex(integerContext);
 
-        integerBlockIndex = new MultiBlockIndex(integerContext);
+        integerBlockIndex = new MultiBlockRangeIndex(integerContext);
 
         int rowCount = 0;
         int keyCount = 0;

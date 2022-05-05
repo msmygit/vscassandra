@@ -23,8 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.db.Clustering;
-import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.index.sai.memory.MultiBlockIndex;
+import org.apache.cassandra.index.sai.memory.MultiBlockRangeIndex;
 import org.apache.cassandra.index.sai.memory.TrieMemoryIndex;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -53,7 +52,7 @@ public class WriteBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
     @Param({ "1"})
     protected int rowsPerPartition;
 
-    private MultiBlockIndex integerBlockIndex;
+    private MultiBlockRangeIndex integerBlockIndex;
 
     @Setup(Level.Iteration)
     public void initialiseColumnData()
@@ -66,7 +65,7 @@ public class WriteBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
     {
         integerIndex = new TrieMemoryIndex(integerContext);
 
-        integerBlockIndex = new MultiBlockIndex(integerContext);
+        integerBlockIndex = new MultiBlockRangeIndex(integerContext);
     }
 
     @Benchmark

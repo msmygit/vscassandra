@@ -25,9 +25,8 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.index.sai.memory.MemoryIndex;
-import org.apache.cassandra.index.sai.memory.MultiBlockIndex;
+import org.apache.cassandra.index.sai.memory.MultiBlockRangeIndex;
 import org.apache.cassandra.index.sai.memory.TrieMemoryIndex;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -57,7 +56,7 @@ public class FlushBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
     @Param({ "1"})
     protected int rowsPerPartition;
 
-    private MultiBlockIndex integerBlockIndex;
+    private MultiBlockRangeIndex integerBlockIndex;
 
     @Setup(Level.Iteration)
     public void initialiseColumnData()
@@ -70,7 +69,7 @@ public class FlushBlockMemoryIndexBenchmark extends AbstractTrieMemoryIndexBench
     {
         integerIndex = new TrieMemoryIndex(integerContext);
 
-        integerBlockIndex = new MultiBlockIndex(integerContext);
+        integerBlockIndex = new MultiBlockRangeIndex(integerContext);
 
         long size = 0;
         int rowCount = 0;
