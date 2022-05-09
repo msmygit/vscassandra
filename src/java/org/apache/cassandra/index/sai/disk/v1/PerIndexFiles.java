@@ -41,26 +41,6 @@ public class PerIndexFiles implements Closeable
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
         this.temporary = temporary;
-//        if (TypeUtil.isLiteral(indexContext.getValidator()))
-//        {
-//            if (indexDescriptor.fileFor(IndexComponent.POSTING_LISTS).exists())
-//                files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
-////            if (indexDescriptor.hasComponent(IndexComponent.POSTING_LISTS, indexContext))
-////                files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
-//            //if (indexDescriptor.hasComponent(IndexComponent.TERMS_DATA, indexContext))
-//            if (indexDescriptor.fileFor(IndexComponent.TERMS_DATA).exists())
-//                files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
-//        }
-//        else
-//        {
-//            // if (indexDescriptor.hasComponent(IndexComponent.KD_TREE, indexContext))
-//            if (indexDescriptor.fileFor(IndexComponent.KD_TREE).exists())
-//                files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, temporary));
-//
-//            //if (indexDescriptor.hasComponent(IndexComponent.KD_TREE_POSTING_LISTS, indexContext))
-//            if (indexDescriptor.fileFor(IndexComponent.KD_TREE_POSTING_LISTS).exists())
-//                files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, temporary));
-//        }
     }
 
     public boolean isTemporary()
@@ -96,14 +76,6 @@ public class PerIndexFiles implements Closeable
     protected FileHandle getFile(IndexComponent indexComponent)
     {
         return files.computeIfAbsent(indexComponent, (comp) -> indexDescriptor.createPerIndexFileHandle(indexComponent, indexContext, temporary));
-
-//        FileHandle file = files.get(indexComponent);
-//        if (file == null)
-//            throw new IllegalArgumentException(String.format(indexContext.logMessage("Component %s not found for SSTable %s"),
-//                                                             indexComponent,
-//                                                             indexDescriptor.descriptor));
-//
-//        return file;
     }
 
     @Override

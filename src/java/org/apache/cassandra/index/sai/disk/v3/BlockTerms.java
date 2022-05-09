@@ -98,7 +98,6 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
  * A point is defined as a term + rowid monotonic id.
  * The default postings block size is 1024 or 1k.
  */
-// TODO: upper level postings
 public class BlockTerms
 {
     public static final int DEFAULT_POSTINGS_BLOCK_SIZE = 1024;
@@ -843,7 +842,6 @@ public class BlockTerms
                                             postings);
         }
 
-        // TODO: for debugging, remove
         @VisibleForTesting
         IntArrayList openOrderMap(int block) throws IOException
         {
@@ -989,7 +987,6 @@ public class BlockTerms
                         final int maxBlock = (int) payloadValue;
 
                         // negative max block means all same values
-
                         final byte[] bytes = ByteSourceInverse.readBytes(pair.left);
                         if (ByteComparable.compare(ByteComparable.fixedLength(bytes), endComp, ByteComparable.Version.OSS41) > 0)
                         {

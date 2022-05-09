@@ -47,6 +47,11 @@ import org.apache.lucene.store.IndexOutput;
 
 import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.MONOTONIC_BLOCK_SIZE;
 
+/**
+ * Reads and writes the non-leaf level block postings.
+ *
+ *
+ */
 public class UpperPostings
 {
     public static class Reader implements AutoCloseable
@@ -204,7 +209,6 @@ public class UpperPostings
                     }
                 }
             }
-           //  System.out.println("postingsCount="+postingsCount);
         }
     }
 
@@ -320,7 +324,6 @@ public class UpperPostings
                     break;
 
                 levelFPMap.put(level, new LongArrayImpl(postingsFPs));
-                // System.out.println("leafFPs.size="+postingsFPs.size());
 
                 level++;
                 previousLevelPostingFPs = new LongArrayImpl(postingsFPs);
@@ -384,8 +387,6 @@ public class UpperPostings
                                            final boolean segmented,
                                            final LongArray previousLevelPostingFPs) throws IOException
         {
-            // System.out.println("processBlock level="+level+" baseUnit="+baseUnit);
-
             final LongArrayList levelFPs = new LongArrayList();
             final LongArrayList prevLevelFPs = new LongArrayList();
             for (int x = 0; x < previousLevelPostingFPs.length(); x++)
@@ -449,8 +450,6 @@ public class UpperPostings
                 }
             }
             final PostingList mergedPostings = MergePostingList.merge(queue);
-
-            // System.out.println("postings.size="+mergedPostings.size());
 
             try
             {
