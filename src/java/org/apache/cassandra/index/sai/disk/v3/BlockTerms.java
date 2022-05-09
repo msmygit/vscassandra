@@ -630,6 +630,7 @@ public class BlockTerms
          * @return Posting list of range matching rowids
          * @throws IOException
          */
+        @SuppressWarnings("resource")
         PostingList searchLeaves(BytesRef startTerm, BytesRef endTerm) throws IOException
         {
             if (startTerm == null)
@@ -713,6 +714,7 @@ public class BlockTerms
             return search(startTerm, endTerm, upperPostingsReader);
         }
 
+        @SuppressWarnings("resource")
         PostingList search(BytesRef startTerm,
                            BytesRef endTerm,
                            UpperPostings.Reader reader) throws IOException
@@ -757,11 +759,8 @@ public class BlockTerms
                 lastFP = firstFilterFP.value;
             }
 
-            final long upperPostingsStartPoint = (minBlockUse) * meta.postingsBlockSize;
-            final long upperPostingsEndPoint = (blockMax) * meta.postingsBlockSize;
-//
-//            System.out.println("upperPostingsStartPoint="+upperPostingsStartPoint);
-//            System.out.println("upperPostingsEndPoint="+upperPostingsEndPoint);
+            final long upperPostingsStartPoint = minBlockUse * (long)meta.postingsBlockSize;
+            final long upperPostingsEndPoint = blockMax * (long)meta.postingsBlockSize;
 
             reader.search(upperPostingsStartPoint, upperPostingsEndPoint, postingLists);
 

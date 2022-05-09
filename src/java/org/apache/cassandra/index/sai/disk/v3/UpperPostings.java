@@ -104,6 +104,7 @@ public class UpperPostings
             upperPostingsFile.close();
         }
 
+        @SuppressWarnings("resource")
         public void search(final long startPoint,
                            final long endPoint,
                            final PriorityQueue<PostingList.PeekablePostingList> queue) throws IOException
@@ -124,7 +125,7 @@ public class UpperPostings
                 final LongArray levelPostingFPs = levelFPMap.get(level);
 
                 final int levelUnit = (int) Math.pow(baseUnit, level);
-                final long levelLength = levelUnit * reader.meta.postingsBlockSize;
+                final long levelLength = levelUnit * (long)reader.meta.postingsBlockSize;
 
                 final int startDerivedIdx = (int)(startPoint / levelLength);
                 final int endDerivedIdx = (int)(endPoint / levelLength);
