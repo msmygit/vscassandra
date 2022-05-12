@@ -132,6 +132,10 @@ import org.apache.cassandra.metrics.Sampler;
 import org.apache.cassandra.metrics.Sampler.Sample;
 import org.apache.cassandra.metrics.Sampler.SamplerType;
 import org.apache.cassandra.metrics.TableMetrics;
+import org.apache.cassandra.nodes.Nodes;
+import org.apache.cassandra.nodes.virtual.LocalNodeSystemView;
+import org.apache.cassandra.nodes.virtual.NodesSystemViews;
+import org.apache.cassandra.nodes.virtual.PeersSystemView;
 import org.apache.cassandra.repair.TableRepairManager;
 import org.apache.cassandra.repair.consistent.admin.PendingStat;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -722,7 +726,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         }
 
         strategyContainer.shutdown();
-        SystemKeyspace.removeTruncationRecord(metadata.id);
+        Nodes.local().removeTruncationRecord(metadata.id);
 
         storageHandler.runWithReloadingDisabled(() -> {
             if (dropData)
@@ -2564,7 +2568,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
                 indexManager.truncateAllIndexesBlocking(truncatedAt);
                 viewManager.truncateBlocking(replayAfter, truncatedAt);
 
-                SystemKeyspace.saveTruncationRecord(metadata.id, truncatedAt, replayAfter);
+                Nodes.local().saveTruncationRecord(ColumnFamilyStore.this, truncatedAt, replayAfter);
                 logger.trace("cleaning out row cache");
                 invalidateCaches();
 
