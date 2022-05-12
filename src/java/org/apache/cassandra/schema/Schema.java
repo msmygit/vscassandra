@@ -43,6 +43,7 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.KeyspaceNotDefinedException;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.virtual.SystemViewsKeyspace;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -50,6 +51,10 @@ import org.apache.cassandra.exceptions.UnknownKeyspaceException;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.LocalStrategy;
+import org.apache.cassandra.nodes.LocalInfo;
+import org.apache.cassandra.nodes.Nodes;
+import org.apache.cassandra.nodes.virtual.LocalNodeSystemView;
+import org.apache.cassandra.nodes.virtual.PeersSystemView;
 import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
@@ -456,6 +461,17 @@ public class Schema implements SchemaProvider
         if (tableName.isEmpty())
             throw new InvalidRequestException("non-empty table is required");
 
+        if (keyspaceName.equals(SchemaConstants.SYSTEM_KEYSPACE_NAME))
+        {
+            if (tableName.equals(SystemKeyspace.LOCAL) || tableName.equals(SystemKeyspace.PEERS_V2))
+            {
+                KeyspaceMetadata systemViews = VirtualKeyspaceRegistry.instance.getKeyspaceMetadataNullable(SchemaConstants.SYSTEM_VIEWS_KEYSPACE_NAME);
+                if (systemViews == null)
+                    throw new InvalidRequestException(String.format("The %s keyspace is not available", SchemaConstants.SYSTEM_VIEWS_KEYSPACE_NAME));
+                return systemViews.getTableOrViewNullable(tableName.equals(SystemKeyspace.LOCAL) ? LocalNodeSystemView.NAME : PeersSystemView.NAME);
+            }
+        }
+
         KeyspaceMetadata keyspace = getKeyspaceMetadata(keyspaceName);
         if (keyspace == null)
             throw new KeyspaceNotDefinedException(format("keyspace %s does not exist", keyspaceName));
@@ -616,7 +632,7 @@ public class Schema implements SchemaProvider
     public synchronized void mergeAndUpdateVersion(SchemaTransformationResult result, boolean dropData)
     {
         if (online)
-            SystemKeyspace.updateSchemaVersion(result.after.getVersion());
+            Nodes.local().update(result.after.getVersion(), LocalInfo::setSchemaVersion, false);
         result = localDiff(result);
         schemaChangeNotifier.notifyPreChanges(result);
         merge(result.diff, dropData);

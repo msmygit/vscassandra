@@ -57,6 +57,8 @@ import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
 import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.metrics.KeyspaceMetrics;
+import org.apache.cassandra.nodes.Nodes;
+import org.apache.cassandra.nodes.virtual.NodesSystemViews;
 import org.apache.cassandra.repair.KeyspaceRepairManager;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
@@ -243,6 +245,11 @@ public class Keyspace
             }
         }
 
+        if (SchemaConstants.SYSTEM_KEYSPACE_NAME.equals(getName()) &&
+            columnFamilyName == null ||
+            (NodesSystemViews.LOCAL.equals(columnFamilyName) || NodesSystemViews.PEERS_V2.equals(columnFamilyName)))
+            Nodes.nodes().snapshot(snapshotName);
+
         if ((columnFamilyName != null) && !tookSnapShot)
             throw new IOException("Failed taking snapshot. Table " + columnFamilyName + " does not exist.");
     }
@@ -308,6 +315,9 @@ public class Keyspace
 
         List<File> snapshotDirs = Directories.getKSChildDirectories(keyspace);
         Directories.clearSnapshot(snapshotName, snapshotDirs, clearSnapshotRateLimiter);
+
+        if (SchemaConstants.SYSTEM_KEYSPACE_NAME.equals(keyspace))
+            Nodes.nodes().clearSnapshot(snapshotName);
     }
 
     /**

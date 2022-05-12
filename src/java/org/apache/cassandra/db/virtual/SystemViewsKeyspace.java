@@ -23,6 +23,8 @@ import org.apache.cassandra.index.sai.virtual.AnalyzerView;
 import org.apache.cassandra.index.sai.virtual.IndexesSystemView;
 import org.apache.cassandra.index.sai.virtual.SSTablesSystemView;
 import org.apache.cassandra.index.sai.virtual.SegmentsSystemView;
+import org.apache.cassandra.nodes.virtual.LocalNodeSystemView;
+import org.apache.cassandra.nodes.virtual.PeersSystemView;
 
 import static org.apache.cassandra.schema.SchemaConstants.VIRTUAL_VIEWS;
 
@@ -46,6 +48,8 @@ public final class SystemViewsKeyspace extends VirtualKeyspace
                     .add(new IndexesSystemView(VIRTUAL_VIEWS))
                     .add(new AnalyzerView(VIRTUAL_VIEWS))
                     .addAll(TableMetricTables.getAll(VIRTUAL_VIEWS))
+                    .add(new LocalNodeSystemView())
+                    .add(new PeersSystemView())
                     .build());
     }
 }
