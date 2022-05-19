@@ -653,9 +653,7 @@ public class BlockTerms
 
             // filter 1 block only and return
             if (minBlock == blockMax)
-            {
                 return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong());
-            }
 
             int minBlockUse = blockMinMax.left.intValue();
             final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
@@ -1114,7 +1112,6 @@ public class BlockTerms
         private final IndexContext context;
         private final PostingsWriter postingsWriter;
         private final RowIDIndex[] rowIDIndices;
-        private final int[] orderMapBuffer;
         private final boolean segmented;
         private final long orderMapStartFP, termsStartFP, termsIndexStartFP;
         private int maxTermLength = 0;
@@ -1122,7 +1119,7 @@ public class BlockTerms
         private long pointId = 0; // point count
         private long distinctTermCount = 0;
         private CachedBlock currentPostingsBlock = new CachedBlock(), previousPostingsBlock = new CachedBlock();
-        private LongBitSet postingsBlockSameTerms = new LongBitSet(DEFAULT_POSTINGS_BLOCK_SIZE); // postings blocks where all terms are the same
+        private LongBitSet postingsBlockSameTerms = new LongBitSet(DEFAULT_POSTINGS_BLOCK_SIZE); // postings blocks with same terms
         private LongBitSet rowIdsSeen = new LongBitSet(DEFAULT_POSTINGS_BLOCK_SIZE);
         private BytesBlockCache currentBytesCache = new BytesBlockCache();
         private BytesBlockCache previousBytesCache = new BytesBlockCache();
@@ -1156,7 +1153,6 @@ public class BlockTerms
             this.orderMapStartFP = this.orderMapOut.getFilePointer();
             this.postingsOut = indexDescriptor.openPerIndexOutput(IndexComponent.BLOCK_POSTINGS, context, true, segmented);
             this.postingsWriter = new PostingsWriter(postingsOut, postingsBlockSize);
-            this.orderMapBuffer = new int[postingsBlockSize];
             this.rowIDIndices = new RowIDIndex[postingsBlockSize];
             for (int x = 0; x < postingsBlockSize; x++)
             {
@@ -1276,9 +1272,7 @@ public class BlockTerms
                         // same terms block signed negative
                         // TODO: maybe use bitshift instead to save payload space
                         if (postingsBlockSameTerms.get(endBlock))
-                        {
                             endBlock = endBlock * -1;
-                        }
 
                         long encodedLong = (((long)startBlock) << 32) | (endBlock & 0xffffffffL);
                         // TODO: when the start and end block's are the same encode a single int
@@ -1293,9 +1287,7 @@ public class BlockTerms
                     int endBlock = blockIdx;
 
                     if (postingsBlockSameTerms.get(endBlock))
-                    {
                         endBlock = endBlock * -1;
-                    }
 
                     final long encodedLong = (((long)start) << 32) | (endBlock & 0xffffffffL);
 

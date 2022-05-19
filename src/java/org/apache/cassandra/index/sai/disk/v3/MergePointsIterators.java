@@ -94,13 +94,9 @@ public class MergePointsIterators implements AutoCloseable
         {
             assert a != b;
 
-            int cmp = a.compareTo(b);
+            final int cmp = a.compareTo(b);
 
-            if (cmp < 0)
-            {
-                return true;
-            }
-            else return false;
+            return cmp < 0;
         }
     }
 }

@@ -61,6 +61,13 @@ public class UpperPostings
         private final FileHandle upperPostingsFile;
         private final SortedMap<Integer, LongArray> levelFPMap = new TreeMap<>();
 
+        /**
+         *
+         * @param baseUnit Level block multiplier
+         * @param reader Source block terms reader
+         * @param levelNumericMeta level -> block packed meta
+         * @throws IOException
+         */
         public Reader(final int baseUnit,
                       final BlockTerms.Reader reader,
                       final Map<Integer,NumericValuesMeta> levelNumericMeta) throws IOException
@@ -153,18 +160,18 @@ public class UpperPostings
                     if ((startPoint2 >= startPoint && endPoint2 <= endPoint)
                         && (startPoint2 < levelGatheredStart || endPoint2 > levelGatheredEnd))
                     {
-                        System.out.println("level=" + level
-                                           + " index=" + x
-                                           + " startDerivedIdx=" + startDerivedIdx
-                                           + " endDerivedIdx=" + endDerivedIdx
-                                           + " startPoint=" + startPoint
-                                           + " endPoint=" + endPoint
-                                           + " startPoint2=" + startPoint2
-                                           + " endPoint2=" + endPoint2
-                                           + " levelGatheredStart=" + levelGatheredStart
-                                           + " levelGatheredEnd=" + levelGatheredEnd
-                                           + " gatheredStart=" + gatheredStart
-                                           + " gatheredEnd=" + gatheredEnd);
+//                        System.out.println("level=" + level
+//                                           + " index=" + x
+//                                           + " startDerivedIdx=" + startDerivedIdx
+//                                           + " endDerivedIdx=" + endDerivedIdx
+//                                           + " startPoint=" + startPoint
+//                                           + " endPoint=" + endPoint
+//                                           + " startPoint2=" + startPoint2
+//                                           + " endPoint2=" + endPoint2
+//                                           + " levelGatheredStart=" + levelGatheredStart
+//                                           + " levelGatheredEnd=" + levelGatheredEnd
+//                                           + " gatheredStart=" + gatheredStart
+//                                           + " gatheredEnd=" + gatheredEnd);
                         gatheredStart = Math.min(gatheredStart, startPoint2);
                         gatheredEnd = Math.max(gatheredEnd, endPoint2);
 
@@ -193,19 +200,19 @@ public class UpperPostings
                             x = (int)(gatheredEnd / levelLength);
                             resetToEnd = true;
                         }
-                        System.out.println("levelno=" + level
-                                           + " index=" + x
-                                           + " startDerivedIdx=" + startDerivedIdx
-                                           + " endDerivedIdx=" + endDerivedIdx
-                                           + " index=" + x
-                                           + " startPoint=" + startPoint
-                                           + " endPoint=" + endPoint
-                                           + " startPoint2=" + startPoint2
-                                           + " endPoint2=" + endPoint2
-                                           + " levelGatheredStart=" + levelGatheredStart
-                                           + " levelGatheredEnd=" + levelGatheredEnd
-                                           + " gatheredStart=" + gatheredStart
-                                           + " gatheredEnd=" + gatheredEnd);
+//                        System.out.println("levelno=" + level
+//                                           + " index=" + x
+//                                           + " startDerivedIdx=" + startDerivedIdx
+//                                           + " endDerivedIdx=" + endDerivedIdx
+//                                           + " index=" + x
+//                                           + " startPoint=" + startPoint
+//                                           + " endPoint=" + endPoint
+//                                           + " startPoint2=" + startPoint2
+//                                           + " endPoint2=" + endPoint2
+//                                           + " levelGatheredStart=" + levelGatheredStart
+//                                           + " levelGatheredEnd=" + levelGatheredEnd
+//                                           + " gatheredStart=" + gatheredStart
+//                                           + " gatheredEnd=" + gatheredEnd);
                     }
                 }
             }

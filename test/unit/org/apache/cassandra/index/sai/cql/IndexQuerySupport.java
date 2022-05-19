@@ -445,7 +445,6 @@ public class IndexQuerySupport
                      DataModel.NON_INDEXED_COLUMN, Operator.EQ, 2,
                      true);
 
-
             andQuery(tester, model,
                      DataModel.UUID_COLUMN, Operator.EQ, UUIDType.instance.fromString("e37394dc-d17b-11e8-a8d5-f2801f1b9fd1"),
                      DataModel.NON_INDEXED_COLUMN, Operator.LT, 3,
