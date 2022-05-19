@@ -90,13 +90,22 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
 
 /**
  * Block terms + postings disk index data structure.
+ *
  * Each unique posting block min term is indexed into a trie, postings of block size, and optionally an order map when row ids are out of order.
+ *
  * A string of posting blocks with the same min term are placed into a multi-block spanning posting list.
+ *
  * Posting block min terms are indexed into a trie.  The payload consists of min and max posting block ids encoded as 2 integers into a long.
+ *
  * Raw bytes are prefix encoded in blocks of 16 for fast(er) random access than the posting block default size of 1024.
+ *
  * Block terms reader uses no significant heap space, all major data structures are disk based.
+ *
  * A point is defined as a term + rowid monotonic id.
+ *
  * The default postings block size is 1024 or 1k.
+ *
+ * All major data structures are on disk thereby enabling many indexes.
  */
 public class BlockTerms
 {

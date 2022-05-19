@@ -50,7 +50,13 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
 /**
  * Reads and writes the non-leaf level block postings.
  *
+ * Postings are written in pyramid form building on the previous level to build the
+ * next level, whereas the v1 kdtree postings implementation always builds from the leaf level.
  *
+ * Upper level postings are only written for the final merged segment whereas the v1 kdtree
+ * builds upper level postings for temporary segments.
+ *
+ * A multiplier is used to build from the first leaf block postings level.
  */
 public class UpperPostings
 {
