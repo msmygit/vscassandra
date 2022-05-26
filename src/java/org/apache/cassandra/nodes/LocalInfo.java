@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.cassandra.db.commitlog.CommitLogPosition;
-import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.Throwables;
@@ -37,7 +36,7 @@ public final class LocalInfo extends NodeInfo
     private volatile BootstrapState bootstrapState = BootstrapState.NEEDS_BOOTSTRAP;
     private volatile String clusterName;
     private volatile CassandraVersion cqlVersion;
-    private volatile Integer gossipGeneration = Gossiper.gossipGenerationForNow();
+    private volatile Integer gossipGeneration = (int) System.currentTimeMillis() / 1000;
     private volatile InetAddressAndPort listenAddressAndPort;
     private volatile String nativeProtocolVersion;
     private volatile String partitioner;
