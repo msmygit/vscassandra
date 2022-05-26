@@ -30,12 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.auth.*;
-import org.apache.cassandra.db.virtual.SystemViewsKeyspace;
 import org.apache.cassandra.db.virtual.VirtualSchemaKeyspace;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
-import org.apache.cassandra.nodes.virtual.LocalNodeSystemView;
-import org.apache.cassandra.nodes.virtual.PeersSystemView;
+import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -77,9 +75,8 @@ public class ClientState
         // make all virtual schema tables readable by default as well
         VirtualSchemaKeyspace.instance.tables().forEach(t -> READABLE_SYSTEM_RESOURCES.add(t.metadata().resource));
 
-        // add the local_node and peer_nodes virtual views as readable.
-        for (String cf : Arrays.asList(LocalNodeSystemView.NAME, PeersSystemView.NAME))
-            READABLE_SYSTEM_RESOURCES.add(DataResource.table(SchemaConstants.VIRTUAL_VIEWS, cf));
+        // add the local_node, peer_v2_nodes and peer_nodes virtual views as readable.
+        NodeConstants.ALL_VIEWS.stream().forEach(view -> READABLE_SYSTEM_RESOURCES.add(DataResource.table(SchemaConstants.VIRTUAL_VIEWS, view)));
 
         // neither clients nor tools need authentication/authorization
         if (DatabaseDescriptor.isDaemonInitialized())

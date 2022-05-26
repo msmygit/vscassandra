@@ -46,6 +46,7 @@ import org.apache.cassandra.db.virtual.VirtualSchemaKeyspace;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.nodes.virtual.NodesSystemViews;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.SchemaKeyspace;
@@ -284,12 +285,12 @@ public class NodesStorageServiceTest
     private static UntypedResultSet loadLocalInfo(String columnName)
     {
         String req = "SELECT %s FROM %s.%s";
-        return executeInternal(format(req, columnName, SchemaConstants.SYSTEM_KEYSPACE_NAME, NodesSystemViews.LOCAL));
+        return executeInternal(format(req, columnName, SchemaConstants.SYSTEM_KEYSPACE_NAME, NodeConstants.LOCAL));
     }
 
     private static UntypedResultSet loadPeerInfo(InetAddressAndPort ep, String columnName)
     {
         String req = "SELECT %s FROM %s.%s WHERE peer = '%s'";
-        return executeInternal(format(req, columnName, SchemaConstants.SYSTEM_KEYSPACE_NAME, NodesSystemViews.PEERS_V2, ep.address.getHostAddress()));
+        return executeInternal(format(req, columnName, SchemaConstants.SYSTEM_KEYSPACE_NAME, NodeConstants.PEERS_V2, ep.address.getHostAddress()));
     }
 }

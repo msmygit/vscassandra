@@ -15,19 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.nodes.virtual;
 
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.nodes.Nodes;
 
 /**
- * A system view of the system.peers_v2 table
+ * A system view of the legacy system.peers table
  */
-public final class PeersSystemView extends NodeSystemView
+public class LegacyPeersSystemView extends NodeSystemView
 {
-    public PeersSystemView()
+    public LegacyPeersSystemView()
     {
-        super(NodesSystemViews.virtualFromLegacy(NodesSystemViews.PeersV2Metadata, NodeConstants.PEERS_V2_VIEW_NAME));
+        super(NodesSystemViews.virtualFromLegacy(NodesSystemViews.LegacyPeersMetadata, NodeConstants.LEGACY_PEERS_VIEW_NAME));
     }
 
     @Override
@@ -42,23 +43,15 @@ public final class PeersSystemView extends NodeSystemView
                  // so null-values could sneak in and cause NPEs during serialization.
                  p = p.copy();
 
-                 dataset.row(p.getPeer().address, p.getPeer().port)
+                 dataset.row(p.getPeer().address)
                         //+ "preferred_ip inet,"
                         .column("preferred_ip",
                                 p.getPreferred() == null ? null
                                                          : p.getPreferred().address)
-                        //+ "preferred_port int,"
-                        .column("preferred_port",
-                                p.getPreferred() == null ? null : p.getPreferred().port)
-                        //+ "native_address inet,"
-                        .column("native_address",
+                        //+ "rpc_address inet,"
+                        .column("rpc_address",
                                 p.getNativeTransportAddressAndPort() == null ? null
-                                                                             : p.getNativeTransportAddressAndPort().address)
-                       //+ "native_port int,"
-                       .column("native_port",
-                               p.getNativeTransportAddressAndPort() == null ? null
-                                                                            : p.getNativeTransportAddressAndPort().port);
-
+                                                                             : p.getNativeTransportAddressAndPort().address);
                  completeRow(dataset, p);
              });
 
