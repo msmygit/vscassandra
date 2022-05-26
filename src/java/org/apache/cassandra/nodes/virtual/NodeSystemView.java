@@ -39,7 +39,7 @@ abstract class NodeSystemView extends AbstractVirtualTable
 
     DataSet completeRow(SimpleDataSet dataset, NodeInfo n)
     {
-        //+ "data_center text,"
+                      //+ "data_center text,"
         return dataset.column("data_center", n.getDataCenter())
                       //+ "host_id uuid,"
                       .column("host_id", n.getHostId())

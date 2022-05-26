@@ -32,7 +32,7 @@ import org.apache.cassandra.nodes.Nodes;
 
 public final class LocalNodeSystemView extends NodeSystemView
 {
-    private static final String KEY = "local";
+    public static final String KEY = "local";
 
     public LocalNodeSystemView()
     {
