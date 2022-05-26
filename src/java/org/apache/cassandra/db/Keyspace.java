@@ -55,10 +55,9 @@ import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
-import org.apache.cassandra.locator.LocalStrategy;
 import org.apache.cassandra.metrics.KeyspaceMetrics;
 import org.apache.cassandra.nodes.Nodes;
-import org.apache.cassandra.nodes.virtual.NodesSystemViews;
+import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.repair.KeyspaceRepairManager;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
@@ -68,7 +67,6 @@ import org.apache.cassandra.schema.SchemaProvider;
 import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
-import org.apache.cassandra.service.PendingRangeCalculatorService;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
@@ -247,7 +245,7 @@ public class Keyspace
 
         if (SchemaConstants.SYSTEM_KEYSPACE_NAME.equals(getName()) &&
             columnFamilyName == null ||
-            (NodesSystemViews.LOCAL.equals(columnFamilyName) || NodesSystemViews.PEERS_V2.equals(columnFamilyName)))
+            NodeConstants.canBeMapped(getName(), columnFamilyName))
             Nodes.nodes().snapshot(snapshotName);
 
         if ((columnFamilyName != null) && !tookSnapShot)

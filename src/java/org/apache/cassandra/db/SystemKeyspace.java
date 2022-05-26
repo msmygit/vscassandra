@@ -74,6 +74,7 @@ import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.metrics.RestorableMeter;
 import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.nodes.virtual.NodesSystemViews;
 import org.apache.cassandra.schema.CompactionParams;
 import org.apache.cassandra.schema.Functions;
@@ -114,8 +115,8 @@ public final class SystemKeyspace
     public static final String BATCHES = "batches";
     public static final String PAXOS = "paxos";
     public static final String BUILT_INDEXES = "IndexInfo";
-    public static final String LOCAL = NodesSystemViews.LOCAL;
-    public static final String PEERS_V2 = NodesSystemViews.PEERS_V2;
+    public static final String LOCAL = NodeConstants.LOCAL;
+    public static final String PEERS_V2 = NodeConstants.PEERS_V2;
     public static final String PEER_EVENTS_V2 = "peer_events_v2";
     public static final String COMPACTION_HISTORY = "compaction_history";
     public static final String SSTABLE_ACTIVITY_V2 = "sstable_activity_v2"; // v2 has modified generation column type (v1 - int, v2 - blob), see CASSANDRA-17048
@@ -140,7 +141,7 @@ public final class SystemKeyspace
                                                                                          PREPARED_STATEMENTS,
                                                                                          REPAIRS);
 
-    @Deprecated public static final String LEGACY_PEERS = "peers";
+    @Deprecated public static final String LEGACY_PEERS = NodeConstants.LEGACY_PEERS;
     @Deprecated public static final String LEGACY_PEER_EVENTS = "peer_events";
     @Deprecated public static final String LEGACY_TRANSFERRED_RANGES = "transferred_ranges";
     @Deprecated public static final String LEGACY_AVAILABLE_RANGES = "available_ranges";
@@ -341,21 +342,7 @@ public final class SystemKeyspace
           + "PRIMARY KEY (parent_id))").build();
 
     @Deprecated
-    private static final TableMetadata LegacyPeers =
-        parse(LEGACY_PEERS,
-            "information about known peers in the cluster",
-            "CREATE TABLE %s ("
-            + "peer inet,"
-            + "data_center text,"
-            + "host_id uuid,"
-            + "preferred_ip inet,"
-            + "rack text,"
-            + "release_version text,"
-            + "rpc_address inet,"
-            + "schema_version uuid,"
-            + "tokens set<varchar>,"
-            + "PRIMARY KEY ((peer)))")
-            .build();
+    private static final TableMetadata LegacyPeers = NodesSystemViews.LegacyPeersMetadata;
 
     @Deprecated
     private static final TableMetadata LegacyPeerEvents =

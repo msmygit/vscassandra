@@ -28,9 +28,7 @@ import org.apache.cassandra.auth.AuthenticatedUser;
 import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.nodes.virtual.LocalNodeSystemView;
-import org.apache.cassandra.nodes.virtual.NodesSystemViews;
-import org.apache.cassandra.nodes.virtual.PeersSystemView;
+import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
@@ -322,19 +320,13 @@ public class AuditLogEntry
         }
 
         // We need to filter out the system_views.local_node and system_views.peer_nodes tables
-        // so that queries to system.local and system.peers_v2 are logged correctly
+        // so that queries to system.local, system.peers_v2 and system.peers are logged correctly
         private void filterSystemViews()
         {
-            if (type == AuditLogEntryType.SELECT &&
-                keyspace.equals(SchemaConstants.SYSTEM_VIEWS_KEYSPACE_NAME) &&
-                (scope.equals(LocalNodeSystemView.NAME) ||
-                 scope.equals(PeersSystemView.NAME)))
+            if (type == AuditLogEntryType.SELECT && NodeConstants.canBeMapped(keyspace, scope))
             {
                 keyspace = SchemaConstants.SYSTEM_KEYSPACE_NAME;
-                if (scope.equals(LocalNodeSystemView.NAME))
-                    scope = NodesSystemViews.LOCAL;
-                else
-                    scope = NodesSystemViews.PEERS_V2;
+                scope = NodeConstants.mapViewToTable(scope);
             }
         }
     }

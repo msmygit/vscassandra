@@ -28,20 +28,17 @@ import org.apache.cassandra.schema.TableMetadata;
 import static java.lang.String.format;
 
 /**
- * Definitions for {@code system.local} and {@code system.peers} are the same as for the virtual table
- * counterparts. The definition is outside of {@link org.apache.cassandra.db.SystemKeyspace} to separate
- * class dependencies.
+ * Definitions for {@code system.local}, {@code system.peers} and {@code system.peers_v2} are the same
+ * as for the virtual table counterparts. The definition is outside of {@link org.apache.cassandra.db.SystemKeyspace}
+ * to separate class dependencies.
  *
- * Note that we need the definitions of {@code system.local} and {@code system.peers} in the schema for
- * drivers and tools and applications.
+ * Note that we need the definitions of {@code system.local}, {@code system.peers} and {@code system.peers_v2}
+ * in the schema for drivers and tools and applications.
  */
 public class NodesSystemViews
 {
-    public static final String LOCAL = "local";
-    public static final String PEERS_V2 = "peers_v2";
-
     public static final TableMetadata LocalMetadata =
-            parse(LOCAL,
+            parse(NodeConstants.LOCAL,
                   "information about the local node",
                   "CREATE TABLE %s ("
                   + "key text,"
@@ -69,7 +66,7 @@ public class NodesSystemViews
                    .build();
 
     public static final TableMetadata PeersV2Metadata =
-            parse(PEERS_V2,
+            parse(NodeConstants.PEERS_V2,
                   "information about known peers in the cluster",
                   "CREATE TABLE %s ("
                   + "peer inet,"
@@ -86,6 +83,22 @@ public class NodesSystemViews
                   + "tokens set<varchar>,"
                   + "PRIMARY KEY ((peer), peer_port))"
                   ).build();
+
+    public static final TableMetadata LegacyPeersMetadata =
+            parse(NodeConstants.LEGACY_PEERS,
+                  "information about known peers in the cluster",
+                  "CREATE TABLE %s ("
+                  + "peer inet,"
+                  + "data_center text,"
+                  + "host_id uuid,"
+                  + "preferred_ip inet,"
+                  + "rack text,"
+                  + "release_version text,"
+                  + "rpc_address inet,"
+                  + "schema_version uuid,"
+                  + "tokens set<varchar>,"
+                  + "PRIMARY KEY ((peer)))"
+            ).build();
 
     private static TableMetadata.Builder parse(String table, String description, String cql)
     {

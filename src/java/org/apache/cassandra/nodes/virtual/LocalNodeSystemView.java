@@ -32,12 +32,11 @@ import org.apache.cassandra.nodes.Nodes;
 
 public final class LocalNodeSystemView extends NodeSystemView
 {
-    public static final String NAME = "local_node";
-    public static final String KEY = "local";
+    private static final String KEY = "local";
 
     public LocalNodeSystemView()
     {
-        super(NodesSystemViews.virtualFromLegacy(NodesSystemViews.LocalMetadata, NAME));
+        super(NodesSystemViews.virtualFromLegacy(NodesSystemViews.LocalMetadata, NodeConstants.LOCAL_VIEW_NAME));
     }
 
     @Override
