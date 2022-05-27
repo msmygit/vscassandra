@@ -67,10 +67,10 @@ public class TopPartitionsTest extends CQLTester
     @Test
     public void testServiceTopPartitionsSingleTable() throws Exception
     {
-        ColumnFamilyStore.getIfExists("system", "local").beginLocalSampling("READS", 5, 100000);
+        ColumnFamilyStore.getIfExists("system", "local").beginLocalSampling("READS", 5, 240000);
         String req = "SELECT * FROM system.%s WHERE key='%s'";
         executeInternal(format(req, SystemKeyspace.LOCAL, SystemKeyspace.LOCAL));
         List<CompositeData> result = ColumnFamilyStore.getIfExists("system", "local").finishLocalSampling("READS", 5);
-        assertEquals(1, result.size());
+        assertEquals("If this failed you probably have to raise the beginLocalSampling duration", 1, result.size());
     }
 }

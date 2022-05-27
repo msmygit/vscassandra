@@ -71,7 +71,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         indexer.onInserted(insert);
 
         this.dataSize += data.dataSize();
-        allocated(data.unsharedHeapSizeExcludingData());
+        onAllocatedOnHeap(data.unsharedHeapSizeExcludingData());
         return data;
     }
 
@@ -85,7 +85,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         indexer.onUpdated(existing, reconciled);
 
         dataSize += reconciled.dataSize() - existing.dataSize();
-        allocated(reconciled.unsharedHeapSizeExcludingData() - existing.unsharedHeapSizeExcludingData());
+        onAllocatedOnHeap(reconciled.unsharedHeapSizeExcludingData() - existing.unsharedHeapSizeExcludingData());
 
         return reconciled;
     }
@@ -105,7 +105,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         // memory we shouldn't hold into. But we don't ever store this off-heap currently so we just default to the
         // HeapAllocator (rather than using 'allocator').
         DeletionInfo newInfo = existing.mutableCopy().add(update.copy(HeapAllocator.instance));
-        allocated(newInfo.unsharedHeapSize() - existing.unsharedHeapSize());
+        onAllocatedOnHeap(newInfo.unsharedHeapSize() - existing.unsharedHeapSize());
         return newInfo;
     }
 
@@ -114,7 +114,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         if (current == null)
         {
             current = BTreePartitionData.EMPTY;
-            this.allocated(BTreePartitionData.UNSHARED_HEAP_SIZE);
+            this.onAllocatedOnHeap(BTreePartitionData.UNSHARED_HEAP_SIZE);
         }
 
         try
@@ -136,7 +136,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
 
         RegularAndStaticColumns columns = current.columns;
         RegularAndStaticColumns newColumns = update.columns().mergeTo(columns);
-        allocated(newColumns.unsharedHeapSize() - columns.unsharedHeapSize());
+        onAllocatedOnHeap(newColumns.unsharedHeapSize() - columns.unsharedHeapSize());
         Row newStatic = update.staticRow();
         newStatic = newStatic.isEmpty()
                     ? current.staticRow
@@ -144,9 +144,9 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
                        ? this.apply(newStatic)
                        : this.apply(current.staticRow, newStatic));
 
-        Object[] tree = BTree.update(current.tree, update.metadata().comparator, update, update.rowCount(), this);
+        Object[] tree = BTree.update(current.tree, update.holder().tree, update.metadata().comparator, this);
         EncodingStats newStats = current.stats.mergeWith(update.stats());
-        allocated(newStats.unsharedHeapSize() - current.stats.unsharedHeapSize());
+        onAllocatedOnHeap(newStats.unsharedHeapSize() - current.stats.unsharedHeapSize());
 
         return new BTreePartitionData(newColumns, tree, newDeletionInfo, newStatic, newStats);
     }
@@ -156,7 +156,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         return false;
     }
 
-    public void allocated(long heapSize)
+    public void onAllocatedOnHeap(long heapSize)
     {
         this.heapSize += heapSize;
     }

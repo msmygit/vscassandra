@@ -33,23 +33,16 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.googlecode.concurrenttrees.common.Iterables;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-
-import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import com.google.common.collect.Iterators;
-import org.apache.cassandra.*;
+import org.apache.cassandra.SchemaLoader;
+import org.apache.cassandra.UpdateBuilder;
+import org.apache.cassandra.Util;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.compaction.OperationType;
+import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.db.lifecycle.SSTableSet;
-import org.apache.cassandra.db.partitions.*;
-import org.apache.cassandra.db.rows.*;
+import org.apache.cassandra.db.partitions.FilteredPartition;
+import org.apache.cassandra.db.rows.Cell;
+import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -67,6 +60,9 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
 import static junit.framework.Assert.assertNotNull;
+import static org.apache.cassandra.db.ColumnFamilyStore.FlushReason.UNIT_TESTS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.*;
 
 public class ColumnFamilyStoreTest
 {
@@ -283,6 +279,46 @@ public class ColumnFamilyStoreTest
 
         //test cleanup
         cfs.clearSnapshot("");
+    }
+
+    @Test
+    public void testSnapshotSize()
+    {
+        // cleanup any previous test gargbage
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE1).getColumnFamilyStore(CF_STANDARD1);
+        cfs.clearSnapshot("");
+
+        // Add row
+        new RowUpdateBuilder(cfs.metadata(), 0, "key1")
+        .clustering("Column1")
+        .add("val", "asdf")
+        .build()
+        .applyUnsafe();
+        cfs.forceBlockingFlush(UNIT_TESTS);
+
+        // snapshot
+        cfs.snapshot("basic", null, false, false);
+
+        // check snapshot was created
+        Map<String, Directories.SnapshotSizeDetails> snapshotDetails = cfs.getSnapshotDetails();
+        assertThat(snapshotDetails).hasSize(1);
+        assertThat(snapshotDetails).containsKey("basic");
+
+        // check that sizeOnDisk > trueSize = 0
+        Directories.SnapshotSizeDetails details = snapshotDetails.get("basic");
+        assertThat(details.sizeOnDiskBytes).isGreaterThan(details.dataSizeBytes);
+        assertThat(details.dataSizeBytes).isZero();
+
+        // compact base table to make trueSize > 0
+        cfs.forceMajorCompaction();
+        LifecycleTransaction.waitForDeletions();
+
+        // sizeOnDisk > trueSize because trueSize does not include manifest.json
+        // Check that truesize now is > 0
+        snapshotDetails = cfs.getSnapshotDetails();
+        details = snapshotDetails.get("basic");
+        assertThat(details.sizeOnDiskBytes).isGreaterThan(details.dataSizeBytes);
+        assertThat(details.dataSizeBytes).isPositive();
     }
 
     @Test

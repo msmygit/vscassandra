@@ -1357,7 +1357,7 @@ public class TableMetadata implements SchemaElement
         {
             if (includeDroppedColumns)
                 appendDropColumns(builder);
-            params.appendCqlTo(builder);
+            params.appendCqlTo(builder, isView());
         }
         builder.append(";");
     }

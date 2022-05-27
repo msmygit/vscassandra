@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -87,7 +88,7 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
                                                                                   IFailureDetectionEventListener,
                                                                                   LocalSessions.Listener
 {
-    private static Logger logger = LoggerFactory.getLogger(RepairSession.class);
+    private static final Logger logger = LoggerFactory.getLogger(RepairSession.class);
 
     public final UUID parentRepairSession;
     /** Repair session ID */
@@ -219,7 +220,7 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
         CompletableRemoteSyncTask task = syncingTasks.remove(Pair.create(desc, nodes));
         if (task == null)
         {
-            assert terminated;
+            assert terminated : "The repair session should be terminated if the sync task we're completing no longer exists.";
             return;
         }
 
@@ -251,6 +252,7 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
      *
      * @param executor Executor to run validation
      */
+    @SuppressWarnings("UnstableApiUsage")
     public void start(ListeningExecutorService executor)
     {
         String message;
@@ -312,10 +314,10 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
                 logger.info("{} {}", previewKind.logPrefix(getId()), "Session completed successfully");
                 Tracing.traceRepair("Completed sync of range {}", commonRange);
                 set(new RepairSessionResult(id, keyspace, commonRange.ranges, results, commonRange.hasSkippedReplicas));
-
                 taskExecutor.shutdown();
                 // mark this session as terminated
                 terminate();
+                awaitTaskExecutorTermination();
             }
 
             public void onFailure(Throwable t)
@@ -324,7 +326,7 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
                 Tracing.traceRepair("Session completed with the following error: {}", t);
                 forceShutdown(t);
             }
-        }, MoreExecutors.directExecutor());
+        }, executor);
     }
 
     public void terminate()
@@ -342,8 +344,24 @@ public class RepairSession extends AbstractFuture<RepairSessionResult> implement
     public void forceShutdown(Throwable reason)
     {
         setException(reason);
-        taskExecutor.shutdownNow();
+        taskExecutor.shutdown();
         terminate();
+        awaitTaskExecutorTermination();
+    }
+
+    private void awaitTaskExecutorTermination()
+    {
+        try
+        {
+            if (taskExecutor.awaitTermination(30, TimeUnit.SECONDS))
+                logger.debug("{} session task executor shut down gracefully", previewKind.logPrefix(getId()));
+            else
+                logger.warn("{} session task executor unable to shut down gracefully", previewKind.logPrefix(getId()));
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public void onRemove(InetAddressAndPort endpoint)

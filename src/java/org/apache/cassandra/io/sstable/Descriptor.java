@@ -103,7 +103,7 @@ public class Descriptor
 
         hashCode = Objects.hashCode(version, this.directory, id, ksname, cfname, formatType);
 
-        filenamePart = version.toString() + separator + id.asString() + separator + formatType.name;
+        filenamePart = version.toString() + separator + id + separator + formatType.name;
         String locationURI = directory.toUri().toString();
         if (!locationURI.endsWith(java.io.File.separator))
             locationURI = locationURI + java.io.File.separatorChar;
@@ -157,7 +157,7 @@ public class Descriptor
     private void appendFileName(StringBuilder buff)
     {
         buff.append(version).append(separator);
-        buff.append(id.asString());
+        buff.append(id.toString());
         buff.append(separator).append(formatType.name);
     }
 

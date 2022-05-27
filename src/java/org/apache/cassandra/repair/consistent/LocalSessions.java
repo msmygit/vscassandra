@@ -887,9 +887,7 @@ public class LocalSessions
                 try
                 {
                     logger.info("Prepare phase for incremental repair session {} completed", sessionID);
-                    if (session.getState() != FAILED)
-                        setStateAndSave(session, PREPARED);
-                    else
+                    if (!prepareSessionExceptFailed(session))
                         logger.info("Session {} failed before anticompaction completed", sessionID);
 
                     Message<PrepareConsistentResponse> message =
@@ -919,6 +917,25 @@ public class LocalSessions
                 }
             }
         }, MoreExecutors.directExecutor());
+    }
+
+    /**
+     * Checks for the session state, and sets it to prepared unless it is on a failed state.
+     * Making the checks inside a synchronized block to prevent the session state from
+     * being changed between the read and the update.
+     *
+     * @param session The local session to be set to prepared.
+     * @return true if the session is prepared, false if not, i.e. session failed
+     */
+    private boolean prepareSessionExceptFailed(LocalSession session) {
+        synchronized (session)
+        {
+            if (session.getState() == FAILED)
+                return false;
+
+            setStateAndSave(session, PREPARED);
+            return true;
+        }
     }
 
     public void maybeSetRepairing(UUID sessionID)

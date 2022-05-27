@@ -328,12 +328,27 @@ public class StatementRestrictions
             RestrictionSet.Builder nonPrimaryKeyRestrictionSet = RestrictionSet.builder();
             ImmutableSet.Builder<ColumnMetadata> notNullColumnsBuilder = ImmutableSet.builder();
 
-            for (Relation relation : element.relations())
+        /*
+         * WHERE clause. For a given entity, rules are:
+         *   - EQ relation conflicts with anything else (including a 2nd EQ)
+         *   - Can't have more than one LT(E) relation (resp. GT(E) relation)
+         *   - IN relation are restricted to row keys (for now) and conflicts with anything else (we could
+         *     allow two IN for the same entity but that doesn't seem very useful)
+         *   - The value_alias cannot be restricted in any way (we don't support wide rows with indexed value
+         *     in CQL so far)
+         *   - CONTAINS and CONTAINS_KEY cannot be used with UPDATE or DELETE
+         */
+        for (Relation relation : element.relations())
+        {
+            if ((relation.isContains() || relation.isContainsKey()) && (type.isUpdate() || type.isDelete()))
             {
-                if (relation.operator() == Operator.IS_NOT)
-                {
-                    if (!forView)
-                        throw invalidRequest("Unsupported restriction: %s", relation);
+                throw invalidRequest("Cannot use %s with %s", type, relation.operator());
+            }
+
+            if (relation.operator() == Operator.IS_NOT)
+            {
+                if (!forView)
+                    throw invalidRequest("Unsupported restriction: %s", relation);
 
                     notNullColumnsBuilder.addAll(relation.toRestriction(table, boundNames).getColumnDefs());
                 }

@@ -36,6 +36,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 import javax.management.ListenerNotFoundException;
 import javax.management.Notification;
@@ -147,7 +148,7 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
 {
     public final IInstanceConfig config;
     private volatile boolean initialized = false;
-    private final long startedAt = System.nanoTime();
+    private final AtomicLong startedAt = new AtomicLong();
 
     // should never be invoked directly, so that it is instantiated on other class loader;
     // only visible for inheritance
@@ -465,6 +466,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
     @Override
     public void startup(ICluster cluster)
     {
+        assert startedAt.compareAndSet(0L, System.nanoTime()) : "startedAt uninitialized";
+
         sync(() -> {
             try
             {
@@ -767,7 +770,8 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
         }).apply(isolatedExecutor);
 
         return CompletableFuture.runAsync(ThrowingRunnable.toRunnable(future::get), isolatedExecutor)
-                                .thenRun(super::shutdown);
+                                .thenRun(super::shutdown)
+                                .thenRun(() -> startedAt.set(0L));
     }
 
     @Override

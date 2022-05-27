@@ -161,7 +161,7 @@ public class RangeAwareSSTableWriter implements SSTableMultiWriter
     @Override
     public long getBytesWritten()
     {
-        long bytesWritten = currentWriter.getBytesWritten();
+        long bytesWritten = currentWriter != null ? currentWriter.getBytesWritten() : 0L;
         for (SSTableMultiWriter writer : finishedWriters)
             bytesWritten += writer.getBytesWritten();
         return bytesWritten;
@@ -170,7 +170,7 @@ public class RangeAwareSSTableWriter implements SSTableMultiWriter
     @Override
     public long getOnDiskBytesWritten()
     {
-        long bytesWritten = currentWriter.getOnDiskBytesWritten();
+        long bytesWritten = currentWriter != null ? currentWriter.getOnDiskBytesWritten() : 0L;
         for (SSTableMultiWriter writer : finishedWriters)
             bytesWritten += writer.getOnDiskBytesWritten();
         return bytesWritten;
@@ -185,7 +185,7 @@ public class RangeAwareSSTableWriter implements SSTableMultiWriter
     @Override
     public TableId getTableId()
     {
-        return currentWriter.getTableId();
+        return cfs.metadata.id;
     }
 
     @Override

@@ -18,6 +18,7 @@
 package org.apache.cassandra.io.sstable;
 
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -51,7 +52,9 @@ import org.apache.cassandra.io.FSWriteError;
 import org.apache.cassandra.io.sstable.format.PartitionIndexIterator;
 import org.apache.cassandra.io.util.DiskOptimizationStrategy;
 import org.apache.cassandra.io.util.File;
+import org.apache.cassandra.io.util.FileOutputStreamPlus;
 import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.io.util.FileWriter;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.Pair;
@@ -375,13 +378,17 @@ public abstract class SSTable
     /**
      * Appends new component names to the TOC component.
      */
+    @SuppressWarnings("resource")
     protected static void appendTOC(Descriptor descriptor, Collection<Component> components)
     {
         File tocFile = descriptor.fileFor(Component.TOC);
-        try (PrintWriter w = new PrintWriter(tocFile.newWriter(APPEND)))
+        FileOutputStreamPlus fos = null;
+        try (PrintWriter w = new PrintWriter((fos = tocFile.newOutputStream(APPEND))))
         {
             for (Component component : components)
                 w.println(component.name);
+            w.flush();
+            fos.sync();
         }
         catch (IOException e)
         {

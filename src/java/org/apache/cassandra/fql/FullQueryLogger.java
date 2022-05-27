@@ -386,15 +386,15 @@ public class FullQueryLogger implements QueryEvents.Listener
                       2 * EMPTY_LIST_SIZE +      // queries + values lists
                       3 * OBJECT_REFERENCE_SIZE; // batchType and two lists references
 
-            for (int i = 0, queriesSize = queries.size(); i < queriesSize; i++)
-                weight += ObjectSizes.sizeOf(checkNotNull(queries.get(i))) + OBJECT_REFERENCE_SIZE;
+            for (String query : queries)
+                weight += ObjectSizes.sizeOf(checkNotNull(query)) + OBJECT_REFERENCE_SIZE;
 
-            for (int j = 0, valuesSize = values.size(); j < valuesSize; j++)
+            for (List<ByteBuffer> subValues : values)
             {
-                List<ByteBuffer> subValues = checkNotNull(values.get(j));
                 weight += EMPTY_LIST_SIZE + OBJECT_REFERENCE_SIZE;
-                for (int i = 0, subValuesSize = subValues.size(); i < subValuesSize; i++)
-                    weight += ObjectSizes.sizeOnHeapOf(checkNotNull(subValues.get(i))) + OBJECT_REFERENCE_SIZE;
+
+                for (ByteBuffer value : subValues)
+                    weight += ObjectSizes.sizeOnHeapOf(value) + OBJECT_REFERENCE_SIZE;
             }
 
             this.weight = weight;
@@ -413,16 +413,19 @@ public class FullQueryLogger implements QueryEvents.Listener
             wire.write(BATCH_TYPE).text(batchType.name());
             ValueOut valueOut = wire.write(QUERIES);
             valueOut.int32(queries.size());
-            for (int i = 0, queriesSize = queries.size(); i < queriesSize; i++)
-                valueOut.text(queries.get(i));
+            for (String query : queries)
+            {
+                valueOut.text(query);
+            }
             valueOut = wire.write(VALUES);
             valueOut.int32(values.size());
-            for (int i = 0, valuesSize = values.size(); i < valuesSize; i++)
+            for (List<ByteBuffer> subValues : values)
             {
-                List<ByteBuffer> subValues = values.get(i);
                 valueOut.int32(subValues.size());
-                for (int j = 0, subValuesSize = subValues.size(); j < subValuesSize; j++)
-                    valueOut.bytes(BytesStore.wrap(subValues.get(j)));
+                for (ByteBuffer value : subValues)
+                {
+                    valueOut.bytes(BytesStore.wrap(value));
+                }
             }
         }
 

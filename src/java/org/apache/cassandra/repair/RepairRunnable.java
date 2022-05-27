@@ -619,7 +619,7 @@ public class RepairRunnable implements Runnable, ProgressEventNotifier
                 }
                 finally
                 {
-                    executor.shutdownNow();
+                    executor.shutdown();
                 }
             }
 
@@ -627,7 +627,7 @@ public class RepairRunnable implements Runnable, ProgressEventNotifier
             {
                 notifyError(t);
                 fail("Error completing preview repair: " + t.getMessage());
-                executor.shutdownNow();
+                executor.shutdown();
             }
         }, MoreExecutors.directExecutor());
     }
@@ -796,7 +796,7 @@ public class RepairRunnable implements Runnable, ProgressEventNotifier
                 success("Repair completed successfully");
                 ActiveRepairService.instance.cleanUp(parentSession, preparedEndpoints);
             }
-            executor.shutdownNow();
+            executor.shutdown();
         }
 
         @Override
@@ -804,7 +804,7 @@ public class RepairRunnable implements Runnable, ProgressEventNotifier
         {
             notifyError(t);
             fail(t.getMessage());
-            executor.shutdownNow();
+            executor.shutdown();
         }
     }
 

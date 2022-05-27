@@ -17,19 +17,15 @@
  */
 package org.apache.cassandra.db;
 
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
-import java.io.IOError;
-import java.io.IOException;
-import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
@@ -37,24 +33,23 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.RateLimiter;
-
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.config.*;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.lifecycle.LifecycleTransaction;
 import org.apache.cassandra.io.FSDiskFullWriteError;
 import org.apache.cassandra.io.FSError;
 import org.apache.cassandra.io.FSNoDiskAvailableForWriteError;
 import org.apache.cassandra.io.FSWriteError;
+import org.apache.cassandra.io.sstable.*;
 import org.apache.cassandra.io.storage.StorageProvider;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.io.sstable.*;
+import org.apache.cassandra.io.util.PathUtils;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.SchemaConstants;
-import org.apache.cassandra.io.util.PathUtils;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.DirectorySizeCalculator;
 import org.apache.cassandra.utils.FBUtilities;
@@ -213,7 +208,7 @@ public class Directories
      *
      * @param metadata metadata of ColumnFamily
      */
-    public Directories(@Nullable KeyspaceMetadata ksMetadata,  final TableMetadata metadata, DataDirectory[] dirs)
+    public Directories(@Nullable KeyspaceMetadata ksMetadata, final TableMetadata metadata, DataDirectory[] dirs)
     {
         this.metadata = metadata;
         this.paths = StorageProvider.instance.createDataDirectories(ksMetadata, metadata.keyspace, dirs);
@@ -1232,11 +1227,11 @@ public class Directories
 
     private class SSTableSizeSummer extends DirectorySizeCalculator
     {
-        private final HashSet<File> toSkip;
+        private final Set<String> toSkip;
         SSTableSizeSummer(File path, List<File> files)
         {
             super(path);
-            toSkip = new HashSet<>(files);
+            toSkip = files.stream().map(File::name).collect(Collectors.toSet());
         }
 
         @Override
@@ -1247,7 +1242,7 @@ public class Directories
             return desc != null
                 && desc.ksname.equals(metadata.keyspace)
                 && desc.cfname.equals(metadata.name)
-                && !toSkip.contains(file);
+                && !toSkip.contains(file.name());
         }
     }
 

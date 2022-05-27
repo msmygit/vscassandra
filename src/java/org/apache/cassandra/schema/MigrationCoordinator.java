@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -52,6 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.concurrent.ScheduledExecutors;
+import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.exceptions.RequestFailureReason;
@@ -68,6 +70,9 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.concurrent.WaitQueue;
+
+import static org.apache.cassandra.config.CassandraRelevantProperties.IGNORED_SCHEMA_CHECK_ENDPOINTS;
+import static org.apache.cassandra.config.CassandraRelevantProperties.IGNORED_SCHEMA_CHECK_VERSIONS;
 
 import static org.apache.cassandra.net.Verb.SCHEMA_PUSH_REQ;
 
@@ -87,12 +92,9 @@ public class MigrationCoordinator
     private static final int MIGRATION_DELAY_IN_MS = CassandraRelevantProperties.MIGRATION_DELAY.getInt();
     public static final int MAX_OUTSTANDING_VERSION_REQUESTS = 3;
 
-    public static final String IGNORED_VERSIONS_PROP = "cassandra.skip_schema_check_for_versions";
-    public static final String IGNORED_ENDPOINTS_PROP = "cassandra.skip_schema_check_for_endpoints";
-
     private static ImmutableSet<UUID> getIgnoredVersions()
     {
-        String s = System.getProperty(IGNORED_VERSIONS_PROP);
+        String s = IGNORED_SCHEMA_CHECK_VERSIONS.getString();
         if (s == null || s.isEmpty())
             return ImmutableSet.of();
 
@@ -111,7 +113,7 @@ public class MigrationCoordinator
     {
         Set<InetAddressAndPort> endpoints = new HashSet<>();
 
-        String s = System.getProperty(IGNORED_ENDPOINTS_PROP);
+        String s = IGNORED_SCHEMA_CHECK_ENDPOINTS.getString();
         if (s == null || s.isEmpty())
             return endpoints;
 
@@ -449,7 +451,6 @@ public class MigrationCoordinator
 
         return endpoint.map(this::pullSchemaFrom).orElse(CompletableFuture.completedFuture(Collections.emptyList()));
     }
-
 
     void announce(UUID schemaVersion)
     {

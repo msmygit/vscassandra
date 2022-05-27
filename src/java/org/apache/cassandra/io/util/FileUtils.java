@@ -257,6 +257,11 @@ public final class FileUtils
         copyWithConfirm(new File(from), new File(to));
     }
 
+    public static void copyToDirectoryWithConfirm(File file, File dir)
+    {
+        copyWithConfirm(file, new File(dir, file.name()));
+    }
+
     public static void copyWithConfirm(File from, File to)
     {
         assert from.exists();

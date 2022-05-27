@@ -255,7 +255,7 @@ public class DirectoriesTest
         assertEquals(cfm.name, resolved.cfname);
         assertEquals(SSTableFormat.Type.BIG, resolved.formatType);
         assertEquals(BigFormat.instance.getVersion("me"), resolved.version);
-        assertEquals("123", resolved.id.asString());
+        assertEquals("123", resolved.id.toString());
     }
 
 
