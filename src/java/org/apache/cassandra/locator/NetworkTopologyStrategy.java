@@ -174,9 +174,12 @@ public class NetworkTopologyStrategy extends AbstractReplicationStrategy
     @Override
     public EndpointsForRange calculateNaturalReplicas(Token searchToken, TokenMetadata tokenMetadata)
     {
+        ArrayList<Token> ring = tokenMetadata.sortedTokens();
+        if (ring.isEmpty())
+            return EndpointsForRange.empty(new Range<>(tokenMetadata.partitioner.getMinimumToken(), tokenMetadata.partitioner.getMinimumToken()));
+
         // we want to preserve insertion order so that the first added endpoint becomes primary
-        ArrayList<Token> sortedTokens = tokenMetadata.sortedTokens();
-        Token replicaEnd = TokenMetadata.firstToken(sortedTokens, searchToken);
+        Token replicaEnd = TokenMetadata.firstToken(ring, searchToken);
         Token replicaStart = tokenMetadata.getPredecessor(replicaEnd);
         Range<Token> replicatedRange = new Range<>(replicaStart, replicaEnd);
 
@@ -208,7 +211,7 @@ public class NetworkTopologyStrategy extends AbstractReplicationStrategy
             ++dcsToFill;
         }
 
-        Iterator<Token> tokenIter = TokenMetadata.ringIterator(sortedTokens, searchToken, false);
+        Iterator<Token> tokenIter = TokenMetadata.ringIterator(ring, searchToken, false);
         while (dcsToFill > 0 && tokenIter.hasNext())
         {
             Token next = tokenIter.next();
