@@ -287,8 +287,6 @@ public class CassandraDaemon
             throw e;
         }
 
-        setupVirtualKeyspaces();
-
         SSTableHeaderFix.fixNonFrozenUDTIfUpgradeFrom30();
 
         // clean up debris in the rest of the keyspaces
@@ -546,12 +544,6 @@ public class CassandraDaemon
                 }
             }
         }
-    }
-
-    public void setupVirtualKeyspaces()
-    {
-        VirtualKeyspaceRegistry.instance.register(VirtualSchemaKeyspace.instance);
-        VirtualKeyspaceRegistry.instance.register(SystemViewsKeyspace.instance);
     }
 
     public synchronized void initializeClientTransports()

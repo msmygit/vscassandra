@@ -525,9 +525,6 @@ public class Instance extends IsolatedExecutor implements IInvokableInstance
                     throw e;
                 }
 
-                // Start up virtual table support
-                CassandraDaemon.getInstanceForTesting().setupVirtualKeyspaces();
-
                 Keyspace.setInitialized();
 
                 // Replay any CommitLogSegments found on disk
