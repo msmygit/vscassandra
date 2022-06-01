@@ -86,7 +86,7 @@ public class Schema implements SchemaProvider
 
     private volatile Keyspaces distributedKeyspaces = Keyspaces.none();
 
-    private final Keyspaces localKeyspaces;
+    private final LocalKeyspaces localKeyspaces;
 
     private TableMetadataRefCache tableMetadataRefCache = TableMetadataRefCache.EMPTY;
 
@@ -113,19 +113,18 @@ public class Schema implements SchemaProvider
     private Schema()
     {
         this.online = isDaemonInitialized();
-        this.localKeyspaces = (FORCE_LOAD_LOCAL_KEYSPACES || isDaemonInitialized() || isToolInitialized())
-                              ? Keyspaces.of(SchemaKeyspace.metadata(), SystemKeyspace.metadata())
-                              : Keyspaces.none();
+        this.localKeyspaces = new LocalKeyspaces(this);
+        if (FORCE_LOAD_LOCAL_KEYSPACES || isDaemonInitialized() || isToolInitialized())
+            this.localKeyspaces.loadHardCodedDefinitions();
 
-        this.localKeyspaces.forEach(this::loadNew);
         this.updateHandler = SchemaUpdateHandlerFactoryProvider.instance.get().getSchemaUpdateHandler(online, this::mergeAndUpdateVersion);
     }
 
     @VisibleForTesting
-    public Schema(boolean online, Keyspaces localKeyspaces, SchemaUpdateHandler updateHandler)
+    public Schema(boolean online, SchemaUpdateHandler updateHandler)
     {
         this.online = online;
-        this.localKeyspaces = localKeyspaces;
+        this.localKeyspaces = new LocalKeyspaces(this);
         this.updateHandler = updateHandler;
     }
 
@@ -167,6 +166,16 @@ public class Schema implements SchemaProvider
             reload(previous, ksm);
 
         distributedKeyspaces = distributedKeyspaces.withAddedOrUpdated(ksm);
+    }
+
+    public LocalKeyspaces localKeyspaces()
+    {
+        return localKeyspaces;
+    }
+
+    protected void addNewRefs(KeyspaceMetadata ksm)
+    {
+        this.tableMetadataRefCache = tableMetadataRefCache.withNewRefs(ksm);
     }
 
     private synchronized void loadNew(KeyspaceMetadata ksm)
@@ -259,7 +268,7 @@ public class Schema implements SchemaProvider
 
     public Keyspaces distributedAndLocalKeyspaces()
     {
-        return Keyspaces.builder().add(localKeyspaces).add(distributedKeyspaces).build();
+        return Keyspaces.builder().add(localKeyspaces.localSystemKeyspaces()).add(distributedKeyspaces).build();
     }
 
     public Keyspaces distributedKeyspaces()
@@ -378,11 +387,6 @@ public class Schema implements SchemaProvider
     public ImmutableSet<String> getKeyspaces()
     {
         return distributedAndLocalKeyspaces().names();
-    }
-
-    public Keyspaces getLocalKeyspaces()
-    {
-        return localKeyspaces;
     }
 
     /* TableMetadata/Ref query/control methods */
