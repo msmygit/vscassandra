@@ -417,7 +417,7 @@ public class BatchlogManager implements BatchlogManagerMBean
         private void addMutation(Mutation mutation)
         {
             for (TableId tableId : mutation.getTableIds())
-                if ( writtenAt <= Nodes.local().getTruncatedAt(tableId))
+                if (writtenAt <= Nodes.local().getTruncatedAt(tableId))
                     mutation = mutation.without(tableId);
 
             if (!mutation.isEmpty())

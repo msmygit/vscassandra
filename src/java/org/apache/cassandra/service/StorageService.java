@@ -513,8 +513,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
 
             Gossiper.instance.forceNewerGeneration();
             Gossiper.instance.start((int) (System.currentTimeMillis() / 1000));
-//
-//            Gossiper.instance.startWithNewerGeneration();
             gossipActive = true;
         }
     }
@@ -2521,9 +2519,6 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                     case NET_VERSION:
                         updateNetVersion(endpoint, value);
                         break;
-                    case INDEX_STATUS:
-                        updateIndexStatus(endpoint, value);
-                        break;
                 }
             }
             else
@@ -2616,6 +2611,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                         break;
                     case HOST_ID:
                         p.setHostId(UUID.fromString(entry.getValue().value));
+                        break;
+                    case INDEX_STATUS:
+                        // Need to set the peer index status in SIM here
+                        // to ensure the status is correct before the node
+                        // fully joins the ring
+                        updateIndexStatus(endpoint, entry.getValue());
                         break;
                 }
             }

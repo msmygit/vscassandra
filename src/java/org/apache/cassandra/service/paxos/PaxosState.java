@@ -145,7 +145,7 @@ public class PaxosState
             // erase the in-progress update.
             // The table may have been truncated since the proposal was initiated. In that case, we
             // don't want to perform the mutation and potentially resurrect truncated data
-            if ( UUIDGen.unixTimestamp(proposal.ballot) >= Nodes.local().getTruncatedAt(proposal.update.metadata().id))
+            if (UUIDGen.unixTimestamp(proposal.ballot) >= Nodes.local().getTruncatedAt(proposal.update.metadata().id))
             {
                 Tracing.trace("Committing proposal {}", proposal);
                 Mutation mutation = proposal.makeMutation();
