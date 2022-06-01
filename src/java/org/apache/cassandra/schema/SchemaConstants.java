@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import com.google.common.collect.ImmutableSet;
 
 import org.apache.cassandra.db.Digest;
+import org.apache.cassandra.locator.LocalStrategy;
 
 public final class SchemaConstants
 {
@@ -137,5 +138,12 @@ public final class SchemaConstants
     public static boolean isUserKeyspace(String keyspaceName)
     {
         return !isInternalKeyspace(keyspaceName);
+    }
+
+    public static boolean isKeyspaceWithLocalStrategy(String keyspaceName)
+    {
+        return isLocalSystemKeyspace(keyspaceName) ||
+               (Schema.instance.getKeyspaces().contains(keyspaceName)
+                && Schema.instance.getKeyspaceMetadata(keyspaceName).params.replication.klass.equals(LocalStrategy.class));
     }
 }

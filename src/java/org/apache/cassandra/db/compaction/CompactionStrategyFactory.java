@@ -24,20 +24,25 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.schema.CompactionParams;
+import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.utils.FBUtilities;
 
 /**
  * The factory for compaction strategies and their containers.
  */
 public class CompactionStrategyFactory
 {
+    String remoteDataSupplier = System.getProperty("cassandra.compaction.remote_data_supplier");
+
     private final CompactionRealm realm;
     private final CompactionLogger compactionLogger;
 
-    public CompactionStrategyFactory(CompactionRealm realm)
+    public CompactionStrategyFactory(ColumnFamilyStore cfs)
     {
-        this.realm = realm;
-        this.compactionLogger = new CompactionLogger(realm.metadata());
+        this.realm = maybeWrapRealm(cfs);
+        this.compactionLogger = new CompactionLogger(cfs.metadata());
     }
 
     /**
@@ -185,5 +190,23 @@ public class CompactionStrategyFactory
     public CompactionStrategy createStrategy(CompactionParams compactionParams)
     {
         return createLegacyStrategy(compactionParams);
+    }
+
+    private CompactionRealm maybeWrapRealm(ColumnFamilyStore cfs)
+    {
+        // local keyspaces are always local so don't use the remote supplier even if it has been configured
+        if (remoteDataSupplier == null || SchemaConstants.isKeyspaceWithLocalStrategy(cfs.getKeyspaceName()))
+            return cfs;
+
+        Class<CompactionRealm> factoryClass =  FBUtilities.classForName(remoteDataSupplier, "Remote data supplier");
+
+        try
+        {
+            return factoryClass.getConstructor(ColumnFamilyStore.class).newInstance(cfs);
+        }
+        catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e)
+        {
+            throw new RuntimeException("Unable to find correct constructor for " + remoteDataSupplier, e);
+        }
     }
 }
