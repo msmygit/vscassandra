@@ -58,17 +58,6 @@ public abstract class IndexSearcher implements Closeable
         this.indexContext = indexContext;
     }
 
-    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                                     PerIndexFiles indexFiles,
-                                     SegmentMetadata segmentMetadata,
-                                     IndexDescriptor indexDescriptor,
-                                     IndexContext indexContext) throws IOException
-    {
-        return TypeUtil.isLiteral(indexContext.getValidator())
-               ? new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext)
-               : new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
-    }
-
     /**
      * @return memory usage of underlying on-disk data structure
      */

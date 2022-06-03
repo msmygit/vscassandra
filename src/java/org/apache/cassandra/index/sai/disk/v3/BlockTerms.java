@@ -103,7 +103,7 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
  *
  * A point is defined as a term + rowid monotonic id.
  *
- * The default postings block size is 1024 or 1k.
+ * The default postings block size is 1024.
  *
  * All major data structures are on disk thereby enabling many indexes.
  */
@@ -1094,7 +1094,7 @@ public class BlockTerms
                         suffixLength += termsData.readVInt();
                 }
 
-                assert prefixLength + suffixLength <= meta.maxTermLength : "prefixLength="+prefixLength+" suffixLength="+suffixLength;
+                assert prefixLength + suffixLength <= meta.maxTermLength : "prefixLength="+prefixLength+" suffixLength="+suffixLength+" maxTermLength="+meta.maxTermLength;
                 currentTerm.length = prefixLength + suffixLength;
                 termsData.readBytes(currentTerm.bytes, prefixLength, suffixLength);
                 return true;
