@@ -73,6 +73,7 @@ import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.FutureArrays;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LongBitSet;
 import org.apache.lucene.util.mutable.MutableValueLong;
 import org.apache.lucene.util.packed.DirectWriter;
@@ -259,11 +260,14 @@ public class BlockTerms
         protected final SegmentMetadata.ComponentMetadataMap componentMetadatas;
         protected final FileHandle bitpackedHandle, postingsHandle, blockOrderMapFile, termsDataHandle, termsIndexHandle;
         protected final V3PerIndexFiles indexFiles;
-        private final LongArray termBlockFPs, postingBlockFPs, orderMapFPs;
+        final MonotonicBlockPackedReader blockPostingOffsetsReader;
+        //private final LongArray termBlockFPs, postingBlockFPs, orderMapFPs;
         private final NumericValuesMeta blockTermsOffsetsMeta, blockPostingsOffsetsMeta, blockOrderMapMeta;
         private final SeekingRandomAccessInput orderMapRandoInput;
         private final DirectReaders.Reader orderMapReader;
         private final UpperPostings.Reader upperPostingsReader;
+        private final MonotonicBlockPackedReader blockTermsOffsetsReader;
+        private final BlockPackedReader blockOrderMapFPReader;
         final Meta meta;
         protected long ramBytesUsed;
 
@@ -308,27 +312,27 @@ public class BlockTerms
             final SegmentMetadata.ComponentMetadata blockTermsOffsetsCompMeta = componentMetadatas.get(IndexComponent.BLOCK_TERMS_OFFSETS);
             this.blockTermsOffsetsMeta = new NumericValuesMeta(blockTermsOffsetsCompMeta.attributes);
 
-            final MonotonicBlockPackedReader blockTermsOffsetsReader = new MonotonicBlockPackedReader(bitpackedHandle, blockTermsOffsetsMeta);
+            blockTermsOffsetsReader = new MonotonicBlockPackedReader(bitpackedHandle, blockTermsOffsetsMeta);
             this.ramBytesUsed += blockTermsOffsetsReader.memoryUsage();
-            this.termBlockFPs = blockTermsOffsetsReader.open();
+            //this.termBlockFPs = blockTermsOffsetsReader.open();
 
             final SegmentMetadata.ComponentMetadata blockPostingsOffsetsCompMeta = componentMetadatas.get(IndexComponent.BLOCK_POSTINGS_OFFSETS);
             this.blockPostingsOffsetsMeta = new NumericValuesMeta(blockPostingsOffsetsCompMeta.attributes);
-            final MonotonicBlockPackedReader blockPostingOffsetsReader = new MonotonicBlockPackedReader(bitpackedHandle, blockPostingsOffsetsMeta);
+            this.blockPostingOffsetsReader = new MonotonicBlockPackedReader(bitpackedHandle, blockPostingsOffsetsMeta);
             this.ramBytesUsed += blockPostingOffsetsReader.memoryUsage();
-            this.postingBlockFPs = blockPostingOffsetsReader.open();
+            //this.postingBlockFPs = blockPostingOffsetsReader.open();
 
             final SegmentMetadata.ComponentMetadata blockOrderMapCompMeta = componentMetadatas.get(IndexComponent.BLOCK_ORDERMAP);
             this.blockOrderMapMeta = new NumericValuesMeta(blockOrderMapCompMeta.attributes);
-            final BlockPackedReader blockOrderMapFPReader = new BlockPackedReader(bitpackedHandle, blockOrderMapMeta);
+            this.blockOrderMapFPReader = new BlockPackedReader(bitpackedHandle, blockOrderMapMeta);
             this.ramBytesUsed += blockOrderMapFPReader.memoryUsage();
-            this.orderMapFPs = blockOrderMapFPReader.open();
+            //this.orderMapFPs = blockOrderMapFPReader.open();
 
-            if (meta.numPostingBlocks != postingBlockFPs.length())
-                throw new IllegalStateException();
-
-            if (meta.numPostingBlocks != orderMapFPs.length())
-                throw new IllegalStateException();
+//            if (meta.numPostingBlocks != postingBlockFPs.length())
+//                throw new IllegalStateException();
+//
+//            if (meta.numPostingBlocks != orderMapFPs.length())
+//                throw new IllegalStateException();
 
             this.orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(meta.postingsBlockSize - 1));
             this.orderMapRandoInput = new SeekingRandomAccessInput(IndexInputReader.create(blockOrderMapFile));
@@ -339,10 +343,10 @@ public class BlockTerms
                 upperPostingsReader = null;
         }
 
-        public LongArray postingBlockFPs()
-        {
-            return postingBlockFPs;
-        }
+//        public LongArray postingBlockFPs()
+//        {
+//            return postingBlockFPs;
+//        }
 
         private void validateCRC(FileHandle handle, FileValidation.Meta meta) throws IOException
         {
@@ -375,6 +379,7 @@ public class BlockTerms
             private final AutoCloseable toClose;
             private final long rowIdOffset;
             private final long[] orderMapBlockRowIds = new long[meta.postingsBlockSize];
+            private final LongArray orderMapFPs, postingsFPs;
             private PostingList postings;
 
             public PointsIterator(AutoCloseable toClose, long rowIdOffset)
@@ -382,6 +387,8 @@ public class BlockTerms
                 this.toClose = toClose;
                 this.rowIdOffset = rowIdOffset;
                 bytesCursor = cursor();
+                orderMapFPs = blockOrderMapFPReader.open();
+                postingsFPs = blockPostingOffsetsReader.open();
             }
 
             /**
@@ -424,7 +431,7 @@ public class BlockTerms
             public void close() throws Exception
             {
                 bytesCursor.close();
-                FileUtils.closeQuietly(postings);
+                FileUtils.closeQuietly(postings, postingsFPs, orderMapFPs);
                 if (toClose != null)
                     toClose.close();
             }
@@ -447,7 +454,7 @@ public class BlockTerms
                 final long block = point / meta.postingsBlockSize;
                 if (block > currentPostingsBlock)
                 {
-                    final long fp = getPostingsFP(block);
+                    final long fp = postingsFPs.get(block);
                     this.currentPostingsBlock = block;
                     if (fp > currentPostingsBlockFP)
                     {
@@ -529,7 +536,8 @@ public class BlockTerms
             // PerIndexFiles caches file handles, close handles only if PerIndexFiles is not present
             if (indexFiles == null)
                 FileUtils.closeQuietly(termsIndexHandle, termsDataHandle, bitpackedHandle, blockOrderMapFile, postingsHandle);
-            FileUtils.closeQuietly(termBlockFPs, postingBlockFPs, orderMapFPs, orderMapRandoInput);
+            // FileUtils.closeQuietly(termBlockFPs, postingBlockFPs, orderMapFPs, orderMapRandoInput);
+            FileUtils.closeQuietly(orderMapRandoInput);
             FileUtils.closeQuietly(upperPostingsReader);
         }
 
@@ -642,76 +650,91 @@ public class BlockTerms
         PostingList searchLeaves(BytesRef startTerm, BytesRef endTerm) throws IOException
         {
             if (startTerm == null)
-                throw new IllegalArgumentException("startTerm="+startTerm);
+                throw new IllegalArgumentException("startTerm=" + startTerm);
             if (endTerm == null)
                 throw new IllegalArgumentException();
 
-            final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
-
-            int blockMax = blockMinMax.right.intValue();
-
-            // a negative blockMax means same values
-            boolean lastBlockSameValues = false;
-            if (blockMax < 0)
+            try (final LongArray postingBlockFPs = blockPostingOffsetsReader.open();
+                 final LongArray orderMapFPs = blockOrderMapFPReader.open())
             {
-                blockMax *= -1;
-                lastBlockSameValues = true;
-            }
+                final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
 
-            int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
+                int blockMax = blockMinMax.right.intValue();
 
-            // filter 1 block only and return
-            if (minBlock == blockMax)
-                return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong());
-
-            int minBlockUse = blockMinMax.left.intValue();
-            final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-
-            long lastFP = -1;
-
-            final MutableValueLong firstFilterFP = new MutableValueLong();
-            final PostingList firstFilterPostings = filterBlock(startTerm, endTerm, minBlock, firstFilterFP);
-            // the first block is always filtered the as there may be matching terms
-            // in the block previous to the minBlock from the trie
-            if (firstFilterPostings != null)
-            {
-                postingLists.add(firstFilterPostings.peekable());
-                lastFP = firstFilterFP.value;
-            }
-
-            for (int block = minBlockUse; block < blockMax; block++)
-            {
-                final long fp = getPostingsFP(block);
-
-                // avoid adding duplicate posting lists
-                if (lastFP != fp)
+                // a negative blockMax means same values
+                boolean lastBlockSameValues = false;
+                if (blockMax < 0)
                 {
-                    final IndexInput input = IndexInputReader.create(postingsHandle);
-                    postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    blockMax *= -1;
+                    lastBlockSameValues = true;
                 }
-                lastFP = fp;
-            }
 
-            // if the last block has same values there's no need to filter
-            if (lastBlockSameValues)
-            {
-                final long fp = getPostingsFP(blockMax);
+                int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
 
-                // avoid adding duplicate posting lists
-                if (lastFP != fp)
+                // filter 1 block only and return
+                if (minBlock == blockMax)
+                    return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong(), postingBlockFPs, orderMapFPs);
+
+                int minBlockUse = blockMinMax.left.intValue();
+                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+
+                long lastFP = -1;
+
+                final MutableValueLong firstFilterFP = new MutableValueLong();
+                final PostingList firstFilterPostings = filterBlock(startTerm,
+                                                                    endTerm,
+                                                                    minBlock,
+                                                                    firstFilterFP,
+                                                                    postingBlockFPs,
+                                                                    orderMapFPs);
+                // the first block is always filtered the as there may be matching terms
+                // in the block previous to the minBlock from the trie
+                if (firstFilterPostings != null)
                 {
-                    final IndexInput input = IndexInputReader.create(postingsHandle);
-                    postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    postingLists.add(firstFilterPostings.peekable());
+                    lastFP = firstFilterFP.value;
                 }
-            }
-            else
-            {
-                PostingList lastFilterPostings = filterBlock(startTerm, endTerm, blockMax, new MutableValueLong());
-                if (lastFilterPostings != null)
-                    postingLists.add(lastFilterPostings.peekable());
-            }
 
-            return MergePostingList.merge(postingLists);
+                for (int block = minBlockUse; block < blockMax; block++)
+                {
+                    final long fp = postingBlockFPs.get(block);
+
+                    // avoid adding duplicate posting lists
+                    if (lastFP != fp)
+                    {
+                        final IndexInput input = IndexInputReader.create(postingsHandle);
+                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    }
+                    lastFP = fp;
+                }
+
+                // if the last block has same values there's no need to filter
+                if (lastBlockSameValues)
+                {
+                    final long fp = postingBlockFPs.get(blockMax);
+                    //final long fp = getPostingsFP(blockMax);
+
+                    // avoid adding duplicate posting lists
+                    if (lastFP != fp)
+                    {
+                        final IndexInput input = IndexInputReader.create(postingsHandle);
+                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    }
+                }
+                else
+                {
+                    PostingList lastFilterPostings = filterBlock(startTerm,
+                                                                 endTerm,
+                                                                 blockMax,
+                                                                 new MutableValueLong(),
+                                                                 postingBlockFPs,
+                                                                 orderMapFPs);
+                    if (lastFilterPostings != null)
+                        postingLists.add(lastFilterPostings.peekable());
+                }
+
+                return MergePostingList.merge(postingLists);
+            }
         }
 
         public PostingList search(BytesRef startTerm,
@@ -732,64 +755,79 @@ public class BlockTerms
 
             final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
 
-            int blockMax = blockMinMax.right.intValue();
-
-            // a negative blockMax means same values
-            boolean lastBlockSameValues = false;
-            if (blockMax < 0)
+            try (final LongArray postingBlockFPs = blockPostingOffsetsReader.open();
+                 final LongArray orderMapFPs = blockOrderMapFPReader.open())
             {
-                blockMax *= -1;
-                lastBlockSameValues = true;
-            }
+                int blockMax = blockMinMax.right.intValue();
 
-            int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
-
-            // filter 1 block only and return
-            if (minBlock == blockMax)
-            {
-                return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong());
-            }
-
-            int minBlockUse = blockMinMax.left.intValue();
-            final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-
-            long lastFP = -1;
-
-            final MutableValueLong firstFilterFP = new MutableValueLong();
-            final PostingList firstFilterPostings = filterBlock(startTerm, endTerm, minBlock, firstFilterFP);
-            // the first block is always filtered the as there may be matching terms
-            // in the block previous to the minBlock from the trie
-            if (firstFilterPostings != null)
-            {
-                postingLists.add(firstFilterPostings.peekable());
-                lastFP = firstFilterFP.value;
-            }
-
-            final long upperPostingsStartPoint = minBlockUse * (long)meta.postingsBlockSize;
-            final long upperPostingsEndPoint = blockMax * (long)meta.postingsBlockSize;
-
-            reader.search(upperPostingsStartPoint, upperPostingsEndPoint, postingLists);
-
-            // if the last block has same values there's no need to filter
-            if (lastBlockSameValues)
-            {
-                final long fp = getPostingsFP(blockMax);
-
-                // avoid adding duplicate posting lists
-                if (lastFP != fp)
+                // a negative blockMax means same values
+                boolean lastBlockSameValues = false;
+                if (blockMax < 0)
                 {
-                    final IndexInput input = IndexInputReader.create(postingsHandle);
-                    postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    blockMax *= -1;
+                    lastBlockSameValues = true;
                 }
-            }
-            else
-            {
-                PostingList lastFilterPostings = filterBlock(startTerm, endTerm, blockMax, new MutableValueLong());
-                if (lastFilterPostings != null)
-                    postingLists.add(lastFilterPostings.peekable());
-            }
 
-            return MergePostingList.merge(postingLists);
+                int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
+
+                // filter 1 block only and return
+                if (minBlock == blockMax)
+                {
+                    return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong(), postingBlockFPs, orderMapFPs);
+                }
+
+                int minBlockUse = blockMinMax.left.intValue();
+                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+
+                long lastFP = -1;
+
+                final MutableValueLong firstFilterFP = new MutableValueLong();
+                final PostingList firstFilterPostings = filterBlock(startTerm,
+                                                                    endTerm,
+                                                                    minBlock,
+                                                                    firstFilterFP,
+                                                                    postingBlockFPs,
+                                                                    orderMapFPs);
+                // the first block is always filtered the as there may be matching terms
+                // in the block previous to the minBlock from the trie
+                if (firstFilterPostings != null)
+                {
+                    postingLists.add(firstFilterPostings.peekable());
+                    lastFP = firstFilterFP.value;
+                }
+
+                final long upperPostingsStartPoint = minBlockUse * (long) meta.postingsBlockSize;
+                final long upperPostingsEndPoint = blockMax * (long) meta.postingsBlockSize;
+
+                reader.search(upperPostingsStartPoint, upperPostingsEndPoint, postingLists);
+
+                // if the last block has same values there's no need to filter
+                if (lastBlockSameValues)
+                {
+                    // final long fp = getPostingsFP(blockMax);
+                    final long fp = postingBlockFPs.get(blockMax);
+
+                    // avoid adding duplicate posting lists
+                    if (lastFP != fp)
+                    {
+                        final IndexInput input = IndexInputReader.create(postingsHandle);
+                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
+                    }
+                }
+                else
+                {
+                    PostingList lastFilterPostings = filterBlock(startTerm,
+                                                                 endTerm,
+                                                                 blockMax,
+                                                                 new MutableValueLong(),
+                                                                 postingBlockFPs,
+                                                                 orderMapFPs);
+                    if (lastFilterPostings != null)
+                        postingLists.add(lastFilterPostings.peekable());
+                }
+
+                return MergePostingList.merge(postingLists);
+            }
         }
 
         /**
@@ -805,7 +843,9 @@ public class BlockTerms
         PostingList filterBlock(final BytesRef startTerm,
                                 final BytesRef endTerm,
                                 final int block,
-                                final MutableValueLong postingsFP) throws IOException
+                                final MutableValueLong postingsFP,
+                                final LongArray blockPostingsFPs,
+                                final LongArray orderMapFPs) throws IOException
         {
             if (startTerm == null || endTerm == null)
                 throw new IllegalArgumentException();
@@ -820,12 +860,20 @@ public class BlockTerms
             if (minMaxPoints.left.longValue() == -1)
                 return null;
 
-            final OrdinalPostingList postings = openBlockPostings(block, postingsFP);
+            // final long fp = getPostingsFP(block);
+//            IndexInput input = IndexInputReader.create(postingsHandle);
+//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
+
+            postingsFP.value = blockPostingsFPs.get(block);
+            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
+                                                                   postingsFP.value,
+                                                                   QueryEventListener.PostingListEventListener.NO_OP);
+            // final OrdinalPostingList postings = openBlockPostings(block, postingsFP);
 
             if (postings.size() > meta.postingsBlockSize)
                 return null;
 
-            final long orderMapFP = getOrderMapFP(block);
+            final long orderMapFP = orderMapFPs.get(block);
 
             final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
 
@@ -850,52 +898,52 @@ public class BlockTerms
         }
 
         @VisibleForTesting
-        IntArrayList openOrderMap(int block) throws IOException
-        {
-            long fp = getOrderMapFP(block);
+//        IntArrayList openOrderMap(int block) throws IOException
+//        {
+//            long fp = getOrderMapFP(block);
+//
+//            if (fp == -1)
+//                return null;
+//
+//            IntArrayList list = new IntArrayList();
+//            for (int x = 0; x < meta.postingsBlockSize; x++)
+//            {
+//                int ord = (int) orderMapReader.get(orderMapRandoInput, fp, x);
+//                list.add(ord);
+//            }
+//            return list;
+//        }
 
-            if (fp == -1)
-                return null;
+//        long getOrderMapFP(int block)
+//        {
+//            return orderMapFPs.get(block);
+//        }
 
-            IntArrayList list = new IntArrayList();
-            for (int x = 0; x < meta.postingsBlockSize; x++)
-            {
-                int ord = (int) orderMapReader.get(orderMapRandoInput, fp, x);
-                list.add(ord);
-            }
-            return list;
-        }
+//        OrdinalPostingList openBlockPostings(long block) throws IOException
+//        {
+//            final long fp = getPostingsFP(block);
+//            IndexInput input = IndexInputReader.create(postingsHandle);
+//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
+//        }
+//
+//        OrdinalPostingList openBlockPostingsFP(long fp) throws IOException
+//        {
+//            IndexInput input = IndexInputReader.create(postingsHandle);
+//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
+//        }
+//
+//        OrdinalPostingList openBlockPostings(int block, MutableValueLong postingsFP) throws IOException
+//        {
+//            final long fp = getPostingsFP(block);
+//            postingsFP.value = fp;
+//            IndexInput input = IndexInputReader.create(postingsHandle);
+//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
+//        }
 
-        long getOrderMapFP(int block)
-        {
-            return orderMapFPs.get(block);
-        }
-
-        OrdinalPostingList openBlockPostings(long block) throws IOException
-        {
-            final long fp = getPostingsFP(block);
-            IndexInput input = IndexInputReader.create(postingsHandle);
-            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-        }
-
-        OrdinalPostingList openBlockPostingsFP(long fp) throws IOException
-        {
-            IndexInput input = IndexInputReader.create(postingsHandle);
-            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-        }
-
-        OrdinalPostingList openBlockPostings(int block, MutableValueLong postingsFP) throws IOException
-        {
-            final long fp = getPostingsFP(block);
-            postingsFP.value = fp;
-            IndexInput input = IndexInputReader.create(postingsHandle);
-            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-        }
-
-        long getPostingsFP(long block)
-        {
-            return postingBlockFPs.get(block);
-        }
+//        long getPostingsFP(long block)
+//        {
+//            return postingBlockFPs.get(block);
+//        }
 
         /**
          * Filter points by a start and end term in a given point id range using
@@ -1025,18 +1073,21 @@ public class BlockTerms
         {
             private final IndexInput termsData;
             private final BytesRef currentTerm;
+            private final LongArray termBlockFPs;
             private long pointId;
 
             public BytesCursor()
             {
                 this.currentTerm = new BytesRef(meta.maxTermLength);
                 this.termsData = IndexInputReader.create(termsDataHandle);
+                termBlockFPs = blockTermsOffsetsReader.open();
             }
 
             @Override
             public void close() throws IOException
             {
                 termsData.close();
+                FileUtils.closeQuietly(termBlockFPs);
             }
 
             /**

@@ -323,11 +323,11 @@ public class UpperPostings
         {
             int level = 1; // level 0 is leaf level posting blocks
 
-            LongArray previousLevelPostingFPs = reader.postingBlockFPs();
+            LongArray previousLevelPostingFPs = reader.blockPostingOffsetsReader.open();
 
             final SortedMap<Integer, LongArray> levelFPMap = new TreeMap<>();
 
-            levelFPMap.put(0, reader.postingBlockFPs());
+            levelFPMap.put(0, previousLevelPostingFPs);
 
             while (true)
             {
@@ -366,6 +366,11 @@ public class UpperPostings
 
                     levelMetas.put(entry.getKey(), numericWriter.meta());
                 }
+            }
+
+            for (LongArray array : levelFPMap.values())
+            {
+                array.close();
             }
 
             final long upperPostingsLength = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS, segmented) - upperPostingsStartFP;
@@ -443,8 +448,10 @@ public class UpperPostings
                 final long fp = prevLevelFPs.get(index);
                 if (level == 1)
                 {
-                    final OrdinalPostingList postings = reader.openBlockPostingsFP(fp);
-                    if (postings.size() > 0)
+                    IndexInput input = IndexInputReader.create(reader.postingsHandle);
+                    PostingsReader postings = new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
+                    //final OrdinalPostingList postings = reader.openBlockPostingsFP(fp);
+                    if (postings.size() > 0) // TODO: how possible
                         queue.add(postings.peekable());
                 }
                 else
