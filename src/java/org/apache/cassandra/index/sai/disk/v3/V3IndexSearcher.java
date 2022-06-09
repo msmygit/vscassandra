@@ -99,7 +99,8 @@ public class V3IndexSearcher extends IndexSearcher
                     upperBound = toComparableBytes(exp.upper.value.encoded, exp.validator);
             }
 
-            PostingList postings = reader.search(lowerBound, lowerExclusive, upperBound, upperExclusive);
+            // postings may be null, handled by toIterator
+            final PostingList postings = reader.search(lowerBound, lowerExclusive, upperBound, upperExclusive);
             return toIterator(postings, context, defer);
         }
         else

@@ -826,6 +826,11 @@ public class BlockTerms
                         postingLists.add(lastFilterPostings.peekable());
                 }
 
+                if (postingLists.isEmpty())
+                {
+                    return null;
+                }
+
                 return MergePostingList.merge(postingLists);
             }
         }
