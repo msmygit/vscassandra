@@ -65,7 +65,7 @@ public class UpperPostings
         private final BlockTerms.Reader reader;
         private final int baseUnit;
         private final FileHandle upperPostingsFile;
-        private final SortedMap<Integer, LongArray> levelFPMap = new TreeMap<>();
+        private final SortedMap<Integer, MonotonicBlockPackedReader> levelFPMap = new TreeMap<>();
 
         /**
          *
@@ -86,8 +86,7 @@ public class UpperPostings
             for (Map.Entry<Integer,NumericValuesMeta> entry : levelNumericMeta.entrySet())
             {
                 final MonotonicBlockPackedReader numericReader = new MonotonicBlockPackedReader(upperPostingsOffsetsFile, entry.getValue());
-                final LongArray array = numericReader.open();
-                levelFPMap.put(entry.getKey(), array);
+                levelFPMap.put(entry.getKey(), numericReader);
             }
 
             this.upperPostingsFile = reader.indexFiles.getFileAndCache(IndexComponent.BLOCK_UPPER_POSTINGS);
@@ -107,8 +106,7 @@ public class UpperPostings
             for (Map.Entry<Integer,NumericValuesMeta> entry : meta.levelMetas.entrySet())
             {
                 final MonotonicBlockPackedReader numericReader = new MonotonicBlockPackedReader(upperPostingsOffsetsFile, entry.getValue());
-                final LongArray array = numericReader.open();
-                levelFPMap.put(entry.getKey(), array);
+                levelFPMap.put(entry.getKey(), numericReader);
             }
 
             this.upperPostingsFile = reader.indexFiles.getFileAndCache(IndexComponent.BLOCK_UPPER_POSTINGS);
@@ -117,8 +115,6 @@ public class UpperPostings
         @Override
         public void close() throws Exception
         {
-            for (LongArray array : levelFPMap.values())
-                array.close();
             upperPostingsFile.close();
         }
 
@@ -138,34 +134,38 @@ public class UpperPostings
 
             int postingsCount = 0;
 
+            final List<LongArray> toClose = new ArrayList<>();
+
             for (int level = lastLevel; level >= firstLevel; level--)
             {
-                final LongArray levelPostingFPs = levelFPMap.get(level);
+                final MonotonicBlockPackedReader levelPostingFPs = levelFPMap.get(level);
 
-                final int levelUnit = (int) Math.pow(baseUnit, level);
-                final long levelLength = levelUnit * (long)reader.meta.postingsBlockSize;
-
-                final int startDerivedIdx = (int)(startPoint / levelLength);
-                final int endDerivedIdx = (int)(endPoint / levelLength);
-
-                final long levelGatheredStart = gatheredStart;
-                final long levelGatheredEnd = gatheredEnd;
-
-                boolean resetToEnd = false;
-                // iterate forwards over the level file pointers
-                // process the first section
-                // then skip to the last section
-                for (int x = startDerivedIdx; x < levelPostingFPs.length(); x++)
+                try (final LongArray levelPostingFPsArray = levelPostingFPs.open())
                 {
-                    if (x > endDerivedIdx)
-                        break;
+                    final int levelUnit = (int) Math.pow(baseUnit, level);
+                    final long levelLength = levelUnit * (long) reader.meta.postingsBlockSize;
 
-                    final long startPoint2 = x * levelLength;
-                    final long endPoint2 = (x * levelLength) + levelLength - 1;
+                    final int startDerivedIdx = (int) (startPoint / levelLength);
+                    final int endDerivedIdx = (int) (endPoint / levelLength);
 
-                    if ((startPoint2 >= startPoint && endPoint2 <= endPoint)
-                        && (startPoint2 < levelGatheredStart || endPoint2 > levelGatheredEnd))
+                    final long levelGatheredStart = gatheredStart;
+                    final long levelGatheredEnd = gatheredEnd;
+
+                    boolean resetToEnd = false;
+                    // iterate forwards over the level file pointers
+                    // process the first section
+                    // then skip to the last section
+                    for (int x = startDerivedIdx; x < levelPostingFPsArray.length(); x++)
                     {
+                        if (x > endDerivedIdx)
+                            break;
+
+                        final long startPoint2 = x * levelLength;
+                        final long endPoint2 = (x * levelLength) + levelLength - 1;
+
+                        if ((startPoint2 >= startPoint && endPoint2 <= endPoint)
+                            && (startPoint2 < levelGatheredStart || endPoint2 > levelGatheredEnd))
+                        {
 //                        System.out.println("level=" + level
 //                                           + " index=" + x
 //                                           + " startDerivedIdx=" + startDerivedIdx
@@ -178,34 +178,34 @@ public class UpperPostings
 //                                           + " levelGatheredEnd=" + levelGatheredEnd
 //                                           + " gatheredStart=" + gatheredStart
 //                                           + " gatheredEnd=" + gatheredEnd);
-                        gatheredStart = Math.min(gatheredStart, startPoint2);
-                        gatheredEnd = Math.max(gatheredEnd, endPoint2);
+                            gatheredStart = Math.min(gatheredStart, startPoint2);
+                            gatheredEnd = Math.max(gatheredEnd, endPoint2);
 
-                        final long fp = levelPostingFPs.get(x);
+                            final long fp = levelPostingFPsArray.get(x);
 
-                        // leaf level zero postings are in a separate file
-                        if (level == 0)
-                        {
-                            PostingsReader postings = new PostingsReader(postingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
-                            queue.add(postings.peekable());
-                        }
-                        else // upper level postings in a separate file
-                        {
-                            PostingsReader postings = new PostingsReader(upperPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
-                            queue.add(postings.peekable());
-                        }
+                            // leaf level zero postings are in a separate file
+                            if (level == 0)
+                            {
+                                PostingsReader postings = new PostingsReader(postingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
+                                queue.add(postings.peekable());
+                            }
+                            else // upper level postings in a separate file
+                            {
+                                PostingsReader postings = new PostingsReader(upperPostingsInput, fp, QueryEventListener.PostingListEventListener.NO_OP);
+                                queue.add(postings.peekable());
+                            }
 
-                        postingsCount++;
-                    }
-                    else
-                    {
-                        // after the first section of postings are gathered
-                        // skip to the last section
-                        if (endPoint2 > levelGatheredStart && !resetToEnd)
-                        {
-                            x = (int)(gatheredEnd / levelLength);
-                            resetToEnd = true;
+                            postingsCount++;
                         }
+                        else
+                        {
+                            // after the first section of postings are gathered
+                            // skip to the last section
+                            if (endPoint2 > levelGatheredStart && !resetToEnd)
+                            {
+                                x = (int) (gatheredEnd / levelLength);
+                                resetToEnd = true;
+                            }
 //                        System.out.println("levelno=" + level
 //                                           + " index=" + x
 //                                           + " startDerivedIdx=" + startDerivedIdx
@@ -219,6 +219,7 @@ public class UpperPostings
 //                                           + " levelGatheredEnd=" + levelGatheredEnd
 //                                           + " gatheredStart=" + gatheredStart
 //                                           + " gatheredEnd=" + gatheredEnd);
+                        }
                     }
                 }
             }
