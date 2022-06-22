@@ -261,7 +261,6 @@ public class BlockTerms
         protected final FileHandle bitpackedHandle, postingsHandle, blockOrderMapFile, termsDataHandle, termsIndexHandle;
         protected final V3PerIndexFiles indexFiles;
         final MonotonicBlockPackedReader blockPostingOffsetsReader;
-        //private final LongArray termBlockFPs, postingBlockFPs, orderMapFPs;
         private final NumericValuesMeta blockTermsOffsetsMeta, blockPostingsOffsetsMeta, blockOrderMapMeta;
         private final SeekingRandomAccessInput orderMapRandoInput;
         private final DirectReaders.Reader orderMapReader;
