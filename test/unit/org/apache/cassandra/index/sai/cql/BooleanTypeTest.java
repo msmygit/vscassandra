@@ -47,7 +47,7 @@ public class BooleanTypeTest extends SAITester
 
 //        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
 //
-//        waitForIndexQueryable();
+        waitForIndexQueryable();
 
         //compact();
 

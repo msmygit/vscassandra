@@ -60,6 +60,9 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
  */
 public class UpperPostings
 {
+    public static final int SKIP_LEVELS = 3;
+    public static final int baseUnit = 10;
+
     public static class Reader implements AutoCloseable
     {
         private final BlockTerms.Reader reader;
@@ -138,7 +141,7 @@ public class UpperPostings
             {
                 final MonotonicBlockPackedReader levelPostingFPs = levelFPMap.get(level);
 
-                final boolean elgibleLevel = level % 3 == 0;
+                final boolean elgibleLevel = level % SKIP_LEVELS == 0;
 
                 if (!elgibleLevel)
                     continue;
@@ -311,7 +314,6 @@ public class UpperPostings
     public static class Writer
     {
         private final BlockTerms.Reader reader;
-        private final int baseUnit = 5;
 
         public Writer(BlockTerms.Reader reader) throws IOException
         {
@@ -341,7 +343,7 @@ public class UpperPostings
 
             while (true)
             {
-                final boolean elgibleLevel = level % 3 == 0;
+                final boolean elgibleLevel = level % SKIP_LEVELS == 0;
 
                 if (elgibleLevel)
                 {
