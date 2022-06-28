@@ -82,7 +82,6 @@ public class BinaryTreeTest extends SaiRandomizedTest
                              },
                              min,
                              max);
-            // reader.traverse(new IntArrayList());
         }
     }
 }

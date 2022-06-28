@@ -34,7 +34,6 @@ import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.MathUtil;
 
-// TODO: get and save the min max bytes
 public class BinaryTree
 {
     public interface IntersectVisitor
@@ -42,6 +41,11 @@ public class BinaryTree
         /** Called for non-leaf cells to test how the cell relates to the query, to
          *  determine how to further recurse down the tree. */
         PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue);
+    }
+
+    public interface BinaryTreeTraversalCallback
+    {
+        void onLeaf(int leafNodeID, IntArrayList pathToRoot);
     }
 
     public static class Reader
@@ -154,14 +158,14 @@ public class BinaryTree
                 pop();
 
                 // Restore the split dim value since it may have been overwritten while recursing:
-                // System.arraycopy(splitPackedValue, splitDim * config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, config.bytesPerDim);
                 copyBytes(splitPackedValue, splitDimValue);
+                // System.arraycopy(splitPackedValue, splitDim * config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, config.bytesPerDim);
 
                 // Recurse on right sub-tree:
-                // System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
-                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
                 copyBytes(cellMinPacked, splitPackedValue);
                 copyBytes(splitDimValue, splitPackedValue);
+                // System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
+                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
 
                 pushRight();
                 intersect(visitor, splitPackedValue, cellMaxPacked);
@@ -183,7 +187,8 @@ public class BinaryTree
             return splitPackedValueStack[level];
         }
 
-        public void traverse(IntArrayList pathToRoot) throws IOException
+        public void traverse(IntArrayList pathToRoot,
+                             BinaryTreeTraversalCallback callback) throws IOException
         {
             final int nodeID = getNodeID();
             System.out.println("traverse nodeID="+nodeID+" isLeafNode="+isLeafNode());
@@ -193,7 +198,7 @@ public class BinaryTree
                 if (nodeExists())
                 {
                     System.out.println("onLeaf nodeID="+getNodeID());
-                    // callback.onLeaf(index.getNodeID(), index.getLeafBlockFP(), pathToRoot);
+                    callback.onLeaf(nodeID, pathToRoot);
                 }
             }
             else
@@ -203,11 +208,11 @@ public class BinaryTree
                 currentPath.add(nodeID);
 
                 pushLeft();
-                traverse(currentPath);
+                traverse(currentPath, callback);
                 pop();
 
                 pushRight();
-                traverse(currentPath);
+                traverse(currentPath, callback);
                 pop();
             }
         }
@@ -284,7 +289,7 @@ public class BinaryTree
             System.out.println("  readNodeData len="+len);
 
             input.readBytes(splitValuesStack[level].bytes, 0, len);
-            System.out.println("  readNodeData bytes="+splitValuesStack[level].utf8ToString());
+            // System.out.println("  readNodeData bytes="+splitValuesStack[level].utf8ToString());
 
             int leftNumBytes;
             if (nodeID * 2 < leafNodeOffset)
@@ -317,7 +322,7 @@ public class BinaryTree
 
     public static class Writer
     {
-        final BytesRefBuilder spare = new BytesRefBuilder();
+        private final BytesRefBuilder spare = new BytesRefBuilder();
 
         public Writer()
         {
@@ -363,20 +368,6 @@ public class BinaryTree
                     return 0;
                 else
                     return appendBlock(writeBuffer, blocks);
-
-                // return 0;
-//                if (isLeft)
-//                {
-//                    assert leafNodes.getLeafLP(leavesOffset) - minBlockFP == 0;
-//                    return 0;
-//                }
-//                else
-//                {
-//                    long delta = leafNodes.getLeafLP(leavesOffset) - minBlockFP;
-//                    assert leafNodes.numLeaves() == numLeaves || delta > 0 : "expected delta > 0; got numLeaves =" + numLeaves + " and delta=" + delta;
-//                    writeBuffer.writeVLong(delta);
-//                    return appendBlock(writeBuffer, blocks);
-//                }
             }
             else
             {
@@ -388,9 +379,7 @@ public class BinaryTree
 
                 minBlockTerms.get(spare, splitOffset);
 
-                //final long startFP = output.getFilePointer();
-
-                System.out.println("  write min term="+spare.get().utf8ToString()+" len="+spare.get().length+" writeBuffer.size="+writeBuffer.size());
+                // System.out.println("  write min term="+spare.get().utf8ToString()+" len="+spare.get().length+" writeBuffer.size="+writeBuffer.size());
 
                 // write bytes
                 writeBuffer.writeVInt(spare.get().length);

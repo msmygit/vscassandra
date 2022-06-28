@@ -33,13 +33,13 @@ import static org.apache.cassandra.index.sai.utils.SAICodecUtils.validate;
  * Mapping between node ID and an offset to its auxiliary posting list (containing every row id from all leaves
  * reachable from that node. See {@link OneDimBKDPostingsWriter}).
  */
-class BKDPostingsIndex
+public class BKDPostingsIndex
 {
     private final int size;
     public final IntLongMap index = new IntLongHashMap();
 
     @SuppressWarnings("resource")
-    BKDPostingsIndex(FileHandle postingsFileHandle, long filePosition) throws IOException
+    public BKDPostingsIndex(FileHandle postingsFileHandle, long filePosition) throws IOException
     {
         try (final RandomAccessReader reader = postingsFileHandle.createReader())
         {

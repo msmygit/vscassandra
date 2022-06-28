@@ -363,17 +363,17 @@ public class BlockTermsTest extends SaiRandomizedTest
         SegmentMetadata.ComponentMetadataMap components = new SegmentMetadata.ComponentMetadataMap();
         writer.finish(components);
 
-        try (V3PerIndexFiles indexFiles = new V3PerIndexFiles(indexDescriptor, indexContext, false);
-             BlockTerms.Reader reader = new BlockTerms.Reader(indexDescriptor,
-                                                              indexContext,
-                                                              indexFiles,
-                                                              components))
-        {
-            PostingList postings = reader.searchLeaves(toBytes(10), toBytes(20));
-
-            assertEquals(1, countPostingLists(postings));
-            assertArrayEquals(LongStream.rangeClosed(0, 19).toArray(), collect(postings).toLongArray());
-        }
+//        try (V3PerIndexFiles indexFiles = new V3PerIndexFiles(indexDescriptor, indexContext, false);
+//             BlockTerms.Reader reader = new BlockTerms.Reader(indexDescriptor,
+//                                                              indexContext,
+//                                                              indexFiles,
+//                                                              components))
+//        {
+//            PostingList postings = reader.searchLeaves(toBytes(10), toBytes(20));
+//
+//            assertEquals(1, countPostingLists(postings));
+//            assertArrayEquals(LongStream.rangeClosed(0, 19).toArray(), collect(postings).toLongArray());
+//        }
     }
 
     @Test
@@ -456,8 +456,8 @@ public class BlockTermsTest extends SaiRandomizedTest
                                                                   indexFiles,
                                                                   components))
             {
-                PostingList postings = reader.searchLeaves(toBytes(queryMin), toBytes(queryMax));
-                postingList = collect(postings);
+//                PostingList postings = reader.searchLeaves(toBytes(queryMin), toBytes(queryMax));
+//                postingList = collect(postings);
             }
 
 //            System.out.println("postingList=" + postingList);
@@ -584,9 +584,9 @@ public class BlockTermsTest extends SaiRandomizedTest
                                                               indexFiles,
                                                               components))
         {
-            PostingList postings = reader.searchLeaves(toBytes(10), toBytes(11));
-            assertEquals(1, countPostingLists(postings));
-            assertArrayEquals(LongStream.rangeClosed(0, 19).toArray(), collect(postings).toLongArray());
+//            PostingList postings = reader.searchLeaves(toBytes(10), toBytes(11));
+//            assertEquals(1, countPostingLists(postings));
+//            assertArrayEquals(LongStream.rangeClosed(0, 19).toArray(), collect(postings).toLongArray());
 
             assertEquals(24, reader.meta.pointCount);
             assertEquals(3, reader.meta.numPostingBlocks);
@@ -637,10 +637,10 @@ public class BlockTermsTest extends SaiRandomizedTest
                                                               indexFiles,
                                                               components))
         {
-            PostingList postings3 = reader.searchLeaves(toBytes(5), toBytes(47));
-            assertEquals(3, countPostingLists(postings3));
-            // System.out.println("postings3="+collect(postings3));
-            assertArrayEquals(LongStream.rangeClosed(0, 53).toArray(), collect(postings3).toLongArray());
+//            PostingList postings3 = reader.searchLeaves(toBytes(5), toBytes(47));
+//            assertEquals(3, countPostingLists(postings3));
+//            // System.out.println("postings3="+collect(postings3));
+//            assertArrayEquals(LongStream.rangeClosed(0, 53).toArray(), collect(postings3).toLongArray());
 
             LongArrayList sameValuePostings = collect(reader.sameValuePostings());
             // block 2 doesn't have same values
@@ -688,46 +688,46 @@ public class BlockTermsTest extends SaiRandomizedTest
             }
 
             // verify reader min block term has 1 value
-            try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
-            {
-                if (minTermsIterator.hasNext())
-                {
-                    Pair<ByteSource, Long> pair = minTermsIterator.next();
-                    int minValue = toInt((version -> pair.left));
-
-                    assertEquals(10, minValue);
-
-                    int minBlock = (int) (pair.right.longValue() >> 32);
-                    int maxBlock = (int) pair.right.longValue();
-
-                    assertEquals(0, minBlock);
-                    assertEquals(2, maxBlock);
-                }
-                else
-                {
-                    assertTrue(false);
-                }
-
-                if (minTermsIterator.hasNext())
-                {
-                    Pair<ByteSource, Long> pair = minTermsIterator.next();
-                    int minValue = toInt((version -> pair.left));
-
-                    assertEquals(20, minValue);
-
-                    int minBlock = (int) (pair.right.longValue() >> 32);
-                    int maxBlock = (int) pair.right.longValue();
-
-                    maxBlock = maxBlock < 0 ? maxBlock * -1 : maxBlock;
-
-                    assertEquals(3, minBlock);
-                    assertEquals(5, maxBlock);
-                }
-                else
-                {
-                    assertTrue(false);
-                }
-            }
+//            try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
+//            {
+//                if (minTermsIterator.hasNext())
+//                {
+//                    Pair<ByteSource, Long> pair = minTermsIterator.next();
+//                    int minValue = toInt((version -> pair.left));
+//
+//                    assertEquals(10, minValue);
+//
+//                    int minBlock = (int) (pair.right.longValue() >> 32);
+//                    int maxBlock = (int) pair.right.longValue();
+//
+//                    assertEquals(0, minBlock);
+//                    assertEquals(2, maxBlock);
+//                }
+//                else
+//                {
+//                    assertTrue(false);
+//                }
+//
+//                if (minTermsIterator.hasNext())
+//                {
+//                    Pair<ByteSource, Long> pair = minTermsIterator.next();
+//                    int minValue = toInt((version -> pair.left));
+//
+//                    assertEquals(20, minValue);
+//
+//                    int minBlock = (int) (pair.right.longValue() >> 32);
+//                    int maxBlock = (int) pair.right.longValue();
+//
+//                    maxBlock = maxBlock < 0 ? maxBlock * -1 : maxBlock;
+//
+//                    assertEquals(3, minBlock);
+//                    assertEquals(5, maxBlock);
+//                }
+//                else
+//                {
+//                    assertTrue(false);
+//                }
+//            }
         }
     }
 
@@ -761,9 +761,9 @@ public class BlockTermsTest extends SaiRandomizedTest
             LongArrayList sameValuePostings = collect(reader.sameValuePostings());
             assertArrayEquals(new long[] {0, 1, 2, 3, 4}, sameValuePostings.toLongArray());
 
-            PostingList postings3 = reader.searchLeaves(toBytes(5), toBytes(47));
-            assertEquals(1, countPostingLists(postings3));
-            assertArrayEquals(LongStream.rangeClosed(0, 44).toArray(), collect(postings3).toLongArray());
+//            PostingList postings3 = reader.searchLeaves(toBytes(5), toBytes(47));
+//            assertEquals(1, countPostingLists(postings3));
+//            assertArrayEquals(LongStream.rangeClosed(0, 44).toArray(), collect(postings3).toLongArray());
 
             assertEquals(45, reader.meta.pointCount);
             assertEquals(5, reader.meta.numPostingBlocks);
@@ -783,29 +783,29 @@ public class BlockTermsTest extends SaiRandomizedTest
             }
 
             // verify reader min block term has 1 value
-            try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
-            {
-                int count = 0;
-                while (minTermsIterator.hasNext())
-                {
-                    Pair<ByteSource, Long> pair = minTermsIterator.next();
-                    int minValue = toInt((version -> pair.left));
-
-                    assertEquals(10, minValue);
-
-                    int minBlock = (int) (pair.right.longValue() >> 32);
-                    int maxBlock = (int) pair.right.longValue();
-
-                    if (maxBlock < 0)
-                        maxBlock *= -1;
-
-                    assertEquals(0, minBlock);
-                    assertEquals(4, maxBlock);
-
-                    count++;
-                }
-                assertEquals(1, count);
-            }
+//            try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
+//            {
+//                int count = 0;
+//                while (minTermsIterator.hasNext())
+//                {
+//                    Pair<ByteSource, Long> pair = minTermsIterator.next();
+//                    int minValue = toInt((version -> pair.left));
+//
+//                    assertEquals(10, minValue);
+//
+//                    int minBlock = (int) (pair.right.longValue() >> 32);
+//                    int maxBlock = (int) pair.right.longValue();
+//
+//                    if (maxBlock < 0)
+//                        maxBlock *= -1;
+//
+//                    assertEquals(0, minBlock);
+//                    assertEquals(4, maxBlock);
+//
+//                    count++;
+//                }
+//                assertEquals(1, count);
+//            }
 
             // verify postings
             long[] rowidMatches = LongStream.rangeClosed(0, 44).toArray();
@@ -852,15 +852,17 @@ public class BlockTermsTest extends SaiRandomizedTest
         {
             assertNull(reader.sameValuePostings());
 
-            PostingList postings3 = reader.searchLeaves(toBytes(11), toBytes(47));
-            //System.out.println("postings3="+collect(postings3));
-            assertArrayEquals(LongStream.rangeClosed(11, 44).toArray(), collect(postings3).toLongArray());
+//            PostingList postings3 = reader.searchLeaves(toBytes(11), toBytes(47));
+//            //System.out.println("postings3="+collect(postings3));
+//            assertArrayEquals(LongStream.rangeClosed(11, 44).toArray(), collect(postings3).toLongArray());
+//
+//            PostingList postings2 = reader.searchLeaves(toBytes(5), toBytes(15));
+//            assertArrayEquals(LongStream.rangeClosed(5, 15).toArray(), collect(postings2).toLongArray());
+//
+//            PostingList postings1 = reader.searchLeaves(toBytes(0), toBytes(5));
+//            assertArrayEquals(new long[] {0, 1, 2, 3, 4, 5}, collect(postings1).toLongArray());
 
-            PostingList postings2 = reader.searchLeaves(toBytes(5), toBytes(15));
-            assertArrayEquals(LongStream.rangeClosed(5, 15).toArray(), collect(postings2).toLongArray());
 
-            PostingList postings1 = reader.searchLeaves(toBytes(0), toBytes(5));
-            assertArrayEquals(new long[] {0, 1, 2, 3, 4, 5}, collect(postings1).toLongArray());
 
 //            // test start block filtering
 //            PostingList filterPostings1 = reader.filterBlock(toBytes(5), toBytes(44), 0, new MutableValueLong());
@@ -880,14 +882,14 @@ public class BlockTermsTest extends SaiRandomizedTest
             assertEquals(45, reader.meta.distinctTermCount);
 
             // Verify reader min block terms
-            IntArrayList blockMinValues = getBlockMinValues(reader);
-            assertArrayEquals(new int[]{ 0, 10, 20, 30, 40 }, blockMinValues.toIntArray());
-
-            // TODO: should searchTermsIndex return N-1 min block id
-            // search the trie for min and max block ids
-            Pair<Integer, Integer> rangePair = reader.searchTermsIndex(toBytes(5), toBytes(30));
-            assertEquals(1, rangePair.left.intValue());
-            assertEquals(3, rangePair.right.intValue());
+//            IntArrayList blockMinValues = getBlockMinValues(reader);
+//            assertArrayEquals(new int[]{ 0, 10, 20, 30, 40 }, blockMinValues.toIntArray());
+//
+//            // TODO: should searchTermsIndex return N-1 min block id
+//            // search the trie for min and max block ids
+//            Pair<Integer, Integer> rangePair = reader.searchTermsIndex(toBytes(5), toBytes(30));
+//            assertEquals(1, rangePair.left.intValue());
+//            assertEquals(3, rangePair.right.intValue());
 
             // use the bytes min max filtering API
             Pair<Long, Long> filterPair = reader.filterPoints(toBytes(5), null, 0, blockSize - 1);
@@ -925,20 +927,20 @@ public class BlockTermsTest extends SaiRandomizedTest
         }
     }
 
-    public IntArrayList getBlockMinValues(BlockTerms.Reader reader) throws Exception
-    {
-        IntArrayList blockMinValues = new IntArrayList();
-        try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
-        {
-            while (minTermsIterator.hasNext())
-            {
-                Pair<ByteSource, Long> pair = minTermsIterator.next();
-                int minValue = toInt((version -> pair.left));
-                blockMinValues.add(minValue);
-            }
-        }
-        return blockMinValues;
-    }
+//    public IntArrayList getBlockMinValues(BlockTerms.Reader reader) throws Exception
+//    {
+//        IntArrayList blockMinValues = new IntArrayList();
+//        try (BlockTerms.Reader.MinTermsIterator minTermsIterator = reader.minTermsIterator())
+//        {
+//            while (minTermsIterator.hasNext())
+//            {
+//                Pair<ByteSource, Long> pair = minTermsIterator.next();
+//                int minValue = toInt((version -> pair.left));
+//                blockMinValues.add(minValue);
+//            }
+//        }
+//        return blockMinValues;
+//    }
 
     public static LongArrayList collect(PostingList postings) throws IOException
     {
