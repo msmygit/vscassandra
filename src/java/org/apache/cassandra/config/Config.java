@@ -631,11 +631,13 @@ public class Config
 
     public static Supplier<Config> getOverrideLoadConfig()
     {
+        logger.info("getOverrideLoadConfig");
         return overrideLoadConfig;
     }
 
     public static void setOverrideLoadConfig(Supplier<Config> loadConfig)
     {
+        logger.info("setOverrideLoadConfig");
         overrideLoadConfig = loadConfig;
     }
 

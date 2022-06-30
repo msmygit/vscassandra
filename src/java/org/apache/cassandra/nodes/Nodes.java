@@ -468,6 +468,7 @@ public class Nodes
 
         public Local(ObjectMapper objectMapper, Path storageDirectory)
         {
+            logger.info("Local(" + storageDirectory + ")");
             localPath = storageDirectory.resolve("local");
             localBackupPath = localPath.resolveSibling(localPath.getFileName().toString() + ".old");
             localTempPath = localPath.resolveSibling(localPath.getFileName().toString() + ".txn");
@@ -481,6 +482,7 @@ public class Nodes
 
         private void saveToDisk()
         {
+            logger.info("LocalInfo.saveToDisk");
             // called via updateExecutor
             synchronized (this)
             {
@@ -491,6 +493,7 @@ public class Nodes
 
         private void write(OutputStream output) throws IOException
         {
+            logger.info("LocalInfo.write(" + localInfo + ")");
             localInfo.resetDirty();
             localWriter.writeValue(output, localInfo);
         }
@@ -534,6 +537,7 @@ public class Nodes
          */
         public void update(Consumer<LocalInfo> updater, boolean blocking)
         {
+            logger.info("LocalInfo.update");
             if (closed)
                 throw new IllegalStateException("Nodes instance already closed");
 
@@ -563,6 +567,7 @@ public class Nodes
          */
         public <V> void update(V value, BiConsumer<LocalInfo, V> updater, boolean blocking)
         {
+            logger.info("LocalInfo.updateWithValue");
             if (closed)
                 throw new IllegalStateException("Nodes instance already closed");
 
@@ -903,6 +908,7 @@ public class Nodes
 
         public static void setup(Path nodesDirectory)
         {
+            logger.info("Nodes.Instance.setup(" + nodesDirectory + ")");
             if (nodes != null)
             {
                 nodes.shutdown();

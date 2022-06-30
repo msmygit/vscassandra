@@ -364,7 +364,9 @@ public class DatabaseDescriptor
         Config config;
         if (Config.getOverrideLoadConfig() != null)
         {
+            logger.info("DatabaseDescriptor.loadConfig override not null");
             config = Config.getOverrideLoadConfig().get();
+            logger.info("config is" + config == null ? " null" : " not null");
         }
         else
         {
@@ -1218,6 +1220,7 @@ public class DatabaseDescriptor
 
     static void applyTokensConfig(Config conf)
     {
+        logger.info("applyTokensConfig");
         if (conf.initial_token != null)
         {
             Collection<String> tokens = tokensFromString(conf.initial_token);
@@ -1605,7 +1608,7 @@ public class DatabaseDescriptor
 
     public static int getNumTokens()
     {
-        return conf.num_tokens;
+        return conf.num_tokens == null ? -1 : conf.num_tokens;
     }
 
     public static InetAddressAndPort getReplaceAddress()
