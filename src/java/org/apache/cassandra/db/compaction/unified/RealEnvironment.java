@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.cache.ChunkCache;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -40,10 +43,13 @@ import org.apache.cassandra.utils.PageAware;
  */
 class RealEnvironment implements Environment
 {
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseDescriptor.class);
+
     private final CompactionRealm realm;
 
     RealEnvironment(CompactionRealm realm)
     {
+        logger.info("RealEnvironment(" + realm.getClass().getCanonicalName() + ", realm metrics are " + realm.metrics() == null ? "null" : "not null" + ")");
         this.realm = realm;
     }
 
@@ -71,7 +77,7 @@ class RealEnvironment implements Environment
     @Override
     public double bloomFilterFpRatio()
     {
-        return metrics().bloomFilterFalseRatio.getValue();
+        return metrics() == null ? 0.0 : metrics().bloomFilterFalseRatio.getValue();
     }
 
     @Override
@@ -87,31 +93,31 @@ class RealEnvironment implements Environment
     @Override
     public long partitionsRead()
     {
-        return metrics().readRequests.getCount();
+        return metrics() == null ? 0 : metrics().readRequests.getCount();
     }
 
     @Override
     public double sstablePartitionReadLatencyNanos()
     {
-        return metrics().sstablePartitionReadLatency.get();
+        return metrics() == null ? 0.0 : metrics().sstablePartitionReadLatency.get();
     }
 
     @Override
     public double compactionTimePerKbInNanos()
     {
-        return metrics().compactionTimePerKb.get();
+        return metrics() == null ? 0.0 : metrics().compactionTimePerKb.get();
     }
 
     @Override
     public double flushTimePerKbInNanos()
     {
-        return metrics().flushTimePerKb.get();
+        return metrics() == null ? 0.0 : metrics().flushTimePerKb.get();
     }
 
     @Override
     public long bytesInserted()
     {
-        return metrics().bytesInserted.getCount();
+        return metrics() == null ? 0 : metrics().bytesInserted.getCount();
     }
 
     @Override
@@ -123,7 +129,7 @@ class RealEnvironment implements Environment
     @Override
     public double flushSize()
     {
-        return metrics().flushSizeOnDisk().get();
+        return metrics() == null ? 0.0 : metrics().flushSizeOnDisk().get();
     }
 
     /**

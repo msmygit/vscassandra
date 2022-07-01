@@ -347,6 +347,7 @@ public class Nodes
     private synchronized void transactionalWrite(Path originalPath, Path backupPath, Path tempPath,
                                                  TxWriter writer, Path syncDir)
     {
+        logger.info("transactionalWrite(originalPath: " + originalPath + ", backupPath: " + backupPath + ", tempPath: " + tempPath + ", syncDir: " + syncDir + ")");
         logger.trace("Writing {}", originalPath);
 
         // 0. cleanup aborted transaction
@@ -546,9 +547,13 @@ public class Nodes
 
             if (local.isDirty())
             {
-                Future future = updateExecutor.submit(() -> saveToDisk());
                 if (blocking)
-                    FBUtilities.waitOnFuture(future);
+                    saveToDisk();
+                else
+                    updateExecutor.submit(() -> saveToDisk());
+//                Future future = updateExecutor.submit(() -> saveToDisk());
+//                if (blocking)
+//                    FBUtilities.waitOnFuture(future);
             }
         }
 
@@ -576,9 +581,13 @@ public class Nodes
 
             if (local.isDirty())
             {
-                Future future = updateExecutor.submit(() -> saveToDisk());
                 if (blocking)
-                    FBUtilities.waitOnFuture(future);
+                    saveToDisk();
+                else
+                    updateExecutor.submit(() -> saveToDisk());
+//                Future future = updateExecutor.submit(() -> saveToDisk());
+//                if (blocking)
+//                    FBUtilities.waitOnFuture(future);
             }
         }
 

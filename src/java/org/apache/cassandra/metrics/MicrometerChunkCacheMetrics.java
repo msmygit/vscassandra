@@ -22,12 +22,16 @@ import javax.annotation.Nonnull;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import org.apache.cassandra.cache.CacheSize;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.FBUtilities;
 
 /**
@@ -35,6 +39,8 @@ import org.apache.cassandra.utils.FBUtilities;
  */
 public class MicrometerChunkCacheMetrics extends MicrometerMetrics implements ChunkCacheMetrics
 {
+    private static final Logger logger = LoggerFactory.getLogger(MicrometerChunkCacheMetrics.class);
+
     public static final String CHUNK_CACHE_MISS_LATENCY = "chunk_cache_miss_latency_seconds";
     public static final String CHUNK_CACHE_EVICTIONS = "chunk_cache_evictions";
 
@@ -46,6 +52,7 @@ public class MicrometerChunkCacheMetrics extends MicrometerMetrics implements Ch
 
     MicrometerChunkCacheMetrics(CacheSize cache)
     {
+        logger.info("MicrometerChunkCacheMetrics(" + cache + ")");
         this.cache = cache;
         this.metrics = new MicrometerCacheMetrics("chunk_cache", cache);
         this.metrics.register(registryWithTags().left, registryWithTags().right);
@@ -59,6 +66,7 @@ public class MicrometerChunkCacheMetrics extends MicrometerMetrics implements Ch
     {
         super.register(newRegistry, newTags);
 
+        logger.info("MicrometerChunkCacheMetrics.register(newRegistry: " + newRegistry + ", newTags: " + newTags + ")" );
         this.metrics = new MicrometerCacheMetrics("chunk_cache", cache);
         this.metrics.register(newRegistry, newTags);
 

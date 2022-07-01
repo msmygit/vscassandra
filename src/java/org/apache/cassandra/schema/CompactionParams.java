@@ -18,10 +18,12 @@
 package org.apache.cassandra.schema;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -77,8 +79,15 @@ public final class CompactionParams
         ImmutableMap.of(Option.MIN_THRESHOLD.toString(), Integer.toString(CompactionStrategyOptions.DEFAULT_MIN_THRESHOLD),
                         Option.MAX_THRESHOLD.toString(), Integer.toString(CompactionStrategyOptions.DEFAULT_MAX_THRESHOLD));
 
-    public static final CompactionParams DEFAULT =
+    public static final Supplier<CompactionParams> DEFAULT_STCS = () ->
         new CompactionParams(SizeTieredCompactionStrategy.class, DEFAULT_THRESHOLDS, DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
+
+    public static final Supplier<CompactionParams> DEFAULT_UCS = () ->
+        new CompactionParams(UnifiedCompactionStrategy.class, Collections.emptyMap(), DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
+
+    public static final boolean UCS_DEFAULT = Boolean.parseBoolean(System.getProperty("cassandra.default.ucs.compaction", "true"));
+
+    public static final CompactionParams DEFAULT = UCS_DEFAULT ? DEFAULT_UCS.get() : DEFAULT_STCS.get();
 
     private final CompactionStrategyOptions strategyOptions;
     private final boolean isEnabled;
