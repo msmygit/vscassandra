@@ -18,15 +18,19 @@
 package org.apache.cassandra.schema;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import com.google.common.collect.ImmutableMap;
 
 import org.apache.commons.lang.StringUtils;
 
+import org.apache.cassandra.config.CassandraRelevantProperties;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.compaction.CompactionStrategy;
 import org.apache.cassandra.db.compaction.CompactionStrategyOptions;
 import org.apache.cassandra.db.compaction.LeveledCompactionStrategy;
@@ -73,12 +77,10 @@ public final class CompactionParams
     public static final TombstoneOption DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES =
             TombstoneOption.valueOf(System.getProperty("default.provide.overlapping.tombstones", TombstoneOption.NONE.toString()).toUpperCase());
 
-    public static final Map<String, String> DEFAULT_THRESHOLDS =
-        ImmutableMap.of(Option.MIN_THRESHOLD.toString(), Integer.toString(CompactionStrategyOptions.DEFAULT_MIN_THRESHOLD),
-                        Option.MAX_THRESHOLD.toString(), Integer.toString(CompactionStrategyOptions.DEFAULT_MAX_THRESHOLD));
-
-    public static final CompactionParams DEFAULT =
-        new CompactionParams(SizeTieredCompactionStrategy.class, DEFAULT_THRESHOLDS, DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
+    public static final CompactionParams DEFAULT = new CompactionParams(UnifiedCompactionStrategy.class,
+                                                                        Collections.emptyMap(),
+                                                                        DEFAULT_ENABLED,
+                                                                        DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
 
     private final CompactionStrategyOptions strategyOptions;
     private final boolean isEnabled;
