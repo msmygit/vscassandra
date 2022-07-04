@@ -1608,7 +1608,7 @@ public class DatabaseDescriptor
 
     public static int getNumTokens()
     {
-        return conf.num_tokens == null ? -1 : conf.num_tokens;
+        return conf.num_tokens;
     }
 
     public static InetAddressAndPort getReplaceAddress()
