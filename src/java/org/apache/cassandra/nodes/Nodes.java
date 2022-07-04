@@ -127,8 +127,7 @@ public class Nodes
      */
     public static Nodes nodes()
     {
-        maybeInitialize();
-        return Instance.nodes;
+        return Instance.nodes();
     }
 
     /**
@@ -299,12 +298,6 @@ public class Nodes
             initializeDirectory(baseDirectory);
         if (!Files.exists(snapshotsDirectory))
             initializeDirectory(snapshotsDirectory);
-    }
-
-    private static void maybeInitialize()
-    {
-        if (Instance.nodes == null)
-            Instance.setup(DatabaseDescriptor.getMetadataDirectory().resolve("nodes").toPath());
     }
 
     private void initializeDirectory(Path dir)
@@ -894,26 +887,43 @@ public class Nodes
     }
 
     /**
-     * Holds the default, runtime instance of {@link Nodes}. {@link Nodes} itself doesn'tt have a static reference
+     * Holds the default, runtime instance of {@link Nodes}. {@link Nodes} itself doesn't have a static reference
      * to "itself" to make testing easier.
      */
     public static final class Instance
     {
-        private static Nodes nodes;
+        private static volatile Nodes instance;
+        private static final Object mutex = new Object();
 
-        public static void setup(Path nodesDirectory)
+        public static Nodes nodes()
         {
-            if (nodes != null)
+            Nodes nodes = instance;
+            if (nodes == null)
             {
-                nodes.shutdown();
+                synchronized (mutex)
+                {
+                    nodes = instance;
+                    if (nodes == null)
+                    {
+                        nodes = instance = new Nodes(DatabaseDescriptor.getMetadataDirectory().resolve("nodes").toPath());
+                    }
+                }
             }
-            nodes = new Nodes(nodesDirectory);
+            return nodes;
+        }
+
+        @VisibleForTesting
+        public static void unsafeSetup(Path directory)
+        {
+            if (instance != null)
+                instance.shutdown();
+
+            instance = new Nodes(directory);
         }
 
         public static void persistLocalMetadata()
         {
-            maybeInitialize();
-            nodes.local.update((local) -> {
+            nodes().local.update((local) -> {
                 local.setClusterName(DatabaseDescriptor.getClusterName());
                 local.setReleaseVersion(SystemKeyspace.CURRENT_VERSION);
                 local.setCqlVersion(QueryProcessor.CQL_VERSION);

@@ -82,7 +82,7 @@ public class NodesTest
     public void initializeNodes() throws Throwable
     {
         dir = folder.newFolder();
-        Nodes.Instance.setup(dir.toPath());
+        Nodes.Instance.unsafeSetup(dir.toPath());
     }
 
     @After
@@ -188,7 +188,7 @@ public class NodesTest
         Nodes.nodes().shutdown();
 
         // Reopen the nodes to load the saved local and peer info
-        Nodes.Instance.setup(dir.toPath());
+        Nodes.Instance.unsafeSetup(dir.toPath());
 
         validateLocalInfo(Nodes.local().get());
         validatePeer(Nodes.peers().get(InetAddressAndPort.getByName("127.0.0.2")));
@@ -199,7 +199,7 @@ public class NodesTest
         Nodes.nodes().syncToDisk();
         Nodes.nodes().shutdown();
 
-        Nodes.Instance.setup(dir.toPath());
+        Nodes.Instance.unsafeSetup(dir.toPath());
 
         validateLocalInfo(Nodes.local().get());
         validatePeer(Nodes.peers().get(InetAddressAndPort.getByName("127.0.0.2")));
