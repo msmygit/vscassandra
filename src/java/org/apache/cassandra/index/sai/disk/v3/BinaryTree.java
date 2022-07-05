@@ -18,12 +18,14 @@
 
 package org.apache.cassandra.index.sai.disk.v3;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.agrona.collections.IntArrayList;
+import org.apache.cassandra.io.util.FileUtils;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.IndexInput;
@@ -41,6 +43,11 @@ public class BinaryTree
         /** Called for non-leaf cells to test how the cell relates to the query, to
          *  determine how to further recurse down the tree. */
         PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue);
+
+        default boolean visit(BytesRef value)
+        {
+            return compare(value, value) == PointValues.Relation.CELL_INSIDE_QUERY;
+        }
     }
 
     public interface BinaryTreeTraversalCallback
@@ -48,7 +55,7 @@ public class BinaryTree
         void onLeaf(int leafNodeID, IntArrayList pathToRoot);
     }
 
-    public static class Reader
+    public static class Reader implements Closeable
     {
         final IndexInput input;
         private final int[] rightNodePositions;
@@ -91,6 +98,20 @@ public class BinaryTree
             readNodeData(false);
         }
 
+        /**
+         * Change the node id to 0..N leaf block id.
+         */
+        public int getBlockID()
+        {
+            return nodeID - leafNodeOffset;
+        }
+
+        @Override
+        public void close() throws IOException
+        {
+            FileUtils.closeQuietly(input);
+        }
+
         public static void copyBytes(BytesRef source, BytesRef dest)
         {
             dest.bytes = ArrayUtil.grow(dest.bytes, source.length + dest.offset);
@@ -98,80 +119,70 @@ public class BinaryTree
             System.arraycopy(source.bytes, source.offset, dest.bytes, dest.offset, source.length);
         }
 
-        public void intersect(IntersectVisitor visitor,
-                              BytesRef cellMinPacked,
-                              BytesRef cellMaxPacked) throws IOException
-        {
-    /*
-    System.out.println("\nR: intersect nodeID=" + state.index.getNodeID());
-    for(int dim=0;dim<numDims;dim++) {
-      System.out.println("  dim=" + dim + "\n    cellMin=" + new BytesRef(cellMinPacked, dim*config.bytesPerDim, config.bytesPerDim) + "\n    cellMax=" + new BytesRef(cellMaxPacked, dim*config.bytesPerDim, config.bytesPerDim));
-    }
-    */
-            PointValues.Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
-
-            System.out.println("relation="+r+" nodeID="+nodeID);
-
-            if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
-            {
-                // This cell is fully outside of the query shape: stop recursing
-            }
-            else if (r == PointValues.Relation.CELL_INSIDE_QUERY)
-            {
-                // This cell is fully inside of the query shape: recursively add all points in this cell without filtering
-                //addAll(state, false);
-                // The cell crosses the shape boundary, or the cell fully contains the query, so we fall through and do full filtering:
-            }
-            else if (isLeafNode())
-            {
-                // In the unbalanced case it's possible the left most node only has one child:
-                if (nodeExists())
-                {
-                    System.out.println("onLeaf nodeID="+getNodeID());
-                }
-            }
-            else
-            {
-//                // Non-leaf node: recurse on the split left and right nodes
-//                int splitDim = state.index.getSplitDim();
-//                assert splitDim >= 0 : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
-//                assert splitDim < config.numIndexDims : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
-
-                BytesRef splitPackedValue = getSplitPackedValue();
-                BytesRef splitDimValue = getSplitDimValue().clone();
-
-                // jason comment: the following code is from lucene 8.x and honestly
-                //                it does not make sense
-
-                // make sure cellMin <= splitValue <= cellMax:
-//                assert FutureArrays.compareUnsigned(cellMinPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) <= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
-//                assert FutureArrays.compareUnsigned(cellMaxPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) >= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
-
-                // Recurse on left sub-tree:
-                copyBytes(cellMaxPacked, splitPackedValue);
-                copyBytes(splitDimValue, splitPackedValue);
-                // System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
-                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
-
-                pushLeft();
-                intersect(visitor, cellMinPacked, splitPackedValue);
-                pop();
-
-                // Restore the split dim value since it may have been overwritten while recursing:
-                copyBytes(splitPackedValue, splitDimValue);
-                // System.arraycopy(splitPackedValue, splitDim * config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, config.bytesPerDim);
-
-                // Recurse on right sub-tree:
-                copyBytes(cellMinPacked, splitPackedValue);
-                copyBytes(splitDimValue, splitPackedValue);
-                // System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
-                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
-
-                pushRight();
-                intersect(visitor, splitPackedValue, cellMaxPacked);
-                pop();
-            }
-        }
+//        public void intersect(IntersectVisitor visitor,
+//                              BytesRef cellMinPacked,
+//                              BytesRef cellMaxPacked) throws IOException
+//        {
+//            PointValues.Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
+//
+//            System.out.println("relation=" + r + " nodeID=" + nodeID);
+//
+//            if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
+//            {
+//                // This cell is fully outside of the query shape: stop recursing
+//            }
+//            else if (r == PointValues.Relation.CELL_INSIDE_QUERY)
+//            {
+//                // This cell is fully inside of the query shape: recursively add all points in this cell without filtering
+//                //addAll(state, false);
+//            }
+//            else if (isLeafNode())
+//            {
+//                // In the unbalanced case it's possible the left most node only has one child:
+//                if (nodeExists())
+//                {
+//                    System.out.println("onLeaf nodeID=" + getNodeID());
+//                }
+//            }
+//            else
+//            {
+////                // Non-leaf node: recurse on the split left and right nodes
+////                int splitDim = state.index.getSplitDim();
+////                assert splitDim >= 0 : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
+////                assert splitDim < config.numIndexDims : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
+//
+//                BytesRef splitPackedValue = getSplitPackedValue();
+//                BytesRef splitDimValue = getSplitDimValue().clone();
+//
+//                // make sure cellMin <= splitValue <= cellMax:
+////                assert FutureArrays.compareUnsigned(cellMinPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) <= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
+////                assert FutureArrays.compareUnsigned(cellMaxPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) >= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
+//
+//                // Recurse on left sub-tree:
+//                copyBytes(cellMaxPacked, splitPackedValue);
+//                copyBytes(splitDimValue, splitPackedValue);
+//                // System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
+//                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
+//
+//                pushLeft();
+//                intersect(visitor, cellMinPacked, splitPackedValue);
+//                pop();
+//
+//                // Restore the split dim value since it may have been overwritten while recursing:
+//                copyBytes(splitPackedValue, splitDimValue);
+//                // System.arraycopy(splitPackedValue, splitDim * config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, config.bytesPerDim);
+//
+//                // Recurse on right sub-tree:
+//                copyBytes(cellMinPacked, splitPackedValue);
+//                copyBytes(splitDimValue, splitPackedValue);
+//                // System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
+//                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
+//
+//                pushRight();
+//                intersect(visitor, splitPackedValue, cellMaxPacked);
+//                pop();
+//            }
+//        }
 
         public BytesRef getSplitDimValue()
         {

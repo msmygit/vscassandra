@@ -334,75 +334,76 @@ public class UpperPostings
 
             int previousWrittenLevel = -1;
 
-            LongArray previousLevelPostingFPs = reader.blockPostingOffsetsReader.open();
-
-            final SortedMap<Integer, LongArray> levelFPMap = new TreeMap<>();
-
-            levelFPMap.put(0, previousLevelPostingFPs);
-            previousWrittenLevel = 0;
-
-            while (true)
-            {
-                final boolean elgibleLevel = level % SKIP_LEVELS == 0;
-
-                if (elgibleLevel)
-                {
-                    System.out.println("Wrote level="+level+" previousWrittenLevel="+previousWrittenLevel);
-                    final LongArrayList postingsFPs = processLevel(level, previousWrittenLevel, segmented, previousLevelPostingFPs);
-
-                    if (postingsFPs == null)
-                        break;
-
-                    previousWrittenLevel = level;
-
-                    levelFPMap.put(level, new LongArrayImpl(postingsFPs));
-                    previousLevelPostingFPs = new LongArrayImpl(postingsFPs);
-                }
-
-                level++;
-            }
-
-            final long upperPostingsStartFP = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS, segmented);
-            final long upperPostingsOffsetsStartFP = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented);
-
-            final Map<Integer,NumericValuesMeta> levelMetas = new HashMap<>();
-
-            try (final IndexOutput output = reader.indexDescriptor.openPerIndexOutput(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, reader.context, true, segmented))
-            {
-                for (Map.Entry<Integer,LongArray> entry : levelFPMap.entrySet())
-                {
-                    @SuppressWarnings("resource")
-                    final SegmentNumericValuesWriter numericWriter = new SegmentNumericValuesWriter(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,
-                                                                                                    output,
-                                                                                                    null,
-                                                                                                    true,
-                                                                                                    MONOTONIC_BLOCK_SIZE);
-                    for (int x = 0; x < entry.getValue().length(); x++)
-                    {
-                        numericWriter.add(entry.getValue().get(x));
-                    }
-
-                    numericWriter.close();
-
-                    levelMetas.put(entry.getKey(), numericWriter.meta());
-                }
-            }
-
-            for (LongArray array : levelFPMap.values())
-            {
-                array.close();
-            }
-
-            final long upperPostingsLength = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS, segmented) - upperPostingsStartFP;
-            final long upperPostingsOffsetsLength = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented) - upperPostingsOffsetsStartFP;
-
-            components.put(IndexComponent.BLOCK_UPPER_POSTINGS, upperPostingsStartFP, upperPostingsStartFP, upperPostingsLength, reader.meta.stringMap());
-            components.put(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, upperPostingsOffsetsStartFP, upperPostingsOffsetsStartFP, upperPostingsOffsetsLength, reader.meta.stringMap());
-
-            final FileValidation.Meta upperPostingsCRC = createCRCMeta(upperPostingsStartFP, IndexComponent.BLOCK_UPPER_POSTINGS, segmented);
-            final FileValidation.Meta upperPostingsOffsetsCRC = createCRCMeta(upperPostingsOffsetsStartFP, IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented);
-
-            return new MetaCRC(upperPostingsCRC, upperPostingsOffsetsCRC, new Meta(baseUnit, levelMetas));
+//            LongArray previousLevelPostingFPs = reader.blockPostingOffsetsReader.open();
+//
+//            final SortedMap<Integer, LongArray> levelFPMap = new TreeMap<>();
+//
+//            levelFPMap.put(0, previousLevelPostingFPs);
+//            previousWrittenLevel = 0;
+//
+//            while (true)
+//            {
+//                final boolean elgibleLevel = level % SKIP_LEVELS == 0;
+//
+//                if (elgibleLevel)
+//                {
+//                    System.out.println("Wrote level="+level+" previousWrittenLevel="+previousWrittenLevel);
+//                    final LongArrayList postingsFPs = processLevel(level, previousWrittenLevel, segmented, previousLevelPostingFPs);
+//
+//                    if (postingsFPs == null)
+//                        break;
+//
+//                    previousWrittenLevel = level;
+//
+//                    levelFPMap.put(level, new LongArrayImpl(postingsFPs));
+//                    previousLevelPostingFPs = new LongArrayImpl(postingsFPs);
+//                }
+//
+//                level++;
+//            }
+//
+//            final long upperPostingsStartFP = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS, segmented);
+//            final long upperPostingsOffsetsStartFP = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented);
+//
+//            final Map<Integer,NumericValuesMeta> levelMetas = new HashMap<>();
+//
+//            try (final IndexOutput output = reader.indexDescriptor.openPerIndexOutput(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, reader.context, true, segmented))
+//            {
+//                for (Map.Entry<Integer,LongArray> entry : levelFPMap.entrySet())
+//                {
+//                    @SuppressWarnings("resource")
+//                    final SegmentNumericValuesWriter numericWriter = new SegmentNumericValuesWriter(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,
+//                                                                                                    output,
+//                                                                                                    null,
+//                                                                                                    true,
+//                                                                                                    MONOTONIC_BLOCK_SIZE);
+//                    for (int x = 0; x < entry.getValue().length(); x++)
+//                    {
+//                        numericWriter.add(entry.getValue().get(x));
+//                    }
+//
+//                    numericWriter.close();
+//
+//                    levelMetas.put(entry.getKey(), numericWriter.meta());
+//                }
+//            }
+//
+//            for (LongArray array : levelFPMap.values())
+//            {
+//                array.close();
+//            }
+//
+//            final long upperPostingsLength = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS, segmented) - upperPostingsStartFP;
+//            final long upperPostingsOffsetsLength = getEndFP(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented) - upperPostingsOffsetsStartFP;
+//
+//            components.put(IndexComponent.BLOCK_UPPER_POSTINGS, upperPostingsStartFP, upperPostingsStartFP, upperPostingsLength, reader.meta.stringMap());
+//            components.put(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, upperPostingsOffsetsStartFP, upperPostingsOffsetsStartFP, upperPostingsOffsetsLength, reader.meta.stringMap());
+//
+//            final FileValidation.Meta upperPostingsCRC = createCRCMeta(upperPostingsStartFP, IndexComponent.BLOCK_UPPER_POSTINGS, segmented);
+//            final FileValidation.Meta upperPostingsOffsetsCRC = createCRCMeta(upperPostingsOffsetsStartFP, IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, segmented);
+//
+//            return new MetaCRC(upperPostingsCRC, upperPostingsOffsetsCRC, new Meta(baseUnit, levelMetas));
+            return null;
         }
 
         private FileValidation.Meta createCRCMeta(long rootFP, IndexComponent comp, boolean segmented) throws IOException

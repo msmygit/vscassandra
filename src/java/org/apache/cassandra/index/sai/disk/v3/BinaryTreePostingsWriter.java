@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.IntArrayList;
+import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
@@ -46,6 +47,7 @@ import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
@@ -93,11 +95,21 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
     public Result finish(BlockTerms.Reader reader, IndexOutput out) throws IOException
     {
+        try (LongArray postingOffsets = reader.blockPostingOffsetsReader.open())
+        {
+            return finish(reader.meta.numPostingBlocks, reader.postingsHandle, postingOffsets, out);
+        }
+    }
+
+    public Result finish(int numPostingBlocks,
+                         FileHandle postingsHandle,
+                         LongArray leafPostingsOffsets,
+                         IndexOutput out) throws IOException
+    {
         final long startFP = out.getFilePointer();
         final PostingsWriter postingsWriter = new PostingsWriter(out);
 
-        try (final IndexInput leafPostingsInput = IndexInputReader.create(reader.postingsHandle);
-             final LongArray leafPostingsOffsets = reader.blockPostingOffsetsReader.open())
+        try (final IndexInput leafPostingsInput = IndexInputReader.create(postingsHandle))
         {
             final List<Integer> internalNodeIDs = nodeToChildLeaves.keySet()
                                                                    .stream()
@@ -120,7 +132,7 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
                 if (leaves.isEmpty())
                 {
-                    assert nodeID >= reader.meta.numPostingBlocks; // assert empty leaves is a leaf node id
+                    assert nodeID >= numPostingBlocks; // assert empty leaves is a leaf node id
 
                     seenLeafNodeCount++;
 
@@ -131,9 +143,9 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
                 for (Integer leafNodeID : leaves)
                 {
-                    final int block = leafNodeID - reader.meta.numPostingBlocks;
+                    final int leafBlock = leafNodeID - numPostingBlocks;
 
-                    final long leafPostingsFP = leafPostingsOffsets.get(block);
+                    final long leafPostingsFP = leafPostingsOffsets.get(leafBlock);
 
                     final PostingsReader postings = new PostingsReader(leafPostingsInput, leafPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     if (postings.size() > 0) // TODO: how possible
@@ -149,7 +161,7 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
             }
             flushTime.stop();
 
-            System.out.println("seenLeafNodeCount="+seenLeafNodeCount+" numLeafBlocks="+reader.meta.numPostingBlocks);
+            System.out.println("seenLeafNodeCount="+seenLeafNodeCount+" numLeafBlocks="+numPostingBlocks);
 
             logger.debug("Flushed {} upper posting lists for binary-tree nodes in {} ms.",
                          nodeIDToPostingsFilePointer.size(),

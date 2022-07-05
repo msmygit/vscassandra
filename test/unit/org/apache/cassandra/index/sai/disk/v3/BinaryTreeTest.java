@@ -67,21 +67,21 @@ public class BinaryTreeTest extends SaiRandomizedTest
             BytesRef queryMin = new BytesRef("00011");
             BytesRef queryMax = new BytesRef("00066");
 
-            reader.intersect(new BinaryTree.IntersectVisitor()
-                             {
-                                 @Override
-                                 public PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue)
-                                 {
-                                     if (maxPackedValue.compareTo(queryMin) < 0 || minPackedValue.compareTo(queryMax) > 0)
-                                         return PointValues.Relation.CELL_OUTSIDE_QUERY;
-                                     else if (minPackedValue.compareTo(queryMin) >= 0 && maxPackedValue.compareTo(queryMax) <= 0)
-                                         return PointValues.Relation.CELL_INSIDE_QUERY;
-                                     else
-                                         return PointValues.Relation.CELL_CROSSES_QUERY;
-                                 }
-                             },
-                             min,
-                             max);
+//            reader.intersect(new BinaryTree.IntersectVisitor()
+//                             {
+//                                 @Override
+//                                 public PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue)
+//                                 {
+//                                     if (maxPackedValue.compareTo(queryMin) < 0 || minPackedValue.compareTo(queryMax) > 0)
+//                                         return PointValues.Relation.CELL_OUTSIDE_QUERY;
+//                                     else if (minPackedValue.compareTo(queryMin) >= 0 && maxPackedValue.compareTo(queryMax) <= 0)
+//                                         return PointValues.Relation.CELL_INSIDE_QUERY;
+//                                     else
+//                                         return PointValues.Relation.CELL_CROSSES_QUERY;
+//                                 }
+//                             },
+//                             min,
+//                             max);
         }
     }
 }
