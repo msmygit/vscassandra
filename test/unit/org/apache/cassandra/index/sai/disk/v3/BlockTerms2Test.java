@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.index.sai.disk.v3;
 
+import java.util.stream.LongStream;
+
 import org.junit.Test;
 
 import org.agrona.collections.LongArrayList;
@@ -28,14 +30,49 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
-import org.apache.lucene.util.BytesRef;
 
 import static org.apache.cassandra.index.sai.disk.v3.BlockTermsTest.collect;
 import static org.apache.cassandra.index.sai.disk.v3.BlockTermsTest.toBytes;
-import static org.apache.cassandra.index.sai.disk.v3.BlockTermsTest.toInt;
 
 public class BlockTerms2Test extends SaiRandomizedTest
 {
+    @Test
+    public void testUniques() throws Exception
+    {
+        final IndexDescriptor indexDescriptor = newIndexDescriptor();
+        final String index = newIndex();
+        final IndexContext indexContext = SAITester.createIndexContext(index, Int32Type.instance);
+
+        final BlockTerms.Writer writer = new BlockTerms.Writer(10, indexDescriptor, indexContext, false);
+
+        final int count = 100;
+
+        for (int rowid = 0; rowid < count; rowid++)
+        {
+            writer.add(toBytes(rowid), rowid);
+        }
+
+        SegmentMetadata.ComponentMetadataMap components = new SegmentMetadata.ComponentMetadataMap();
+        writer.finish(components);
+
+        try (V3PerIndexFiles indexFiles = new V3PerIndexFiles(indexDescriptor, indexContext, false);
+             BlockTerms.Reader reader = new BlockTerms.Reader(indexDescriptor,
+                                                              indexContext,
+                                                              indexFiles,
+                                                              components))
+        {
+            PostingList postings = reader.search(toBytes(15), toBytes(25));
+            LongArrayList list = collect(postings);
+
+            System.out.println("list="+list);
+
+            // long[] expectedRowids = new long[] {5, 6, 7, 8, 9, 10};
+            long[] expectedRowids = LongStream.rangeClosed(15, 25).toArray();
+
+            assertArrayEquals(expectedRowids, list.toLongArray());
+        }
+    }
+
     @Test
     public void testBytesBlockConsecutiveSameTerms() throws Exception
     {
@@ -64,7 +101,14 @@ public class BlockTerms2Test extends SaiRandomizedTest
             PostingList postings = reader.search(toBytes(9), toBytes(11));
 
             LongArrayList list = collect(postings);
+
+            long[] rowidMatches = LongStream.rangeClosed(0, 24).toArray();
+
             System.out.println("list="+list);
+
+            assertEquals(rowidMatches, list.toLongArray());
         }
     }
+
+
 }

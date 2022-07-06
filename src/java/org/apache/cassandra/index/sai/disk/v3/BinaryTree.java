@@ -36,6 +36,8 @@ import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.MathUtil;
 
+import static org.apache.cassandra.index.sai.disk.v3.BlockTerms.toInt;
+
 public class BinaryTree
 {
     public interface IntersectVisitor
@@ -59,6 +61,7 @@ public class BinaryTree
     {
         final IndexInput input;
         private final int[] rightNodePositions;
+        private final int[] leafOrdinals;
         final int leafNodeOffset;
         // total number of points
         final long pointCount;
@@ -90,6 +93,7 @@ public class BinaryTree
             this.splitPackedValueStack = new BytesRef[treeDepth + 1];
             this.splitValuesStack = new BytesRef[treeDepth + 1];
             this.rightNodePositions = new int[treeDepth + 1];
+            this.leafOrdinals = new int[treeDepth + 1];
 
             this.rightMostLeafNode = (1 << treeDepth - 1) - 1;
             int lastLeafNodePointCount = Math.toIntExact(pointCount % maxPointsPerLeaf);
@@ -103,7 +107,8 @@ public class BinaryTree
          */
         public int getBlockID()
         {
-            return nodeID - leafNodeOffset;
+            return leafOrdinals[level];
+            //return nodeID - leafNodeOffset;
         }
 
         @Override
@@ -252,7 +257,6 @@ public class BinaryTree
 
         public void pushRight() throws IOException
         {
-            System.out.println("pushRight level="+level);
             final int nodePosition = rightNodePositions[level];
             assert nodePosition >= input.getFilePointer() : "nodePosition = " + nodePosition + " < currentPosition=" + input.getFilePointer();
             nodeID = nodeID * 2 + 1;
@@ -263,7 +267,6 @@ public class BinaryTree
 
         public void pushLeft() throws IOException
         {
-            System.out.println("pushLeft level="+level);
             nodeID *= 2;
             level++;
             readNodeData(true);
@@ -288,7 +291,14 @@ public class BinaryTree
             System.out.println("readNodeData nodeID=" + nodeID + " isLeft=" + isLeft + " isLeafNode=" + isLeafNode() + " leafNodeOffset=" + leafNodeOffset + " fp=" + input.getFilePointer() + " level=" + level);
 
             if (isLeafNode())
+            {
+                int leafOrdinal = input.readVInt();
+
+                this.leafOrdinals[level] = leafOrdinal;
+
+                //System.out.println("leafOrdinal="+leafOrdinal);
                 return;
+            }
 
             final int len = input.readVInt();
 
@@ -297,16 +307,23 @@ public class BinaryTree
             else
                 splitValuesStack[level].bytes = ArrayUtil.grow(splitValuesStack[level].bytes, len);
 
+            splitValuesStack[level].length = len;
+
+            // copy previous split value to this level
+            // copyBytes(splitValuesStack[level - 1], splitValuesStack[level]);
+
+            //System.arraycopy(splitValuesStack[level - 1], 0, splitValuesStack[level], 0, config.packedIndexBytesLength);
+
             System.out.println("  readNodeData len="+len);
 
             input.readBytes(splitValuesStack[level].bytes, 0, len);
-            // System.out.println("  readNodeData bytes="+splitValuesStack[level].utf8ToString());
+            System.out.println("  nodeID="+nodeID+" readNodeData int="+toInt(splitValuesStack[level]));
 
             int leftNumBytes;
-            if (nodeID * 2 < leafNodeOffset)
+            //if (nodeID * 2 < leafNodeOffset)
                 leftNumBytes = input.readVInt();
-            else
-                leftNumBytes = 0;
+//            else
+//                leftNumBytes = 0;
 
             System.out.println("  isLeft="+isLeft+" leftNumBytes="+leftNumBytes+" nodeID*2="+(nodeID * 2)+" leafNodeOffset="+leafNodeOffset);
 
@@ -344,7 +361,7 @@ public class BinaryTree
             ByteBuffersDataOutput writeBuffer = ByteBuffersDataOutput.newResettableInstance();
             List<byte[]> blocks = new ArrayList<>();
 
-            int totalSize = recurseIndex(minBlockTerms, false, 0, minBlockTerms.size(), writeBuffer, blocks);
+            int totalSize = recurseIndex(minBlockTerms, false, 0, minBlockTerms.size(), writeBuffer, blocks, new BytesRef(new byte[10]));
 
             System.out.println("finish totalSize="+totalSize);
 
@@ -370,21 +387,31 @@ public class BinaryTree
                                  int leavesOffset,
                                  int numLeaves,
                                  ByteBuffersDataOutput writeBuffer,
-                                 List<byte[]> blocks) throws IOException
+                                 List<byte[]> blocks,
+                                 BytesRef lastSplitValues) throws IOException
         {
             System.out.println("recurseIndex isLeft="+isLeft+" leavesOffset="+leavesOffset+" numLeaves="+numLeaves);
+
             if (numLeaves == 1)
             {
-                if (isLeft)
-                    return 0;
-                else
-                    return appendBlock(writeBuffer, blocks);
+                writeBuffer.writeVInt(leavesOffset); // leaf ordinal
+//                if (isLeft)
+//                {
+//                    return 0;
+//                }
+//                else
+//                {
+                return appendBlock(writeBuffer, blocks);
+                //}
             }
             else
             {
                 final int numLeftLeafNodes = getNumLeftLeafNodes(numLeaves);
                 final int rightOffset = leavesOffset + numLeftLeafNodes;
-                final int splitOffset = rightOffset - 1;
+                // final int splitOffset = rightOffset - 1;
+                final int splitOffset = rightOffset;
+
+                //BytesRef splitValue = getSplitValue(splitOffset);
 
                 System.out.println("  rightOffset="+rightOffset);
 
@@ -394,6 +421,9 @@ public class BinaryTree
 
                 // write bytes
                 writeBuffer.writeVInt(spare.get().length);
+
+                System.out.println("  recurseIndex write value="+toInt(spare.get()));
+
                 writeBuffer.writeBytes(spare.get().bytes, spare.get().offset, spare.get().length);
 
                 final int numBytes = appendBlock(writeBuffer, blocks);
@@ -401,21 +431,27 @@ public class BinaryTree
                 final int idxSav = blocks.size();
                 blocks.add(null);
 
-                final int leftNumBytes = recurseIndex(minBlockTerms, true, leavesOffset, numLeftLeafNodes, writeBuffer, blocks);
-                if (numLeftLeafNodes != 1)
-                {
-                    System.out.println("  leftNumBytes="+leftNumBytes);
-                    writeBuffer.writeVInt(leftNumBytes);
-                }
-                else
-                    assert leftNumBytes == 0 : "leftNumBytes=" + leftNumBytes;
+                // System.arraycopy(splitValue.bytes, address+prefix, lastSplitValues, splitDim * config.bytesPerDim + prefix, suffix);
+
+                //copyBytes();
+
+                final int leftNumBytes = recurseIndex(minBlockTerms, true, leavesOffset, numLeftLeafNodes, writeBuffer, blocks, lastSplitValues);
+                System.out.println("  leftNumBytes="+leftNumBytes);
+                writeBuffer.writeVInt(leftNumBytes);
+//                if (numLeftLeafNodes != 1)
+//                {
+//
+//
+//                }
+//                else
+//                    assert leftNumBytes == 0 : "leftNumBytes=" + leftNumBytes;
 
                 byte[] bytes2 = writeBuffer.toArrayCopy();
                 writeBuffer.reset();
                 // replace our placeholder:
                 blocks.set(idxSav, bytes2);
 
-                final int rightNumBytes = recurseIndex(minBlockTerms, false, rightOffset, numLeaves - numLeftLeafNodes, writeBuffer, blocks);
+                final int rightNumBytes = recurseIndex(minBlockTerms, false, rightOffset, numLeaves - numLeftLeafNodes, writeBuffer, blocks, lastSplitValues);
 
                 return numBytes + bytes2.length + leftNumBytes + rightNumBytes;
             }

@@ -19,6 +19,7 @@
 package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
@@ -35,6 +36,7 @@ import com.google.common.primitives.UnsignedBytes;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
+import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
@@ -62,6 +64,7 @@ import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.store.IndexInput;
@@ -107,6 +110,13 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
 public class BlockTerms
 {
     public static final int DEFAULT_POSTINGS_BLOCK_SIZE = 1024;
+
+    public static int toInt(BytesRef term)
+    {
+        ByteSource.Peekable peekable = ByteComparable.fixedLength(term.bytes, term.offset, term.length).asPeekableBytes(ByteComparable.Version.OSS41);
+        ByteBuffer buffer2 = Int32Type.instance.fromComparableBytes(peekable, ByteComparable.Version.OSS41);
+        return Int32Type.instance.compose(buffer2);
+    }
 
     /**
      * Block terms index meta object.
@@ -799,6 +809,9 @@ public class BlockTerms
                 {
                     final int blockId = treeReader.getBlockID();
                     final long blockPostingsFP = postingBlockFPs.get(blockId);
+
+                    System.out.println("collectPostingLists nodeID="+nodeID+" blockId="+blockId+" blockPostingsFP="+blockPostingsFP);
+
                     // A -1 postings fp means there is a single posting list
                     // for multiple leaf blocks because the values are the same
                     if (blockPostingsFP != -1)
@@ -846,11 +859,19 @@ public class BlockTerms
                 this.visitor = visitor;
             }
 
+            @Override
+            public void executeInternal(final PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
+            {
+                collectPostingLists(postingLists, new BytesRef(meta.minTerm), new BytesRef(meta.maxTerm));
+            }
+
             public void collectPostingLists(PriorityQueue<PostingList.PeekablePostingList> postingLists,
                                             BytesRef cellMinPacked,
                                             BytesRef cellMaxPacked) throws IOException
             {
                 final PointValues.Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
+
+                System.out.println("collectPostingLists nodeid="+treeReader.getNodeID()+" blockid="+treeReader.getBlockID()+" nodeExists="+treeReader.nodeExists()+" isLeafNode="+treeReader.isLeafNode()+" cellMinPacked="+toInt(cellMinPacked)+" cellMaxPacked="+toInt(cellMaxPacked)+" relation="+r);
 
                 if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
                 {
@@ -881,6 +902,8 @@ public class BlockTerms
 
                 final int block = treeReader.getBlockID();
 
+                System.out.println("filterLeaf block="+block);
+
                 final PostingList postings = filterBlock(visitor,
                                                          block,
                                                          postingsFP,
@@ -900,11 +923,18 @@ public class BlockTerms
                 BytesRef splitPackedValue = treeReader.getSplitPackedValue();
                 BytesRef splitDimValue = treeReader.getSplitDimValue().clone();
 
+                System.out.println("visitNode splitPackedValue="+toInt(splitPackedValue)+" splitDimValue="+toInt(splitDimValue));
+
+                // Recurse on left sub-tree:
+//                System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, packedBytesLength);
+//                System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * bytesPerDim, bytesPerDim);
+
                 // Recurse on left sub-tree:
                 BinaryTree.Reader.copyBytes(cellMaxPacked, splitPackedValue);
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushLeft();
+                System.out.println("visitNode cellMinPacked="+toInt(cellMinPacked)+" splitPackedValue="+toInt(splitPackedValue));
                 collectPostingLists(postingLists, cellMinPacked, splitPackedValue);
                 treeReader.pop();
 
@@ -916,6 +946,7 @@ public class BlockTerms
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushRight();
+                System.out.println("visitNode2 splitPackedValue="+toInt(splitPackedValue)+" cellMaxPacked="+toInt(cellMaxPacked));
                 collectPostingLists(postingLists, splitPackedValue, cellMaxPacked);
                 treeReader.pop();
             }
@@ -931,7 +962,6 @@ public class BlockTerms
                 throw new IllegalArgumentException();
 
             final BinaryTree.IntersectVisitor visitor = BinaryTreePostingsReader.bkdQueryFrom(startTerm, endTerm);
-
             return intersect(visitor);
 
             // final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
@@ -1029,6 +1059,8 @@ public class BlockTerms
 
             final Pair<Long, Long> minMaxPoints = filterPoints(visitor, start, maxord);
 
+            System.out.println("minMaxPoints="+minMaxPoints);
+
             if (minMaxPoints.left.longValue() == -1)
                 return null;
 
@@ -1049,6 +1081,8 @@ public class BlockTerms
 
             final int startOrd = (int) (minMaxPoints.left % meta.postingsBlockSize);
             final int endOrd = (int) (minMaxPoints.right % meta.postingsBlockSize);
+
+            System.out.println("startOrd="+startOrd+" endOrd="+endOrd);
 
             return new FilteringPostingList(cardinality,
                                             // get the row id's term ordinal to compare against the startOrdinal
@@ -1134,6 +1168,9 @@ public class BlockTerms
             long startIdx = -1;
             long endIdx = end;
 
+            final BytesRef startTerm = ((BinaryTreePostingsReader.RangeQueryVisitor)visitor).getLowerBytes();
+            final BytesRef endTerm = ((BinaryTreePostingsReader.RangeQueryVisitor)visitor).getUpperBytes();
+
             try (final BytesCursor bytesCursor = cursor())
             {
                 for (; idx <= end; idx++)
@@ -1142,24 +1179,24 @@ public class BlockTerms
                     if (term == null)
                         break;
 
-                    if (visitor.visit(term))
-                    {
-                        if (startIdx == -1)
-                            startIdx = idx;
-                    }
-                    else if (startIdx != -1)
-                    {
-                        endIdx = idx - 1;
-                    }
-
-//                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
-//                        startIdx = idx;
-//
-//                    if (endTerm != null && term.compareTo(endTerm) > 0)
+//                    if (visitor.visit(term))
+//                    {
+//                        if (startIdx == -1)
+//                            startIdx = idx;
+//                    }
+//                    else if (startIdx != -1)
 //                    {
 //                        endIdx = idx - 1;
-//                        break;
 //                    }
+
+                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
+                        startIdx = idx;
+
+                    if (endTerm != null && term.compareTo(endTerm) > 0)
+                    {
+                        endIdx = idx - 1;
+                        break;
+                    }
                 }
             }
             return Pair.create(startIdx, endIdx);

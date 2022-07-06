@@ -75,15 +75,15 @@ public class BinaryTreePostingsReader
         }
 
         Bound lower = null;
-        if (lower != null)
+        if (lowerBytes != null)
         {
-            lower = new Bound(lowerBytes, true);
+            lower = new Bound(lowerBytes, false);
         }
 
         Bound upper = null;
-        if (upper != null)
+        if (upperBytes != null)
         {
-            upper = new Bound(upperBytes, true);
+            upper = new Bound(upperBytes, false);
         }
 
         return new RangeQueryVisitor(lower, upper);
@@ -151,15 +151,25 @@ public class BinaryTreePostingsReader
         return buffer;
     }
 
-    private static class RangeQueryVisitor implements BinaryTree.IntersectVisitor
+    public static class RangeQueryVisitor implements BinaryTree.IntersectVisitor
     {
         private final Bound lower;
         private final Bound upper;
 
-        private RangeQueryVisitor(Bound lower, Bound upper)
+        public RangeQueryVisitor(Bound lower, Bound upper)
         {
             this.lower = lower;
             this.upper = upper;
+        }
+
+        public BytesRef getLowerBytes()
+        {
+            return lower != null ? lower.bound: null;
+        }
+
+        public BytesRef getUpperBytes()
+        {
+            return upper != null ? upper.bound: null;
         }
 
         int compareUnsigned(BytesRef packedValue, Bound bound)
