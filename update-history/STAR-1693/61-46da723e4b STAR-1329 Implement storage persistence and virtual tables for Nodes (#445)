@@ -1,0 +1,141 @@
+diff --git a/src/java/org/apache/cassandra/repair/messages/RepairMessage.java b/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
+index 565f00b567..0f93f74244 100644
+--- a/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
++++ b/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
+@@ -17,7 +17,6 @@
+  */
+ package org.apache.cassandra.repair.messages;
+ 
+-import java.util.Optional;
+ import java.util.UUID;
+ 
+ import org.slf4j.Logger;
+@@ -25,7 +24,6 @@ import org.slf4j.LoggerFactory;
+ 
+ import org.apache.cassandra.exceptions.RepairException;
+ import org.apache.cassandra.exceptions.RequestFailureReason;
+-import org.apache.cassandra.gms.Gossiper;
+ import org.apache.cassandra.locator.InetAddressAndPort;
+ import org.apache.cassandra.net.Message;
+ import org.apache.cassandra.net.MessagingService;
+@@ -92,8 +90,8 @@ public abstract class RepairMessage
+ 
+     private static boolean supportsTimeouts(InetAddressAndPort from, UUID parentSessionId)
+     {
+-        Optional<CassandraVersion> remoteVersion = Nodes.peers().getOpt(from).map(NodeInfo::getReleaseVersion);
+-        if (remoteVersion.filter(v -> v.compareTo(SUPPORTS_TIMEOUTS) >= 0).isPresent())
++        CassandraVersion remoteVersion = Nodes.peers().map(from, NodeInfo::getReleaseVersion, () -> null);
++        if (remoteVersion != null && remoteVersion.compareTo(SUPPORTS_TIMEOUTS) >= 0)
+             return true;
+         logger.warn("[#{}] Not failing repair due to remote host {} not supporting repair message timeouts (version = {})", parentSessionId, from, remoteVersion);
+         return false;
+--- a/src/java/org/apache/cassandra/service/StorageService.java
++++ b/src/java/org/apache/cassandra/service/StorageService.java
+@@ -2086,14 +2086,8 @@
+         return map;
+     }
+ 
+-<<<<<<<
+-=======
+     public InetAddressAndPort getNativeAddressAndPort(InetAddressAndPort endpoint)
+     {
+-        InetAddressAndPort addr = Nodes.getNativeTransportAddressAndPort(endpoint, null);
+-        if (addr != null)
+-            return addr;
+-
+         if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+             return FBUtilities.getBroadcastNativeAddressAndPort();
+         else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
+@@ -2135,7 +2129,6 @@
+         }
+     }
+ 
+->>>>>>>
+     /**
+      * Return the native address associated with an endpoint as a string.
+      * @param endpoint The endpoint to get rpc address for
+@@ -2143,24 +2136,7 @@
+      */
+     public String getNativeAddress(InetAddressAndPort endpoint, boolean withPort)
+     {
+-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+-            return FBUtilities.getBroadcastNativeAddressAndPort().getHostAddress(withPort);
+-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
+-        {
+-            try
+-            {
+-                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
+-                return address.getHostAddress(withPort);
+-            }
+-            catch (UnknownHostException e)
+-            {
+-                throw new RuntimeException(e);
+-            }
+-        }
+-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) == null)
+-            return endpoint.address.getHostAddress() + ":" + DatabaseDescriptor.getNativeTransportPort();
+-        else
+-            return Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value + ":" + DatabaseDescriptor.getNativeTransportPort();
++        return getNativeAddressAndPort(endpoint).getHostAddress(withPort);
+     }
+ 
+     public Map<List<String>, List<String>> getRangeToRpcaddressMap(String keyspace)
+diff --git a/update-history/STAR-1693/61-46da723e4b STAR-1329 Implement storage persistence and virtual tables for Nodes (#445) b/update-history/STAR-1693/61-46da723e4b STAR-1329 Implement storage persistence and virtual tables for Nodes (#445)
+index e1449c7bb0..84bd215ba8 100644
+--- a/update-history/STAR-1693/61-46da723e4b STAR-1329 Implement storage persistence and virtual tables for Nodes (#445)	
++++ b/update-history/STAR-1693/61-46da723e4b STAR-1329 Implement storage persistence and virtual tables for Nodes (#445)	
+@@ -29,3 +29,54 @@ index 565f00b567..0f93f74244 100644
+              return true;
+          logger.warn("[#{}] Not failing repair due to remote host {} not supporting repair message timeouts (version = {})", parentSessionId, from, remoteVersion);
+          return false;
++--- a/src/java/org/apache/cassandra/service/StorageService.java
+++++ b/src/java/org/apache/cassandra/service/StorageService.java
++@@ -2086,14 +2086,8 @@
++         return map;
++     }
++ 
++-<<<<<<<
++-=======
++     public InetAddressAndPort getNativeAddressAndPort(InetAddressAndPort endpoint)
++     {
++-        InetAddressAndPort addr = Nodes.getNativeTransportAddressAndPort(endpoint, null);
++-        if (addr != null)
++-            return addr;
++-
++         if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
++             return FBUtilities.getBroadcastNativeAddressAndPort();
++         else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
++@@ -2135,7 +2129,6 @@
++         }
++     }
++ 
++->>>>>>>
++     /**
++      * Return the native address associated with an endpoint as a string.
++      * @param endpoint The endpoint to get rpc address for
++@@ -2143,24 +2136,7 @@
++      */
++     public String getNativeAddress(InetAddressAndPort endpoint, boolean withPort)
++     {
++-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
++-            return FBUtilities.getBroadcastNativeAddressAndPort().getHostAddress(withPort);
++-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
++-        {
++-            try
++-            {
++-                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
++-                return address.getHostAddress(withPort);
++-            }
++-            catch (UnknownHostException e)
++-            {
++-                throw new RuntimeException(e);
++-            }
++-        }
++-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) == null)
++-            return endpoint.address.getHostAddress() + ":" + DatabaseDescriptor.getNativeTransportPort();
++-        else
++-            return Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value + ":" + DatabaseDescriptor.getNativeTransportPort();
+++        return getNativeAddressAndPort(endpoint).getHostAddress(withPort);
++     }
++ 
++     public Map<List<String>, List<String>> getRangeToRpcaddressMap(String keyspace)
