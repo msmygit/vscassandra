@@ -78,7 +78,8 @@ public final class CompactionParams
                         Option.MAX_THRESHOLD.toString(), Integer.toString(CompactionStrategyOptions.DEFAULT_MAX_THRESHOLD));
 
     public static final CompactionParams DEFAULT =
-        new CompactionParams(SizeTieredCompactionStrategy.class, DEFAULT_THRESHOLDS, DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
+        new CompactionParams(UnifiedCompactionStrategy.class, ImmutableMap.of(), DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
+//        new CompactionParams(SizeTieredCompactionStrategy.class, DEFAULT_THRESHOLDS, DEFAULT_ENABLED, DEFAULT_PROVIDE_OVERLAPPING_TOMBSTONES);
 
     private final CompactionStrategyOptions strategyOptions;
     private final boolean isEnabled;

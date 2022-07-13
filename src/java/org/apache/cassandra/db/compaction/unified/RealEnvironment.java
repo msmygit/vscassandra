@@ -163,6 +163,8 @@ class RealEnvironment implements Environment
     @Override
     public String toString()
     {
+        if (metrics() == null)
+            return "Uninitialized environment";
         return String.format("Read latency: %d us / partition, flush latency: %d us / KiB, compaction latency: %d us / KiB, bfpr: %f, measured WA: %.2f, flush size %s",
                              TimeUnit.NANOSECONDS.toMicros((long) sstablePartitionReadLatencyNanos()),
                              TimeUnit.NANOSECONDS.toMicros((long) flushTimePerKbInNanos()),
