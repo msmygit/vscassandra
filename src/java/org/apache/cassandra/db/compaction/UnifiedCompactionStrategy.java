@@ -138,6 +138,7 @@ public class UnifiedCompactionStrategy extends AbstractCompactionStrategy
     @Override
     public synchronized CompactionTasks getMaximalTasks(int gcBefore, boolean splitOutput)
     {
+        maybeUpdateSelector();
         // The tasks need to be split by repair status and disk, but we perform the maximal compaction across all shards.
         // The result will be split across shards, but the operation cannot be parallelized and does require 100% extra
         // space to complete.
