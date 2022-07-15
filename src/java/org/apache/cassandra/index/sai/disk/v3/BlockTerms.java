@@ -338,7 +338,6 @@ public class BlockTerms
             this.blockOrderMapMeta = new NumericValuesMeta(blockOrderMapCompMeta.attributes);
             this.blockOrderMapFPReader = new BlockPackedReader(bitpackedHandle, blockOrderMapMeta);
             this.ramBytesUsed += blockOrderMapFPReader.memoryUsage();
-            // this.orderMapFPs = blockOrderMapFPReader.open();
 
 //            if (meta.numPostingBlocks != postingBlockFPs.length())
 //                throw new IllegalStateException();
@@ -362,17 +361,7 @@ public class BlockTerms
                 binaryTreePostingsReader = null;
                 upperPostingsHandle = null;
             }
-
-//            if (indexDescriptor.componentExists(IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS, context, indexFiles.isTemporary()))
-//                upperPostingsReader = new UpperPostings.Reader(this);
-//            else
-//                upperPostingsReader = null;
         }
-
-//        public LongArray postingBlockFPs()
-//        {
-//            return postingBlockFPs;
-//        }
 
         private void validateCRC(FileHandle handle, FileValidation.Meta meta) throws IOException
         {
@@ -407,11 +396,13 @@ public class BlockTerms
             private final long[] orderMapBlockRowIds = new long[meta.postingsBlockSize];
             private final LongArray orderMapFPs, postingsFPs;
             private PostingList postings;
+            final IndexInput postingsInput;
 
             public PointsIterator(AutoCloseable toClose, long rowIdOffset)
             {
                 this.toClose = toClose;
                 this.rowIdOffset = rowIdOffset;
+                this.postingsInput = IndexInputReader.create(postingsHandle);
                 bytesCursor = cursor();
                 orderMapFPs = blockOrderMapFPReader.open();
                 postingsFPs = blockPostingOffsetsReader.open();
@@ -457,7 +448,7 @@ public class BlockTerms
             public void close() throws Exception
             {
                 bytesCursor.close();
-                FileUtils.closeQuietly(postings, postingsFPs, orderMapFPs);
+                FileUtils.closeQuietly(postingsInput, postings, postingsFPs, orderMapFPs);
                 if (toClose != null)
                     toClose.close();
             }
@@ -485,12 +476,8 @@ public class BlockTerms
                     if (fp > currentPostingsBlockFP)
                     {
                         this.currentPostingsBlockFP = fp;
-                        final IndexInput input = IndexInputReader.create(postingsHandle);
 
-                        if (postings != null)
-                            postings.close();
-
-                        this.postings = new PostingsReader(input, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
+                        this.postings = new PostingsReader(postingsInput, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
 
                         currentOrderMapFP = orderMapFPs.get(currentPostingsBlock);
                         if (currentOrderMapFP != -1)
@@ -607,110 +594,6 @@ public class BlockTerms
             return search(new BytesRef(startBytes), new BytesRef(endBytes));
         }
 
-//        /**
-//         * Main functional search method.
-//         *
-//         * 1) The trie is queried for matching posting block min terms.
-//         * 2) Min max block ids from the trie payload are used to iterate on the posting file
-//         *    pointers in ascending order, non-duplicate posting file pointers and posting lists.
-//         * 3) The first block is always filtered, unless the block is all same values.
-//         * 4) Posting lists are merged in a MergePostingList
-//         *
-//         * @param startTerm Min range bytes inclusive; no null
-//         * @param endTerm Max range bytes inclusive; no null
-//         * @return Posting list of range matching rowids
-//         * @throws IOException
-//         */
-       // @SuppressWarnings("resource")
-//        PostingList searchLeaves(BytesRef startTerm, BytesRef endTerm) throws IOException
-//        {
-//            if (startTerm == null)
-//                throw new IllegalArgumentException("startTerm=" + startTerm);
-//            if (endTerm == null)
-//                throw new IllegalArgumentException();
-//
-//            try (final LongArray postingBlockFPs = blockPostingOffsetsReader.open();
-//                 final LongArray orderMapFPs = blockOrderMapFPReader.open())
-//            {
-//                final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
-//
-//                int blockMax = blockMinMax.right.intValue();
-//
-//                // a negative blockMax means same values
-//                boolean lastBlockSameValues = false;
-//                if (blockMax < 0)
-//                {
-//                    blockMax *= -1;
-//                    lastBlockSameValues = true;
-//                }
-//
-//                int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
-//
-//                // filter 1 block only and return
-//                if (minBlock == blockMax)
-//                    return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong(), postingBlockFPs, orderMapFPs);
-//
-//                int minBlockUse = blockMinMax.left.intValue();
-//                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-//
-//                long lastFP = -1;
-//
-//                final MutableValueLong firstFilterFP = new MutableValueLong();
-//                final PostingList firstFilterPostings = filterBlock(startTerm,
-//                                                                    endTerm,
-//                                                                    minBlock,
-//                                                                    firstFilterFP,
-//                                                                    postingBlockFPs,
-//                                                                    orderMapFPs);
-//                // the first block is always filtered the as there may be matching terms
-//                // in the block previous to the minBlock from the trie
-//                if (firstFilterPostings != null)
-//                {
-//                    postingLists.add(firstFilterPostings.peekable());
-//                    lastFP = firstFilterFP.value;
-//                }
-//
-//                for (int block = minBlockUse; block < blockMax; block++)
-//                {
-//                    final long fp = postingBlockFPs.get(block);
-//
-//                    // avoid adding duplicate posting lists
-//                    if (lastFP != fp)
-//                    {
-//                        final IndexInput input = IndexInputReader.create(postingsHandle);
-//                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
-//                    }
-//                    lastFP = fp;
-//                }
-//
-//                // if the last block has same values there's no need to filter
-//                if (lastBlockSameValues)
-//                {
-//                    final long fp = postingBlockFPs.get(blockMax);
-//                    //final long fp = getPostingsFP(blockMax);
-//
-//                    // avoid adding duplicate posting lists
-//                    if (lastFP != fp)
-//                    {
-//                        final IndexInput input = IndexInputReader.create(postingsHandle);
-//                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
-//                    }
-//                }
-//                else
-//                {
-//                    PostingList lastFilterPostings = filterBlock(startTerm,
-//                                                                 endTerm,
-//                                                                 blockMax,
-//                                                                 new MutableValueLong(),
-//                                                                 postingBlockFPs,
-//                                                                 orderMapFPs);
-//                    if (lastFilterPostings != null)
-//                        postingLists.add(lastFilterPostings.peekable());
-//                }
-//
-//                return MergePostingList.merge(postingLists);
-//            }
-//        }
         public PostingList intersect(BinaryTree.IntersectVisitor visitor) throws IOException
         {
             final PointValues.Relation relation = visitor.compare(new BytesRef(meta.minTerm), new BytesRef(meta.maxTerm));
@@ -721,6 +604,8 @@ public class BlockTerms
             final LongArray postingBlockFPs = new LongArray.DeferredLongArray(() -> blockPostingOffsetsReader.open());
             final LongArray orderMapFPs = new LongArray.DeferredLongArray(() -> blockOrderMapFPReader.open());
 
+            // it's important to create the input streams once per query as
+            // there is a significant performance cost atm
             final IndexInputReader treeIndexInput = IndexInputReader.create(termsIndexHandle);
             final IndexInputReader postingsInput = IndexInputReader.create(postingsHandle);
             final IndexInputReader upperPostingsInput = IndexInputReader.create(upperPostingsHandle);
@@ -805,7 +690,7 @@ public class BlockTerms
 
                     // System.out.println("postingLists.size="+postingLists.size());
 
-                    return MergePostingList.merge(postingLists, () -> FileUtils.close(upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs));
+                    return MergePostingList.merge(postingLists, () -> FileUtils.close(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs));
                 }
             }
 
@@ -937,10 +822,6 @@ public class BlockTerms
                 // System.out.println("visitNode splitPackedValue="+toInt(splitPackedValue)+" splitDimValue="+toInt(splitDimValue));
 
                 // Recurse on left sub-tree:
-//                System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, packedBytesLength);
-//                System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * bytesPerDim, bytesPerDim);
-
-                // Recurse on left sub-tree:
                 BinaryTree.Reader.copyBytes(cellMaxPacked, splitPackedValue);
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
@@ -974,87 +855,6 @@ public class BlockTerms
 
             final BinaryTree.IntersectVisitor visitor = BinaryTreePostingsReader.bkdQueryFrom(startTerm, endTerm);
             return intersect(visitor);
-
-            // final Pair<Integer, Integer> blockMinMax = searchTermsIndex(startTerm, endTerm);
-
-//            try (final LongArray postingBlockFPs = blockPostingOffsetsReader.open();
-//                 final LongArray orderMapFPs = blockOrderMapFPReader.open())
-//            {
-//                int blockMax = blockMinMax.right.intValue();
-//
-//                // a negative blockMax means same values
-//                boolean lastBlockSameValues = false;
-//                if (blockMax < 0)
-//                {
-//                    blockMax *= -1;
-//                    lastBlockSameValues = true;
-//                }
-//
-//                int minBlock = blockMinMax.left.intValue() == 0 ? 0 : blockMinMax.left.intValue() - 1;
-//
-//                // filter 1 block only and return
-//                if (minBlock == blockMax)
-//                {
-//                    return filterBlock(startTerm, endTerm, minBlock, new MutableValueLong(), postingBlockFPs, orderMapFPs);
-//                }
-//
-//                int minBlockUse = blockMinMax.left.intValue();
-//                final PriorityQueue<PostingList.PeekablePostingList> postingLists = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-//
-//                long lastFP = -1;
-//
-//                final MutableValueLong firstFilterFP = new MutableValueLong();
-//                final PostingList firstFilterPostings = filterBlock(startTerm,
-//                                                                    endTerm,
-//                                                                    minBlock,
-//                                                                    firstFilterFP,
-//                                                                    postingBlockFPs,
-//                                                                    orderMapFPs);
-//                // the first block is always filtered the as there may be matching terms
-//                // in the block previous to the minBlock from the trie
-//                if (firstFilterPostings != null)
-//                {
-//                    postingLists.add(firstFilterPostings.peekable());
-//                    lastFP = firstFilterFP.value;
-//                }
-//
-////                final long upperPostingsStartPoint = minBlockUse * (long) meta.postingsBlockSize;
-////                final long upperPostingsEndPoint = blockMax * (long) meta.postingsBlockSize;
-////
-////                reader.search(upperPostingsStartPoint, upperPostingsEndPoint, postingLists);
-//
-//                // if the last block has same values there's no need to filter
-//                if (lastBlockSameValues)
-//                {
-//                    // final long fp = getPostingsFP(blockMax);
-//                    final long fp = postingBlockFPs.get(blockMax);
-//
-//                    // avoid adding duplicate posting lists
-//                    if (lastFP != fp)
-//                    {
-//                        final IndexInput input = IndexInputReader.create(postingsHandle);
-//                        postingLists.add(new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP).peekable());
-//                    }
-//                }
-//                else
-//                {
-//                    PostingList lastFilterPostings = filterBlock(startTerm,
-//                                                                 endTerm,
-//                                                                 blockMax,
-//                                                                 new MutableValueLong(),
-//                                                                 postingBlockFPs,
-//                                                                 orderMapFPs);
-//                    if (lastFilterPostings != null)
-//                        postingLists.add(lastFilterPostings.peekable());
-//                }
-//
-//                if (postingLists.isEmpty())
-//                {
-//                    return null;
-//                }
-//
-//                return MergePostingList.merge(postingLists);
-//            }
         }
 
         PostingList filterBlock(BinaryTree.IntersectVisitor visitor,
@@ -1084,12 +884,13 @@ public class BlockTerms
 
             // must be a same terms posting list
             // return as is
-            if (postings.size() > meta.postingsBlockSize)
-            {
-                assert orderMapFP == -1;
-                // System.out.println("filterBlock postings size="+postings.size()+" max postings size="+meta.postingsBlockSize);
-                return postings;
-            }
+            // resurect for STAR-1524
+//            if (postings.size() > meta.postingsBlockSize)
+//            {
+//                assert orderMapFP == -1;
+//                // System.out.println("filterBlock postings size="+postings.size()+" max postings size="+meta.postingsBlockSize);
+//                return postings;
+//            }
 
             final Pair<Long, Long> minMaxPoints = filterPoints(visitor, start, maxord);
 
@@ -1097,14 +898,6 @@ public class BlockTerms
 
             if (minMaxPoints.left.longValue() == -1)
                 return null;
-
-//            postingsFP.value = blockPostingsFPs.get(block);
-//            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
-//                                                                   postingsFP.value,
-//                                                                   QueryEventListener.PostingListEventListener.NO_OP);
-//
-//            if (postings.size() > meta.postingsBlockSize)
-//                return null;
 
             final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
 
@@ -1130,68 +923,6 @@ public class BlockTerms
                                             postings);
         }
 
-//        /**
-//         * Obtain the min max points ids of a given range using the prefix encoded bytes.
-//         *
-//         * @param startTerm Start term inclusive
-//         * @param endTerm End term inclusive
-//         * @param block Block id to filter
-//         * @param postingsFP File pointer object
-//         * @return Filtered posting list
-//         * @throws IOException
-//         */
-//        PostingList filterBlock(final BytesRef startTerm,
-//                                final BytesRef endTerm,
-//                                final int block,
-//                                final MutableValueLong postingsFP,
-//                                final LongArray blockPostingsFPs,
-//                                final LongArray orderMapFPs) throws IOException
-//        {
-//            if (startTerm == null || endTerm == null)
-//                throw new IllegalArgumentException();
-//
-//            final long start = (long)block * (long)meta.postingsBlockSize;
-//
-//            long maxord = ((long)block + 1) * (long)meta.postingsBlockSize - 1;
-//            maxord = maxord >= meta.pointCount ? meta.pointCount - 1 : maxord;
-//
-//            final Pair<Long, Long> minMaxPoints = filterPoints(startTerm, endTerm, start, maxord);
-//
-//            if (minMaxPoints.left.longValue() == -1)
-//                return null;
-//
-//            postingsFP.value = blockPostingsFPs.get(block);
-//            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
-//                                                                   postingsFP.value,
-//                                                                   QueryEventListener.PostingListEventListener.NO_OP);
-//
-//            if (postings.size() > meta.postingsBlockSize)
-//                return null;
-//
-//            final long orderMapFP = orderMapFPs.get(block);
-//
-//            final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
-//
-//            if (cardinality == 0)
-//                return null;
-//
-//            final int startOrd = (int) (minMaxPoints.left % meta.postingsBlockSize);
-//            final int endOrd = (int) (minMaxPoints.right % meta.postingsBlockSize);
-//
-//            return new FilteringPostingList(cardinality,
-//                                            // get the row id's term ordinal to compare against the startOrdinal
-//                                            (postingsOrd, rowID) -> {
-//                                                int ord = postingsOrd;
-//
-//                                                // if there's no order map use the postings order
-//                                                if (orderMapFP != -1)
-//                                                    ord = (int) this.orderMapReader.get(this.orderMapRandoInput, orderMapFP, postingsOrd);
-//
-//                                                return ord >= startOrd && ord <= endOrd;
-//                                            },
-//                                            postings);
-//        }
-
         Pair<Long, Long> filterPoints(BinaryTree.IntersectVisitor visitor,
                                       final long start,
                                       final long end) throws IOException
@@ -1215,7 +946,6 @@ public class BlockTerms
                     if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
                     {
                         startIdx = idx;
-                        //break;
                     }
 
                     if (endTerm != null && term.compareTo(endTerm) > 0)
@@ -1225,86 +955,13 @@ public class BlockTerms
                     }
 
                     if (bytesCursor.next())
-                    {
                         term = bytesCursor.currentTerm;
-                    }
                     else
-                    {
                         break;
-                    }
                 }
             }
             return Pair.create(startIdx, endIdx);
         }
-
-        /**
-         * Filter points by a start and end term in a given point id range using
-         * @see BytesCursor
-         *
-         * Used to filter singular posting blocks
-         *
-         * @param startTerm Start term inclusive
-         * @param endTerm End term inclusive
-         * @param start Start point id
-         * @param end End point id
-         * @return Min and max point ids
-         * @throws IOException
-         */
-//        Pair<Long, Long> filterPoints(final BytesRef startTerm,
-//                                      final BytesRef endTerm,
-//                                      final long start,
-//                                      final long end) throws IOException
-//        {
-//            long idx = start;
-//            long startIdx = -1;
-//            long endIdx = end;
-//
-//            try (final BytesCursor bytesCursor = cursor())
-//            {
-//                BytesRef term = bytesCursor.seekToPointId(idx);
-//
-//                for (; idx <= end; idx++)
-//                {
-//                    if (term == null)
-//                        break;
-//
-//                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
-//                    {
-//                        startIdx = idx;
-//                        //break;
-//                    }
-//
-//                    if (endTerm != null && term.compareTo(endTerm) > 0)
-//                    {
-//                        endIdx = idx - 1;
-//                        break;
-//                    }
-//
-//                    if (bytesCursor.next())
-//                    {
-//                        term = bytesCursor.currentTerm;
-//                    }
-//                    else
-//                    {
-//                        break;
-//                    }
-//
-////                    final BytesRef term = bytesCursor.seekToPointId(idx);
-////                    if (term == null)
-////                        break;
-////
-////                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
-////                        startIdx = idx;
-////
-////                    if (endTerm != null && term.compareTo(endTerm) > 0)
-////                    {
-////                        endIdx = idx - 1;
-////                        break;
-////                    }
-//                }
-//            }
-//            return Pair.create(startIdx, endIdx);
-//        }
 
         /**
          * Create a BytesCursor.  Needs to be closed after use.
@@ -1593,51 +1250,6 @@ public class BlockTerms
                                                                    upperPostingsOut);
                 }
             }
-
-//            for (blockIdx = 0; blockIdx < minBlockTerms.size(); blockIdx++)
-//            {
-//                final BytesRef minValue = minBlockTerms.get(new BytesRefBuilder(), blockIdx);
-//                if (blockIdx > 0)
-//                {
-//                    final BytesRef prevMinValue = minBlockTerms.get(new BytesRefBuilder(), blockIdx - 1);
-//                    if (!minValue.equals(prevMinValue))
-//                    {
-//                        final int startBlock = start;
-//                        int endBlock = blockIdx - 1;
-//
-//                        // same terms block signed negative
-//                        // TODO: maybe use bitshift instead to save payload space
-//                        if (postingsBlockSameTerms.get(endBlock))
-//                            endBlock = endBlock * -1;
-//
-//                        long encodedLong = (((long)startBlock) << 32) | (endBlock & 0xffffffffL);
-//                        // TODO: when the start and end block's are the same encode a single int
-//                        termsIndexWriter.add(fixedLength(prevMinValue), new Long(encodedLong));
-//                        lastTerm.clear();
-//                        lastTerm.append(prevMinValue);
-//                        start = blockIdx;
-//                    }
-//                }
-//                if (blockIdx == minBlockTerms.size() - 1 && blockIdx > 0)
-//                {
-//                    int endBlock = blockIdx;
-//
-//                    if (postingsBlockSameTerms.get(endBlock))
-//                        endBlock = endBlock * -1;
-//
-//                    final long encodedLong = (((long)start) << 32) | (endBlock & 0xffffffffL);
-//
-//                    if (!minValue.equals(lastTerm.get()))
-//                    {
-//                        assert minValue.compareTo(lastTerm.get()) > 0;
-//
-//                        termsIndexWriter.add(fixedLength(minValue), new Long(encodedLong));
-//                        lastTerm.copyBytes(minValue);
-//                    }
-//                }
-//            }
-//
-//            final long termsIndexFP = termsIndexWriter.complete();
 
             final long bitpackStartFP;
             try (final IndexOutput bitPackOut = indexDescriptor.openPerIndexOutput(IndexComponent.BLOCK_BITPACKED, context, true, segmented))

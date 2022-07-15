@@ -42,11 +42,6 @@ public class BinaryTree
         /** Called for non-leaf cells to test how the cell relates to the query, to
          *  determine how to further recurse down the tree. */
         PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue);
-
-//        default boolean visit(BytesRef value)
-//        {
-//            return compare(value, value) == PointValues.Relation.CELL_INSIDE_QUERY;
-//        }
     }
 
     public interface BinaryTreeTraversalCallback
@@ -324,24 +319,13 @@ public class BinaryTree
             if (numLeaves == 1)
             {
                 writeBuffer.writeVInt(leavesOffset); // leaf ordinal
-//                if (isLeft)
-//                {
-//                    return 0;
-//                }
-//                else
-//                {
                 return appendBlock(writeBuffer, blocks);
-                //}
             }
             else
             {
                 final int numLeftLeafNodes = getNumLeftLeafNodes(numLeaves);
                 final int rightOffset = leavesOffset + numLeftLeafNodes;
-                //final int splitOffset = rightOffset - 1;
-                //final int splitOffset = rightOffset;
 
-                //BytesRef splitValue = getSplitValue(splitOffset);
-                // TODO: splitOffset is used in lucene 8.x
                 // System.out.println("  rightOffset="+rightOffset);
 
                 assert rightOffset >= 1;
@@ -363,13 +347,6 @@ public class BinaryTree
                 final int leftNumBytes = recurseIndex(minBlockTerms, true, leavesOffset, numLeftLeafNodes, writeBuffer, blocks, lastSplitValues);
                 // System.out.println("  leftNumBytes="+leftNumBytes);
                 writeBuffer.writeVInt(leftNumBytes);
-//                if (numLeftLeafNodes != 1)
-//                {
-//
-//
-//                }
-//                else
-//                    assert leftNumBytes == 0 : "leftNumBytes=" + leftNumBytes;
 
                 byte[] bytes2 = writeBuffer.toArrayCopy();
                 writeBuffer.reset();

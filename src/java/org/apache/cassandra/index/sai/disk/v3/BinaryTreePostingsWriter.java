@@ -21,7 +21,6 @@ package org.apache.cassandra.index.sai.disk.v3;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -34,12 +33,10 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.IntArrayList;
-import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
@@ -52,16 +49,12 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalCallback
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final Multimap<Integer, Integer> nodeToChildLeaves = HashMultimap.create();
     private final IntArrayList leafNodeIDs = new IntArrayList();
-    //private final int skip = 3;
-    //private final int minLeaves = 64;
     private final IndexWriterConfig config;
 
     public BinaryTreePostingsWriter(IndexWriterConfig config)
@@ -205,9 +198,4 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
     {
         return level > 1 && level % config.getBkdPostingsSkip() == 0;
     }
-
-//    private boolean isLevelEligibleForPostingList(int level)
-//    {
-//        return level > 1 && level % skip == 0;
-//    }
 }
