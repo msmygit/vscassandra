@@ -42,6 +42,7 @@ import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
@@ -59,14 +60,20 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
     private final Multimap<Integer, Integer> nodeToChildLeaves = HashMultimap.create();
     private final IntArrayList leafNodeIDs = new IntArrayList();
-    private final int skip = 3;
-    private final int minLeaves = 64;
+    //private final int skip = 3;
+    //private final int minLeaves = 64;
+    private final IndexWriterConfig config;
+
+    public BinaryTreePostingsWriter(IndexWriterConfig config)
+    {
+       this.config = config;
+    }
 
     @Override
-    public void onLeaf(int leafNodeID, IntArrayList pathToRoot)
+    public void onLeaf(int leafID, int leafNodeID, IntArrayList pathToRoot)
     {
-        checkArgument(!pathToRoot.containsInt(leafNodeID));
-        checkArgument(pathToRoot.isEmpty() || leafNodeID > pathToRoot.get(pathToRoot.size() - 1));
+        //checkArgument(!pathToRoot.containsInt(leafNodeID));
+        //checkArgument(pathToRoot.isEmpty() || leafNodeID > pathToRoot.get(pathToRoot.size() - 1));
 
         leafNodeIDs.add(leafNodeID);
 
@@ -76,7 +83,7 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
             if (isLevelEligibleForPostingList(level))
             {
                 final int nodeID = pathToRoot.get(i);
-                nodeToChildLeaves.put(nodeID, leafNodeID);
+                nodeToChildLeaves.put(nodeID, leafID);
             }
         }
     }
@@ -113,7 +120,7 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
         {
             final List<Integer> internalNodeIDs = nodeToChildLeaves.keySet()
                                                                    .stream()
-                                                                   .filter(i -> nodeToChildLeaves.get(i).size() >= minLeaves)
+                                                                   .filter(i -> nodeToChildLeaves.get(i).size() >= config.getBkdPostingsMinLeaves())
                                                                    .collect(Collectors.toList());
 
 //        logger.debug(indexContext.logMessage("Writing posting lists for {} internal and {} leaf kd-tree nodes. Leaf postings memory usage: {}."),
@@ -130,9 +137,12 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
             {
                 final Collection<Integer> leaves = nodeToChildLeaves.get(nodeID);
 
+                // leaf level posting lists are already written
+                // leaf nodes have no leaves
+                // skip
                 if (leaves.isEmpty())
                 {
-                    assert nodeID >= numPostingBlocks; // assert empty leaves is a leaf node id
+                    //assert nodeID >= numPostingBlocks; // assert empty leaves is a leaf node id
 
                     seenLeafNodeCount++;
 
@@ -141,15 +151,16 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
                 final PriorityQueue<PostingList.PeekablePostingList> leafPostings = new PriorityQueue<>(100, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
 
-                for (Integer leafNodeID : leaves)
+                for (Integer leafID : leaves)
                 {
-                    final int leafBlock = leafNodeID - numPostingBlocks;
+                    final long leafPostingsFP = leafPostingsOffsets.get(leafID);
 
-                    final long leafPostingsFP = leafPostingsOffsets.get(leafBlock);
-
-                    final PostingsReader postings = new PostingsReader(leafPostingsInput, leafPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
-                    if (postings.size() > 0) // TODO: how possible
-                        leafPostings.add(postings.peekable());
+                    if (leafPostingsFP != -1)
+                    {
+                        final PostingsReader postings = new PostingsReader(leafPostingsInput, leafPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                        if (postings.size() > 0) // TODO: how possible
+                            leafPostings.add(postings.peekable());
+                    }
                 }
 
                 final PostingList mergedPostingList = MergePostingList.merge(leafPostings);
@@ -161,7 +172,7 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
             }
             flushTime.stop();
 
-            System.out.println("seenLeafNodeCount="+seenLeafNodeCount+" numLeafBlocks="+numPostingBlocks);
+            // System.out.println("seenLeafNodeCount="+seenLeafNodeCount+" numLeafBlocks="+numPostingBlocks);
 
             logger.debug("Flushed {} upper posting lists for binary-tree nodes in {} ms.",
                          nodeIDToPostingsFilePointer.size(),
@@ -192,6 +203,11 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
 
     private boolean isLevelEligibleForPostingList(int level)
     {
-        return level > 1 && level % skip == 0;
+        return level > 1 && level % config.getBkdPostingsSkip() == 0;
     }
+
+//    private boolean isLevelEligibleForPostingList(int level)
+//    {
+//        return level > 1 && level % skip == 0;
+//    }
 }

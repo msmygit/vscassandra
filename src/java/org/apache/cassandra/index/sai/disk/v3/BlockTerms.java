@@ -37,6 +37,7 @@ import com.google.common.primitives.UnsignedBytes;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
@@ -45,6 +46,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.BlockPackedReader;
@@ -716,42 +718,48 @@ public class BlockTerms
             if (relation == PointValues.Relation.CELL_OUTSIDE_QUERY)
                 return null;
 
-            final LongArray postingBlockFPs = blockPostingOffsetsReader.open();
-            final LongArray orderMapFPs = blockOrderMapFPReader.open();
+            final LongArray postingBlockFPs = new LongArray.DeferredLongArray(() -> blockPostingOffsetsReader.open());
+            final LongArray orderMapFPs = new LongArray.DeferredLongArray(() -> blockOrderMapFPReader.open());
 
             final IndexInputReader treeIndexInput = IndexInputReader.create(termsIndexHandle);
+            final IndexInputReader postingsInput = IndexInputReader.create(postingsHandle);
             final IndexInputReader upperPostingsInput = IndexInputReader.create(upperPostingsHandle);
 
-            final BinaryTree.Reader treeReader = new BinaryTree.Reader(meta.numPostingBlocks,
-                                                                       meta.pointCount,
-                                                                       meta.postingsBlockSize,
-                                                                       treeIndexInput);
+            try (final BinaryTree.Reader treeReader = new BinaryTree.Reader(meta.numPostingBlocks,
+                                                                            meta.pointCount,
+                                                                            meta.postingsBlockSize,
+                                                                            treeIndexInput))
+            {
+                final Intersection intersection = relation == PointValues.Relation.CELL_INSIDE_QUERY ?
+                                                  new Intersection(postingsInput,
+                                                                   upperPostingsInput,
+                                                                   treeReader,
+                                                                   postingBlockFPs,
+                                                                   orderMapFPs) :
+                                                  new FilteringIntersection(postingsInput,
+                                                                            upperPostingsInput,
+                                                                            treeReader,
+                                                                            visitor,
+                                                                            postingBlockFPs,
+                                                                            orderMapFPs);
 
-            final Intersection intersection = relation == PointValues.Relation.CELL_INSIDE_QUERY ?
-                                              new Intersection(upperPostingsInput,
-                                                               treeReader,
-                                                               postingBlockFPs,
-                                                               orderMapFPs) :
-                                              new FilteringIntersection(upperPostingsInput,
-                                                                        treeReader,
-                                                                        visitor,
-                                                                        postingBlockFPs,
-                                                                        orderMapFPs);
-
-            return intersection.execute();
+                return intersection.execute();
+            }
         }
 
         public class Intersection
         {
             protected final BinaryTree.Reader treeReader;
-            private final IndexInput upperPostingsInput;
+            protected final IndexInput postingsInput, upperPostingsInput;
             protected final LongArray postingBlockFPs, orderMapFPs;
 
-            public Intersection(IndexInput upperPostingsInput,
+            public Intersection(IndexInput postingsInput,
+                                IndexInput upperPostingsInput,
                                 BinaryTree.Reader treeReader,
                                 final LongArray postingBlockFPs,
                                 final LongArray orderMapFPs)
             {
+                this.postingsInput = postingsInput;
                 this.upperPostingsInput = upperPostingsInput;
                 this.treeReader = treeReader;
                 this.postingBlockFPs = postingBlockFPs;
@@ -786,7 +794,7 @@ public class BlockTerms
             {
                 if (postingLists.isEmpty())
                 {
-                    FileUtils.closeQuietly(upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
+                    FileUtils.closeQuietly(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
                     return null;
                 }
                 else
@@ -795,7 +803,7 @@ public class BlockTerms
 //                        logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
 //                                     indexFile.path(), elapsedMicros, postingLists.size());
 
-                    System.out.println("postingLists.size="+postingLists.size());
+                    // System.out.println("postingLists.size="+postingLists.size());
 
                     return MergePostingList.merge(postingLists, () -> FileUtils.close(upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs));
                 }
@@ -810,13 +818,13 @@ public class BlockTerms
                     final int blockId = treeReader.getBlockID();
                     final long blockPostingsFP = postingBlockFPs.get(blockId);
 
-                    System.out.println("collectPostingLists nodeID="+nodeID+" blockId="+blockId+" blockPostingsFP="+blockPostingsFP);
+                    // System.out.println("collectPostingLists nodeID="+nodeID+" blockId="+blockId+" blockPostingsFP="+blockPostingsFP);
 
                     // A -1 postings fp means there is a single posting list
                     // for multiple leaf blocks because the values are the same
                     if (blockPostingsFP != -1)
                     {
-                        final PostingsReader postings = new PostingsReader(IndexInputReader.create(postingsHandle),
+                        final PostingsReader postings = new PostingsReader(postingsInput,
                                                                            blockPostingsFP,
                                                                            QueryEventListener.PostingListEventListener.NO_OP);
                         postingLists.add(postings.peekable());
@@ -825,6 +833,7 @@ public class BlockTerms
                 }
                 else if (binaryTreePostingsReader.exists(nodeID))
                 {
+                    // System.out.println("Upper level postings nodeID="+nodeID);
                     final long upperPostingsFP = binaryTreePostingsReader.getPostingsFilePointer(nodeID);
                     final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(postingsReader.peekable());
@@ -849,13 +858,14 @@ public class BlockTerms
         {
             private final BinaryTree.IntersectVisitor visitor;
 
-            public FilteringIntersection(IndexInput upperPostingsInput,
+            public FilteringIntersection(IndexInput postingsInput,
+                                         IndexInput upperPostingsInput,
                                          BinaryTree.Reader treeReader,
                                          BinaryTree.IntersectVisitor visitor,
                                          final LongArray postingBlockFPs,
                                          final LongArray orderMapFPs)
             {
-                super(upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
+                super(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
                 this.visitor = visitor;
             }
 
@@ -871,7 +881,7 @@ public class BlockTerms
             {
                 final PointValues.Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
 
-                System.out.println("collectPostingLists nodeid="+treeReader.getNodeID()+" blockid="+treeReader.getBlockID()+" nodeExists="+treeReader.nodeExists()+" isLeafNode="+treeReader.isLeafNode()+" cellMinPacked="+toInt(cellMinPacked)+" cellMaxPacked="+toInt(cellMaxPacked)+" relation="+r);
+                // System.out.println("collectPostingLists nodeid="+treeReader.getNodeID()+" blockid="+treeReader.getBlockID()+" nodeExists="+treeReader.nodeExists()+" isLeafNode="+treeReader.isLeafNode()+" cellMinPacked="+toInt(cellMinPacked)+" cellMaxPacked="+toInt(cellMaxPacked)+" relation="+r);
 
                 if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
                 {
@@ -902,13 +912,14 @@ public class BlockTerms
 
                 final int block = treeReader.getBlockID();
 
-                System.out.println("filterLeaf block="+block);
+                // System.out.println("filterLeaf block="+block);
 
                 final PostingList postings = filterBlock(visitor,
                                                          block,
                                                          postingsFP,
                                                          postingBlockFPs,
-                                                         orderMapFPs);
+                                                         orderMapFPs,
+                                                         postingsInput);
 
                 if (postings != null)
                 {
@@ -923,7 +934,7 @@ public class BlockTerms
                 BytesRef splitPackedValue = treeReader.getSplitPackedValue();
                 BytesRef splitDimValue = treeReader.getSplitDimValue().clone();
 
-                System.out.println("visitNode splitPackedValue="+toInt(splitPackedValue)+" splitDimValue="+toInt(splitDimValue));
+                // System.out.println("visitNode splitPackedValue="+toInt(splitPackedValue)+" splitDimValue="+toInt(splitDimValue));
 
                 // Recurse on left sub-tree:
 //                System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, packedBytesLength);
@@ -934,7 +945,7 @@ public class BlockTerms
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushLeft();
-                System.out.println("visitNode cellMinPacked="+toInt(cellMinPacked)+" splitPackedValue="+toInt(splitPackedValue));
+                // System.out.println("visitNode cellMinPacked="+toInt(cellMinPacked)+" splitPackedValue="+toInt(splitPackedValue));
                 collectPostingLists(postingLists, cellMinPacked, splitPackedValue);
                 treeReader.pop();
 
@@ -946,7 +957,7 @@ public class BlockTerms
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushRight();
-                System.out.println("visitNode2 splitPackedValue="+toInt(splitPackedValue)+" cellMaxPacked="+toInt(cellMaxPacked));
+                // System.out.println("visitNode2 splitPackedValue="+toInt(splitPackedValue)+" cellMaxPacked="+toInt(cellMaxPacked));
                 collectPostingLists(postingLists, splitPackedValue, cellMaxPacked);
                 treeReader.pop();
             }
@@ -1050,29 +1061,50 @@ public class BlockTerms
                                 final int block,
                                 final MutableValueLong postingsFP,
                                 final LongArray blockPostingsFPs,
-                                final LongArray orderMapFPs) throws IOException
+                                final LongArray orderMapFPs,
+                                final IndexInput postingsInput) throws IOException
         {
             final long start = (long)block * (long)meta.postingsBlockSize;
 
             long maxord = ((long)block + 1) * (long)meta.postingsBlockSize - 1;
             maxord = maxord >= meta.pointCount ? meta.pointCount - 1 : maxord;
+
+            postingsFP.value = blockPostingsFPs.get(block);
+
+            if (postingsFP.value == -1)
+            {
+                return null;
+            }
+
+            final OrdinalPostingList postings = new PostingsReader(postingsInput,
+                                                                   postingsFP.value,
+                                                                   QueryEventListener.PostingListEventListener.NO_OP);
+
+            final long orderMapFP = orderMapFPs.get(block); // here for assertion, move lower
+
+            // must be a same terms posting list
+            // return as is
+            if (postings.size() > meta.postingsBlockSize)
+            {
+                assert orderMapFP == -1;
+                // System.out.println("filterBlock postings size="+postings.size()+" max postings size="+meta.postingsBlockSize);
+                return postings;
+            }
 
             final Pair<Long, Long> minMaxPoints = filterPoints(visitor, start, maxord);
 
-            System.out.println("minMaxPoints="+minMaxPoints);
+            // System.out.println("minMaxPoints="+minMaxPoints);
 
             if (minMaxPoints.left.longValue() == -1)
                 return null;
 
-            postingsFP.value = blockPostingsFPs.get(block);
-            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
-                                                                   postingsFP.value,
-                                                                   QueryEventListener.PostingListEventListener.NO_OP);
-
-            if (postings.size() > meta.postingsBlockSize)
-                return null;
-
-            final long orderMapFP = orderMapFPs.get(block);
+//            postingsFP.value = blockPostingsFPs.get(block);
+//            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
+//                                                                   postingsFP.value,
+//                                                                   QueryEventListener.PostingListEventListener.NO_OP);
+//
+//            if (postings.size() > meta.postingsBlockSize)
+//                return null;
 
             final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
 
@@ -1082,7 +1114,7 @@ public class BlockTerms
             final int startOrd = (int) (minMaxPoints.left % meta.postingsBlockSize);
             final int endOrd = (int) (minMaxPoints.right % meta.postingsBlockSize);
 
-            System.out.println("startOrd="+startOrd+" endOrd="+endOrd);
+            // System.out.println("startOrd="+startOrd+" endOrd="+endOrd);
 
             return new FilteringPostingList(cardinality,
                                             // get the row id's term ordinal to compare against the startOrdinal
@@ -1098,67 +1130,67 @@ public class BlockTerms
                                             postings);
         }
 
-        /**
-         * Obtain the min max points ids of a given range using the prefix encoded bytes.
-         *
-         * @param startTerm Start term inclusive
-         * @param endTerm End term inclusive
-         * @param block Block id to filter
-         * @param postingsFP File pointer object
-         * @return Filtered posting list
-         * @throws IOException
-         */
-        PostingList filterBlock(final BytesRef startTerm,
-                                final BytesRef endTerm,
-                                final int block,
-                                final MutableValueLong postingsFP,
-                                final LongArray blockPostingsFPs,
-                                final LongArray orderMapFPs) throws IOException
-        {
-            if (startTerm == null || endTerm == null)
-                throw new IllegalArgumentException();
-
-            final long start = (long)block * (long)meta.postingsBlockSize;
-
-            long maxord = ((long)block + 1) * (long)meta.postingsBlockSize - 1;
-            maxord = maxord >= meta.pointCount ? meta.pointCount - 1 : maxord;
-
-            final Pair<Long, Long> minMaxPoints = filterPoints(startTerm, endTerm, start, maxord);
-
-            if (minMaxPoints.left.longValue() == -1)
-                return null;
-
-            postingsFP.value = blockPostingsFPs.get(block);
-            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
-                                                                   postingsFP.value,
-                                                                   QueryEventListener.PostingListEventListener.NO_OP);
-
-            if (postings.size() > meta.postingsBlockSize)
-                return null;
-
-            final long orderMapFP = orderMapFPs.get(block);
-
-            final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
-
-            if (cardinality == 0)
-                return null;
-
-            final int startOrd = (int) (minMaxPoints.left % meta.postingsBlockSize);
-            final int endOrd = (int) (minMaxPoints.right % meta.postingsBlockSize);
-
-            return new FilteringPostingList(cardinality,
-                                            // get the row id's term ordinal to compare against the startOrdinal
-                                            (postingsOrd, rowID) -> {
-                                                int ord = postingsOrd;
-
-                                                // if there's no order map use the postings order
-                                                if (orderMapFP != -1)
-                                                    ord = (int) this.orderMapReader.get(this.orderMapRandoInput, orderMapFP, postingsOrd);
-
-                                                return ord >= startOrd && ord <= endOrd;
-                                            },
-                                            postings);
-        }
+//        /**
+//         * Obtain the min max points ids of a given range using the prefix encoded bytes.
+//         *
+//         * @param startTerm Start term inclusive
+//         * @param endTerm End term inclusive
+//         * @param block Block id to filter
+//         * @param postingsFP File pointer object
+//         * @return Filtered posting list
+//         * @throws IOException
+//         */
+//        PostingList filterBlock(final BytesRef startTerm,
+//                                final BytesRef endTerm,
+//                                final int block,
+//                                final MutableValueLong postingsFP,
+//                                final LongArray blockPostingsFPs,
+//                                final LongArray orderMapFPs) throws IOException
+//        {
+//            if (startTerm == null || endTerm == null)
+//                throw new IllegalArgumentException();
+//
+//            final long start = (long)block * (long)meta.postingsBlockSize;
+//
+//            long maxord = ((long)block + 1) * (long)meta.postingsBlockSize - 1;
+//            maxord = maxord >= meta.pointCount ? meta.pointCount - 1 : maxord;
+//
+//            final Pair<Long, Long> minMaxPoints = filterPoints(startTerm, endTerm, start, maxord);
+//
+//            if (minMaxPoints.left.longValue() == -1)
+//                return null;
+//
+//            postingsFP.value = blockPostingsFPs.get(block);
+//            final OrdinalPostingList postings = new PostingsReader(IndexInputReader.create(postingsHandle),
+//                                                                   postingsFP.value,
+//                                                                   QueryEventListener.PostingListEventListener.NO_OP);
+//
+//            if (postings.size() > meta.postingsBlockSize)
+//                return null;
+//
+//            final long orderMapFP = orderMapFPs.get(block);
+//
+//            final int cardinality = (int) (minMaxPoints.right - minMaxPoints.left) + 1;
+//
+//            if (cardinality == 0)
+//                return null;
+//
+//            final int startOrd = (int) (minMaxPoints.left % meta.postingsBlockSize);
+//            final int endOrd = (int) (minMaxPoints.right % meta.postingsBlockSize);
+//
+//            return new FilteringPostingList(cardinality,
+//                                            // get the row id's term ordinal to compare against the startOrdinal
+//                                            (postingsOrd, rowID) -> {
+//                                                int ord = postingsOrd;
+//
+//                                                // if there's no order map use the postings order
+//                                                if (orderMapFP != -1)
+//                                                    ord = (int) this.orderMapReader.get(this.orderMapRandoInput, orderMapFP, postingsOrd);
+//
+//                                                return ord >= startOrd && ord <= endOrd;
+//                                            },
+//                                            postings);
+//        }
 
         Pair<Long, Long> filterPoints(BinaryTree.IntersectVisitor visitor,
                                       final long start,
@@ -1173,82 +1205,37 @@ public class BlockTerms
 
             try (final BytesCursor bytesCursor = cursor())
             {
+                BytesRef term = bytesCursor.seekToPointId(idx);
+
                 for (; idx <= end; idx++)
                 {
-                    final BytesRef term = bytesCursor.seekToPointId(idx);
                     if (term == null)
                         break;
 
-//                    if (visitor.visit(term))
-//                    {
-//                        if (startIdx == -1)
-//                            startIdx = idx;
-//                    }
-//                    else if (startIdx != -1)
-//                    {
-//                        endIdx = idx - 1;
-//                    }
-
                     if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
+                    {
                         startIdx = idx;
+                        //break;
+                    }
 
                     if (endTerm != null && term.compareTo(endTerm) > 0)
                     {
                         endIdx = idx - 1;
                         break;
                     }
+
+                    if (bytesCursor.next())
+                    {
+                        term = bytesCursor.currentTerm;
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
             }
             return Pair.create(startIdx, endIdx);
         }
-
-        @VisibleForTesting
-//        IntArrayList openOrderMap(int block) throws IOException
-//        {
-//            long fp = getOrderMapFP(block);
-//
-//            if (fp == -1)
-//                return null;
-//
-//            IntArrayList list = new IntArrayList();
-//            for (int x = 0; x < meta.postingsBlockSize; x++)
-//            {
-//                int ord = (int) orderMapReader.get(orderMapRandoInput, fp, x);
-//                list.add(ord);
-//            }
-//            return list;
-//        }
-
-//        long getOrderMapFP(int block)
-//        {
-//            return orderMapFPs.get(block);
-//        }
-
-//        OrdinalPostingList openBlockPostings(long block) throws IOException
-//        {
-//            final long fp = getPostingsFP(block);
-//            IndexInput input = IndexInputReader.create(postingsHandle);
-//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-//        }
-//
-//        OrdinalPostingList openBlockPostingsFP(long fp) throws IOException
-//        {
-//            IndexInput input = IndexInputReader.create(postingsHandle);
-//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-//        }
-//
-//        OrdinalPostingList openBlockPostings(int block, MutableValueLong postingsFP) throws IOException
-//        {
-//            final long fp = getPostingsFP(block);
-//            postingsFP.value = fp;
-//            IndexInput input = IndexInputReader.create(postingsHandle);
-//            return new PostingsReader(input, fp, QueryEventListener.PostingListEventListener.NO_OP);
-//        }
-
-//        long getPostingsFP(long block)
-//        {
-//            return postingBlockFPs.get(block);
-//        }
 
         /**
          * Filter points by a start and end term in a given point id range using
@@ -1263,35 +1250,61 @@ public class BlockTerms
          * @return Min and max point ids
          * @throws IOException
          */
-        Pair<Long, Long> filterPoints(final BytesRef startTerm,
-                                      final BytesRef endTerm,
-                                      final long start,
-                                      final long end) throws IOException
-        {
-            long idx = start;
-            long startIdx = -1;
-            long endIdx = end;
-
-            try (final BytesCursor bytesCursor = cursor())
-            {
-                for (; idx <= end; idx++)
-                {
-                    final BytesRef term = bytesCursor.seekToPointId(idx);
-                    if (term == null)
-                        break;
-
-                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
-                        startIdx = idx;
-
-                    if (endTerm != null && term.compareTo(endTerm) > 0)
-                    {
-                        endIdx = idx - 1;
-                        break;
-                    }
-                }
-            }
-            return Pair.create(startIdx, endIdx);
-        }
+//        Pair<Long, Long> filterPoints(final BytesRef startTerm,
+//                                      final BytesRef endTerm,
+//                                      final long start,
+//                                      final long end) throws IOException
+//        {
+//            long idx = start;
+//            long startIdx = -1;
+//            long endIdx = end;
+//
+//            try (final BytesCursor bytesCursor = cursor())
+//            {
+//                BytesRef term = bytesCursor.seekToPointId(idx);
+//
+//                for (; idx <= end; idx++)
+//                {
+//                    if (term == null)
+//                        break;
+//
+//                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
+//                    {
+//                        startIdx = idx;
+//                        //break;
+//                    }
+//
+//                    if (endTerm != null && term.compareTo(endTerm) > 0)
+//                    {
+//                        endIdx = idx - 1;
+//                        break;
+//                    }
+//
+//                    if (bytesCursor.next())
+//                    {
+//                        term = bytesCursor.currentTerm;
+//                    }
+//                    else
+//                    {
+//                        break;
+//                    }
+//
+////                    final BytesRef term = bytesCursor.seekToPointId(idx);
+////                    if (term == null)
+////                        break;
+////
+////                    if (startTerm != null && startIdx == -1 && term.compareTo(startTerm) >= 0)
+////                        startIdx = idx;
+////
+////                    if (endTerm != null && term.compareTo(endTerm) > 0)
+////                    {
+////                        endIdx = idx - 1;
+////                        break;
+////                    }
+//                }
+//            }
+//            return Pair.create(startIdx, endIdx);
+//        }
 
         /**
          * Create a BytesCursor.  Needs to be closed after use.
@@ -1356,7 +1369,7 @@ public class BlockTerms
                 return currentTerm;
             }
 
-            private boolean next() throws IOException
+            public boolean next() throws IOException
             {
                 if (pointId >= meta.pointCount || ++pointId >= meta.pointCount)
                 {
@@ -1569,7 +1582,9 @@ public class BlockTerms
                                                                                postingsBlockSize,
                                                                                binaryTreeInput);
 
-                    final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter();
+                    IndexWriterConfig config = IndexWriterConfig.fromOptions("", UTF8Type.instance, new HashMap<>());
+
+                    final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter(config);
                     treeReader.traverse(new IntArrayList(), treePostingsWriter);
 
                     treePostingsResult = treePostingsWriter.finish(minBlockTerms.size(),
@@ -1686,7 +1701,7 @@ public class BlockTerms
                             minBlockTerms.size(),
                             distinctTermCount,
                             sameTermsPostingsFP,
-                            treePostingsResult.indexFilePointer,
+                            treePostingsResult != null ? treePostingsResult.indexFilePointer : -1,
                             BytesRef.deepCopyOf(minTerm.get()).bytes,
                             BytesRef.deepCopyOf(prevTerm.get()).bytes,
                             termsIndexCRC,
@@ -1708,24 +1723,6 @@ public class BlockTerms
             components.put(IndexComponent.POSTING_LISTS, -1, postingsWriter.getStartOffset(), postingsLength, meta.stringMap());
             components.put(IndexComponent.BLOCK_TERMS_INDEX, meta.termsIndexFP, termsIndexStartFP, termsIndexLength, meta.stringMap());
 
-            //UpperPostings.MetaCRC upperPostingsMetaCRC = null;
-
-            // only write upper level postings for the final index files
-            // not temporary segments
-            if (!segmented)
-            {
-//                // write upper level postings
-//                try (V3PerIndexFiles indexFiles = new V3PerIndexFiles(indexDescriptor, context, segmented);
-//                     BlockTerms.Reader reader = new BlockTerms.Reader(indexDescriptor,
-//                                                                      context,
-//                                                                      indexFiles,
-//                                                                      components))
-//                {
-//                    final UpperPostings.Writer upperPostingsWriter = new UpperPostings.Writer(reader);
-//                    upperPostingsMetaCRC = upperPostingsWriter.finish(components, segmented);
-//                }
-            }
-
             // the upper postings crc's are available
             // after writing the upper postings
             // a new meta is created
@@ -1737,7 +1734,7 @@ public class BlockTerms
                             minBlockTerms.size(),
                             distinctTermCount,
                             sameTermsPostingsFP,
-                            treePostingsResult.indexFilePointer,
+                            treePostingsResult != null ? treePostingsResult.indexFilePointer : -1,
                             BytesRef.deepCopyOf(minTerm.get()).bytes,
                             BytesRef.deepCopyOf(prevTerm.get()).bytes,
                             termsIndexCRC,
@@ -1964,8 +1961,10 @@ public class BlockTerms
          * Write a cached block's postings and order map if necessary.
          *
          * Order map is optional, the order map file pointer may be -1.
+         *
+         * Returns if the order map was written.
          */
-        protected void writePostingsAndOrderMap(CachedBlock buffer) throws IOException
+        protected boolean writePostingsAndOrderMap(CachedBlock buffer) throws IOException
         {
             assert buffer.count > 0;
 
@@ -2001,11 +2000,13 @@ public class BlockTerms
 
                 writer.finish();
                 blockOrderMapFPs.addLong(orderMapFP);
+                return true;
             }
             else
             {
                 // -1 demarcs blocks with no order map
                 blockOrderMapFPs.addLong(-1);
+                return false;
             }
         }
 
@@ -2059,23 +2060,25 @@ public class BlockTerms
             if (!previousPostingsBlock.isEmpty())
             {
                 processBlock(previousPostingsBlock);
-                writePostingsAndOrderMap(previousPostingsBlock);
+                boolean orderMapWritten = writePostingsAndOrderMap(previousPostingsBlock);
 
                 // if the previous buffer is all same terms as the current buffer
                 // then the postings writer is kept open
-                if (!currentPostingsBlock.isEmpty()
-                    && currentPostingsBlock.sameTerms()
-                    && previousPostingsBlock.sameTerms()
-                    && previousPostingsBlock.minTerm().equals(currentPostingsBlock.minTerm()))
-                {
-                    // -1 demarcs a same terms block to be backfilled later with a real posting file pointer
-                    blockPostingsFPs.addLong(-1);
-                }
-                else
-                {
-                    final long postingsFP = postingsWriter.finishPostings();
-                    blockPostingsFPs.addLong(postingsFP);
-                }
+                // there should not be an order map because the row ids should be in order
+//                if (!currentPostingsBlock.isEmpty()
+//                    && currentPostingsBlock.sameTerms()
+//                    && previousPostingsBlock.sameTerms()
+//                    && previousPostingsBlock.minTerm().equals(currentPostingsBlock.minTerm()))
+//                {
+//                    assert !orderMapWritten;
+//                    // -1 demarcs a same terms block to be backfilled later with a real posting file pointer
+//                    blockPostingsFPs.addLong(-1);
+//                }
+//                else
+//                {
+                final long postingsFP = postingsWriter.finishPostings();
+                blockPostingsFPs.addLong(postingsFP);
+                //}
                 previousPostingsBlock.reset();
             }
         }

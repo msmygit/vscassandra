@@ -25,6 +25,7 @@ import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.lucene.store.ByteBuffersDirectory;
@@ -91,7 +92,8 @@ public class BinaryTreePostingsWriterTest extends SaiRandomizedTest
                                                                            reader.meta.postingsBlockSize,
                                                                            binaryTreeInput);
 
-                final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter();
+                IndexWriterConfig config = IndexWriterConfig.defaultConfig("");
+                final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter(config);
                 treeReader.traverse(new IntArrayList(), treePostingsWriter);
 
                 result = treePostingsWriter.finish(reader, upperPostingsOut);
@@ -138,7 +140,8 @@ public class BinaryTreePostingsWriterTest extends SaiRandomizedTest
                                                                    10,
                                                                    input);
 
-            final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter();
+            IndexWriterConfig config = IndexWriterConfig.defaultConfig("");
+            final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter(config);
             reader.traverse(new IntArrayList(), treePostingsWriter);
 
             // treePostingsWriter.finish();

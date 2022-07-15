@@ -377,9 +377,10 @@ public class BlockTermsTest extends SaiRandomizedTest
     }
 
     @Test
+    @Seed("88E15363629EA9C0")
     public void testRandom() throws Exception
     {
-        for (int x = 0; x < 5; x++)
+        for (int x = 0; x < 1; x++)
         {
             doRandomTest();
         }
@@ -393,7 +394,7 @@ public class BlockTermsTest extends SaiRandomizedTest
         final BlockTerms.Writer writer = new BlockTerms.Writer(10, indexDescriptor2, indexContext2, false);
 
         List<Pair<ByteComparable, com.carrotsearch.hppc.IntArrayList>> list = new ArrayList();
-        int numValues = nextInt(5, 200);
+        int numValues = nextInt(4400, 4500);
         final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(1, Integer.BYTES);
 
         int maxRowID = -1;
@@ -402,7 +403,7 @@ public class BlockTermsTest extends SaiRandomizedTest
         {
             byte[] scratch = toBytes(x).bytes;
 
-            int numRows = nextInt(1, 50);
+            int numRows = nextInt(1, 8);
             int rowID = nextInt(100);
             com.carrotsearch.hppc.IntArrayList postings = new com.carrotsearch.hppc.IntArrayList();
             for (int i = 0; i < numRows; i++)
@@ -434,6 +435,7 @@ public class BlockTermsTest extends SaiRandomizedTest
                                                               maxRowID + 1,
                                                               totalRows);
 
+        int queryIteration = 0;
         for (int x = 0; x < 100; x++)
         {
             int startIdx = nextInt(0, numValues - 2);
@@ -456,21 +458,24 @@ public class BlockTermsTest extends SaiRandomizedTest
                                                                   indexFiles,
                                                                   components))
             {
+                PostingList postings = reader.search(toBytes(queryMin), toBytes(queryMax));
 //                PostingList postings = reader.searchLeaves(toBytes(queryMin), toBytes(queryMax));
-//                postingList = collect(postings);
+                postingList = collect(postings);
             }
 
-//            System.out.println("postingList=" + postingList);
-//            System.out.println("kdtreePostingList=" + kdtreePostingList);
+            queryIteration++;
+
+            System.out.println("postingLis1=" + kdtreePostingList);
+            System.out.println("postingLis2=" + postingList);
 //            System.out.println("postings equals=" + postingList.equals(kdtreePostingList));
 
-            assertArrayEquals(kdtreePostingList.toLongArray(), postingList.toLongArray());
+            assertArrayEquals("queryIteration="+queryIteration, kdtreePostingList.toLongArray(), postingList.toLongArray());
             kdtreePostings.close();
         }
         bkdReader.close();
     }
 
-    private static BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf,
+    public static BKDReader finishAndOpenReaderOneDim(int maxPointsPerLeaf,
                                                        BKDTreeRamBuffer buffer,
                                                        IndexDescriptor indexDescriptor,
                                                        IndexContext context,
@@ -892,16 +897,16 @@ public class BlockTermsTest extends SaiRandomizedTest
 //            assertEquals(3, rangePair.right.intValue());
 
             // use the bytes min max filtering API
-            Pair<Long, Long> filterPair = reader.filterPoints(toBytes(5), null, 0, blockSize - 1);
-            assertEquals(Pair.create(5l, 9l), filterPair);
-
-            // verify block postings
-            final long[][] blockRowids = new long[][]
-                                   { new long[]{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 },
-                                     new long[]{ 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 },
-                                     new long[]{ 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 },
-                                     new long[]{ 30, 31, 32, 33, 34, 35, 36, 37, 38, 39 },
-                                     new long[]{ 40, 41, 42, 43, 44 } };
+//            Pair<Long, Long> filterPair = reader.filterPoints(toBytes(5), null, 0, blockSize - 1);
+//            assertEquals(Pair.create(5l, 9l), filterPair);
+//
+//            // verify block postings
+//            final long[][] blockRowids = new long[][]
+//                                   { new long[]{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 },
+//                                     new long[]{ 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 },
+//                                     new long[]{ 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 },
+//                                     new long[]{ 30, 31, 32, 33, 34, 35, 36, 37, 38, 39 },
+//                                     new long[]{ 40, 41, 42, 43, 44 } };
 //            for (int x = 0; x < reader.meta.numPostingBlocks; x++)
 //            {
 //                try (PostingList postings = reader.openBlockPostings(x))

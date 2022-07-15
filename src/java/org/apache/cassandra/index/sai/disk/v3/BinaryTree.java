@@ -21,7 +21,6 @@ package org.apache.cassandra.index.sai.disk.v3;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.agrona.collections.IntArrayList;
@@ -36,8 +35,6 @@ import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.MathUtil;
 
-import static org.apache.cassandra.index.sai.disk.v3.BlockTerms.toInt;
-
 public class BinaryTree
 {
     public interface IntersectVisitor
@@ -46,15 +43,15 @@ public class BinaryTree
          *  determine how to further recurse down the tree. */
         PointValues.Relation compare(BytesRef minPackedValue, BytesRef maxPackedValue);
 
-        default boolean visit(BytesRef value)
-        {
-            return compare(value, value) == PointValues.Relation.CELL_INSIDE_QUERY;
-        }
+//        default boolean visit(BytesRef value)
+//        {
+//            return compare(value, value) == PointValues.Relation.CELL_INSIDE_QUERY;
+//        }
     }
 
     public interface BinaryTreeTraversalCallback
     {
-        void onLeaf(int leafNodeID, IntArrayList pathToRoot);
+        void onLeaf(int leafID, int leafNodeID, IntArrayList pathToRoot);
     }
 
     public static class Reader implements Closeable
@@ -77,6 +74,7 @@ public class BinaryTree
 
         private final BytesRef[] splitPackedValueStack;
         private final BytesRef[] splitValuesStack;
+        private final BytesRef scratch = new BytesRef();
 
         public Reader(int numLeaves, long pointCount, int maxPointsPerLeaf, IndexInput input) throws IOException
         {
@@ -108,7 +106,6 @@ public class BinaryTree
         public int getBlockID()
         {
             return leafOrdinals[level];
-            //return nodeID - leafNodeOffset;
         }
 
         @Override
@@ -124,75 +121,12 @@ public class BinaryTree
             System.arraycopy(source.bytes, source.offset, dest.bytes, dest.offset, source.length);
         }
 
-//        public void intersect(IntersectVisitor visitor,
-//                              BytesRef cellMinPacked,
-//                              BytesRef cellMaxPacked) throws IOException
-//        {
-//            PointValues.Relation r = visitor.compare(cellMinPacked, cellMaxPacked);
-//
-//            System.out.println("relation=" + r + " nodeID=" + nodeID);
-//
-//            if (r == PointValues.Relation.CELL_OUTSIDE_QUERY)
-//            {
-//                // This cell is fully outside of the query shape: stop recursing
-//            }
-//            else if (r == PointValues.Relation.CELL_INSIDE_QUERY)
-//            {
-//                // This cell is fully inside of the query shape: recursively add all points in this cell without filtering
-//                //addAll(state, false);
-//            }
-//            else if (isLeafNode())
-//            {
-//                // In the unbalanced case it's possible the left most node only has one child:
-//                if (nodeExists())
-//                {
-//                    System.out.println("onLeaf nodeID=" + getNodeID());
-//                }
-//            }
-//            else
-//            {
-////                // Non-leaf node: recurse on the split left and right nodes
-////                int splitDim = state.index.getSplitDim();
-////                assert splitDim >= 0 : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
-////                assert splitDim < config.numIndexDims : "splitDim=" + splitDim + ", config.numIndexDims=" + config.numIndexDims;
-//
-//                BytesRef splitPackedValue = getSplitPackedValue();
-//                BytesRef splitDimValue = getSplitDimValue().clone();
-//
-//                // make sure cellMin <= splitValue <= cellMax:
-////                assert FutureArrays.compareUnsigned(cellMinPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) <= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
-////                assert FutureArrays.compareUnsigned(cellMaxPacked, splitDim * config.bytesPerDim, splitDim * config.bytesPerDim + config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, splitDimValue.offset + config.bytesPerDim) >= 0 : "config.bytesPerDim=" + config.bytesPerDim + " splitDim=" + splitDim + " config.numIndexDims=" + config.numIndexDims + " config.numDims=" + config.numDims;
-//
-//                // Recurse on left sub-tree:
-//                copyBytes(cellMaxPacked, splitPackedValue);
-//                copyBytes(splitDimValue, splitPackedValue);
-//                // System.arraycopy(cellMaxPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
-//                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
-//
-//                pushLeft();
-//                intersect(visitor, cellMinPacked, splitPackedValue);
-//                pop();
-//
-//                // Restore the split dim value since it may have been overwritten while recursing:
-//                copyBytes(splitPackedValue, splitDimValue);
-//                // System.arraycopy(splitPackedValue, splitDim * config.bytesPerDim, splitDimValue.bytes, splitDimValue.offset, config.bytesPerDim);
-//
-//                // Recurse on right sub-tree:
-//                copyBytes(cellMinPacked, splitPackedValue);
-//                copyBytes(splitDimValue, splitPackedValue);
-//                // System.arraycopy(cellMinPacked, 0, splitPackedValue, 0, config.packedIndexBytesLength);
-//                // System.arraycopy(splitDimValue.bytes, splitDimValue.offset, splitPackedValue, splitDim * config.bytesPerDim, config.bytesPerDim);
-//
-//                pushRight();
-//                intersect(visitor, splitPackedValue, cellMaxPacked);
-//                pop();
-//            }
-//        }
-
-        public BytesRef getSplitDimValue()
-        {
+        public BytesRef getSplitDimValue() {
             assert isLeafNode() == false;
-            return splitValuesStack[level];
+            scratch.bytes = splitValuesStack[level].bytes;
+            scratch.length = splitValuesStack[level].length;
+            scratch.offset = splitValuesStack[level].offset;
+            return scratch;
         }
 
         // it seems this is used as a buffer stack to copy into during traversal
@@ -207,14 +141,15 @@ public class BinaryTree
                              BinaryTreeTraversalCallback callback) throws IOException
         {
             final int nodeID = getNodeID();
-            System.out.println("traverse nodeID="+nodeID+" isLeafNode="+isLeafNode());
+            // System.out.println("traverse nodeID="+nodeID+" isLeafNode="+isLeafNode());
             if (isLeafNode())
             {
                 // In the unbalanced case it's possible the left most node only has one child:
                 if (nodeExists())
                 {
-                    System.out.println("onLeaf nodeID="+getNodeID());
-                    callback.onLeaf(nodeID, pathToRoot);
+                    // System.out.println("onLeaf nodeID="+getNodeID());
+                    int blockID = getBlockID();
+                    callback.onLeaf(blockID, nodeID, pathToRoot);
                 }
             }
             else
@@ -288,11 +223,11 @@ public class BinaryTree
             if (splitPackedValueStack[level] == null)
                 splitPackedValueStack[level] = new BytesRef(new byte[10]);
 
-            System.out.println("readNodeData nodeID=" + nodeID + " isLeft=" + isLeft + " isLeafNode=" + isLeafNode() + " leafNodeOffset=" + leafNodeOffset + " fp=" + input.getFilePointer() + " level=" + level);
+            // System.out.println("readNodeData nodeID=" + nodeID + " isLeft=" + isLeft + " isLeafNode=" + isLeafNode() + " leafNodeOffset=" + leafNodeOffset + " fp=" + input.getFilePointer() + " level=" + level);
 
             if (isLeafNode())
             {
-                int leafOrdinal = input.readVInt();
+                final int leafOrdinal = input.readVInt();
 
                 this.leafOrdinals[level] = leafOrdinal;
 
@@ -310,26 +245,19 @@ public class BinaryTree
             splitValuesStack[level].length = len;
 
             // copy previous split value to this level
-            // copyBytes(splitValuesStack[level - 1], splitValuesStack[level]);
 
-            //System.arraycopy(splitValuesStack[level - 1], 0, splitValuesStack[level], 0, config.packedIndexBytesLength);
-
-            System.out.println("  readNodeData len="+len);
+            // System.out.println("  readNodeData len="+len);
 
             input.readBytes(splitValuesStack[level].bytes, 0, len);
-            System.out.println("  nodeID="+nodeID+" readNodeData int="+toInt(splitValuesStack[level]));
+            // System.out.println("  nodeID="+nodeID+" readNodeData int="+toInt(splitValuesStack[level]));
 
-            int leftNumBytes;
-            //if (nodeID * 2 < leafNodeOffset)
-                leftNumBytes = input.readVInt();
-//            else
-//                leftNumBytes = 0;
+            final int leftNumBytes = input.readVInt();
 
-            System.out.println("  isLeft="+isLeft+" leftNumBytes="+leftNumBytes+" nodeID*2="+(nodeID * 2)+" leafNodeOffset="+leafNodeOffset);
+            // System.out.println("  isLeft="+isLeft+" leftNumBytes="+leftNumBytes+" nodeID*2="+(nodeID * 2)+" leafNodeOffset="+leafNodeOffset);
 
             rightNodePositions[level] = Math.toIntExact(input.getFilePointer()) + leftNumBytes;
 
-            System.out.println("  rightNodePositions=" + Arrays.toString(rightNodePositions));
+            // System.out.println("  rightNodePositions=" + Arrays.toString(rightNodePositions));
         }
 
         // for assertions
@@ -363,11 +291,12 @@ public class BinaryTree
 
             int totalSize = recurseIndex(minBlockTerms, false, 0, minBlockTerms.size(), writeBuffer, blocks, new BytesRef(new byte[10]));
 
-            System.out.println("finish totalSize="+totalSize);
+            // System.out.println("finish totalSize=" + totalSize);
 
             byte[] index = new byte[totalSize];
             int upto = 0;
-            for(byte[] block : blocks) {
+            for (byte[] block : blocks)
+            {
                 System.arraycopy(block, 0, index, upto, block.length);
                 upto += block.length;
             }
@@ -390,7 +319,7 @@ public class BinaryTree
                                  List<byte[]> blocks,
                                  BytesRef lastSplitValues) throws IOException
         {
-            System.out.println("recurseIndex isLeft="+isLeft+" leavesOffset="+leavesOffset+" numLeaves="+numLeaves);
+            // System.out.println("recurseIndex isLeft="+isLeft+" leavesOffset="+leavesOffset+" numLeaves="+numLeaves);
 
             if (numLeaves == 1)
             {
@@ -408,22 +337,20 @@ public class BinaryTree
             {
                 final int numLeftLeafNodes = getNumLeftLeafNodes(numLeaves);
                 final int rightOffset = leavesOffset + numLeftLeafNodes;
-                // final int splitOffset = rightOffset - 1;
-                final int splitOffset = rightOffset;
+                //final int splitOffset = rightOffset - 1;
+                //final int splitOffset = rightOffset;
 
                 //BytesRef splitValue = getSplitValue(splitOffset);
+                // TODO: splitOffset is used in lucene 8.x
+                // System.out.println("  rightOffset="+rightOffset);
 
-                System.out.println("  rightOffset="+rightOffset);
+                assert rightOffset >= 1;
+                minBlockTerms.get(spare, rightOffset); // TODO: in lucene 8.x splitOffset is used
 
-                minBlockTerms.get(spare, splitOffset);
-
-                // System.out.println("  write min term="+spare.get().utf8ToString()+" len="+spare.get().length+" writeBuffer.size="+writeBuffer.size());
+                // System.out.println("  recurseIndex write value="+toInt(spare.get()));
 
                 // write bytes
                 writeBuffer.writeVInt(spare.get().length);
-
-                System.out.println("  recurseIndex write value="+toInt(spare.get()));
-
                 writeBuffer.writeBytes(spare.get().bytes, spare.get().offset, spare.get().length);
 
                 final int numBytes = appendBlock(writeBuffer, blocks);
@@ -433,10 +360,8 @@ public class BinaryTree
 
                 // System.arraycopy(splitValue.bytes, address+prefix, lastSplitValues, splitDim * config.bytesPerDim + prefix, suffix);
 
-                //copyBytes();
-
                 final int leftNumBytes = recurseIndex(minBlockTerms, true, leavesOffset, numLeftLeafNodes, writeBuffer, blocks, lastSplitValues);
-                System.out.println("  leftNumBytes="+leftNumBytes);
+                // System.out.println("  leftNumBytes="+leftNumBytes);
                 writeBuffer.writeVInt(leftNumBytes);
 //                if (numLeftLeafNodes != 1)
 //                {
