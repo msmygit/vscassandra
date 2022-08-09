@@ -594,6 +594,8 @@ public class BlockTermsTest extends SaiRandomizedTest
             assertEquals(10, reader.meta.postingsBlockSize);
             assertEquals(3, reader.meta.distinctTermCount);
 
+            postings = reader.searchLeaves(toBytes(10), toBytes(10));
+
 //            assertNull(reader.openOrderMap(0));
 //            assertNull(reader.openOrderMap(1));
 //
