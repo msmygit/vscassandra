@@ -122,7 +122,7 @@ public class PostingsWriter implements Closeable
         this.dataOutput = dataOutput;
         startOffset = dataOutput.getFilePointer();
         deltaBuffer = new long[blockSize];
-        SAICodecUtils.writeHeader(dataOutput);
+        //SAICodecUtils.writeHeader(dataOutput);
     }
 
     /**
