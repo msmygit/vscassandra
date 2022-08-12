@@ -149,12 +149,13 @@ public class EliasFanoBenchmark //extends AbstractOnDiskBenchmark
     @BenchmarkMode({ Mode.Throughput })
     public void advanceEliasFano(Blackhole bh) throws Throwable
     {
+        EliasFanoIndexedMonotoneLongBigList.EliasFanoIndexedMonotoneLongBigListIterator iterator = eliasFanoPostings.iterator();
         for (int i = 0; i < rowIds.length;)
         {
             int rowId = rowIds[i];
 
-            bh.consume(eliasFanoPostings.successorUnsafe(rowId));
-
+            bh.consume(iterator.skipToUnsafe(rowId));
+            
             i += skippingDistance;
         }
     }
