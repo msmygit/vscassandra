@@ -183,7 +183,8 @@ public class PostingsReader implements OrdinalPostingList
     @Override
     public void close() throws IOException
     {
-        listener.postingDecoded(postingsDecoded);
+        if (listener != null)
+            listener.postingDecoded(postingsDecoded);
         try
         {
             input.close();
@@ -217,7 +218,8 @@ public class PostingsReader implements OrdinalPostingList
     @Override
     public long advance(long targetRowID) throws IOException
     {
-        listener.onAdvance();
+        if (listener != null)
+            listener.onAdvance();
         int block = binarySearchBlock(targetRowID);
 
         if (block < 0)

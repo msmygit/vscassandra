@@ -326,10 +326,13 @@ public class BinaryTree
                 final int numLeftLeafNodes = getNumLeftLeafNodes(numLeaves);
                 final int rightOffset = leavesOffset + numLeftLeafNodes;
 
+                // unlike lucene 8.x, rightOffset is used because the
+                // SAI min block terms includes the first or 0th block term
+                // whereas lucene skips the first min block term
                 // System.out.println("  rightOffset="+rightOffset);
 
                 assert rightOffset >= 1;
-                minBlockTerms.get(spare, rightOffset); // TODO: in lucene 8.x splitOffset is used
+                minBlockTerms.get(spare, rightOffset);
 
                 // System.out.println("  recurseIndex write value="+toInt(spare.get()));
 

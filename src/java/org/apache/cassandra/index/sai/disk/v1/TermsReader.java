@@ -121,7 +121,8 @@ public class TermsReader implements Closeable
 
     public PostingList exactMatch(ByteComparable term, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
     {
-        perQueryEventListener.onSegmentHit();
+        if (perQueryEventListener != null)
+            perQueryEventListener.onSegmentHit();
         return new TermQuery(term, perQueryEventListener, context).execute();
     }
 
@@ -186,7 +187,8 @@ public class TermsReader implements Closeable
             {
                 final long offset = reader.exactMatch(term);
 
-                listener.onTraversalComplete(System.nanoTime() - lookupStartTime, TimeUnit.NANOSECONDS);
+                if (listener != null)
+                    listener.onTraversalComplete(System.nanoTime() - lookupStartTime, TimeUnit.NANOSECONDS);
 
                 if (offset == TrieTermsDictionaryReader.NOT_FOUND)
                     return PostingList.OFFSET_NOT_FOUND;
@@ -199,7 +201,7 @@ public class TermsReader implements Closeable
         {
             PostingsReader.BlocksSummary header = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
 
-            return new PostingsReader(postingsInput, header, listener.postingListEventListener());
+            return new PostingsReader(postingsInput, header, listener != null ? listener.postingListEventListener() : null);
         }
     }
 

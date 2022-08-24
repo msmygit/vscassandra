@@ -69,14 +69,14 @@ public class InvertedIndexSearcher extends IndexSearcher
         reader = new TermsReader(indexContext,
                                  indexFiles.termsData().sharedCopy(),
                                  indexFiles.postingLists().sharedCopy(),
-                                 root, footerPointer);
+                                 root,
+                                 footerPointer);
     }
 
     @Override
     public long indexFileCacheSize()
     {
         // trie has no pre-allocated memory.
-        // TODO: Is this still the case now the trie isn't using the chunk cache?
         return 0;
     }
 

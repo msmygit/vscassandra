@@ -56,7 +56,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
     @Seed("88E15363629EA9C0")
     public void testRandom() throws Exception
     {
-        for (int x = 0; x < 1; x++)
+        for (int x = 0; x < 10; x++)
         {
             doRandomTest();
         }
@@ -170,13 +170,11 @@ public class BlockTerms2Test extends SaiRandomizedTest
         for (int x = 0; x < 44; x++)
         {
             // rowid starts at 31
-            System.out.println("30 rowid = "+rowid);
             writer.add(toBytes(30), rowid++);
         }
 
         for (int x = 0; x < 10; x++)
         {
-            System.out.println("post 30 rowid = "+rowid);
             writer.add(toBytes(rowid), rowid++);
         }
 

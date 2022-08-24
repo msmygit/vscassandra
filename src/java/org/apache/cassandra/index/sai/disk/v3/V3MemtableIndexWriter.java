@@ -40,16 +40,19 @@ public class V3MemtableIndexWriter extends MemtableIndexWriter
         super(memtable, indexDescriptor, indexContext, rowMapping);
     }
 
-    protected long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
+    protected long flush(DecoratedKey minKey,
+                         DecoratedKey maxKey,
+                         AbstractType<?> termComparator,
+                         MemtableTermsIterator terms,
+                         long maxSegmentRowId) throws IOException
     {
-        final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext);
+        V3IndexWriter v3IndexWriter = new V3IndexWriter(indexDescriptor, indexContext, false);
 
-        final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(terms);
-        final long numRows = writer.pointCount();
+        SegmentMetadata.ComponentMetadataMap indexMetas = v3IndexWriter.writeAll(terms);
 
         // If no rows were written we need to delete any created column index components
         // so that the index is correctly identified as being empty (only having a completion marker)
-        if (numRows == 0)
+        if (v3IndexWriter.getPostingsAdded() == 0)
         {
             indexDescriptor.deleteColumnIndex(indexContext);
             return 0;
@@ -57,7 +60,7 @@ public class V3MemtableIndexWriter extends MemtableIndexWriter
 
         // During index memtable flush, the data is sorted based on terms.
         final SegmentMetadata metadata = new SegmentMetadata(0,
-                                                             numRows,
+                                                             v3IndexWriter.getPostingsAdded(),
                                                              terms.getMinSSTableRowId(),
                                                              terms.getMaxSSTableRowId(),
                                                              indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(minKey),
@@ -71,6 +74,6 @@ public class V3MemtableIndexWriter extends MemtableIndexWriter
             SegmentMetadata.write(metadataWriter, Collections.singletonList(metadata));
         }
 
-        return numRows;
+        return v3IndexWriter.getPostingsAdded();
     }
 }

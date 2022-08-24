@@ -81,7 +81,7 @@ public class V3SSTableIndexWriter extends SSTableIndexWriter
         protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexDescriptor indexDescriptor,
                                                                      IndexContext indexContext) throws IOException
         {
-            final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext, true);
+            V3IndexWriter writer = new V3IndexWriter(indexDescriptor, indexContext, true);
             return writer.writeAll(ramIndexer.getTermsWithPostings());
         }
     }
@@ -89,7 +89,7 @@ public class V3SSTableIndexWriter extends SSTableIndexWriter
     @Override
     protected SegmentMerger newSegmentMerger(boolean literal)
     {
-        return new BlockTermsSegmentMerger();
+        return new V3SegmentMerger();
     }
 
     @Override

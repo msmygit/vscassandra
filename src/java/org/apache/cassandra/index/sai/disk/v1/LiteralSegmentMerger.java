@@ -57,7 +57,6 @@ public class LiteralSegmentMerger implements SegmentMerger
     {
         try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), indexContext.getValidator()))
         {
-
             SegmentMetadata.ComponentMetadataMap indexMetas;
             long numRows;
 
