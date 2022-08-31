@@ -91,19 +91,11 @@ public class V3SegmentMerger implements SegmentMerger
         {
             try (final TermsIteratorMerger merger = new TermsIteratorMerger(segmentTermsIterators.toArray(new TermsIterator[0]), indexContext.getValidator()))
             {
-                SegmentMetadata.ComponentMetadataMap indexMetas;
-                //long numRows;
-
                 V3IndexWriter writer = new V3IndexWriter(indexDescriptor, indexContext, false);
-                indexMetas = writer.writeAll(merger);
+                SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(merger);
 
                 close();
 
-//                try (InvertedIndexWriter indexWriter = new InvertedIndexWriter(indexDescriptor, indexContext, false))
-//                {
-//                    indexMetas = indexWriter.writeAll(merger);
-//                    numRows = indexWriter.getPostingsCount();
-//                }
                 return new SegmentMetadata(0,
                                            writer.getPostingsAdded(),
                                            merger.minSSTableRowId,
@@ -114,25 +106,6 @@ public class V3SegmentMerger implements SegmentMerger
                                            merger.getMaxTerm(),
                                            indexMetas);
             }
-
-
-//            try (final MergePointsIterators merger = new MergePointsIterators(segmentIterators))
-//            {
-////                final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext, false);
-////                final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(merger);
-//                final V3IndexWriter writer = new V3IndexWriter(indexDescriptor, indexContext, true);
-//                final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(merger);
-//                return new SegmentMetadata(0,
-//                                           //writer.meta.pointCount,
-//                                           writer.getPostingsAdded(),
-//                                           minRowId,
-//                                           maxRowid,
-//                                           minKey,
-//                                           maxKey,
-//                                           minTerm,
-//                                           maxTerm,
-//                                           indexMetas);
-//            }
         }
         catch (Exception ex)
         {

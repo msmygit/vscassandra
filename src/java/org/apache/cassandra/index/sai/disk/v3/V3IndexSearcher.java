@@ -54,7 +54,6 @@ public class V3IndexSearcher extends IndexSearcher
 
     private final BlockTerms.Reader blockTermsReader;
     private final TermsReader termsReader;
-    //private final QueryEventListener.TrieIndexEventListener perColumnEventListener;
 
     V3IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
                     V3PerIndexFiles perIndexFiles,
@@ -66,8 +65,6 @@ public class V3IndexSearcher extends IndexSearcher
 
         long root = metadata.getIndexRoot(IndexComponent.TERMS_DATA);
         assert root >= 0;
-
-        //perColumnEventListener = (QueryEventListener.TrieIndexEventListener)indexContext.getColumnQueryMetrics();
 
         Map<String,String> map = metadata.componentMetadatas.get(IndexComponent.TERMS_DATA).attributes;
         String footerPointerString = map.get(SAICodecUtils.FOOTER_POINTER);
@@ -125,13 +122,9 @@ public class V3IndexSearcher extends IndexSearcher
             // if it's an equality query use the terms reader index
             if (exp.getOp().isEquality())
             {
-                //final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
-                //QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
-
-                //QueryEventListener.TrieIndexEventListener listener = QueryEventListener.TrieIndexEventListener.
-
                 // TODO: figure out the listener metrics
                 final PostingList postingList = termsReader.exactMatch(lowerBound, null, context.queryContext);
+                System.out.println("termsReader.exactMatch postingList="+postingList);
                 return toIterator(postingList, context, defer);
             }
             else

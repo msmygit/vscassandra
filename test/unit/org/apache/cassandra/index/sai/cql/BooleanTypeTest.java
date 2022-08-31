@@ -26,123 +26,123 @@ import static org.junit.Assert.assertEquals;
 
 public class BooleanTypeTest extends SAITester
 {
-    @Test
-    public void testTinyint() throws Throwable
-    {
-        createTable("CREATE TABLE %s (id text PRIMARY KEY, val tinyint)");
-        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
-
-        execute("INSERT INTO %s (id, val) VALUES ('0', 0)");
-        execute("INSERT INTO %s (id, val) VALUES ('1', 1)");
-        execute("INSERT INTO %s (id, val) VALUES ('2', 2)");
-
-        flush();
-
-//        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
-//        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
-//        execute("INSERT INTO %s (id, val) VALUES ('12', 12)");
-//
-//        flush();
-
+//    @Test
+//    public void testTinyint() throws Throwable
+//    {
+//        createTable("CREATE TABLE %s (id text PRIMARY KEY, val tinyint)");
 //        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+//        waitForIndexQueryable();
 //
-        waitForIndexQueryable();
-
-        //compact();
-
-        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
-        //assertEquals(5, execute("SELECT id FROM %s WHERE val >= 1").size());
-        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
-    }
-
-    @Test
-    public void testSmallint() throws Throwable
-    {
-        createTable("CREATE TABLE %s (id text PRIMARY KEY, val smallint)");
-        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
-
-        execute("INSERT INTO %s (id, val) VALUES ('0', 0)");
-        execute("INSERT INTO %s (id, val) VALUES ('1', 1)");
-        execute("INSERT INTO %s (id, val) VALUES ('2', 2)");
-
-        flush();
-
-//        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
-//        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
-//        execute("INSERT INTO %s (id, val) VALUES ('12', 12)");
+//        execute("INSERT INTO %s (id, val) VALUES ('0', 0)");
+//        execute("INSERT INTO %s (id, val) VALUES ('1', 1)");
+//        execute("INSERT INTO %s (id, val) VALUES ('2', 2)");
 //
 //        flush();
-
+//
+////        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
+////        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
+////        execute("INSERT INTO %s (id, val) VALUES ('12', 12)");
+////
+////        flush();
+//
+////        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+////
+//        waitForIndexQueryable();
+//
+//        //compact();
+//
+//        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
+//        //assertEquals(5, execute("SELECT id FROM %s WHERE val >= 1").size());
+//        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
+//    }
+//
+//    @Test
+//    public void testSmallint() throws Throwable
+//    {
+//        createTable("CREATE TABLE %s (id text PRIMARY KEY, val smallint)");
+//        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+//        waitForIndexQueryable();
+//
+//        execute("INSERT INTO %s (id, val) VALUES ('0', 0)");
+//        execute("INSERT INTO %s (id, val) VALUES ('1', 1)");
+//        execute("INSERT INTO %s (id, val) VALUES ('2', 2)");
+//
+//        flush();
+//
+////        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
+////        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
+////        execute("INSERT INTO %s (id, val) VALUES ('12', 12)");
+////
+////        flush();
+//
+////        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+////
+////        waitForIndexQueryable();
+//
+//        //compact();
+//
+//        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
+//        //assertEquals(5, execute("SELECT id FROM %s WHERE val >= 1").size());
+//        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
+//    }
+//
+//    // smallint
+//    @Test
+//    public void testDate() throws Throwable
+//    {
+//        createTable("CREATE TABLE %s (id text PRIMARY KEY, val date)");
+//
+//        waitForIndexQueryable();
+//
+//        execute("INSERT INTO %s (id, val) VALUES ('0', '2013-06-10')");
+//        execute("INSERT INTO %s (id, val) VALUES ('1', '2013-06-11')");
+//        execute("INSERT INTO %s (id, val) VALUES ('2', '2013-06-12')");
+//
+//        flush();
+//
+//        execute("INSERT INTO %s (id, val) VALUES ('10', '2014-06-10')");
+//        execute("INSERT INTO %s (id, val) VALUES ('11', '2014-06-10')");
+//        execute("INSERT INTO %s (id, val) VALUES ('12', '2014-06-10')");
+//
+//        flush();
+//
 //        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
 //
 //        waitForIndexQueryable();
-
-        //compact();
-
-        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
-        //assertEquals(5, execute("SELECT id FROM %s WHERE val >= 1").size());
-        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
-    }
-
-    // smallint
-    @Test
-    public void testDate() throws Throwable
-    {
-        createTable("CREATE TABLE %s (id text PRIMARY KEY, val date)");
-
-        waitForIndexQueryable();
-
-        execute("INSERT INTO %s (id, val) VALUES ('0', '2013-06-10')");
-        execute("INSERT INTO %s (id, val) VALUES ('1', '2013-06-11')");
-        execute("INSERT INTO %s (id, val) VALUES ('2', '2013-06-12')");
-
-        flush();
-
-        execute("INSERT INTO %s (id, val) VALUES ('10', '2014-06-10')");
-        execute("INSERT INTO %s (id, val) VALUES ('11', '2014-06-10')");
-        execute("INSERT INTO %s (id, val) VALUES ('12', '2014-06-10')");
-
-        flush();
-
-        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
-
-        waitForIndexQueryable();
-
-        compact();
-
-        assertEquals(1, execute("SELECT id FROM %s WHERE val = '2013-06-10'").size());
-        assertEquals(6, execute("SELECT id FROM %s WHERE val >= '2013-06-10'").size());
-        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
-    }
-
-    @Test
-    public void testString() throws Throwable
-    {
-        createTable("CREATE TABLE %s (id text PRIMARY KEY, val text)");
-
-        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
-
-        waitForIndexQueryable();
-
-        execute("INSERT INTO %s (id, val) VALUES ('0', 'apple')");
-        execute("INSERT INTO %s (id, val) VALUES ('1', 'sauce')");
-        execute("INSERT INTO %s (id, val) VALUES ('2', 'yuck')");
-
-        flush();
-
-        execute("INSERT INTO %s (id, val) VALUES ('10', 'tomato')");
-        execute("INSERT INTO %s (id, val) VALUES ('11', 'garbage')");
-        execute("INSERT INTO %s (id, val) VALUES ('12', 'dump')");
-
-        flush();
-
-        compact();
-
-        assertEquals(1, execute("SELECT id FROM %s WHERE val = 'apple'").size());
-        assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
-    }
+//
+//        compact();
+//
+//        assertEquals(1, execute("SELECT id FROM %s WHERE val = '2013-06-10'").size());
+//        assertEquals(6, execute("SELECT id FROM %s WHERE val >= '2013-06-10'").size());
+//        //assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
+//    }
+//
+//    @Test
+//    public void testString() throws Throwable
+//    {
+//        createTable("CREATE TABLE %s (id text PRIMARY KEY, val text)");
+//
+//        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+//
+//        waitForIndexQueryable();
+//
+//        execute("INSERT INTO %s (id, val) VALUES ('0', 'apple')");
+//        execute("INSERT INTO %s (id, val) VALUES ('1', 'sauce')");
+//        execute("INSERT INTO %s (id, val) VALUES ('2', 'yuck')");
+//
+//        flush();
+//
+//        execute("INSERT INTO %s (id, val) VALUES ('10', 'tomato')");
+//        execute("INSERT INTO %s (id, val) VALUES ('11', 'garbage')");
+//        execute("INSERT INTO %s (id, val) VALUES ('12', 'dump')");
+//
+//        flush();
+//
+//        compact();
+//
+//        assertEquals(1, execute("SELECT id FROM %s WHERE val = 'apple'").size());
+//        assertEquals(1, execute("SELECT id FROM %s WHERE val = 'tomato'").size());
+//    }
 
     @Test
     public void test() throws Throwable
@@ -168,9 +168,42 @@ public class BooleanTypeTest extends SAITester
 
         compact();
 
-        assertEquals(1, execute("SELECT id FROM %s WHERE val2 = 0").size());
+        //assertEquals(1, execute("SELECT id FROM %s WHERE val2 = 0").size());
 
         assertEquals(4, execute("SELECT id FROM %s WHERE val = true").size());
         assertEquals(2, execute("SELECT id FROM %s WHERE val = false").size());
+    }
+
+    @Test
+    public void testInt() throws Throwable
+    {
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, val int)");
+
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (id, val) VALUES ('0', 0)");
+        execute("INSERT INTO %s (id, val) VALUES ('1', 1)");
+        execute("INSERT INTO %s (id, val) VALUES ('2', 2)");
+
+        flush();
+
+        execute("INSERT INTO %s (id, val) VALUES ('10', 10)");
+        execute("INSERT INTO %s (id, val) VALUES ('11', 11)");
+        execute("INSERT INTO %s (id, val) VALUES ('12', 12)");
+
+        flush();
+
+        compact();
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 10").size());
+
+        assertEquals(3, execute("SELECT id FROM %s WHERE val >= 0 AND val <= 2").size());
+
+        assertEquals(1, execute("SELECT id FROM %s WHERE val = 0").size());
+
+        //assertEquals(4, execute("SELECT id FROM %s WHERE val = true").size());
+        //assertEquals(2, execute("SELECT id FROM %s WHERE val = false").size());
     }
 }
