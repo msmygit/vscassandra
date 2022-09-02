@@ -18,10 +18,16 @@
 
 package org.apache.cassandra.cql3.validation.entities;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Test;
 
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.UntypedResultSet;
+import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.ListType;
+import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 
 import static org.junit.Assert.assertNotNull;
@@ -186,6 +192,177 @@ public class WritetimeOrTTLTest extends CQLTester
         // Both fields are set
         execute("INSERT INTO %s (k, t) VALUES (3, {f1:1, f2:2}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
         assertWritetimeAndTTL("t", "k=3", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=3", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2", "k=3", TIMESTAMP_1, TTL_1);
+        assertRows("SELECT k, WRITETIME(t.f1), WRITETIME(t.f2) FROM %s WHERE k=3", row(3, TIMESTAMP_1, TIMESTAMP_1));
+    }
+
+    @Test
+    public void testFrozenNestedUDTs() throws Throwable
+    {
+        String nestedType = createType("CREATE TYPE %s (f1 int, f2 int)");
+        String type = createType(format("CREATE TYPE %%s (f1 frozen<%s>, f2 frozen<%<s>)", nestedType));
+        createTable("CREATE TABLE %s (k int PRIMARY KEY, t frozen<" + type + ">)");
+
+        // Both fields are empty
+        execute("INSERT INTO %s (k, t) VALUES (1, {f1:null, f2:null}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=1", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=1", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f1", "k=1", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=1", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=1", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f1", "k=1", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=1", NO_TIMESTAMP, NO_TTL);
+
+        // Only the first field is set, no nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (2, {f1:{f1:null,f2:null}, f2:null}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=2", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=2", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=2", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=2", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=2", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f1", "k=2", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=2", NO_TIMESTAMP, NO_TTL);
+
+        // Only the first field is set, only the first nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (3, {f1:{f1:1,f2:null}, f2:null}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=3", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=3", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=3", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f2", "k=3", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=3", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f1", "k=3", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=3", NO_TIMESTAMP, NO_TTL);
+
+        // Only the first field is set, only the second nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (4, {f1:{f1:null,f2:2}, f2:null}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=4", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=4", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=4", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=4", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2", "k=4", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f1", "k=4", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=4", NO_TIMESTAMP, NO_TTL);
+
+        // Only the first field is set, both nested field are set
+        execute("INSERT INTO %s (k, t) VALUES (5, {f1:{f1:1,f2:2}, f2:null}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=5", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=5", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=5", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f2", "k=5", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2", "k=5", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f1", "k=5", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=5", NO_TIMESTAMP, NO_TTL);
+
+        // Only the second field is set, no nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (6, {f1:null, f2:{f1:null,f2:null}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=6", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=6", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f1", "k=6", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=6", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=6", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=6", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=6", NO_TIMESTAMP, NO_TTL);
+
+        // Only the second field is set, only the first nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (7, {f1:null, f2:{f1:1,f2:null}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=7", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=7", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f1", "k=7", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=7", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=7", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=7", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f2", "k=7", NO_TIMESTAMP, NO_TTL);
+
+        // Only the second field is set, only the second nested field is set
+        execute("INSERT INTO %s (k, t) VALUES (8, {f1:null, f2:{f1:null,f2:2}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=8", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=8", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f1", "k=8", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=8", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=8", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=8", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=8", TIMESTAMP_1, TTL_1);
+
+        // Only the second field is set, both nested field are set
+        execute("INSERT INTO %s (k, t) VALUES (9, {f1:null, f2:{f1:1,f2:2}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=9", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=9", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f1", "k=9", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=9", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=9", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=9", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f2", "k=9", TIMESTAMP_1, TTL_1);
+
+        // Both fields are set, alternate fields are set
+        execute("INSERT INTO %s (k, t) VALUES (10, {f1:{f1:1}, f2:{f2:2}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=10", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=10", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=10", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f2", "k=10", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2", "k=10", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=10", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f2.f2", "k=10", TIMESTAMP_1, TTL_1);
+        // Both fields are set, alternate fields are set
+        execute("INSERT INTO %s (k, t) VALUES (11, {f1:{f2:2}, f2:{f1:1}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=11", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=11", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=11", NO_TIMESTAMP, NO_TTL);
+        assertWritetimeAndTTL("t.f1.f2", "k=11", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2", "k=11", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=11", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f2", "k=11", NO_TIMESTAMP, NO_TTL);
+
+        // Both fields are set, all fields are set
+        execute("INSERT INTO %s (k, t) VALUES (12, {f1:{f1:1,f2:2},f2:{f1:1,f2:2}}) USING TIMESTAMP ? AND TTL ?", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f1", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f1.f2", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f1", "k=12", TIMESTAMP_1, TTL_1);
+        assertWritetimeAndTTL("t.f2.f2", "k=12", TIMESTAMP_1, TTL_1);
+    }
+
+    @Test
+    public void testFunctions() throws Throwable
+    {
+        createTable("CREATE TABLE %s (k int PRIMARY KEY, v int, s set<int>, fs frozen<set<int>>)");
+        execute("INSERT INTO %s (k, v, s, fs) VALUES (0, 0, {1, 2, 3}, {1, 2, 3}) USING TIMESTAMP 1 AND TTL 1000");
+        execute("INSERT INTO %s (k, v, s, fs) VALUES (1, 1, {10, 20, 30}, {10, 20, 30}) USING TIMESTAMP 10 AND TTL 1000");
+        execute("UPDATE %s USING TIMESTAMP 2 AND TTL 2000 SET s = s + {2, 3} WHERE k = 0");
+        execute("UPDATE %s USING TIMESTAMP 20 AND TTL 2000 SET s = s + {20, 30} WHERE k = 1");
+
+        // Regular column
+        assertRows("SELECT min(v) FROM %s", row(0));
+        assertRows("SELECT max(v) FROM %s", row(1));
+        assertRows("SELECT writetime(v) FROM %s", row(10L), row(1L));
+        assertRows("SELECT min(writetime(v)) FROM %s", row(1L));
+        assertRows("SELECT max(writetime(v)) FROM %s", row(10L));
+        assertRows("SELECT min(maxwritetime(v)) FROM %s", row(1L));
+        assertRows("SELECT max(maxwritetime(v)) FROM %s", row(10L));
+
+        // Frozen collection
+        // Note that currently the tested system functions (min and max) return collections in their serialized format,
+        // this is something that we might want to improve in the future (CASSANDRA-17811).
+        assertRows("SELECT min(fs) FROM %s", row(ListType.getInstance(Int32Type.instance, false).decompose(Arrays.asList(1, 2, 3))));
+        assertRows("SELECT max(fs) FROM %s", row(ListType.getInstance(Int32Type.instance, false).decompose(Arrays.asList(10, 20, 30))));
+        assertRows("SELECT writetime(fs) FROM %s", row(10L), row(1L));
+        assertRows("SELECT min(writetime(fs)) FROM %s", row(1L));
+        assertRows("SELECT max(writetime(fs)) FROM %s", row(10L));
+        assertRows("SELECT min(maxwritetime(fs)) FROM %s", row(1L));
+        assertRows("SELECT max(maxwritetime(fs)) FROM %s", row(10L));
+
+        // Multi-cell collection
+        // Note that currently the tested system functions (min and max) return collections in their serialized format,
+        // this is something that we might want to improve in the future (CASSANDRA-17811).
+        assertRows("SELECT min(s) FROM %s", row(ListType.getInstance(Int32Type.instance, false).decompose(Arrays.asList(1, 2, 3))));
+        assertRows("SELECT max(s) FROM %s", row(ListType.getInstance(Int32Type.instance, false).decompose(Arrays.asList(10, 20, 30))));
+        assertRows("SELECT writetime(s) FROM %s", row(Arrays.asList(10L, 20L, 20L)), row(Arrays.asList(1L, 2L, 2L)));
+        assertRows("SELECT min(writetime(s)) FROM %s", row(ListType.getInstance(LongType.instance, false).decompose(Arrays.asList(1L, 2L, 2L))));
+        assertRows("SELECT max(writetime(s)) FROM %s", row(ListType.getInstance(LongType.instance, false).decompose(Arrays.asList(10L, 20L, 20L))));
+        assertRows("SELECT min(maxwritetime(s)) FROM %s", row(2L));
+        assertRows("SELECT max(maxwritetime(s)) FROM %s", row(20L));
     }
 
     private void assertRows(String query, Object[]... rows) throws Throwable
