@@ -23,14 +23,19 @@ import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.exceptions.InvalidQueryException;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.service.EmbeddedCassandraService;
+
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
 
-public class BatchTests extends  CQLTester
+import static org.junit.Assert.assertSame;
+
+public class BatchTest extends  CQLTester
 {
     private static EmbeddedCassandraService cassandra;
 
@@ -148,6 +153,7 @@ public class BatchTests extends  CQLTester
         sendBatch(BatchStatement.Type.LOGGED, true, false, false);
     }
 
+    @Ignore
     @Test(expected = InvalidQueryException.class)
     public void testOversizedBatch()
     {
@@ -158,6 +164,15 @@ public class BatchTests extends  CQLTester
             b.add(noncounter.bind(i, "foobar"));
         }
         session.execute(b);
+    }
+
+    @Test
+    public void testQueryOptionConsistency()
+    {
+        BatchQueryOptions queryOptions = BatchQueryOptions.withoutPerStatementVariables(QueryOptions.DEFAULT);
+        assertSame(ConsistencyLevel.ONE, queryOptions.getConsistency());
+        queryOptions.updateConsistency(ConsistencyLevel.ALL);
+        assertSame(ConsistencyLevel.ALL, queryOptions.getConsistency());
     }
 
     public void sendBatch(BatchStatement.Type type, boolean addCounter, boolean addNonCounter, boolean addClustering)
