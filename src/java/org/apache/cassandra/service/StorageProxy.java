@@ -1276,19 +1276,19 @@ public class StorageProxy implements StorageProxyMBean
             return;
         }
 
-        try
-        {
-            //We could potentially pass a callback into performWrite. And add callback provision for mutateCounter or mutateAtomically (sendToHintedEndPoints)
-            //However, Trade off between write metric per CF accuracy vs performance hit due to callbacks. Similar issue exists with CoordinatorReadLatency metric.
-            mutations.stream()
-                     .flatMap(m -> m.getTableIds().stream().map(tableId -> Keyspace.open(m.getKeyspaceName()).getColumnFamilyStore(tableId)))
-                     .distinct()
-                     .forEach(store -> store.metric.coordinatorWriteLatency.update(latency, TimeUnit.NANOSECONDS));
-        }
-        catch (Exception ex)
-        {
-            logger.warn("Exception occurred updating coordinatorWriteLatency metric", ex);
-        }
+//        try
+//        {
+//            //We could potentially pass a callback into performWrite. And add callback provision for mutateCounter or mutateAtomically (sendToHintedEndPoints)
+//            //However, Trade off between write metric per CF accuracy vs performance hit due to callbacks. Similar issue exists with CoordinatorReadLatency metric.
+//            mutations.stream()
+//                     .flatMap(m -> m.getTableIds().stream().map(tableId -> Keyspace.open(m.getKeyspaceName()).getColumnFamilyStore(tableId)))
+//                     .distinct()
+//                     .forEach(store -> store.metric.coordinatorWriteLatency.update(latency, TimeUnit.NANOSECONDS));
+//        }
+//        catch (Exception ex)
+//        {
+//            logger.warn("Exception occurred updating coordinatorWriteLatency metric", ex);
+//        }
     }
 
     private static void syncWriteToBatchlog(Collection<Mutation> mutations, ReplicaPlan.ForTokenWrite replicaPlan, UUID uuid, long queryStartNanoTime)
