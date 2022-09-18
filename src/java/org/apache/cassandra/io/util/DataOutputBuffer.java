@@ -52,27 +52,66 @@ public class DataOutputBuffer extends BufferedDataOutputStreamPlus
      * Scratch buffers used mostly for serializing in memory. It's important to call #recycle() when finished
      * to keep the memory overhead from being too large in the system.
      */
-    public static final FastThreadLocal<DataOutputBuffer> scratchBuffer = new FastThreadLocal<DataOutputBuffer>()
+    public static final FastThreadLocal<DataOutputBuffer> scratchBuffer = new FastThreadLocal<>()
     {
         @Override
         protected DataOutputBuffer initialValue()
         {
-            return new DataOutputBuffer()
-            {
-                public void close()
-                {
-                    if (buffer.capacity() <= MAX_RECYCLE_BUFFER_SIZE)
-                    {
-                        buffer.clear();
-                    }
-                    else
-                    {
-                        buffer = ByteBuffer.allocate(DEFAULT_INITIAL_BUFFER_SIZE);
-                    }
-                }
-            };
+            return new LimitingScratchBuffer();
         }
     };
+
+    /**
+     * Returns a {@link DataOutputBuffer} that is limited to a capacity of {@code limit} bytes.
+     * A {@code limit} of 0 means unlimited.
+     */
+    public static DataOutputBuffer limitedScratchBuffer(long limit)
+    {
+        LimitingScratchBuffer dob = (LimitingScratchBuffer) scratchBuffer.get();
+        dob.limit = limit;
+        return dob;
+    }
+
+    public static class BufferCapacityExceededException extends RuntimeException
+    {}
+
+    private static final class LimitingScratchBuffer extends DataOutputBuffer
+    {
+        private final ByteBuffer initialSizeBuffer;
+        long limit = 0L;
+
+        LimitingScratchBuffer()
+        {
+            super();
+            initialSizeBuffer = buffer;
+        }
+
+        @Override
+        long calculateNewSize(long count)
+        {
+            if (limit == 0L)
+                return super.calculateNewSize(count);
+
+            // capacity limited scratch buffer
+            long target = count + capacity();
+            long newSize = super.calculateNewSize(count);
+            newSize = Math.min(limit, newSize);
+            if (newSize < target)
+                throw new BufferCapacityExceededException();
+            return newSize;
+        }
+
+        @Override
+        public void close()
+        {
+            limit = 0L;
+            if (buffer.capacity() > MAX_RECYCLE_BUFFER_SIZE)
+            {
+                buffer = initialSizeBuffer;
+            }
+            buffer.clear();
+        }
+    }
 
     public DataOutputBuffer()
     {

@@ -19,7 +19,9 @@ package org.apache.cassandra.net;
 
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -215,6 +217,27 @@ public class MessagingService extends MessagingServiceMBeanImpl
     static AcceptVersions accept_messaging = new AcceptVersions(minimum_version, current_version);
     static AcceptVersions accept_streaming = new AcceptVersions(current_version, current_version);
 
+    static Map<Integer, Version> versionMap = Map.of(VERSION_30, Version.VERSION_30,
+                                                     VERSION_3014, Version.VERSION_3014,
+                                                     VERSION_40, Version.VERSION_40,
+                                                     VERSION_41, Version.VERSION_41,
+                                                     VERSION_SG_10, Version.STARGAZER_10,
+                                                     VERSION_DSE_68, Version.DSE_68);
+
+    /**
+     * This is an optimisation to speed up the translation of the serialization
+     * version to the {@link Version} enum.
+     *
+     * @param version the serialization version
+     * @return a {@link Version}
+     */
+    public static Version getVersion(int version)
+    {
+        if (versionMap.containsKey(version))
+            return versionMap.get(version);
+        throw new IllegalStateException("Unkown serialization version: " + version);
+    }
+
     public final static boolean NON_GRACEFUL_SHUTDOWN = Boolean.getBoolean("cassandra.test.messagingService.nonGracefulShutdown");
 
     public enum Version
@@ -223,7 +246,8 @@ public class MessagingService extends MessagingServiceMBeanImpl
         VERSION_3014(MessagingService.VERSION_3014),
         VERSION_40(MessagingService.VERSION_40),
         VERSION_41(MessagingService.VERSION_41),
-        STARGAZER_10(MessagingService.VERSION_SG_10);
+        STARGAZER_10(MessagingService.VERSION_SG_10),
+        DSE_68(MessagingService.VERSION_DSE_68);
 
         public final int value;
 
