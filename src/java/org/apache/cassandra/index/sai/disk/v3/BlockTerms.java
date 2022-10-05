@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.v3;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -92,12 +93,6 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
 
 /**
  * Block terms + postings disk index data structure.
- *
- * Each unique posting block min term is indexed into a trie, postings of block size, and optionally an order map when row ids are out of order.
- *
- * A string of posting blocks with the same min term are placed into a multi-block spanning posting list.
- *
- * Posting block min terms are indexed into a trie.  The payload consists of min and max posting block ids encoded as 2 integers into a long.
  *
  * Raw bytes are prefix encoded in blocks of 16 for fast(er) random access than the posting block default size of 1024.
  *
@@ -460,51 +455,58 @@ public class BlockTerms
              */
             public boolean next() throws IOException
             {
-                if (point >= meta.pointCount)
-                    return false;
-
-                final BytesRef term = bytesCursor.seekToPointId(point);
-
-                if (term == null)
-                    throw new IllegalStateException();
-
-                final long block = point / meta.postingsBlockSize;
-                if (block > currentPostingsBlock)
+                try
                 {
-                    final long fp = postingsFPs.get(block);
-                    this.currentPostingsBlock = block;
-                    if (fp > currentPostingsBlockFP)
+                    if (point >= meta.pointCount)
+                        return false;
+
+                    final BytesRef term = bytesCursor.seekToPointId(point);
+
+                    if (term == null)
+                        throw new IllegalStateException();
+
+                    final long block = point / meta.postingsBlockSize;
+                    if (block > currentPostingsBlock)
                     {
-                        this.currentPostingsBlockFP = fp;
-
-                        this.postings = new PostingsReader(postingsInput, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
-
-                        currentOrderMapFP = orderMapFPs.get(currentPostingsBlock);
-                        if (currentOrderMapFP != -1)
+                        final long fp = postingsFPs.get(block);
+                        this.currentPostingsBlock = block;
+                        if (fp > currentPostingsBlockFP)
                         {
-                            for (int x = 0; x < meta.postingsBlockSize; x++)
-                            {
-                                final long rowid = postings.nextPosting();
-                                if (rowid == PostingList.END_OF_STREAM)
-                                    break;
+                            this.currentPostingsBlockFP = fp;
 
-                                final int ordinal = LeafOrderMap.getValue(orderMapRandoInput, currentOrderMapFP, x, orderMapReader);
-                                orderMapBlockRowIds[ordinal] = rowid;
+                            this.postings = new PostingsReader(postingsInput, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
+
+                            currentOrderMapFP = orderMapFPs.get(currentPostingsBlock);
+                            if (currentOrderMapFP != -1)
+                            {
+                                for (int x = 0; x < meta.postingsBlockSize; x++)
+                                {
+                                    final long rowid = postings.nextPosting();
+                                    if (rowid == PostingList.END_OF_STREAM)
+                                        break;
+
+                                    final int ordinal = LeafOrderMap.getValue(orderMapRandoInput, currentOrderMapFP, x, orderMapReader);
+                                    orderMapBlockRowIds[ordinal] = rowid;
+                                }
                             }
                         }
                     }
+
+                    if (currentOrderMapFP != -1)
+                        currentRowId = orderMapBlockRowIds[(int) (point % meta.postingsBlockSize)];
+                    else
+                        currentRowId = this.postings.nextPosting();
+
+                    if (currentRowId == PostingList.END_OF_STREAM)
+                        throw new IllegalStateException();
+
+                    this.point++;
+                    return true;
                 }
-
-                if (currentOrderMapFP != -1)
-                    currentRowId = orderMapBlockRowIds[(int) (point % meta.postingsBlockSize)];
-                else
-                    currentRowId = this.postings.nextPosting();
-
-                if (currentRowId == PostingList.END_OF_STREAM)
-                    throw new IllegalStateException();
-
-                this.point++;
-                return true;
+                catch (EOFException ex)
+                {
+                    throw new IOException("point="+point+" meta.pointCount="+meta.pointCount, ex);
+                }
             }
         }
 
@@ -1015,7 +1017,11 @@ public class BlockTerms
                 {
                     final long blockIndex = target >>> TERMS_DICT_BLOCK_SHIFT;
                     final long blockAddress = termBlockFPs.get(blockIndex);
-                    termsData.seek(blockAddress + meta.termsDataFp);
+
+                    System.out.println("meta.termsDataFp="+meta.termsDataFp+" blockIndex="+blockIndex+" blockAddress="+blockAddress);
+
+                    termsData.seek(blockAddress); // MAYBE THE MAIN PROBLEM
+                    //termsData.seek(blockAddress + meta.termsDataFp);
                     pointId = (blockIndex << TERMS_DICT_BLOCK_SHIFT) - 1;
                     while (pointId < target)
                     {
@@ -1033,6 +1039,8 @@ public class BlockTerms
                     currentTerm.length = 0;
                     return false;
                 }
+
+                System.out.println("BlockTerms.next() filepointer="+termsData.getFilePointer());
 
                 int prefixLength;
                 int suffixLength;
@@ -1131,7 +1139,7 @@ public class BlockTerms
          * Writes merged segments.
          */
         public SegmentMetadata.ComponentMetadataMap writeAll(final MergePointsIterators iterator,
-                                                             TermRowIDCallback callback) throws Exception
+                                                             final TermRowIDCallback callback) throws Exception
         {
             while (iterator.next())
             {
@@ -1231,8 +1239,6 @@ public class BlockTerms
 //                    blockPostingsFPs.setLong(x, blockPostingsFPs.getLong(x + 1));
 //            }
 
-            // final BytesRefBuilder lastTerm = new BytesRefBuilder();
-
             assert minBlockTerms.size() <= postingsBlockSameTerms.length() : "minBlockTerms.size=" + minBlockTerms.size() + " postingsBlockSameTerms.length=" + postingsBlockSameTerms.length() + " postingsBlockCount=" + postingsBlockCount;
 
             final BinaryTree.Writer treeWriter = new BinaryTree.Writer();
@@ -1246,10 +1252,10 @@ public class BlockTerms
             if (!segmented)
             {
                 try (final V3PerIndexFiles perIndexFiles = new V3PerIndexFiles(indexDescriptor, context, segmented);
-                     FileHandle binaryTreeFile = perIndexFiles.getFile(BLOCK_TERMS_INDEX);
-                     IndexInput binaryTreeInput = IndexInputReader.create(binaryTreeFile);
-                     IndexOutput upperPostingsOut = indexDescriptor.openPerIndexOutput(BLOCK_UPPER_POSTINGS, context, true, segmented);
-                     FileHandle blockPostingsHandle = perIndexFiles.getFile(BLOCK_POSTINGS))
+                     final FileHandle binaryTreeFile = perIndexFiles.getFile(BLOCK_TERMS_INDEX);
+                     final IndexInput binaryTreeInput = IndexInputReader.create(binaryTreeFile);
+                     final IndexOutput upperPostingsOut = indexDescriptor.openPerIndexOutput(BLOCK_UPPER_POSTINGS, context, true, segmented);
+                     final FileHandle blockPostingsHandle = perIndexFiles.getFile(BLOCK_POSTINGS))
                 {
                     final BinaryTree.Reader treeReader = new BinaryTree.Reader(minBlockTerms.size(),
                                                                                pointCount(),
@@ -1345,6 +1351,12 @@ public class BlockTerms
 
             final long postingsLength = postingsOut.getFilePointer() - postingsWriter.getStartOffset();
             final long termsLength = termsOut.getFilePointer() - termsStartFP;
+
+            IndexOutput termsOut2 = indexDescriptor.openPerIndexOutput(BLOCK_TERMS_DATA, context, true, segmented);
+
+            System.out.println("terms file length="+termsOut2.getFilePointer()+" termsStartFP="+termsStartFP+" termsLength="+termsLength+" pointId="+pointId);
+            termsOut2.close();
+
             final long termsIndexLength = termsIndexOut.getFilePointer() - termsIndexStartFP;
 
             // Postings list file pointers are stored directly in TERMS_DATA, so a root is not needed.

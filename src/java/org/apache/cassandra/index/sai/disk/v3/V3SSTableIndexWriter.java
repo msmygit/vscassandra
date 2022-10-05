@@ -84,9 +84,7 @@ public class V3SSTableIndexWriter extends SSTableIndexWriter
             try (V3InvertedIndexWriter termsWriter = new V3InvertedIndexWriter(indexDescriptor, indexContext, true))
             {
                 final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext, true);
-                SegmentMetadata.ComponentMetadataMap meta = writer.writeAll(ramIndexer.getTermsWithPostings(), termsWriter);
-
-                return meta;
+                return writer.writeAll(ramIndexer.getTermsWithPostings(), termsWriter);
             }
         }
     }

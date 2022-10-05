@@ -80,7 +80,7 @@ public class BlockTermsSegmentMerger implements SegmentMerger
         try
         {
             try (final MergePointsIterators merger = new MergePointsIterators(segmentIterators);
-                 V3InvertedIndexWriter invertedWriter = new V3InvertedIndexWriter(indexDescriptor, indexContext, false))
+                 final V3InvertedIndexWriter invertedWriter = new V3InvertedIndexWriter(indexDescriptor, indexContext, false))
             {
                 final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext, false);
                 final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(merger, invertedWriter);

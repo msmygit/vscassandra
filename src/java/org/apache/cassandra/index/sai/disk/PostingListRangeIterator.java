@@ -66,7 +66,6 @@ public class PostingListRangeIterator extends RangeIterator
     private boolean needsSkipping = false;
     private PrimaryKey skipToToken = null;
 
-
     /**
      * Create a direct PostingListRangeIterator where the underlying PostingList is materialised
      * immediately so the posting list size can be used.

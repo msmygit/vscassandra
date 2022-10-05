@@ -531,7 +531,7 @@ public class SAITester extends CQLTester
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(numericCompletionMarkers, numericIndexFiles.size());
                 else
-                    assertEquals("indexComponent="+indexComponent+" numericIndexFiles="+numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
+                    assertEquals("indexFiles="+indexFiles+" indexComponent="+indexComponent+" numericIndexFiles="+numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
             }
         }
     }

@@ -82,7 +82,6 @@ public class V3IndexSearcher extends IndexSearcher
                                       postingsFile,
                                       root,
                                       footerPointer);
-
     }
 
     @Override
