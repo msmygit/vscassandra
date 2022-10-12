@@ -36,6 +36,7 @@ import org.apache.cassandra.index.sai.disk.v1.SSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v3.V3SSTableIndexWriter;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 
@@ -189,6 +190,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void shouldZeroMemoryAfterOneOfTwoIndexesFail() throws Throwable
     {
         createTable(CREATE_TABLE_TEMPLATE);
@@ -212,6 +214,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ca")
     public void shouldZeroMemoryAfterOneOfTwoIndexesFailIndexVersion3() throws Throwable
     {
         createTable(CREATE_TABLE_TEMPLATE);
@@ -267,6 +270,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void shouldLeaveOnlyFailedIndexNonQueryable() throws Throwable
     {
         String table1 = createTable(CREATE_TABLE_TEMPLATE);
@@ -299,6 +303,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ca")
     public void shouldLeaveOnlyFailedIndexNonQueryableIndexVersion3() throws Throwable
     {
         String table1 = createTable(CREATE_TABLE_TEMPLATE);
