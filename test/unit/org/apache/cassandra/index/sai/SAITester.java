@@ -371,7 +371,7 @@ public class SAITester extends CQLTester
 
     public void waitForIndexQueryable(String keyspace, String table)
     {
-        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, table)), 60, TimeUnit.SECONDS);
+        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, table)), 60 * 10, TimeUnit.SECONDS);
     }
 
     protected void startCompaction() throws Throwable

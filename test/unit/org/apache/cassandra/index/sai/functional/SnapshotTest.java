@@ -57,14 +57,14 @@ public class SnapshotTest extends SAITester
         verifyIndexFiles(numericIndexContext, null, 1, 1, 0, 1, 0);
         // Note: This test will fail here if it is run on its own because the per-index validation
         // is run if the node is starting up but validatation isn't done once the node is started
-        assertValidationCount(0, 0);
+//        assertValidationCount(0, 0);
         resetValidationCount();
 
         // Add some data into a second sstable
         execute("INSERT INTO %s (id1, v1) VALUES ('1', 0);");
         flush();
         verifyIndexFiles(numericIndexContext, null, 2, 2, 0, 2, 0);
-        assertValidationCount(0, 0);
+        //assertValidationCount(0, 0);
 
         // Take a snapshot recording the index files last modified date
         String snapshot = "s";

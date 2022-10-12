@@ -40,6 +40,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
 
@@ -369,6 +370,9 @@ public class SSTableIndexWriter implements PerIndexWriter
         try (MetadataWriter writer = new MetadataWriter(indexDescriptor.openPerIndexOutput(IndexComponent.META, indexContext)))
         {
             SegmentMetadata.write(writer, segments);
+
+            File metaFile = indexDescriptor.fileFor(IndexComponent.META, indexContext);
+            System.out.println("writeSegmentsMetadata exists="+metaFile.exists()+" metafile="+metaFile.absolutePath());
         }
         catch (IOException e)
         {

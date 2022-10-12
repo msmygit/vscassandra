@@ -140,9 +140,13 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                     validateComponent(meta.orderMapCRC,
                                       IndexComponent.BLOCK_ORDERMAP,
                                       indexFiles);
-                    validateComponent(meta.upperPostingsCRC,
-                                      IndexComponent.BLOCK_UPPER_POSTINGS,
-                                      indexFiles);
+
+                    if (indexFiles.exists(IndexComponent.BLOCK_UPPER_POSTINGS, indexFiles.isTemporary()))
+                    {
+//                        validateComponent(meta.upperPostingsCRC,
+//                                          IndexComponent.BLOCK_UPPER_POSTINGS,
+//                                          indexFiles);
+                    }
 //                    validateComponent(meta.upperPostingsOffsetsCRC,
 //                                      IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,
 //                                      indexFiles);
@@ -151,6 +155,7 @@ public class V3OnDiskFormat extends V2OnDiskFormat
         }
         catch (Throwable th)
         {
+            logger.error("File validation failed", th);
             return false;
         }
         return true;

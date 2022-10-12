@@ -1352,10 +1352,10 @@ public class BlockTerms
             final long postingsLength = postingsOut.getFilePointer() - postingsWriter.getStartOffset();
             final long termsLength = termsOut.getFilePointer() - termsStartFP;
 
-            IndexOutput termsOut2 = indexDescriptor.openPerIndexOutput(BLOCK_TERMS_DATA, context, true, segmented);
-
-            System.out.println("terms file length="+termsOut2.getFilePointer()+" termsStartFP="+termsStartFP+" termsLength="+termsLength+" pointId="+pointId);
-            termsOut2.close();
+            try (IndexOutput termsOut2 = indexDescriptor.openPerIndexOutput(BLOCK_TERMS_DATA, context, true, segmented))
+            {
+                System.out.println("terms file length=" + termsOut2.getFilePointer() + " termsStartFP=" + termsStartFP + " termsLength=" + termsLength + " pointId=" + pointId);
+            }
 
             final long termsIndexLength = termsIndexOut.getFilePointer() - termsIndexStartFP;
 

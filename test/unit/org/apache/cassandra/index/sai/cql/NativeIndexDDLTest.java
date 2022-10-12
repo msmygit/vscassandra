@@ -854,7 +854,7 @@ public class NativeIndexDDLTest extends SAITester
         assertEquals("There should be no segment builders in progress.", 0L, getColumnIndexBuildsInProgress());
     }
 
-    @RequiresVersion(version="ba")
+    //@RequiresVersion(version="ba")
     @Test
     public void verifyRebuildCorruptedFiles() throws Throwable
     {

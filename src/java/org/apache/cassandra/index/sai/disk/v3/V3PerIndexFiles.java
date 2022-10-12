@@ -31,6 +31,11 @@ public class V3PerIndexFiles extends PerIndexFiles
         super(indexDescriptor, indexContext, temporary);
     }
 
+    public boolean exists(IndexComponent indexComponent, boolean temporary)
+    {
+        return indexDescriptor.componentExists(indexComponent, indexContext, temporary);
+    }
+
     public FileHandle getFileAndCache(IndexComponent indexComponent)
     {
         return files.computeIfAbsent(indexComponent, (comp) -> indexDescriptor.createPerIndexFileHandle(indexComponent, indexContext, temporary));
