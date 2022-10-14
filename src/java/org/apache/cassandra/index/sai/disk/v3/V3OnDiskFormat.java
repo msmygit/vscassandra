@@ -143,9 +143,9 @@ public class V3OnDiskFormat extends V2OnDiskFormat
 
                     if (indexFiles.exists(IndexComponent.BLOCK_UPPER_POSTINGS, indexFiles.isTemporary()))
                     {
-//                        validateComponent(meta.upperPostingsCRC,
-//                                          IndexComponent.BLOCK_UPPER_POSTINGS,
-//                                          indexFiles);
+                        validateComponent(meta.upperPostingsCRC,
+                                          IndexComponent.BLOCK_UPPER_POSTINGS,
+                                          indexFiles);
                     }
 //                    validateComponent(meta.upperPostingsOffsetsCRC,
 //                                      IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,

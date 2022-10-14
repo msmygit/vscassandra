@@ -45,9 +45,9 @@ public class V3InvertedIndexWriter implements Closeable, BlockTerms.Writer.TermR
 {
     private final TrieTermsDictionaryWriter termsDictionaryWriter;
     private final PostingsWriter postingsWriter;
-    private long postingsAdded;
     private final long termsOffset, postingsOffset;
     private final BytesRefBuilder lastTerm = new BytesRefBuilder();
+    private long postingsAdded;
 
     public V3InvertedIndexWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {

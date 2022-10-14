@@ -1327,6 +1327,7 @@ public class BlockTerms
             final FileValidation.Meta orderMapCRC = createCRCMeta(orderMapStartFP, IndexComponent.BLOCK_ORDERMAP);
             final FileValidation.Meta postingsCRC = createCRCMeta(postingsWriter.getStartOffset(), IndexComponent.BLOCK_POSTINGS);
             final FileValidation.Meta bitpackedCRC = createCRCMeta(bitpackStartFP, IndexComponent.BLOCK_BITPACKED);
+            final FileValidation.Meta upperPostingsMetaCRC = treePostingsResult != null ? createCRCMeta(treePostingsResult.startFP, BLOCK_UPPER_POSTINGS) : null;
 
             meta = new Meta(pointId,
                             postingsBlockSize,
@@ -1351,11 +1352,6 @@ public class BlockTerms
 
             final long postingsLength = postingsOut.getFilePointer() - postingsWriter.getStartOffset();
             final long termsLength = termsOut.getFilePointer() - termsStartFP;
-
-            try (IndexOutput termsOut2 = indexDescriptor.openPerIndexOutput(BLOCK_TERMS_DATA, context, true, segmented))
-            {
-                System.out.println("terms file length=" + termsOut2.getFilePointer() + " termsStartFP=" + termsStartFP + " termsLength=" + termsLength + " pointId=" + pointId);
-            }
 
             final long termsIndexLength = termsIndexOut.getFilePointer() - termsIndexStartFP;
 
@@ -1383,9 +1379,11 @@ public class BlockTerms
                             orderMapCRC,
                             postingsCRC,
                             bitpackedCRC,
+                            //null,
+                            //null,
+                            upperPostingsMetaCRC,
+                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC : null,
                             null,
-                            null,
-                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC.upperPostingsCRC : null,
                             //upperPostingsMetaCRC != null ? upperPostingsMetaCRC.upperPostingsOffsetsCRC : null,
                             minRowId,
                             maxRowId);
