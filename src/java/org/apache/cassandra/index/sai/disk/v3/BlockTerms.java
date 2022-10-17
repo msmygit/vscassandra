@@ -1345,7 +1345,7 @@ public class BlockTerms
                             orderMapCRC,
                             postingsCRC,
                             bitpackedCRC,
-                            null,
+                            upperPostingsMetaCRC,
                             null,
                             minRowId,
                             maxRowId);
@@ -1360,33 +1360,33 @@ public class BlockTerms
             components.put(IndexComponent.POSTING_LISTS, -1, postingsWriter.getStartOffset(), postingsLength, meta.stringMap());
             components.put(IndexComponent.BLOCK_TERMS_INDEX, meta.termsIndexFP, termsIndexStartFP, termsIndexLength, meta.stringMap());
 
-            // the upper postings crc's are available
-            // after writing the upper postings
-            // a new meta is created
-            meta = new Meta(pointId,
-                            postingsBlockSize,
-                            maxTermLength,
-                            termsStartFP,
-                            termsIndexFP,
-                            minBlockTerms.size(),
-                            distinctTermCount,
-                            sameTermsPostingsFP,
-                            treePostingsResult != null ? treePostingsResult.indexFilePointer : -1,
-                            BytesRef.deepCopyOf(minTerm.get()).bytes,
-                            BytesRef.deepCopyOf(prevTerm.get()).bytes,
-                            termsIndexCRC,
-                            termsCRC,
-                            orderMapCRC,
-                            postingsCRC,
-                            bitpackedCRC,
-                            //null,
-                            //null,
-                            upperPostingsMetaCRC,
-                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC : null,
-                            null,
-                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC.upperPostingsOffsetsCRC : null,
-                            minRowId,
-                            maxRowId);
+//            // the upper postings crc's are available
+//            // after writing the upper postings
+//            // a new meta is created
+//            meta = new Meta(pointId,
+//                            postingsBlockSize,
+//                            maxTermLength,
+//                            termsStartFP,
+//                            termsIndexFP,
+//                            minBlockTerms.size(),
+//                            distinctTermCount,
+//                            sameTermsPostingsFP,
+//                            treePostingsResult != null ? treePostingsResult.indexFilePointer : -1,
+//                            BytesRef.deepCopyOf(minTerm.get()).bytes,
+//                            BytesRef.deepCopyOf(prevTerm.get()).bytes,
+//                            termsIndexCRC,
+//                            termsCRC,
+//                            orderMapCRC,
+//                            postingsCRC,
+//                            bitpackedCRC,
+//                            //null,
+//                            //null,
+//                            upperPostingsMetaCRC,
+//                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC : null,
+//                            null,
+//                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC.upperPostingsOffsetsCRC : null,
+//                            minRowId,
+//                            maxRowId);
 
             // replace relevant components with the new meta string map
 //            if (upperPostingsMetaCRC != null)

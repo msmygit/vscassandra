@@ -24,6 +24,7 @@ import java.util.Base64;
 import java.util.zip.CRC32;
 
 import org.apache.cassandra.index.sai.disk.io.RAMIndexOutput;
+import org.apache.hadoop.mapred.JobTracker;
 import org.apache.lucene.store.ByteArrayIndexInput;
 import org.apache.lucene.store.IndexInput;
 
@@ -145,6 +146,9 @@ public class FileValidation
      */
     public static boolean validate(final IndexInput input, Meta meta) throws IOException
     {
+        if (meta == null)
+            throw new IllegalArgumentException();
+
         final long prevFP = input.getFilePointer();
         try
         {
