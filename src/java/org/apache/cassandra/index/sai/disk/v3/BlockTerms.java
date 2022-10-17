@@ -61,6 +61,7 @@ import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
+import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
@@ -1228,6 +1229,10 @@ public class BlockTerms
 
             postingsWriter.complete();
 
+            SAICodecUtils.writeFooter(orderMapOut);
+            SAICodecUtils.writeFooter(termsOut);
+            SAICodecUtils.writeFooter(postingsOut);
+
             orderMapOut.close();
             termsOut.close();
             postingsOut.close();
@@ -1243,6 +1248,7 @@ public class BlockTerms
 
             final BinaryTree.Writer treeWriter = new BinaryTree.Writer();
             treeWriter.finish(minBlockTerms, termsIndexOut);
+            SAICodecUtils.writeFooter(termsIndexOut);
             termsIndexOut.close();
 
             final long termsIndexFP = 0;
@@ -1271,6 +1277,7 @@ public class BlockTerms
                                                                    blockPostingsHandle,
                                                                    new LongArrayImpl(blockPostingsFPs),
                                                                    upperPostingsOut);
+                    SAICodecUtils.writeFooter(upperPostingsOut);
                 }
             }
 
@@ -1320,6 +1327,7 @@ public class BlockTerms
                         numericWriter.add(fp);
                     }
                 }
+                SAICodecUtils.writeFooter(bitPackOut);
             }
 
             final FileValidation.Meta termsIndexCRC = createCRCMeta(termsIndexStartFP, IndexComponent.BLOCK_TERMS_INDEX);

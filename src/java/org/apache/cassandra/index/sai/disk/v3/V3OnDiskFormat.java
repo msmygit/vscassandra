@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.store.IndexInput;
 
@@ -64,9 +65,11 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                                                                               IndexComponent.BLOCK_TERMS_INDEX,
                                                                               IndexComponent.BLOCK_POSTINGS,
                                                                               IndexComponent.BLOCK_UPPER_POSTINGS,
-                                                                              // IndexComponent.BLOCK_UPPER_POSTINGS_OFFSETS,
                                                                               IndexComponent.TERMS_DATA,
                                                                               IndexComponent.POSTING_LISTS);
+
+    private static final Set<IndexComponent> V3_STRING_INDEX_COMPONENTS = EnumSet.of(IndexComponent.TERMS_DATA,
+                                                                                     IndexComponent.POSTING_LISTS);
 
     protected V3OnDiskFormat()
     {
@@ -159,6 +162,33 @@ public class V3OnDiskFormat extends V2OnDiskFormat
             logger.error("File validation failed", th);
             return false;
         }
+
+        // validate the string index
+        for (IndexComponent indexComponent : V3_STRING_INDEX_COMPONENTS)
+        {
+            if (!isBuildCompletionMarker(indexComponent))
+            {
+                try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext))
+                {
+                    if (checksum)
+                        SAICodecUtils.validateChecksum(input);
+                    else
+                        SAICodecUtils.validate(input);
+                }
+                catch (Throwable e)
+                {
+                    if (logger.isDebugEnabled())
+                    {
+                        logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
+                                     (checksum ? "Checksum validation" : "Validation"),
+                                     indexComponent,
+                                     indexDescriptor.descriptor);
+                    }
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 
