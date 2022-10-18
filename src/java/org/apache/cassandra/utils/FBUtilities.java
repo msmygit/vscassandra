@@ -538,7 +538,30 @@ public class FBUtilities
         }
         catch (TimeoutException e)
         {
-            throw new RuntimeException("Timeout - task did not finish in " + timeout);
+            throw new RuntimeException("Timeout - task did not finish in " + timeout, e);
+        }
+    }
+
+    public static boolean await(Future<?> future, Duration timeout)
+    {
+        Preconditions.checkArgument(!timeout.isNegative(), "Timeout must not be negative, provided %s", timeout);
+        try
+        {
+            future.get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+            return true;
+        }
+        catch (ExecutionException ee)
+        {
+            logger.info("Exception occurred in async code", ee);
+            throw Throwables.cleaned(ee);
+        }
+        catch (InterruptedException ie)
+        {
+            throw new AssertionError(ie);
+        }
+        catch (TimeoutException e)
+        {
+            return false;
         }
     }
 

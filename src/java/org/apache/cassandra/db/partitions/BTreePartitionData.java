@@ -36,11 +36,11 @@ public final class BTreePartitionData
     public static final long UNSHARED_HEAP_SIZE = ObjectSizes.measure(EMPTY);
 
 
-    final RegularAndStaticColumns columns;
-    final DeletionInfo deletionInfo;
+    public final RegularAndStaticColumns columns;
+    public final DeletionInfo deletionInfo;
     // the btree of rows
-    final Object[] tree;
-    final Row staticRow;
+    public final Object[] tree;
+    public final Row staticRow;
     public final EncodingStats stats;
 
     BTreePartitionData(RegularAndStaticColumns columns,

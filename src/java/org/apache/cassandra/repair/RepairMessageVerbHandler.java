@@ -137,17 +137,19 @@ public class RepairMessageVerbHandler implements IVerbHandler<RepairMessage>
                     }
             else if (message.verb() == VALIDATION_REQ)
             {
-                ValidationRequest validationRequest = (ValidationRequest) message.payload;
-                logger.debug("Validating {}", validationRequest);
-                // trigger read-only compaction
-                ColumnFamilyStore store = ColumnFamilyStore.getIfExists(desc.keyspace, desc.columnFamily);
-                if (store == null)
-                {
-                    logger.error("Table {}.{} was dropped during snapshot phase of repair {}",
-                                 desc.keyspace, desc.columnFamily, desc.parentSessionId);
-                    MessagingService.instance().send(Message.out(VALIDATION_RSP, new ValidationResponse(desc)), message.from());
-                    return;
-                }
+                // notify initiator that the message has been received, allowing this method to take as long as it needs to
+                    MessagingService.instance().send(message.emptyResponse(), message.from());
+                    ValidationRequest validationRequest = (ValidationRequest) message.payload;
+                    logger.debug("Validating {}", validationRequest);
+                    // trigger read-only compaction
+                    ColumnFamilyStore store = ColumnFamilyStore.getIfExists(desc.keyspace, desc.columnFamily);
+                    if (store == null)
+                    {
+                        logger.error("Table {}.{} was dropped during snapshot phase of repair {}",
+                                     desc.keyspace, desc.columnFamily, desc.parentSessionId);
+                        MessagingService.instance().send(Message.out(VALIDATION_RSP, new ValidationResponse(desc)), message.from());
+                        return;
+                    }
 
                 ActiveRepairService.instance.consistent.local.maybeSetRepairing(desc.parentSessionId);
                 Validator validator = new Validator(desc, message.from(), validationRequest.nowInSec,
@@ -157,7 +159,9 @@ public class RepairMessageVerbHandler implements IVerbHandler<RepairMessage>
             }
             else if (message.verb() == SYNC_REQ)
             {
-                // forwarded sync request
+                // notify initiator that the message has been received, allowing this method to take as long as it needs to
+                    MessagingService.instance().send(message.emptyResponse(), message.from());
+                    // forwarded sync request
                 SyncRequest request = (SyncRequest) message.payload;
                 logger.debug("Syncing {}", request);
                 StreamingRepairTask task = new StreamingRepairTask(desc,

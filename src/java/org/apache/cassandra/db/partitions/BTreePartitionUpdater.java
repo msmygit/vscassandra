@@ -21,6 +21,9 @@ package org.apache.cassandra.db.partitions;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DeletionInfo;
 import org.apache.cassandra.db.RegularAndStaticColumns;
+import org.apache.cassandra.db.rows.BTreeRow;
+import org.apache.cassandra.db.rows.Cell;
+import org.apache.cassandra.db.rows.ColumnData;
 import org.apache.cassandra.db.rows.EncodingStats;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Rows;
@@ -28,46 +31,37 @@ import org.apache.cassandra.index.transactions.UpdateTransaction;
 import org.apache.cassandra.utils.btree.BTree;
 import org.apache.cassandra.utils.btree.UpdateFunction;
 import org.apache.cassandra.utils.concurrent.OpOrder;
-import org.apache.cassandra.utils.memory.HeapAllocator;
+import org.apache.cassandra.utils.memory.Cloner;
+import org.apache.cassandra.utils.memory.HeapCloner;
 import org.apache.cassandra.utils.memory.MemtableAllocator;
 
 /**
  *  the function we provide to the trie and btree utilities to perform any row and column replacements
  */
-public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
+public class BTreePartitionUpdater implements UpdateFunction<Row, Row>, ColumnData.PostReconciliationFunction
 {
     final MemtableAllocator allocator;
     final OpOrder.Group writeOp;
     final UpdateTransaction indexer;
-    Row.Builder regularBuilder;
+    final Cloner cloner;
     public long dataSize;
     long heapSize;
     public long colUpdateTimeDelta = Long.MAX_VALUE;
 
-    public BTreePartitionUpdater(MemtableAllocator allocator, OpOrder.Group writeOp, UpdateTransaction indexer)
+    public BTreePartitionUpdater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
     {
         this.allocator = allocator;
         this.writeOp = writeOp;
         this.indexer = indexer;
+        this.cloner = cloner;
         this.heapSize = 0;
         this.dataSize = 0;
     }
 
-    private Row.Builder builder(Clustering<?> clustering)
+    @Override
+    public Row insert(Row insert)
     {
-        boolean isStatic = clustering == Clustering.STATIC_CLUSTERING;
-        // We know we only insert/update one static per PartitionUpdate, so no point in saving the builder
-        if (isStatic)
-            return allocator.rowBuilder(writeOp);
-
-        if (regularBuilder == null)
-            regularBuilder = allocator.rowBuilder(writeOp);
-        return regularBuilder;
-    }
-
-    public Row apply(Row insert)
-    {
-        Row data = Rows.copy(insert, builder(insert.clustering())).build();
+        Row data = insert.clone(cloner);
         indexer.onInserted(insert);
 
         this.dataSize += data.dataSize();
@@ -75,13 +69,10 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         return data;
     }
 
-    public Row apply(Row existing, Row update)
+    @Override
+    public Row merge(Row existing, Row update)
     {
-        Row.Builder builder = builder(existing.clustering());
-        colUpdateTimeDelta = Math.min(colUpdateTimeDelta, Rows.merge(existing, update, builder));
-
-        Row reconciled = builder.build();
-
+        Row reconciled = Rows.merge(existing, update, this);
         indexer.onUpdated(existing, reconciled);
 
         dataSize += reconciled.dataSize() - existing.dataSize();
@@ -104,7 +95,7 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         // Like for rows, we have to clone the update in case internal buffers (when it has range tombstones) reference
         // memory we shouldn't hold into. But we don't ever store this off-heap currently so we just default to the
         // HeapAllocator (rather than using 'allocator').
-        DeletionInfo newInfo = existing.mutableCopy().add(update.copy(HeapAllocator.instance));
+        DeletionInfo newInfo = existing.mutableCopy().add(update.clone(HeapCloner.instance));
         onAllocatedOnHeap(newInfo.unsharedHeapSize() - existing.unsharedHeapSize());
         return newInfo;
     }
@@ -141,8 +132,8 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         newStatic = newStatic.isEmpty()
                     ? current.staticRow
                     : (current.staticRow.isEmpty()
-                       ? this.apply(newStatic)
-                       : this.apply(current.staticRow, newStatic));
+                       ? this.insert(newStatic)
+                       : this.merge(current.staticRow, newStatic));
 
         Object[] tree = BTree.update(current.tree, update.holder().tree, update.metadata().comparator, this);
         EncodingStats newStats = current.stats.mergeWith(update.stats());
@@ -156,6 +147,37 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
         return false;
     }
 
+    public Cell<?> merge(Cell<?> previous, Cell<?> insert)
+    {
+        if (insert != previous)
+        {
+            long timeDelta = Math.abs(insert.timestamp() - previous.timestamp());
+            if (timeDelta < colUpdateTimeDelta)
+                colUpdateTimeDelta = timeDelta;
+        }
+        if (cloner != null)
+            insert = cloner.clone(insert);
+        dataSize += insert.dataSize() - previous.dataSize();
+        heapSize += insert.unsharedHeapSizeExcludingData() - previous.unsharedHeapSizeExcludingData();
+        return insert;
+    }
+
+    public ColumnData insert(ColumnData insert)
+    {
+        if (cloner != null)
+            insert = insert.clone(cloner);
+        dataSize += insert.dataSize();
+        heapSize += insert.unsharedHeapSizeExcludingData();
+        return insert;
+    }
+
+    @Override
+    public void delete(ColumnData existing)
+    {
+        dataSize -= existing.dataSize();
+        heapSize -= existing.unsharedHeapSizeExcludingData();
+    }
+
     public void onAllocatedOnHeap(long heapSize)
     {
         this.heapSize += heapSize;
@@ -165,4 +187,6 @@ public class BTreePartitionUpdater implements UpdateFunction<Row, Row>
     {
         allocator.onHeap().adjust(heapSize, writeOp);
     }
+
+
 }

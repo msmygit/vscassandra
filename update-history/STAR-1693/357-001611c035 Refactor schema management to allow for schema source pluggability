@@ -1,0 +1,1068 @@
+--- a/src/java/org/apache/cassandra/schema/MigrationCoordinator.java
++++ b/src/java/org/apache/cassandra/schema/MigrationCoordinator.java
+@@ -34,17 +34,13 @@
+ import java.util.Optional;
+ import java.util.Set;
+ import java.util.UUID;
+-<<<<<<<
+ import java.util.WeakHashMap;
+-=======
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.Executor;
+ import java.util.concurrent.ExecutorService;
+->>>>>>>
+ import java.util.concurrent.Future;
+ import java.util.concurrent.ScheduledExecutorService;
+ import java.util.concurrent.ScheduledFuture;
+-import java.util.concurrent.RejectedExecutionException;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicReference;
+ import java.util.function.BiConsumer;
+@@ -58,7 +54,6 @@
+ import org.slf4j.LoggerFactory;
+ 
+ import org.apache.cassandra.concurrent.ScheduledExecutors;
+-import org.apache.cassandra.concurrent.Stage;
+ import org.apache.cassandra.config.CassandraRelevantProperties;
+ import org.apache.cassandra.db.Mutation;
+ import org.apache.cassandra.exceptions.RequestFailureReason;
+@@ -79,49 +74,27 @@
+ 
+ import static org.apache.cassandra.config.CassandraRelevantProperties.IGNORED_SCHEMA_CHECK_ENDPOINTS;
+ import static org.apache.cassandra.config.CassandraRelevantProperties.IGNORED_SCHEMA_CHECK_VERSIONS;
+-
+-<<<<<<<
+-=======
+ import static org.apache.cassandra.net.Verb.SCHEMA_PUSH_REQ;
+ 
+->>>>>>>
+ /**
+  * Migration coordinator is responsible for tracking schema versions on various nodes and, if needed, synchronize the
+  * schema. It performs periodic checks and if there is a schema version mismatch between the current node and the other
+  * node, it pulls the schema and applies the changes locally through the callback.
+  *
+-<<<<<<<
+  * In particular the Migration Coordinator keeps track of all schema versions reported from each node in the cluster.
+  * As long as a certain version is advertised by some node, it is being tracked. As long as a version is tracked,
+  * the migration coordinator tries to fetch it by its periodic job.
+-=======
++ *
+  * It works in close cooperation with {@link DefaultSchemaUpdateHandler} which is responsible for maintaining local
+  * schema metadata stored in {@link SchemaKeyspace}.
+->>>>>>>
+  */
+ public class MigrationCoordinator
+ {
+     private static final Logger logger = LoggerFactory.getLogger(MigrationCoordinator.class);
+     private static final CompletableFuture<Void> FINISHED_FUTURE = CompletableFuture.completedFuture(null);
+ 
+-<<<<<<<
+-    private static LongSupplier getUptimeFn = () -> ManagementFactory.getRuntimeMXBean().getUptime();
+-
+-    @VisibleForTesting
+-    public static void setUptimeFn(LongSupplier supplier)
+-    {
+-        getUptimeFn = supplier;
+-    }
+-
+-
+-    private static final int MIGRATION_DELAY_IN_MS = CassandraRelevantProperties.MIGRATION_DELAY.getInt();
+-    private static final int MAX_OUTSTANDING_VERSION_REQUESTS = 3;
+-
+-    public static final MigrationCoordinator instance = new MigrationCoordinator();
+-=======
+     private static final int MIGRATION_DELAY_IN_MS = CassandraRelevantProperties.MIGRATION_DELAY.getInt();
+     public static final int MAX_OUTSTANDING_VERSION_REQUESTS = 3;
+->>>>>>>
+ 
+     /**
+      * @see CassandraRelevantProperties#SCHEMA_PULL_BACKOFF_DELAY_MS
+@@ -264,22 +237,6 @@
+                          Supplier<UUID> schemaVersionSupplier,
+                          BiConsumer<InetAddressAndPort, Collection<Mutation>> schemaUpdateCallback)
+     {
+-<<<<<<<
+-        int interval = CassandraRelevantProperties.SCHEMA_PULL_INTERVAL_MS.getInt();
+-        ScheduledExecutors.scheduledTasks.scheduleWithFixedDelay(this::pullUnreceivedSchemaVersions, interval, interval, TimeUnit.MILLISECONDS);
+-    }
+-
+-    /**
+-     * Resets the migration coordinator by notifying all waiting threads and removing all the existing version info.
+-     */
+-    public synchronized void reset()
+-    {
+-        logger.info("Resetting migration coordinator...");
+-
+-        // clear all the managed information
+-        this.endpointVersions.clear();
+-        clearVersionsInfo();
+-=======
+         this.messagingService = messagingService;
+         this.executor = executor;
+         this.periodicCheckExecutor = periodicCheckExecutor;
+@@ -292,10 +249,10 @@
+     void start()
+     {
+         announce(schemaVersion.get());
++        int interval = CassandraRelevantProperties.SCHEMA_PULL_INTERVAL_MS.getInt();
+         periodicPullTask.updateAndGet(curTask -> curTask == null
+-                                                 ? periodicCheckExecutor.scheduleWithFixedDelay(this::pullUnreceivedSchemaVersions, 1, 1, TimeUnit.MINUTES)
++                                                 ? periodicCheckExecutor.scheduleWithFixedDelay(this::pullUnreceivedSchemaVersions, interval, interval, TimeUnit.MILLISECONDS)
+                                                  : curTask);
+->>>>>>>
+     }
+ 
+     private synchronized void pullUnreceivedSchemaVersions()
+@@ -320,13 +277,9 @@
+             return FINISHED_FUTURE;
+         }
+ 
+-<<<<<<<
+-        if (info.outstandingRequests.size() >= getMaxOutstandingVersionRequests())
+-        {
+-            logger.trace("Not pulling schema {} because the number of outstanding requests has been exceeded ({} >= {})", info.version, info.outstandingRequests.size(), getMaxOutstandingVersionRequests());
+-=======
+         if (info.outstandingRequests.size() >= maxOutstandingVersionRequests)
+->>>>>>>
++        {
++            logger.trace("Not pulling schema {} because the number of outstanding requests has been exceeded ({} >= {})", info.version, info.outstandingRequests.size(), maxOutstandingVersionRequests);
+             return FINISHED_FUTURE;
+         }
+ 
+@@ -381,15 +334,7 @@
+ 
+         if (localSchemaVersion.equals(version))
+         {
+-<<<<<<<
+-            logger.debug("Not pulling schema for version {}, because schema versions match: " +
+-                         "local={}, remote={}",
+-                         version,
+-                         DistributedSchema.schemaVersionToString(localSchemaVersion),
+-                         DistributedSchema.schemaVersionToString(version));
+-=======
+             logger.debug("Not pulling schema {} because it is the same as the local schema", version);
+->>>>>>>
+             return false;
+         }
+ 
+@@ -489,12 +434,8 @@
+         }
+ 
+         VersionInfo info = versionInfo.computeIfAbsent(version, VersionInfo::new);
+-<<<<<<<
+         if (Objects.equals(schemaVersion.get(), version))
+-=======
+-        if (isLocalVersion(version))
+         {
+->>>>>>>
+             info.markReceived();
+             logger.trace("Schema {} from {} has been marked as recevied because it is equal the local schema", version, endpoint);
+         }
+@@ -545,6 +486,43 @@
+         }
+     }
+ 
++    private void reportCurrentSchemaVersionOnEndpoint(InetAddressAndPort endpoint)
++    {
++        if (FBUtilities.getBroadcastAddressAndPort().equals(endpoint))
++        {
++            reportEndpointVersion(endpoint, schemaVersion.get());
++        }
++        else
++        {
++            EndpointState state = gossiper.getEndpointStateForEndpoint(endpoint);
++            if (state != null)
++            {
++                UUID v = state.getSchemaVersion();
++                if (v != null)
++                {
++                    reportEndpointVersion(endpoint, v);
++                }
++            }
++        }
++    }
++
++    /**
++     * Resets the migration coordinator by notifying all waiting threads and removing all the existing version info.
++     * Then, it is populated with the information about schema versions on different endpoints provided by Gossiper.
++     * Each version is marked as unreceived so the migration coordinator will start pulling schemas from other nodes.
++     */
++    synchronized void reset()
++    {
++        logger.info("Resetting migration coordinator...");
++
++        // clear all the managed information
++        this.endpointVersions.clear();
++        clearVersionsInfo();
++
++        // now report again the versions we are aware of
++        gossiper.getLiveMembers().forEach(this::reportCurrentSchemaVersionOnEndpoint);
++    }
++
+     synchronized void removeAndIgnoreEndpoint(InetAddressAndPort endpoint)
+     {
+         logger.debug("Removing and ignoring endpoint {}", endpoint);
+@@ -562,9 +540,28 @@
+ 
+     private CompletableFuture<Void> scheduleSchemaPull(InetAddressAndPort endpoint, VersionInfo info)
+     {
+-        Executor submissionExecutor = shouldPullImmediately(endpoint, info.version)
+-                                      ? this::submitToMigrationIfNotShutdown
+-                                      : r -> ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(r), MIGRATION_DELAY_IN_MS, TimeUnit.MILLISECONDS);
++        Executor submissionExecutor;
++        if (shouldPullImmediately(endpoint, info.version))
++        {
++            long nextAttempt = lastPullAttemptTimestamps.getOrDefault(endpoint, 0L) + BACKOFF_DELAY_MS;
++            long now = System.currentTimeMillis();
++            if (nextAttempt <= now)
++            {
++                logger.debug("Pulling {} immediately from {}", info, endpoint);
++                submissionExecutor = this::submitToMigrationIfNotShutdown;
++            }
++            else
++            {
++                long delay = nextAttempt - now;
++                logger.debug("Previous pull of {} from {} failed. Postponing next attempt for {}ms", info, endpoint, delay);
++                submissionExecutor = r -> ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(r), delay, TimeUnit.MILLISECONDS);
++            }
++        }
++        else
++        {
++            logger.debug("Postponing pull of {} from {} for {}ms", info, endpoint, MIGRATION_DELAY_IN_MS);
++            submissionExecutor = r -> ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(r), MIGRATION_DELAY_IN_MS, TimeUnit.MILLISECONDS);
++        }
+ 
+         return CompletableFuture.runAsync(() -> pullSchema(endpoint, new Callback(endpoint, info)), submissionExecutor);
+     }
+@@ -574,7 +571,6 @@
+         CompletableFuture<Collection<Mutation>> result = new CompletableFuture<>();
+         return submitToMigrationIfNotShutdown(() -> pullSchema(endpoint, new RequestCallback<Collection<Mutation>>()
+         {
+-<<<<<<<
+             @Override
+             public void onResponse(Message<Collection<Mutation>> msg)
+             {
+@@ -622,54 +618,6 @@
+         else
+         {
+             return CompletableFuture.runAsync(task, executor);
+-=======
+-            long nextAttempt = lastPullAttemptTimestamps.getOrDefault(endpoint, 0L) + BACKOFF_DELAY_MS;
+-            long now = System.currentTimeMillis();
+-            if (nextAttempt <= now)
+-            {
+-                logger.debug("Pulling {} immediately from {}", info, endpoint);
+-                submitToMigrationIfNotShutdown(task);
+-            }
+-            else
+-            {
+-                long delay = nextAttempt - now;
+-                logger.debug("Previous pull of {} from {} failed. Postponing next attempt for {}ms", info, endpoint, delay);
+-                ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(task), delay, TimeUnit.MILLISECONDS);
+-            }
+-        }
+-        else
+-        {
+-            logger.debug("Postponing pull of {} from {} for {}ms", info, endpoint, MIGRATION_DELAY_IN_MS);
+-            ScheduledExecutors.nonPeriodicTasks.schedule(() -> submitToMigrationIfNotShutdown(task), MIGRATION_DELAY_IN_MS, TimeUnit.MILLISECONDS);
+-        }
+-
+-        return task;
+-    }
+-
+-    private static Future<?> submitToMigrationIfNotShutdown(Runnable task)
+-    {
+-        boolean skipped = false;
+-        try
+-        {
+-            if (Stage.MIGRATION.executor().isShutdown() || Stage.MIGRATION.executor().isTerminated())
+-            {
+-                skipped = true;
+-                return null;
+-            }
+-            return Stage.MIGRATION.submit(task);
+-        }
+-        catch (RejectedExecutionException ex)
+-        {
+-            skipped = true;
+-            return null;
+-        }
+-        finally
+-        {
+-            if (skipped)
+-            {
+-                logger.info("Skipped scheduled pulling schema from other nodes: the MIGRATION executor service has been shutdown.");
+-            }
+->>>>>>>
+         }
+     }
+ 
+@@ -727,13 +675,9 @@
+ 
+     private void pullSchema(InetAddressAndPort endpoint, RequestCallback<Collection<Mutation>> callback)
+     {
+-<<<<<<<
+-        if (!gossiper.isAlive(endpoint))
+-=======
+-        lastPullAttemptTimestamps.put(callback.endpoint, System.currentTimeMillis());
++        lastPullAttemptTimestamps.put(endpoint, System.currentTimeMillis());
+ 
+-        if (!isAlive(callback.endpoint))
+->>>>>>>
++        if (!gossiper.isAlive(endpoint))
+         {
+             logger.warn("Can't send schema pull request: node {} is down.", endpoint);
+             callback.onFailure(endpoint, RequestFailureReason.UNKNOWN);
+diff --git a/src/java/org/apache/cassandra/config/CassandraRelevantProperties.java b/src/java/org/apache/cassandra/config/CassandraRelevantProperties.java
+index c6b1f030b7..4dd6734afd 100644
+--- a/src/java/org/apache/cassandra/config/CassandraRelevantProperties.java
++++ b/src/java/org/apache/cassandra/config/CassandraRelevantProperties.java
+@@ -140,8 +140,6 @@ public enum CassandraRelevantProperties
+ 
+     RING_DELAY("cassandra.ring_delay_ms", "30000"),
+ 
+-    MIGRATION_DELAY("cassandra.migration_delay_ms", "60000"),
+-
+     /**
+      * When bootstraping we wait for all schema versions found in gossip to be seen, and if not seen in time we fail
+      * the bootstrap; this property will avoid failing and allow bootstrap to continue if set to true.
+diff --git a/src/java/org/apache/cassandra/net/Verb.java b/src/java/org/apache/cassandra/net/Verb.java
+index de0b495a58..5c30c4fdcb 100644
+--- a/src/java/org/apache/cassandra/net/Verb.java
++++ b/src/java/org/apache/cassandra/net/Verb.java
+@@ -111,6 +111,7 @@ import static org.apache.cassandra.net.VerbTimeouts.noTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.pingTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.rangeTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.readTimeout;
++import static org.apache.cassandra.net.VerbTimeouts.repairMsgTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.rpcTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.truncateTimeout;
+ import static org.apache.cassandra.net.VerbTimeouts.writeTimeout;
+diff --git a/src/java/org/apache/cassandra/schema/DefaultSchemaUpdateHandler.java b/src/java/org/apache/cassandra/schema/DefaultSchemaUpdateHandler.java
+index e6e14c4ee2..031f00baa9 100644
+--- a/src/java/org/apache/cassandra/schema/DefaultSchemaUpdateHandler.java
++++ b/src/java/org/apache/cassandra/schema/DefaultSchemaUpdateHandler.java
+@@ -20,9 +20,11 @@ package org.apache.cassandra.schema;
+ 
+ import java.time.Duration;
+ import java.util.Collection;
++import java.util.Collections;
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
+ import java.util.function.BiConsumer;
+ import java.util.stream.Collectors;
+ 
+@@ -60,6 +62,8 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+     private final BiConsumer<SchemaTransformationResult, Boolean> updateCallback;
+     private volatile DistributedSchema schema = DistributedSchema.EMPTY;
+ 
++    private volatile CompletableFuture<Void> requestedReset;
++
+     private MigrationCoordinator createMigrationCoordinator(MessagingService messagingService)
+     {
+         return new MigrationCoordinator(messagingService,
+@@ -67,8 +71,8 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+                                         ScheduledExecutors.scheduledTasks,
+                                         MAX_OUTSTANDING_VERSION_REQUESTS,
+                                         Gossiper.instance,
+-                                        () -> schema.getVersion(),
+-                                        (from, mutations) -> applyMutations(mutations));
++                                        this::getSchemaVersionForCoordinator,
++                                        this::applyMutationsFromCoordinator);
+     }
+ 
+     public DefaultSchemaUpdateHandler(BiConsumer<SchemaTransformationResult, Boolean> updateCallback)
+@@ -85,8 +89,23 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+         this.updateCallback = updateCallback;
+         this.migrationCoordinator = migrationCoordinator == null ? createMigrationCoordinator(messagingService) : migrationCoordinator;
+         Gossiper.instance.register(this);
+-        SchemaPushVerbHandler.instance.register(msg -> applyMutations(msg.payload));
+-        SchemaPullVerbHandler.instance.register(msg -> messagingService.send(msg.responseWith(getSchemaMutations()), msg.from()));
++        SchemaPushVerbHandler.instance.register(msg -> {
++            synchronized (this)
++            {
++                if (requestedReset == null)
++                    applyMutations(msg.payload);
++            }
++        });
++        SchemaPullVerbHandler.instance.register(msg -> {
++            try
++            {
++                messagingService.send(msg.responseWith(getSchemaMutations()), msg.from());
++            }
++            catch (RuntimeException ex)
++            {
++                logger.error("Failed to send schema mutations to " + msg.from(), ex);
++            }
++        });
+     }
+ 
+     public synchronized void start()
+@@ -197,6 +216,7 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+         DistributedSchema after = new DistributedSchema(afterKeyspaces, version);
+         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
+ 
++        logger.debug("Applying schema change due to received mutations: {}", update);
+         updateSchema(update, false);
+         return update;
+     }
+@@ -231,16 +251,23 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+ 
+     private void updateSchema(SchemaTransformationResult update, boolean local)
+     {
+-        this.schema = update.after;
+-        logger.debug("Schema updated: {}", update);
+-        updateCallback.accept(update, true);
+-        if (!local)
++        if (!update.diff.isEmpty())
+         {
+-            migrationCoordinator.announce(update.after.getVersion());
++            this.schema = update.after;
++            logger.debug("Schema updated: {}", update);
++            updateCallback.accept(update, true);
++            if (!local)
++            {
++                migrationCoordinator.announce(update.after.getVersion());
++            }
++        }
++        else
++        {
++            logger.debug("Schema update is empty - skipping");
+         }
+     }
+ 
+-    private synchronized SchemaTransformationResult reload()
++    private synchronized void reload()
+     {
+         DistributedSchema before = this.schema;
+         DistributedSchema after = new DistributedSchema(SchemaKeyspace.fetchNonSystemKeyspaces(), SchemaKeyspace.calculateSchemaDigest());
+@@ -248,27 +275,83 @@ public class DefaultSchemaUpdateHandler implements SchemaUpdateHandler, IEndpoin
+         SchemaTransformationResult update = new SchemaTransformationResult(before, after, diff);
+ 
+         updateSchema(update, false);
+-        return update;
+     }
+ 
+     @Override
+-    public SchemaTransformationResult reset(boolean local)
++    public void reset(boolean local)
+     {
+-        return local
+-               ? reload()
+-               : FBUtilities.waitOnFuture(migrationCoordinator.pullSchemaFromAnyNode().thenApply(this::applyMutations));
++        if (local)
++        {
++            reload();
++        }
++        else
++        {
++            migrationCoordinator.reset();
++            if (!migrationCoordinator.awaitSchemaRequests(CassandraRelevantProperties.MIGRATION_DELAY.getLong()))
++            {
++                logger.error("Timeout exceeded when waiting for schema from other nodes");
++            }
++        }
+     }
+ 
++    /**
++     * When clear is called the update handler will flag that the clear was requested. It means that migration
++     * coordinator will think that we have empty schema version and will apply whatever it receives from other nodes.
++     * When a first attempt to apply mutations from other node is called, it will first clear the schema and apply
++     * the mutations on a truncated table. The flag is then reset.
++     * <p>
++     * This way the clear is postponed until we really fetch any schema we can use as a replacement. Otherwise, nothing
++     * will happen. We will simply reset the flag after the timeout and throw exceptions to the caller.
++     *
++     * @return
++     */
+     @Override
+-    public synchronized void clear()
++    public CompletableFuture<Void> clear()
+     {
+-        SchemaKeyspace.truncate();
+-        this.schema = DistributedSchema.EMPTY;
++        synchronized (this)
++        {
++            if (requestedReset == null)
++            {
++                requestedReset = new CompletableFuture<Void>()
++                {
++                    @Override
++                    public boolean cancel(boolean mayInterruptIfRunning)
++                    {
++                        throw new UnsupportedOperationException();
++                    }
++                };
++                migrationCoordinator.reset();
++            }
++            return requestedReset;
++        }
++    }
++
++    private UUID getSchemaVersionForCoordinator()
++    {
++        if (requestedReset != null)
++            return SchemaConstants.emptyVersion;
++        else
++            return schema.getVersion();
++    }
++
++    private synchronized void applyMutationsFromCoordinator(InetAddressAndPort from, Collection<Mutation> mutations)
++    {
++        if (requestedReset != null && !mutations.isEmpty())
++        {
++            schema = DistributedSchema.EMPTY;
++            SchemaKeyspace.truncate();
++            requestedReset.complete(null);
++            requestedReset = null;
++        }
++        applyMutations(mutations);
+     }
+ 
+     private synchronized Collection<Mutation> getSchemaMutations()
+     {
+-        return SchemaKeyspace.convertSchemaToMutations();
++        if (requestedReset != null)
++            return Collections.emptyList();
++        else
++            return SchemaKeyspace.convertSchemaToMutations();
+     }
+ 
+     public Map<UUID, Set<InetAddressAndPort>> getOutstandingSchemaVersions()
+diff --git a/src/java/org/apache/cassandra/schema/MigrationCoordinator.java b/src/java/org/apache/cassandra/schema/MigrationCoordinator.java
+index 4d91495769..688913b616 100644
+--- a/src/java/org/apache/cassandra/schema/MigrationCoordinator.java
++++ b/src/java/org/apache/cassandra/schema/MigrationCoordinator.java
+@@ -255,18 +255,6 @@ public class MigrationCoordinator
+                                                  : curTask);
+     }
+ 
+-    /**
+-     * Resets the migration coordinator by notifying all waiting threads and removing all the existing version info.
+-     */
+-    public synchronized void reset()
+-    {
+-        logger.info("Resetting migration coordinator...");
+-
+-        // clear all the managed information
+-        this.endpointVersions.clear();
+-        clearVersionsInfo();
+-    }
+-
+     private synchronized void pullUnreceivedSchemaVersions()
+     {
+         for (VersionInfo info : versionInfo.values())
+@@ -291,7 +279,7 @@ public class MigrationCoordinator
+ 
+         if (info.outstandingRequests.size() >= maxOutstandingVersionRequests)
+         {
+-            logger.trace("Not pulling schema {} because the number of outstanding requests has been exceeded ({} >= {})", info.version, info.outstandingRequests.size(), getMaxOutstandingVersionRequests());
++            logger.trace("Not pulling schema {} because the number of outstanding requests has been exceeded ({} >= {})", info.version, info.outstandingRequests.size(), maxOutstandingVersionRequests);
+             return FINISHED_FUTURE;
+         }
+ 
+@@ -498,6 +486,43 @@ public class MigrationCoordinator
+         }
+     }
+ 
++    private void reportCurrentSchemaVersionOnEndpoint(InetAddressAndPort endpoint)
++    {
++        if (FBUtilities.getBroadcastAddressAndPort().equals(endpoint))
++        {
++            reportEndpointVersion(endpoint, schemaVersion.get());
++        }
++        else
++        {
++            EndpointState state = gossiper.getEndpointStateForEndpoint(endpoint);
++            if (state != null)
++            {
++                UUID v = state.getSchemaVersion();
++                if (v != null)
++                {
++                    reportEndpointVersion(endpoint, v);
++                }
++            }
++        }
++    }
++
++    /**
++     * Resets the migration coordinator by notifying all waiting threads and removing all the existing version info.
++     * Then, it is populated with the information about schema versions on different endpoints provided by Gossiper.
++     * Each version is marked as unreceived so the migration coordinator will start pulling schemas from other nodes.
++     */
++    synchronized void reset()
++    {
++        logger.info("Resetting migration coordinator...");
++
++        // clear all the managed information
++        this.endpointVersions.clear();
++        clearVersionsInfo();
++
++        // now report again the versions we are aware of
++        gossiper.getLiveMembers().forEach(this::reportCurrentSchemaVersionOnEndpoint);
++    }
++
+     synchronized void removeAndIgnoreEndpoint(InetAddressAndPort endpoint)
+     {
+         logger.debug("Removing and ignoring endpoint {}", endpoint);
+diff --git a/src/java/org/apache/cassandra/schema/OfflineSchemaUpdateHandler.java b/src/java/org/apache/cassandra/schema/OfflineSchemaUpdateHandler.java
+index 9d1020883b..47804c8b07 100644
+--- a/src/java/org/apache/cassandra/schema/OfflineSchemaUpdateHandler.java
++++ b/src/java/org/apache/cassandra/schema/OfflineSchemaUpdateHandler.java
+@@ -20,6 +20,7 @@ package org.apache.cassandra.schema;
+ 
+ import java.time.Duration;
+ import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
+ import java.util.function.BiConsumer;
+ 
+ import org.slf4j.Logger;
+@@ -77,17 +78,18 @@ public class OfflineSchemaUpdateHandler implements SchemaUpdateHandler
+     }
+ 
+     @Override
+-    public SchemaTransformationResult reset(boolean local)
++    public void reset(boolean local)
+     {
+         if (!local)
+             throw new UnsupportedOperationException();
+ 
+-        return apply(ignored -> SchemaKeyspace.fetchNonSystemKeyspaces(), local);
++        apply(ignored -> SchemaKeyspace.fetchNonSystemKeyspaces(), local);
+     }
+ 
+     @Override
+-    public synchronized void clear()
++    public synchronized CompletableFuture<Void> clear()
+     {
+         this.schema = DistributedSchema.EMPTY;
++        return CompletableFuture.completedFuture(null);
+     }
+ }
+diff --git a/src/java/org/apache/cassandra/schema/Schema.java b/src/java/org/apache/cassandra/schema/Schema.java
+index f0052631e0..52d570fbda 100644
+--- a/src/java/org/apache/cassandra/schema/Schema.java
++++ b/src/java/org/apache/cassandra/schema/Schema.java
+@@ -26,6 +26,10 @@ import java.util.Objects;
+ import java.util.Optional;
+ import java.util.Set;
+ import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.TimeoutException;
+ import java.util.function.Supplier;
+ 
+ import com.google.common.annotations.VisibleForTesting;
+@@ -53,6 +57,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
+ import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
+ import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+ import org.apache.cassandra.service.PendingRangeCalculatorService;
++import org.apache.cassandra.service.StorageService;
+ import org.apache.cassandra.utils.concurrent.LoadingMap;
+ 
+ import static com.google.common.collect.Iterables.size;
+@@ -626,19 +631,29 @@ public class Schema implements SchemaProvider
+     }
+ 
+     /**
+-     * Clear all locally stored schema information and reset schema to initial state.
++     * Clear all locally stored schema information and fetch schema from another node.
+      * Called by user (via JMX) who wants to get rid of schema disagreement.
+      */
+     public void resetLocalSchema()
+     {
+         logger.debug("Clearing local schema...");
+-        updateHandler.clear();
+ 
+-        logger.debug("Clearing local schema keyspace instances...");
+-        clear();
+-
+-        updateHandler.reset(false);
+-        logger.info("Local schema reset is complete.");
++        CompletableFuture<Void> clearCompletion = updateHandler.clear();
++        try
++        {
++            clearCompletion.get(StorageService.SCHEMA_DELAY_MILLIS, TimeUnit.MILLISECONDS);
++        }
++        catch (TimeoutException | ExecutionException e)
++        {
++            throw new RuntimeException("Schema reset failed - no schema received from other nodes");
++        }
++        catch (InterruptedException e)
++        {
++            Thread.currentThread().interrupt();
++            throw new RuntimeException("Failed to reset schema - the thread has been interrupted");
++        }
++        SchemaDiagnostics.schemaCleared(this);
++        logger.info("Local schema reset completed");
+     }
+ 
+     private void merge(KeyspacesDiff diff, boolean removeData)
+diff --git a/src/java/org/apache/cassandra/schema/SchemaUpdateHandler.java b/src/java/org/apache/cassandra/schema/SchemaUpdateHandler.java
+index c429f9b5d5..783afc5566 100644
+--- a/src/java/org/apache/cassandra/schema/SchemaUpdateHandler.java
++++ b/src/java/org/apache/cassandra/schema/SchemaUpdateHandler.java
+@@ -19,6 +19,7 @@
+ package org.apache.cassandra.schema;
+ 
+ import java.time.Duration;
++import java.util.concurrent.CompletableFuture;
+ 
+ import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+ 
+@@ -63,14 +64,15 @@ public interface SchemaUpdateHandler
+      * refreshed, the callbacks provided in the factory method are executed, and the updated schema version is announced.
+      *
+      * @param local whether we should reset with locally stored schema or fetch the schema from other nodes
+-     * @return transformation result
+      */
+-    SchemaTransformationResult reset(boolean local);
++    void reset(boolean local);
+ 
+     /**
+-     * Clears the locally stored schema entirely. After this operation the schema is equal to {@link DistributedSchema#EMPTY}.
+-     * The method does not execute any callback. It is indended to reinitialize the schema later using the method
+-     * {@link #reset(boolean)}.
++     * Marks the local schema to be cleared and refreshed. Since calling this method, the update handler tries to obtain
++     * a fresh schema definition from a remote source. Once the schema definition is received, the local schema is
++     * replaced (instead of being merged which usually happens when the update is received).
++     * <p/>
++     * The returned awaitable is fulfilled when the schema is received and applied.
+      */
+-    void clear();
++    CompletableFuture<Void> clear();
+ }
+diff --git a/src/java/org/apache/cassandra/utils/FBUtilities.java b/src/java/org/apache/cassandra/utils/FBUtilities.java
+index a5f5b36af3..f1953a2a3e 100644
+--- a/src/java/org/apache/cassandra/utils/FBUtilities.java
++++ b/src/java/org/apache/cassandra/utils/FBUtilities.java
+@@ -538,7 +538,30 @@ public class FBUtilities
+         }
+         catch (TimeoutException e)
+         {
+-            throw new RuntimeException("Timeout - task did not finish in " + timeout);
++            throw new RuntimeException("Timeout - task did not finish in " + timeout, e);
++        }
++    }
++
++    public static boolean await(Future<?> future, Duration timeout)
++    {
++        Preconditions.checkArgument(!timeout.isNegative(), "Timeout must not be negative, provided %s", timeout);
++        try
++        {
++            future.get(timeout.toNanos(), TimeUnit.NANOSECONDS);
++            return true;
++        }
++        catch (ExecutionException ee)
++        {
++            logger.info("Exception occurred in async code", ee);
++            throw Throwables.cleaned(ee);
++        }
++        catch (InterruptedException ie)
++        {
++            throw new AssertionError(ie);
++        }
++        catch (TimeoutException e)
++        {
++            return false;
+         }
+     }
+ 
+diff --git a/test/distributed/org/apache/cassandra/distributed/test/SchemaTest.java b/test/distributed/org/apache/cassandra/distributed/test/SchemaTest.java
+index bc5ccbe203..eb4fdf545a 100644
+--- a/test/distributed/org/apache/cassandra/distributed/test/SchemaTest.java
++++ b/test/distributed/org/apache/cassandra/distributed/test/SchemaTest.java
+@@ -18,27 +18,42 @@
+ 
+ package org.apache.cassandra.distributed.test;
+ 
++import java.time.Duration;
++import java.util.concurrent.Future;
+ import java.util.concurrent.TimeUnit;
+ 
++import com.google.common.util.concurrent.Futures;
+ import com.google.common.util.concurrent.Uninterruptibles;
+ import org.junit.Test;
+ 
+ import org.apache.cassandra.config.CassandraRelevantProperties;
++import org.apache.cassandra.db.ColumnFamilyStore;
+ import org.apache.cassandra.distributed.Cluster;
+ import org.apache.cassandra.distributed.api.ConsistencyLevel;
+ import org.apache.cassandra.distributed.api.Feature;
++import org.apache.cassandra.distributed.api.IInvokableInstance;
++import org.apache.cassandra.distributed.api.IIsolatedExecutor;
++import org.apache.cassandra.distributed.api.IIsolatedExecutor.SerializableCallable;
+ import org.apache.cassandra.gms.Gossiper;
+ import org.apache.cassandra.schema.Schema;
++import org.apache.cassandra.schema.SchemaConstants;
+ import org.apache.cassandra.service.StorageService;
+ import org.apache.cassandra.utils.FBUtilities;
++import org.assertj.core.api.Assertions;
+ import org.awaitility.Awaitility;
++import org.awaitility.core.ConditionFactory;
+ 
+ import static java.time.Duration.ofMillis;
+ import static java.time.Duration.ofSeconds;
++import static org.apache.cassandra.utils.FBUtilities.getBroadcastAddressAndPort;
++import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertTrue;
+ 
+ public class SchemaTest extends TestBaseImpl
+ {
++    public static final String TABLE_ONE = "tbl_one";
++    public static final String TABLE_TWO = "tbl_two";
++
+     @Test
+     public void readRepair() throws Throwable
+     {
+@@ -91,7 +106,7 @@ public class SchemaTest extends TestBaseImpl
+             Throwable cause = e;
+             while (cause != null)
+             {
+-                if (cause.getMessage() != null && cause.getMessage().contains("Unknown column "+name+" during deserialization"))
++                if (cause.getMessage() != null && cause.getMessage().contains("Unknown column " + name + " during deserialization"))
+                     causeIsUnknownColumn = true;
+                 cause = cause.getCause();
+             }
+@@ -99,6 +114,25 @@ public class SchemaTest extends TestBaseImpl
+         }
+     }
+ 
++    /**
++     * The purpose of this test is to verify manual schema reset functinality.
++     * <p>
++     * There is a 2-node cluster and a TABLE_ONE created. The schema version is agreed on both nodes. Then the 2nd node
++     * is shutdown. We introduce a disagreement by dropping TABLE_ONE and creating TABLE_TWO on the 1st node. Therefore,
++     * the 1st node has a newer schema version with TABLE_TWO, while the shutdown 2nd node has older schema version with
++     * TABLE_ONE.
++     * <p>
++     * At this point, if we just started the 2nd node, it would sync its schema by getting fresh mutations from the 1st
++     * node which would result in both nodes having only the definition of TABLE_TWO.
++     * <p>
++     * However, before starting the 2nd node the schema is reset on the 1st node, so the 1st node will discard its local
++     * schema whenever it manages to fetch a schema definition from some other node (the 2nd node in this case).
++     * It is expected to end up with both nodes having only the definition of TABLE_ONE.
++     * <p>
++     * In the second phase of the test we simply break the schema on the 1st node and call reset to fetch the schema
++     * definition it from the 2nd node.
++     */
++    @SuppressWarnings("Convert2MethodRef")
+     @Test
+     public void schemaReset() throws Throwable
+     {
+@@ -109,48 +143,64 @@ public class SchemaTest extends TestBaseImpl
+ 
+         try (Cluster cluster = init(Cluster.build(2).withConfig(cfg -> cfg.with(Feature.GOSSIP, Feature.NETWORK)).start()))
+         {
+-            cluster.schemaChange("CREATE TABLE " + KEYSPACE + ".tbl (pk INT PRIMARY KEY, v TEXT)");
+-
+-            assertTrue(cluster.get(1).callOnInstance(() -> Schema.instance.getTableMetadata(KEYSPACE, "tbl") != null));
+-            assertTrue(cluster.get(2).callOnInstance(() -> Schema.instance.getTableMetadata(KEYSPACE, "tbl") != null));
++            // create TABLE_ONE and make sure it is propagated
++            cluster.schemaChange(String.format("CREATE TABLE %s.%s (pk INT PRIMARY KEY, v TEXT)", KEYSPACE, TABLE_ONE));
++            assertTrue(checkTablesPropagated(cluster.get(1), true, false));
++            assertTrue(checkTablesPropagated(cluster.get(2), true, false));
+ 
++            // shutdown the 2nd node and make sure that the 1st does not see it any longer as alive
+             cluster.get(2).shutdown().get();
+-
+-            Awaitility.await()
+-                      .atMost(ofSeconds(30))
+-                      .until(() -> cluster
+-                                   .get(1)
+-                                   .callOnInstance(() -> Gossiper.instance
+-                                                         .getLiveMembers()
+-                                                         .stream()
+-                                                         .allMatch(addr -> addr.equals(FBUtilities.getBroadcastAddressAndPort()))));
+-
+-            // when schema is removed and there is no other node to fetch it from, node 1 should be left with clean schema
+-            //noinspection Convert2MethodRef
+-            cluster.get(1).runOnInstance(() -> StorageService.instance.resetLocalSchema());
+-            assertTrue(cluster.get(1).callOnInstance(() -> Schema.instance.getTableMetadata(KEYSPACE, "tbl") == null));
+-
+-            // sleep slightly longer than the schema pull interval
+-            Uninterruptibles.sleepUninterruptibly(6 * delayUnit, TimeUnit.MILLISECONDS);
+-
+-            // when the other node is started, schema should be back in sync - node 2 should send schema mutations to node 1
++            await(30).until(() -> cluster.get(1).callOnInstance(() -> {
++                return Gossiper.instance.getLiveMembers()
++                                        .stream()
++                                        .allMatch(e -> e.equals(getBroadcastAddressAndPort()));
++            }));
++
++            // now, let's make a disagreement, the shutdown node 2 has a definition of TABLE_ONE, while the running
++            // node 1 will have a definition of TABLE_TWO
++            cluster.coordinator(1).execute(String.format("DROP TABLE %s.%s", KEYSPACE, TABLE_ONE), ConsistencyLevel.ONE);
++            cluster.coordinator(1).execute(String.format("CREATE TABLE %s.%s (pk INT PRIMARY KEY, v TEXT)", KEYSPACE, TABLE_TWO), ConsistencyLevel.ONE);
++            await(30).until(() -> checkTablesPropagated(cluster.get(1), false, true));
++
++            // Schema.resetLocalSchema is guarded by some conditions which would not let us reset schema if there is no
++            // live node in the cluster, therefore we simply call SchemaUpdateHandler.clear (this is the only real thing
++            // being done by Schema.resetLocalSchema under the hood)
++            SerializableCallable<Boolean> clear = () -> FBUtilities.await(Schema.instance.updateHandler.clear(), Duration.ofMinutes(1));
++            Future<Boolean> clear1 = cluster.get(1).asyncCallsOnInstance(clear).call();
++            assertFalse(clear1.isDone());
++
++            // when the 2nd node is started, schema should be back in sync
+             cluster.get(2).startup();
+-
+-            // sleep slightly longer than the schema pull interval
+-            Uninterruptibles.sleepUninterruptibly(6 * delayUnit, TimeUnit.MILLISECONDS);
+-
+-            Awaitility.waitAtMost(ofMillis(6 * delayUnit))
+-                      .pollDelay(ofSeconds(1))
+-                      .until(() -> cluster.get(1).callOnInstance(() -> Schema.instance.getTableMetadata(KEYSPACE, "tbl") != null));
+-
+-            // when schema is removed and there is a node to fetch it from, node 1 should immediately restore the schema
+-            //noinspection Convert2MethodRef
+-            cluster.get(2).runOnInstance(() -> StorageService.instance.resetLocalSchema());
+-
+-            Awaitility.waitAtMost(ofMillis(6 * delayUnit))
+-                      .pollDelay(ofSeconds(1))
+-                      .until(() -> cluster.get(2).callOnInstance(() -> Schema.instance.getTableMetadata(KEYSPACE, "tbl") != null));
++            await(30).until(() -> clear1.isDone() && clear1.get());
++
++            // this proves that reset schema works on the 1st node - the most recent change should be discarded because
++            // it receives the schema from the 2nd node and applies it on empty schema
++            await(60).until(() -> checkTablesPropagated(cluster.get(1), true, false));
++
++            // now let's break schema locally and let it be reset
++            cluster.get(1).runOnInstance(() -> Schema.instance.getLocalKeyspaces()
++                                                              .get(SchemaConstants.SCHEMA_KEYSPACE_NAME)
++                                                              .get().tables.forEach(t -> ColumnFamilyStore.getIfExists(t.keyspace, t.name).truncateBlockingWithoutSnapshot()));
++
++            // when schema is removed and there is a node to fetch it from, the 1st node should immediately restore it
++            cluster.get(1).runOnInstance(() -> Schema.instance.resetLocalSchema());
++            // note that we should not wait for this to be true because resetLocalSchema is blocking
++            // and after successfully completing it, the schema should be already back in sync
++            assertTrue(checkTablesPropagated(cluster.get(1), true, false));
++            assertTrue(checkTablesPropagated(cluster.get(2), true, false));
+         }
+     }
+ 
++    private static ConditionFactory await(int seconds)
++    {
++        return Awaitility.await().atMost(ofSeconds(seconds)).pollDelay(ofSeconds(1));
++    }
++
++    private static boolean checkTablesPropagated(IInvokableInstance instance, boolean one, boolean two)
++    {
++        return instance.callOnInstance(() -> {
++            return (Schema.instance.getTableMetadata(KEYSPACE, TABLE_ONE) != null ^ !one)
++                   && (Schema.instance.getTableMetadata(KEYSPACE, TABLE_TWO) != null ^ !two);
++        });
++    }
+ }
+diff --git a/test/unit/org/apache/cassandra/schema/MigrationCoordinatorTest.java b/test/unit/org/apache/cassandra/schema/MigrationCoordinatorTest.java
+index 0beb1ad8fe..3ef216950f 100644
+--- a/test/unit/org/apache/cassandra/schema/MigrationCoordinatorTest.java
++++ b/test/unit/org/apache/cassandra/schema/MigrationCoordinatorTest.java
+@@ -19,7 +19,6 @@
+ package org.apache.cassandra.schema;
+ 
+ import java.net.UnknownHostException;
+-import java.time.Duration;
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Collections;
+@@ -41,9 +40,9 @@ import org.junit.Test;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
++import org.apache.cassandra.config.CassandraRelevantProperties;
+ import org.apache.cassandra.config.DatabaseDescriptor;
+ import org.apache.cassandra.db.Mutation;
+-import org.apache.cassandra.exceptions.RequestFailureReason;
+ import org.apache.cassandra.gms.ApplicationState;
+ import org.apache.cassandra.gms.EndpointState;
+ import org.apache.cassandra.gms.Gossiper;
+@@ -64,7 +63,6 @@ import org.mockito.internal.creation.MockSettingsImpl;
+ 
+ import static com.google.common.util.concurrent.Futures.getUnchecked;
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+ import static org.mockito.ArgumentMatchers.any;
+ import static org.mockito.ArgumentMatchers.anyLong;
+ import static org.mockito.Mockito.doAnswer;
+@@ -99,6 +97,7 @@ public class MigrationCoordinatorTest
+             throw new AssertionError(e);
+         }
+ 
++        CassandraRelevantProperties.SCHEMA_PULL_BACKOFF_DELAY_MS.setInt(0);
+         DatabaseDescriptor.daemonInitialization();
+ 
+         when(validEndpointState.getApplicationState(ApplicationState.RELEASE_VERSION)).thenReturn(VersionedValue.unsafeMakeVersionedValue(FBUtilities.getReleaseVersionString(), 0));
+@@ -331,7 +330,7 @@ public class MigrationCoordinatorTest
+ 
+             Pair<InetAddressAndPort, RequestCallback<Collection<Mutation>>> next = wrapper.requests.remove();
+ 
+-            // we should be contacting endpoints in a round robin fashion
++            // we should be contacting endpoints in a round-robin fashion
+             Assert.assertTrue(EPs.contains(next.left));
+             if (prev != null && prev.left.equals(next.left))
+                 Assert.fail(String.format("Not expecting prev %s to be equal to next %s", prev.left, next.left));
+@@ -399,25 +398,27 @@ public class MigrationCoordinatorTest
+     }
+ 
+     @Test
+-    public void pullSchemaFromAnyNode() throws UnknownHostException
++    public void reset() throws UnknownHostException
+     {
+         Collection<Mutation> mutations = Arrays.asList(mock(Mutation.class));
+ 
+         Wrapper wrapper = new Wrapper();
+-
+-        // no live nodes
+-        when(wrapper.gossiper.getLiveMembers()).thenReturn(Collections.emptySet());
+-        Collection<Mutation> result = FBUtilities.waitOnFuture(wrapper.coordinator.pullSchemaFromAnyNode(), Duration.ofSeconds(10));
+-        assertThat(result).isEmpty();
++        wrapper.localSchemaVersion = SchemaConstants.emptyVersion;
+ 
+         EndpointState invalidVersionState = mock(EndpointState.class);
+         when(invalidVersionState.getApplicationState(ApplicationState.RELEASE_VERSION)).thenReturn(VersionedValue.unsafeMakeVersionedValue("3.0", 0));
++        when(invalidVersionState.getSchemaVersion()).thenReturn(V1);
+ 
+         EndpointState validVersionState = mock(EndpointState.class);
+         when(validVersionState.getApplicationState(ApplicationState.RELEASE_VERSION)).thenReturn(VersionedValue.unsafeMakeVersionedValue(FBUtilities.getReleaseVersionString(), 0));
++        when(validVersionState.getSchemaVersion()).thenReturn(V2);
++
++        EndpointState localVersionState = mock(EndpointState.class);
++        when(localVersionState.getApplicationState(ApplicationState.RELEASE_VERSION)).thenReturn(VersionedValue.unsafeMakeVersionedValue(FBUtilities.getReleaseVersionString(), 0));
++        when(localVersionState.getSchemaVersion()).thenReturn(SchemaConstants.emptyVersion);
+ 
+         // some nodes
+-        InetAddressAndPort thisNode = wrapper.configureMocksForEndpoint(FBUtilities.getBroadcastAddressAndPort(), validVersionState, MessagingService.current_version, false);
++        InetAddressAndPort thisNode = wrapper.configureMocksForEndpoint(FBUtilities.getBroadcastAddressAndPort(), localVersionState, MessagingService.current_version, false);
+         InetAddressAndPort noStateNode = wrapper.configureMocksForEndpoint("10.0.0.1:8000", null, MessagingService.current_version, false);
+         InetAddressAndPort diffMajorVersionNode = wrapper.configureMocksForEndpoint("10.0.0.2:8000", invalidVersionState, MessagingService.current_version, false);
+         InetAddressAndPort unkonwnNode = wrapper.configureMocksForEndpoint("10.0.0.2:8000", validVersionState, null, false);
+@@ -437,22 +438,8 @@ public class MigrationCoordinatorTest
+             callback.onResponse(Message.remoteResponse(regularNode1, Verb.SCHEMA_PULL_RSP, mutations));
+             return null;
+         }).when(wrapper.messagingService).sendWithCallback(any(Message.class), any(InetAddressAndPort.class), any(RequestCallback.class));
+-        result = FBUtilities.waitOnFuture(wrapper.coordinator.pullSchemaFromAnyNode(), Duration.ofSeconds(10));
+-        assertThat(result).isEqualTo(mutations);
+-
+-        // failures
+-        doAnswer(a -> {
+-            Message msg = a.getArgument(0, Message.class);
+-            InetAddressAndPort endpoint = a.getArgument(1, InetAddressAndPort.class);
+-            RequestCallback callback = a.getArgument(2, RequestCallback.class);
+-
+-            assertThat(msg.verb()).isEqualTo(Verb.SCHEMA_PULL_REQ);
+-            assertThat(endpoint).isEqualTo(regularNode1);
+-            callback.onFailure(regularNode1, RequestFailureReason.UNKNOWN);
+-            return null;
+-        }).when(wrapper.messagingService).sendWithCallback(any(Message.class), any(InetAddressAndPort.class), any(RequestCallback.class));
+-        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> FBUtilities.waitOnFuture(wrapper.coordinator.pullSchemaFromAnyNode(), Duration.ofSeconds(10)))
+-                                                         .withMessageContaining("Failed to get schema from");
+-
++        wrapper.coordinator.reset();
++        assertThat(wrapper.mergedSchemasFrom).anyMatch(ep -> regularNode1.equals(ep) || regularNode2.equals(ep));
++        assertThat(wrapper.mergedSchemasFrom).hasSize(1);
+     }
+ }
+\ No newline at end of file

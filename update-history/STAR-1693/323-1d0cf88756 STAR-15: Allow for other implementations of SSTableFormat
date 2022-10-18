@@ -1,0 +1,100 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -398,35 +398,31 @@
+ 
+     private boolean seekToNextPartition()
+     {
+-<<<<<<<
+-        long nextRowPositionFromIndex = indexIterator.isExhausted()
+-                                        ? dataFile.length()
+-                                        : indexIterator.dataPosition();
+-=======
+-        while(nextPartitionPositionFromIndex < dataFile.length())
++        while (indexAvailable())
+         {
++            long nextRowPositionFromIndex = indexIterator.dataPosition();
++
+             try
+             {
+-                dataFile.seek(nextPartitionPositionFromIndex);
++                dataFile.seek(nextRowPositionFromIndex);
+                 return true;
+             }
+             catch (Throwable th)
+             {
+                 throwIfFatal(th);
+-                outputHandler.warn(String.format("Failed to seek to next partition position %d", nextPartitionPositionFromIndex), th);
++                outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+                 badPartitions++;
+             }
+->>>>>>>
+ 
+-        try
+-        {
+-            dataFile.seek(nextRowPositionFromIndex);
+-        }
+-        catch (Throwable th)
+-        {
+-            throwIfFatal(th);
+-            outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+-            badPartitions++;
++            try
++            {
++                indexIterator.advance();
++            }
++            catch (Throwable th)
++            {
++                outputHandler.warn("Failed to go to the next entry in index", th);
++                throw Throwables.cleaned(th);
++            }
+         }
+ 
+         return false;
+diff --git a/src/java/org/apache/cassandra/db/compaction/Scrubber.java b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+index 5efa51cad0..d30aad1c89 100644
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -398,19 +398,31 @@ public class Scrubber implements Closeable
+ 
+     private boolean seekToNextPartition()
+     {
+-        long nextRowPositionFromIndex = indexIterator.isExhausted()
+-                                        ? dataFile.length()
+-                                        : indexIterator.dataPosition();
+-
+-        try
+-        {
+-            dataFile.seek(nextRowPositionFromIndex);
+-        }
+-        catch (Throwable th)
++        while (indexAvailable())
+         {
+-            throwIfFatal(th);
+-            outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
+-            badPartitions++;
++            long nextRowPositionFromIndex = indexIterator.dataPosition();
++
++            try
++            {
++                dataFile.seek(nextRowPositionFromIndex);
++                return true;
++            }
++            catch (Throwable th)
++            {
++                throwIfFatal(th);
++                outputHandler.warn(String.format("Failed to seek to next row position %d", nextRowPositionFromIndex), th);
++                badPartitions++;
++            }
++
++            try
++            {
++                indexIterator.advance();
++            }
++            catch (Throwable th)
++            {
++                outputHandler.warn("Failed to go to the next entry in index", th);
++                throw Throwables.cleaned(th);
++            }
+         }
+ 
+         return false;

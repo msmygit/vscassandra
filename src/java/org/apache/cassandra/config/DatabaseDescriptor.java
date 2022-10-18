@@ -775,6 +775,9 @@ public class DatabaseDescriptor
 
             if (preparedStatementsCacheSizeInMB <= 0)
                 throw new NumberFormatException(); // to escape duplicating error message
+
+            // we need this assignment for the Settings virtual table - CASSANDRA-17734
+            conf.prepared_statements_cache_size_mb = preparedStatementsCacheSizeInMB;
         }
         catch (NumberFormatException e)
         {
@@ -791,6 +794,9 @@ public class DatabaseDescriptor
 
             if (keyCacheSizeInMB < 0)
                 throw new NumberFormatException(); // to escape duplicating error message
+
+            // we need this assignment for the Settings Virtual Table - CASSANDRA-17734
+            conf.key_cache_size_in_mb = keyCacheSizeInMB;
         }
         catch (NumberFormatException e)
         {
@@ -814,6 +820,9 @@ public class DatabaseDescriptor
                                              + conf.counter_cache_size_in_mb + "', supported values are <integer> >= 0.", false);
         }
 
+        // we need this assignment for the Settings virtual table - CASSANDRA-17735
+        conf.counter_cache_size_in_mb = counterCacheSizeInMB;
+
         // if set to empty/"auto" then use 5% of Heap size
         indexSummaryCapacityInMB = (conf.index_summary_capacity_in_mb == null)
                                    ? Math.max(1, (int) (Runtime.getRuntime().totalMemory() * 0.05 / 1024 / 1024))
@@ -822,6 +831,9 @@ public class DatabaseDescriptor
         if (indexSummaryCapacityInMB < 0)
             throw new ConfigurationException("index_summary_capacity_in_mb option was set incorrectly to '"
                                              + conf.index_summary_capacity_in_mb + "', it should be a non-negative integer.", false);
+
+        // we need this assignment for the Settings virtual table - CASSANDRA-17735
+        conf.index_summary_capacity_in_mb = indexSummaryCapacityInMB;
 
         if (conf.user_defined_function_fail_timeout < 0)
             throw new ConfigurationException("user_defined_function_fail_timeout must not be negative", false);
@@ -1780,6 +1792,16 @@ public class DatabaseDescriptor
     public static long getPingTimeout(TimeUnit unit)
     {
         return unit.convert(getBlockForPeersTimeoutInSeconds(), TimeUnit.SECONDS);
+    }
+
+    public static long getRepairRpcTimeout(TimeUnit unit)
+    {
+        return unit.convert(conf.repair_request_timeout_in_ms, MILLISECONDS);
+    }
+
+    public static void setRepairRpcTimeout(long time, TimeUnit unit)
+    {
+        conf.repair_request_timeout_in_ms = MILLISECONDS.convert(time, unit);
     }
 
     public static double getPhiConvictThreshold()
@@ -3036,6 +3058,11 @@ public class DatabaseDescriptor
         return conf.index_summary_resize_interval_in_minutes;
     }
 
+    public static void setIndexSummaryResizeIntervalInMinutes(int value)
+    {
+        conf.index_summary_resize_interval_in_minutes = value;
+    }
+
     public static boolean hasLargeAddressSpace()
     {
         // currently we just check if it's a 64bit arch, but any we only really care if the address space is large
@@ -3178,6 +3205,11 @@ public class DatabaseDescriptor
         return conf.gc_log_threshold_in_ms;
     }
 
+    public static void setGCLogThreshold(int gcLogThreshold)
+    {
+        conf.gc_log_threshold_in_ms = gcLogThreshold;
+    }
+
     public static EncryptionContext getEncryptionContext()
     {
         return encryptionContext;
@@ -3186,6 +3218,11 @@ public class DatabaseDescriptor
     public static long getGCWarnThreshold()
     {
         return conf.gc_warn_threshold_in_ms;
+    }
+
+    public static void setGCWarnThreshold(int threshold)
+    {
+        conf.gc_warn_threshold_in_ms = threshold;
     }
 
     public static boolean isCDCEnabled()

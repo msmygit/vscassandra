@@ -69,7 +69,6 @@ import org.apache.cassandra.io.sstable.CorruptSSTableException;
 import org.apache.cassandra.utils.DseLegacy;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.SyncUtil;
-import sun.nio.ch.DirectBuffer;
 
 import static com.google.common.base.Throwables.propagate;
 import static org.apache.cassandra.config.CassandraRelevantProperties.JAVA_IO_TMPDIR;

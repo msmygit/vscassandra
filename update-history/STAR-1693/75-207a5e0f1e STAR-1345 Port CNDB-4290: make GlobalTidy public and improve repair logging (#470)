@@ -1,0 +1,67 @@
+--- a/build.xml
++++ b/build.xml
+@@ -1184,11 +1184,11 @@
+     </target>
+ 
+     <!-- creates release tarballs -->
+-<<<<<<<
+-    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
+-=======
++<<<<<<< HEAD
+     <target name="artifacts" depends="_artifacts-init,gen-doc,sources-jar"
+->>>>>>>
++=======
++    <target name="artifacts" depends="_artifacts-init,eclipse-warnings,gen-doc,sources-jar,javadoc-jar"
++>>>>>>> 2c63a3b936 (STAR-1147: Improve unit-test performance (#360))
+             description="Create DSE DB release artifacts">
+       <tar compression="gzip" longfile="gnu"
+         destfile="${build.dir}/${final.name}-bin.tar.gz">
+--- a/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
++++ b/src/java/org/apache/cassandra/db/partitions/PartitionUpdate.java
+@@ -22,11 +22,11 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+-<<<<<<<
++<<<<<<< HEAD
+ import com.google.common.annotations.VisibleForTesting;
+ =======
+ import com.google.common.base.Preconditions;
+->>>>>>>
++>>>>>>> 6e77c155f2 (STAR-985: allow substituting StorageProxy::mutateAtomically implementation (#316))
+ import com.google.common.collect.Iterables;
+ import com.google.common.collect.Lists;
+ import net.openhft.chronicle.core.util.ThrowingFunction;
+--- a/src/java/org/apache/cassandra/repair/LocalSyncTask.java
++++ b/src/java/org/apache/cassandra/repair/LocalSyncTask.java
+@@ -117,15 +117,10 @@
+             logger.info("{} {}", previewKind.logPrefix(desc.sessionId), message);
+             Tracing.traceRepair(message);
+ 
+-<<<<<<<
+             StreamPlan plan = createStreamPlan();
++            logger.info("{} {} {}", previewKind.logPrefix(desc.sessionId), "Starting streaming plan with id", plan.getPlanId());
+             plan.execute();
+             planFuture.complete(plan);
+-=======
+-            streamPlan = createStreamPlan();
+-            logger.info("{} {} {}", previewKind.logPrefix(desc.sessionId), "Starting streaming plan with id", streamPlan.getPlanId());
+-            streamPlan.execute();
+->>>>>>>
+         }
+     }
+ 
+@@ -181,13 +176,6 @@
+     {
+         if (active.compareAndSet(true, false))
+         {
+-<<<<<<<
+-=======
+-            active = false;
+-            String message = String.format("Sync failed using session %s between %s and %s on %s: %s", 
+-                                           desc.sessionId, nodePair().coordinator, nodePair().peer, desc.columnFamily, t.getMessage());
+-            logger.warn("[repair #{}] {}", desc.sessionId, message);
+->>>>>>>
+             setException(t);
+             finished();
+         }

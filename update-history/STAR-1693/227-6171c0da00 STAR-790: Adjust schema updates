@@ -1,0 +1,82 @@
+--- a/src/java/org/apache/cassandra/schema/Schema.java
++++ b/src/java/org/apache/cassandra/schema/Schema.java
+@@ -726,11 +726,7 @@
+         // we send mutations to the correct set of bootstrapping nodes. Refer CASSANDRA-15433.
+         if (keyspace.params.replication.klass != LocalStrategy.class && instance != null)
+         {
+-<<<<<<<
+-            PendingRangeCalculatorService.calculatePendingRanges(Keyspace.open(keyspace.name, this, false).getReplicationStrategy(), keyspace.name);
+-=======
+             PendingRangeCalculatorService.calculatePendingRanges(instance.getReplicationStrategy(), keyspace.name);
+->>>>>>>
+         }
+     }
+ 
+--- a/test/unit/org/apache/cassandra/schema/SchemaTest.java
++++ b/test/unit/org/apache/cassandra/schema/SchemaTest.java
+@@ -30,11 +30,7 @@
+ import org.apache.cassandra.config.DatabaseDescriptor;
+ import org.apache.cassandra.db.Keyspace;
+ import org.apache.cassandra.db.Mutation;
+-<<<<<<<
+-=======
+ import org.apache.cassandra.db.SystemKeyspace;
+-import org.apache.cassandra.db.commitlog.CommitLog;
+->>>>>>>
+ import org.apache.cassandra.gms.Gossiper;
+ import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
+ import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
+@@ -89,7 +85,26 @@
+     }
+ 
+     @Test
+-<<<<<<<
++    public void testSchemaManagerMocking()
++    {
++        Keyspace.unsetInitialized();
++
++        SchemaUpdateHandler updateHandler = mock(SchemaUpdateHandler.class);
++        Schema schemaManager = new Schema(false, Keyspaces.of(SchemaKeyspace.metadata(), SystemKeyspace.metadata()), updateHandler);
++        assertThat(schemaManager.getKeyspaceMetadata("ks")).isNull();
++
++        KeyspaceMetadata newKs = KeyspaceMetadata.create("ks", KeyspaceParams.simple(1));
++        DistributedSchema before = new DistributedSchema(schemaManager.distributedKeyspaces(), schemaManager.getVersion());
++        DistributedSchema after = new DistributedSchema(schemaManager.distributedKeyspaces().withAddedOrUpdated(newKs), UUID.randomUUID());
++        KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), after.getKeyspaces());
++        SchemaTransformationResult transformation = new SchemaTransformationResult(before, after, diff);
++        schemaManager.mergeAndUpdateVersion(transformation, true);
++
++        assertThat(schemaManager.getKeyspaceMetadata("ks")).isEqualTo(newKs);
++        assertThat(schemaManager.getKeyspaceInstance("ks")).isNull(); // means that we didn't open the keyspace, which is expected since Keyspace is uninitialized
++    }
++
++    @Test
+     public void testKeyspaceCreationWhenNotInitialized() {
+         Keyspace.unsetInitialized();
+         try
+@@ -114,25 +129,6 @@
+         SchemaTestUtil.dropKeyspaceIfExist("test", true);
+         assertNull(Schema.instance.getKeyspaceMetadata("test"));
+         assertNull(Schema.instance.getKeyspaceInstance("test"));
+-=======
+-    public void testSchemaManagerMocking()
+-    {
+-        Keyspace.unsetInitialized();
+-
+-        SchemaUpdateHandler updateHandler = mock(SchemaUpdateHandler.class);
+-        Schema schemaManager = new Schema(false, Keyspaces.of(SchemaKeyspace.metadata(), SystemKeyspace.metadata()), updateHandler);
+-        assertThat(schemaManager.getKeyspaceMetadata("ks")).isNull();
+-
+-        KeyspaceMetadata newKs = KeyspaceMetadata.create("ks", KeyspaceParams.simple(1));
+-        DistributedSchema before = new DistributedSchema(schemaManager.distributedKeyspaces(), schemaManager.getVersion());
+-        DistributedSchema after = new DistributedSchema(schemaManager.distributedKeyspaces().withAddedOrUpdated(newKs), UUID.randomUUID());
+-        KeyspacesDiff diff = Keyspaces.diff(before.getKeyspaces(), after.getKeyspaces());
+-        SchemaTransformationResult transformation = new SchemaTransformationResult(before, after, diff);
+-        schemaManager.mergeAndUpdateVersion(transformation, true);
+-
+-        assertThat(schemaManager.getKeyspaceMetadata("ks")).isEqualTo(newKs);
+-        assertThat(schemaManager.getKeyspaceInstance("ks")).isNull(); // means that we didn't open the keyspace, which is expected since Keyspace is uninitialized
+->>>>>>>
+     }
+ 
+     private void saveKeyspaces()

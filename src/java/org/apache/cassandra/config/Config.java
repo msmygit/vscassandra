@@ -140,6 +140,8 @@ public class Config
     public volatile Integer repair_session_max_tree_depth = null;
     public volatile Integer repair_session_space_in_mb = null;
 
+    public volatile long repair_request_timeout_in_ms = TimeUnit.MILLISECONDS.convert(1, TimeUnit.MINUTES);
+
     public volatile boolean use_offheap_merkle_trees = true;
 
     public int storage_port = 7000;
@@ -240,7 +242,7 @@ public class Config
     @Deprecated
     public Integer unlogged_batch_across_partitions_warn_threshold = 0;
     public volatile Integer concurrent_compactors;
-    public volatile int compaction_throughput_mb_per_sec = 16;
+    public volatile int compaction_throughput_mb_per_sec = 64;
     /**
      * @deprecated Migrated to 'guardrails.compaction_large_partition_warning_threshold_mb'
      */
@@ -395,8 +397,8 @@ public class Config
     public volatile Long index_summary_capacity_in_mb;
     public volatile int index_summary_resize_interval_in_minutes = 60;
 
-    public int gc_log_threshold_in_ms = 200;
-    public int gc_warn_threshold_in_ms = 1000;
+    public volatile int gc_log_threshold_in_ms = 200;
+    public volatile int gc_warn_threshold_in_ms = 1000;
 
     // TTL for different types of trace events.
     public int tracetype_query_ttl = (int) TimeUnit.DAYS.toSeconds(1);
@@ -562,7 +564,7 @@ public class Config
     public volatile int validation_preview_purge_head_start_in_sec = 60 * 60;
 
     public boolean emulate_dbaas_defaults = false;
-    
+
     public GuardrailsConfig guardrails = new GuardrailsConfig();
 
     /**

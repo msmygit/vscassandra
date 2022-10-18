@@ -26,6 +26,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -57,6 +62,7 @@ import org.apache.cassandra.schema.KeyspaceMetadata.KeyspaceDiff;
 import org.apache.cassandra.schema.Keyspaces.KeyspacesDiff;
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 import org.apache.cassandra.service.PendingRangeCalculatorService;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.concurrent.LoadingMap;
 
 import static com.google.common.collect.Iterables.size;
@@ -239,15 +245,15 @@ public class Schema implements SchemaProvider
         return keyspaceInstances.blockingLoadIfAbsent(keyspaceName, loadFunction);
     }
 
-    public Keyspace maybeRemoveKeyspaceInstance(String keyspaceName, boolean dropData)
+    public Keyspace maybeRemoveKeyspaceInstance(String keyspaceName, Consumer<Keyspace> unloadFunction)
     {
         try
         {
-            return keyspaceInstances.blockingUnloadIfPresent(keyspaceName, keyspace -> keyspace.unload(dropData));
+            return keyspaceInstances.blockingUnloadIfPresent(keyspaceName, unloadFunction);
         }
         catch (LoadingMap.UnloadExecutionException e)
         {
-            throw new AssertionError("Failed to unload the keyspace " + keyspaceName);
+            throw new AssertionError("Failed to unload the keyspace " + keyspaceName, e);
         }
     }
 
@@ -645,19 +651,29 @@ public class Schema implements SchemaProvider
     }
 
     /**
-     * Clear all locally stored schema information and reset schema to initial state.
+     * Clear all locally stored schema information and fetch schema from another node.
      * Called by user (via JMX) who wants to get rid of schema disagreement.
      */
     public void resetLocalSchema()
     {
         logger.debug("Clearing local schema...");
-        updateHandler.clear();
 
-        logger.debug("Clearing local schema keyspace instances...");
-        clear();
-
-        updateHandler.reset(false);
-        logger.info("Local schema reset is complete.");
+        CompletableFuture<Void> clearCompletion = updateHandler.clear();
+        try
+        {
+            clearCompletion.get(StorageService.SCHEMA_DELAY_MILLIS, TimeUnit.MILLISECONDS);
+        }
+        catch (TimeoutException | ExecutionException e)
+        {
+            throw new RuntimeException("Schema reset failed - no schema received from other nodes");
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to reset schema - the thread has been interrupted");
+        }
+        SchemaDiagnostics.schemaCleared(this);
+        logger.info("Local schema reset completed");
     }
 
     private void merge(KeyspacesDiff diff, boolean removeData)
@@ -725,35 +741,37 @@ public class Schema implements SchemaProvider
         }
     }
 
-    private void dropKeyspace(KeyspaceMetadata keyspace, boolean dropData)
+    private void dropKeyspace(KeyspaceMetadata keyspaceMetadata, boolean dropData)
     {
-        SchemaDiagnostics.keyspaceDropping(this, keyspace);
+        SchemaDiagnostics.keyspaceDropping(this, keyspaceMetadata);
 
         boolean initialized = Keyspace.isInitialized();
-        Keyspace ks = initialized ? getKeyspaceInstance(keyspace.name) : null;
+        Keyspace keyspace = initialized ? Keyspace.open(keyspaceMetadata.name, this, false) : null;
         if (initialized)
         {
-            if (ks == null)
+            if (keyspace == null)
                 return;
 
-            logger.debug("Dropping keyspace {}", keyspace.name);
-            keyspace.views.forEach(v -> dropView(ks, v, dropData));
-            keyspace.tables.forEach(t -> dropTable(ks, t, dropData));
+            logger.debug("Dropping keyspace {}", keyspaceMetadata.name);
+            keyspaceMetadata.views.forEach(v -> dropView(keyspace, v, dropData));
+            keyspaceMetadata.tables.forEach(t -> dropTable(keyspace, t, dropData));
 
             // remove the keyspace from the static instances
-            maybeRemoveKeyspaceInstance(keyspace.name, dropData);
-        }
-
-        unload(keyspace);
-
-        if (initialized)
-        {
-            logger.debug("Awaiting on write barrier before dropping keyspace {}", keyspace.name);
+            Keyspace unloadedKeyspace = maybeRemoveKeyspaceInstance(keyspaceMetadata.name, ks -> {
+                ks.unload(dropData);
+                unload(keyspaceMetadata);
+            });
+            assert unloadedKeyspace == keyspace;
+            logger.debug("Awaiting on write barrier before dropping keyspace {}", keyspaceMetadata.name);
             Keyspace.writeOrder.awaitNewBarrier();
         }
+        else
+        {
+            unload(keyspaceMetadata);
+        }
 
-        schemaChangeNotifier.notifyKeyspaceDropped(keyspace, dropData);
-        SchemaDiagnostics.keyspaceDropped(this, keyspace);
+        schemaChangeNotifier.notifyKeyspaceDropped(keyspaceMetadata, dropData);
+        SchemaDiagnostics.keyspaceDropped(this, keyspaceMetadata);
     }
 
     private void dropView(Keyspace keyspace, ViewMetadata metadata, boolean dropData)

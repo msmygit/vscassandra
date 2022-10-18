@@ -57,7 +57,7 @@ import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.utils.Pair;
-import org.apache.cassandra.utils.memory.HeapAllocator;
+import org.apache.cassandra.utils.memory.HeapCloner;
 
 import static org.apache.cassandra.io.util.File.WriteMode.APPEND;
 import static org.apache.cassandra.service.ActiveRepairService.NO_PENDING_REPAIR;
@@ -174,7 +174,7 @@ public abstract class SSTable
     public static DecoratedKey getMinimalKey(DecoratedKey key)
     {
         return key.getKey().position() > 0 || key.getKey().hasRemaining() || !key.getKey().hasArray()
-                                       ? new BufferDecoratedKey(key.getToken(), HeapAllocator.instance.clone(key.getKey()))
+                                       ? new BufferDecoratedKey(key.getToken(), HeapCloner.instance.clone(key.getKey()))
                                        : key;
     }
 

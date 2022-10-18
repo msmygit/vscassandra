@@ -1,0 +1,14 @@
+--- a/test/unit/org/apache/cassandra/db/ScrubTest.java
++++ b/test/unit/org/apache/cassandra/db/ScrubTest.java
+@@ -90,11 +90,7 @@
+ import org.apache.cassandra.schema.KeyspaceParams;
+ import org.apache.cassandra.schema.TableMetadataRef;
+ import org.apache.cassandra.utils.ByteBufferUtil;
+-<<<<<<<
+-=======
+ import org.apache.cassandra.utils.Throwables;
+-import org.assertj.core.api.Assertions;
+->>>>>>>
+ 
+ import static org.apache.cassandra.SchemaLoader.counterCFMD;
+ import static org.apache.cassandra.SchemaLoader.createKeyspace;

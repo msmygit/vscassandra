@@ -153,10 +153,10 @@ public class SlabAllocator extends MemtableBufferAllocator
         }
     }
 
-    @VisibleForTesting
-    public AbstractAllocator allocator(OpOrder.Group writeOp)
+    @Override
+    public Cloner cloner(OpOrder.Group opGroup)
     {
-        return new ContextAllocator(writeOp, this);
+        return allocator(opGroup);
     }
 
     /**

@@ -1,0 +1,34 @@
+--- a/src/java/org/apache/cassandra/schema/Schema.java
++++ b/src/java/org/apache/cassandra/schema/Schema.java
+@@ -752,7 +752,7 @@
+             if (keyspace == null)
+                 return;
+ 
+-<<<<<<<
++            logger.debug("Dropping keyspace {}", keyspaceMetadata.name);
+             keyspaceMetadata.views.forEach(v -> dropView(keyspace, v, dropData));
+             keyspaceMetadata.tables.forEach(t -> dropTable(keyspace, t, dropData));
+ 
+@@ -762,21 +762,7 @@
+                 unload(keyspaceMetadata);
+             });
+             assert unloadedKeyspace == keyspace;
+-=======
+-            logger.debug("Dropping keyspace {}", keyspace.name);
+-            keyspace.views.forEach(v -> dropView(ks, v, dropData));
+-            keyspace.tables.forEach(t -> dropTable(ks, t, dropData));
+-
+-            // remove the keyspace from the static instances
+-            maybeRemoveKeyspaceInstance(keyspace.name, dropData);
+-        }
+-
+-        unload(keyspace);
+-
+-        if (initialized)
+-        {
+-            logger.debug("Awaiting on write barrier before dropping keyspace {}", keyspace.name);
+->>>>>>>
++            logger.debug("Awaiting on write barrier before dropping keyspace {}", keyspaceMetadata.name);
+             Keyspace.writeOrder.awaitNewBarrier();
+         }
+         else

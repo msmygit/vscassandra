@@ -143,8 +143,6 @@ public enum CassandraRelevantProperties
 
     RING_DELAY("cassandra.ring_delay_ms", "30000"),
 
-    MIGRATION_DELAY("cassandra.migration_delay_ms", "60000"),
-
     /**
      * When bootstraping we wait for all schema versions found in gossip to be seen, and if not seen in time we fail
      * the bootstrap; this property will avoid failing and allow bootstrap to continue if set to true.
@@ -239,6 +237,16 @@ public enum CassandraRelevantProperties
 
     /** what class to use for mbean registeration */
     MBEAN_REGISTRATION_CLASS("org.apache.cassandra.mbean_registration_class"),
+
+    MIGRATION_DELAY("cassandra.migration_delay_ms", "60000"),
+    /** Defines how often schema definitions are pulled from the other nodes */
+    SCHEMA_PULL_INTERVAL_MS("cassandra.schema_pull_interval_ms", "60000"),
+    /**
+     * Minimum delay after a failed pull request before it is reattempted. It prevents reattempting failed requests
+     * immediately as it is high chance they will fail anyway. It is better to wait a bit instead of flooding logs
+     * and wasting resources.
+     */
+    SCHEMA_PULL_BACKOFF_DELAY_MS("cassandra.schema_pull_backoff_delay_ms", "3000"),
 
     /** Which class to use for token metadata provider */
     CUSTOM_TMD_PROVIDER_PROPERTY("cassandra.custom_token_metadata_provider_class"),

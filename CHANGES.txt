@@ -6,11 +6,55 @@ Future version (tbd)
  * Add information whether sstables are dropped to SchemaChangeListener (CASSANDRA-17582)
  * Save sstable id as string in activity table (CASSANDRA-17585)
  * Add support for UUID based sstable generation identifiers (CASSANDRA-17048)
+ * Fix a race condition where a keyspace can be oopened while it is being removed (CASSANDRA-17658)
+
+4.0.7
+ * Fix StorageService.getNativeaddress handling of IPv6 addresses (CASSANDRA-17945)
+ * Mitigate direct buffer memory OOM on replacements (CASSANDRA-17895)
+ * Fix repair failure on assertion if two peers have overlapping mismatching ranges (CASSANDRA-17900)
+ * Better handle null state in Gossip schema migration to avoid NPE (CASSANDRA-17864)
+ * HintedHandoffAddRemoveNodesTest now accounts for the fact that StorageMetrics.totalHints is not updated synchronously w/ writes (CASSANDRA-16679)
+ * Avoid getting hanging repairs due to repair message timeouts (CASSANDRA-17613)
+ * Prevent infinite loop in repair coordinator on FailSession (CASSANDRA-17834)
+Merged from 3.11:
+ * Make LongBufferPoolTest insensitive to timing (CASSANDRA-16681)
+ * Suppress CVE-2022-25857 and other snakeyaml CVEs (CASSANDRA-17907)
+ * Fix potential IndexOutOfBoundsException in PagingState in mixed mode clusters (CASSANDRA-17840)
+Merged from 3.0:
+ * Fix auto-completing "WITH" when creating a materialized view (CASSANDRA-17879)
+ * Fix scrubber falling into infinite loop when the last partition is broken (CASSANDRA-17862)
+ * Fix resetting schema (CASSANDRA-17819)
+
+4.0.6
+ * Fix race condition on updating cdc size and advancing to next segment (CASSANDRA-17792)
+ * Add 'noboolean' rpm build for older distros like CentOS7 (CASSANDRA-17765)
+ * Fix default value for compaction_throughput_mb_per_sec in Config class to match  the one in cassandra.yaml (CASSANDRA-17790)
+ * Fix Setting Virtual Table - update after startup config properties gc_log_threshold_in_ms, gc_warn_threshold_in_ms,
+   conf.index_summary_capacity_in_mb, prepared_statements_cache_size_mb, key_cache_size_in_mb, counter_cache_size_in_mb
+   (CASSANDRA-17737)
+ * Fix Settings Virtual Table - index_summary_resize_interval and index_summary_capacity were not updated after startup (CASSANDRA-17735)
+ * Clean up ScheduledExecutors, CommitLog, and MessagingService shutdown for in-JVM dtests (CASSANDRA-17731)
+ * Remove extra write to system table for prepared statements (CASSANDRA-17764)
+Merged from 3.11:
+ * Document usage of closed token intervals in manual compaction (CASSANDRA-17575)
+Merged from 3.0:
+ * Improve libjemalloc resolution in bin/cassandra (CASSANDRA-15767)
+ * Fix restarting of services on gossipping-only member (CASSANDRA-17752)
 
 4.0.5
+ * Utilise BTree improvements to reduce garbage and improve throughput (CASSANDRA-15511)
+ * Make sure existing delayed tasks in StreamTransferTask cannot prevent clean shutdown (CASSANDRA-17706)
+ * SSL storage port in sstableloader is deprecated (CASSANDRA-17602)
+ * Fix counter write timeouts at ONE (CASSANDRA-17411)
+ * Fix NPE in getLocalPrimaryRangeForEndpoint (CASSANDRA-17680)
+ * Remove SSL storage port from sstableloader (CASSANDRA-17602)
+ * Allow Java 11 to satisfy RPM/Debian packaging (CASSANDRA-17669)
+ * Ensure FileStreamTask cannot compromise shared channel proxy for system table when interrupted (CASSANDRA-17663)
  * silence benign SslClosedEngineException (CASSANDRA-17565)
 Merged from 3.11:
+ * Creating of a keyspace on insufficient number of replicas should filter out gosspping-only members (CASSANDRA-17759)
 Merged from 3.0:
+ * Fix writetime and ttl functions forbidden for collections instead of multicell columns (CASSANDRA-17628)
  * Fix issue where frozen maps may not be serialized in the correct order (CASSANDRA-17623)
  * Suppress CVE-2022-24823 (CASSANDRA-17633)
  * fsync TOC and digest files (CASSANDRA-10709)
@@ -34,7 +78,7 @@ Merged from 3.0:
  * Fix snapshot true size calculation (CASSANDRA-17267)
  * dropping of a materialized view creates a snapshot with dropped- prefix (CASSANDRA-17415)
  * Validate existence of DCs when repairing (CASSANDRA-17407)
-Merged from 3.11.13:
+Merged from 3.11:
  * Upgrade jackson-databind to 2.13.2.2 (CASSANDRA-17556)
  * Upgrade slf4j to 1.7.25 (CASSANDRA-17474)
  * Upgrade jackson to 2.13.2 (CASSANDRA-17492)

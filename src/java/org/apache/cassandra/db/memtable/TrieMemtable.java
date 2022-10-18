@@ -70,6 +70,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.MBeanWrapper;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
+import org.apache.cassandra.utils.memory.Cloner;
 import org.apache.cassandra.utils.memory.EnsureOnHeap;
 import org.apache.cassandra.utils.memory.MemtableAllocator;
 import org.github.jamm.Unmetered;
@@ -465,7 +466,8 @@ public class TrieMemtable extends AbstractAllocatorMemtable
 
         public long put(DecoratedKey key, PartitionUpdate update, UpdateTransaction indexer, OpOrder.Group opGroup)
         {
-            BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, opGroup, indexer);
+            Cloner cloner = allocator.cloner(opGroup);
+            BTreePartitionUpdater updater = new BTreePartitionUpdater(allocator, cloner, opGroup, indexer);
             boolean locked = writeLock.tryLock();
             if (locked)
             {

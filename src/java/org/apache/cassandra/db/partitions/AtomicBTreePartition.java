@@ -32,7 +32,10 @@ import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.cassandra.utils.concurrent.OpOrder;
+import org.apache.cassandra.utils.memory.Cloner;
 import org.apache.cassandra.utils.memory.MemtableAllocator;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * A thread-safe and atomic Partition implementation.
@@ -109,18 +112,21 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
      * @return an array containing first the difference in size seen after merging the updates, and second the minimum
      * time detla between updates.
      */
-    public BTreePartitionUpdater addAll(final PartitionUpdate update, OpOrder.Group writeOp, UpdateTransaction indexer)
+    public BTreePartitionUpdater addAll(final PartitionUpdate update,
+                                      Cloner cloner,
+                                      OpOrder.Group writeOp,
+                                      UpdateTransaction indexer)
     {
-        return new Updater(allocator, writeOp, indexer).addAll(update);
+        return new Updater(allocator, cloner, writeOp, indexer).addAll(update);
     }
 
     class Updater extends BTreePartitionUpdater
     {
         BTreePartitionData current;
 
-        public Updater(MemtableAllocator allocator, OpOrder.Group writeOp, UpdateTransaction indexer)
+        public Updater(MemtableAllocator allocator, Cloner cloner, OpOrder.Group writeOp, UpdateTransaction indexer)
         {
-            super(allocator, writeOp, indexer);
+            super(allocator, cloner, writeOp, indexer);
         }
 
         Updater addAll(final PartitionUpdate update)
@@ -303,5 +309,17 @@ public final class AtomicBTreePartition extends AbstractBTreePartition
         if (wasteTracker == TRACKER_NEVER_WASTED || wasteTracker == TRACKER_PESSIMISTIC_LOCKING)
             return wasteTracker + 1;
         return wasteTracker;
+    }
+
+    @VisibleForTesting
+    public void unsafeSetHolder(BTreePartitionData holder)
+    {
+        ref = holder;
+    }
+
+    @VisibleForTesting
+    public BTreePartitionData unsafeGetHolder()
+    {
+        return ref;
     }
 }

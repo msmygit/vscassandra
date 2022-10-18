@@ -682,10 +682,13 @@ public class StreamSession implements IEndpointStateChangeSubscriber
         }
 
         logError(e);
-        // send session failure message
+
         if (messageSender.connected())
+        {
+            state(State.FAILED); // make sure subsequent error handling sees the session in a final state
             messageSender.sendMessage(new SessionFailedMessage());
-        // fail session
+        }
+
         return closeSession(State.FAILED);
     }
 
@@ -1069,6 +1072,12 @@ public class StreamSession implements IEndpointStateChangeSubscriber
 
     public synchronized void abort()
     {
+        if (state.isFinalState())
+        {
+            logger.debug("[Stream #{}] Stream session with peer {} is already in a final state on abort.", planId(), peer);
+            return;
+        }
+
         logger.info("[Stream #{}] Aborting stream session with peer {}...", planId(), peer);
 
         if (getMessageSender().connected())

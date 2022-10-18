@@ -488,12 +488,14 @@ public abstract class CQLTester
 
     public static List<String> buildNodetoolArgs(List<String> args)
     {
+        int port = jmxPort == 0 ? Integer.getInteger("cassandra.jmx.local.port", 7199) : jmxPort;
+        String host = jmxHost == null ? "127.0.0.1" : jmxHost;
         List<String> allArgs = new ArrayList<>();
         allArgs.add("bin/nodetool");
         allArgs.add("-p");
-        allArgs.add(Integer.toString(jmxPort));
+        allArgs.add(String.valueOf(port));
         allArgs.add("-h");
-        allArgs.add(jmxHost == null ? "127.0.0.1" : jmxHost);
+        allArgs.add(host);
         allArgs.addAll(args);
         return allArgs;
     }
@@ -799,8 +801,13 @@ public abstract class CQLTester
 
     protected String createType(String query)
     {
+        return createType(KEYSPACE, query);
+    }
+
+    protected String createType(String keyspace, String query)
+    {
         String typeName = createTypeName();
-        String fullQuery = String.format(query, KEYSPACE + "." + typeName);
+        String fullQuery = String.format(query, keyspace + "." + typeName);
         logger.info(fullQuery);
         schemaChange(fullQuery);
         return typeName;
@@ -962,7 +969,12 @@ public abstract class CQLTester
 
     protected String createIndex(String query)
     {
-        String formattedQuery = formatQuery(query);
+        return createIndex(KEYSPACE, query);
+    }
+
+    protected String createIndex(String keyspace, String query)
+    {
+        String formattedQuery = formatQuery(keyspace, query);
         return createFormattedIndex(formattedQuery);
     }
 
@@ -1178,6 +1190,11 @@ public abstract class CQLTester
     protected com.datastax.driver.core.ResultSet executeNetWithPaging(ProtocolVersion version, String query, int pageSize) throws Throwable
     {
         return sessionNet(version).execute(new SimpleStatement(formatQuery(query)).setFetchSize(pageSize));
+    }
+
+    protected com.datastax.driver.core.ResultSet executeNetWithPaging(ProtocolVersion version, String query, String KS, int pageSize)
+    {
+        return sessionNet(version).execute(new SimpleStatement(formatQuery(KS, query)).setKeyspace(KS).setFetchSize(pageSize));
     }
 
     protected com.datastax.driver.core.ResultSet executeNetWithPaging(String query, int pageSize) throws Throwable

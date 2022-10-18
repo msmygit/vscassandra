@@ -90,12 +90,8 @@ import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadataRef;
-import org.apache.cassandra.tools.StandaloneScrubber;
-import org.apache.cassandra.tools.ToolRunner;
-import org.apache.cassandra.tools.ToolRunner.ToolResult;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Throwables;
-import org.assertj.core.api.Assertions;
 
 import static org.apache.cassandra.SchemaLoader.counterCFMD;
 import static org.apache.cassandra.SchemaLoader.createKeyspace;
@@ -179,6 +175,28 @@ public class ScrubTest
 
         // check data is still there
         assertOrderedAll(cfs, 1);
+    }
+
+    @Test
+    public void testScrubLastBrokenPartition() throws ExecutionException, InterruptedException, IOException
+    {
+        CompactionManager.instance.disableAutoCompaction();
+        ColumnFamilyStore cfs = ColumnFamilyStore.getIfExists(ksName, CF);
+
+        // insert data and verify we get it back w/ range query
+        fillCF(cfs, 1);
+        assertOrderedAll(cfs, 1);
+
+        Set<SSTableReader> liveSSTables = cfs.getLiveSSTables();
+        assertThat(liveSSTables).hasSize(1);
+        String fileName = liveSSTables.iterator().next().getFilename();
+        Files.write(Paths.get(fileName), new byte[10], StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        ChunkCache.instance.invalidateFile(fileName);
+
+        CompactionManager.instance.performScrub(cfs, true, true, false, 2);
+
+        // check data is still there
+        assertOrderedAll(cfs, 0);
     }
 
     @Test

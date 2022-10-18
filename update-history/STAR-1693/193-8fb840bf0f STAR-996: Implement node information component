@@ -1,0 +1,111 @@
+diff --git a/src/java/org/apache/cassandra/repair/messages/RepairMessage.java b/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
+index 165911dc9b..565f00b567 100644
+--- a/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
++++ b/src/java/org/apache/cassandra/repair/messages/RepairMessage.java
+@@ -17,6 +17,7 @@
+  */
+ package org.apache.cassandra.repair.messages;
+ 
++import java.util.Optional;
+ import java.util.UUID;
+ 
+ import org.slf4j.Logger;
+@@ -30,6 +31,8 @@ import org.apache.cassandra.net.Message;
+ import org.apache.cassandra.net.MessagingService;
+ import org.apache.cassandra.net.RequestCallback;
+ import org.apache.cassandra.net.Verb;
++import org.apache.cassandra.nodes.NodeInfo;
++import org.apache.cassandra.nodes.Nodes;
+ import org.apache.cassandra.repair.RepairJobDesc;
+ import org.apache.cassandra.utils.CassandraVersion;
+ 
+@@ -89,8 +92,8 @@ public abstract class RepairMessage
+ 
+     private static boolean supportsTimeouts(InetAddressAndPort from, UUID parentSessionId)
+     {
+-        CassandraVersion remoteVersion = Gossiper.instance.getReleaseVersion(from);
+-        if (remoteVersion != null && remoteVersion.compareTo(SUPPORTS_TIMEOUTS) >= 0)
++        Optional<CassandraVersion> remoteVersion = Nodes.peers().getOpt(from).map(NodeInfo::getReleaseVersion);
++        if (remoteVersion.filter(v -> v.compareTo(SUPPORTS_TIMEOUTS) >= 0).isPresent())
+             return true;
+         logger.warn("[#{}] Not failing repair due to remote host {} not supporting repair message timeouts (version = {})", parentSessionId, from, remoteVersion);
+         return false;
+diff --git a/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java b/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java
+index 7fec953e74..6820befcf2 100644
+--- a/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java
++++ b/test/unit/org/apache/cassandra/service/StorageServiceServerTest.java
+@@ -688,16 +688,16 @@ public class StorageServiceServerTest
+         Gossiper.instance.addSavedEndpoint(internalAddressIPV6);
+ 
+         //Default to using the provided address with the configured port
+-        assertEquals("[0:0:0:0:0:0:0:3]:" + DatabaseDescriptor.getNativeTransportPort(), StorageService.instance.getNativeaddress(internalAddressIPV6, true));
++        assertEquals("[0:0:0:0:0:0:0:3]:" + DatabaseDescriptor.getNativeTransportPort(), StorageService.instance.getNativeAddress(internalAddressIPV6, true));
+ 
+         VersionedValue.VersionedValueFactory valueFactory =  new VersionedValue.VersionedValueFactory(Murmur3Partitioner.instance);
+         //If RPC_ADDRESS is present with an IPv6 address, we should properly bracket encode the IP with the configured port.
+         Gossiper.instance.getEndpointStateForEndpoint(internalAddressIPV6).addApplicationState(ApplicationState.RPC_ADDRESS, valueFactory.rpcaddress(InetAddress.getByName("0:0:0:0:0:0:5a:3")));
+-        assertEquals("[0:0:0:0:0:0:5a:3]:" + DatabaseDescriptor.getNativeTransportPort(), StorageService.instance.getNativeaddress(internalAddressIPV6, true));
++        assertEquals("[0:0:0:0:0:0:5a:3]:" + DatabaseDescriptor.getNativeTransportPort(), StorageService.instance.getNativeAddress(internalAddressIPV6, true));
+ 
+         //If we have the address and port in gossip use that
+         Gossiper.instance.getEndpointStateForEndpoint(internalAddressIPV6).addApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT, valueFactory.nativeaddressAndPort(InetAddressAndPort.getByName("[0:0:0:0:0:0:5c:3]:8675")));
+-        assertEquals("[0:0:0:0:0:0:5c:3]:8675", StorageService.instance.getNativeaddress(internalAddressIPV6, true));
++        assertEquals("[0:0:0:0:0:0:5c:3]:8675", StorageService.instance.getNativeAddress(internalAddressIPV6, true));
+     }
+ 
+     @Test
+diff --git a/src/java/org/apache/cassandra/service/StorageService.java b/src/java/org/apache/cassandra/service/StorageService.java
+index cb6a9b73a6..2ae61a62bf 100644
+--- a/src/java/org/apache/cassandra/service/StorageService.java
++++ b/src/java/org/apache/cassandra/service/StorageService.java
+@@ -2009,14 +2009,45 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
+ 
+     public InetAddressAndPort getNativeAddressAndPort(InetAddressAndPort endpoint)
+     {
+-        NodeInfo<?> info = Nodes.localOrPeerInfo(endpoint);
+-        if (info != null && info.getNativeTransportAddressAndPort() != null)
+-            return info.getNativeTransportAddressAndPort();
+-
+         if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+             return FBUtilities.getBroadcastNativeAddressAndPort();
++        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
++        {
++            try
++            {
++                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
++                return address;
++            }
++            catch (UnknownHostException e)
++            {
++                throw new RuntimeException(e);
++            }
++        }
++        else
++        {
++            final String ipAddress;
++            // If RPC_ADDRESS present in gossip for this endpoint use it.  This is expected for 3.x nodes.
++            if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) != null)
++            {
++                ipAddress = Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value;
++            }
++            else
++            {
++                // otherwise just use the IP of the endpoint itself.
++                ipAddress = endpoint.getHostAddress(false);
++            }
+ 
+-        return InetAddressAndPort.getByAddressOverrideDefaults(endpoint.address, DatabaseDescriptor.getNativeTransportPort());
++            // include the configured native_transport_port.
++            try
++            {
++                InetAddressAndPort address = InetAddressAndPort.getByNameOverrideDefaults(ipAddress, DatabaseDescriptor.getNativeTransportPort());
++                return address;
++            }
++            catch (UnknownHostException e)
++            {
++                throw new RuntimeException(e);
++            }
++        }
+     }
+ 
+     /**

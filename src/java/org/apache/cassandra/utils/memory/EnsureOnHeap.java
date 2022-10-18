@@ -54,7 +54,7 @@ public abstract class EnsureOnHeap extends Transformation
 
         public DecoratedKey applyToPartitionKey(DecoratedKey key)
         {
-            return new BufferDecoratedKey(key.getToken(), HeapAllocator.instance.clone(key.getKey()));
+            return new BufferDecoratedKey(key.getToken(), HeapCloner.instance.clone(key.getKey()));
         }
 
         public Row applyToRow(Row row)
@@ -62,7 +62,7 @@ public abstract class EnsureOnHeap extends Transformation
             // If current "row" is Rows.EMPTY_STATIC_ROW, don't copy it again, as "copied_empty_static_row" != EMPTY_STATIC_ROW
             if (row == null || row == Rows.EMPTY_STATIC_ROW)
                 return row;
-            return Rows.copy(row, HeapAllocator.instance.cloningBTreeRowBuilder()).build();
+            return row.clone(HeapCloner.instance);
         }
 
         public Row applyToStatic(Row row)
@@ -74,7 +74,7 @@ public abstract class EnsureOnHeap extends Transformation
 
         public RangeTombstoneMarker applyToMarker(RangeTombstoneMarker marker)
         {
-            return marker.copy(HeapAllocator.instance);
+            return marker.clone(HeapCloner.instance);
         }
 
         public UnfilteredRowIterator applyToPartition(UnfilteredRowIterator partition)
@@ -114,7 +114,7 @@ public abstract class EnsureOnHeap extends Transformation
 
         public DeletionInfo applyToDeletionInfo(DeletionInfo deletionInfo)
         {
-            return deletionInfo.copy(HeapAllocator.instance);
+            return deletionInfo.clone(HeapCloner.instance);
         }
     }
 

@@ -92,6 +92,7 @@ import org.apache.cassandra.exceptions.TruncateException;
 import org.apache.cassandra.exceptions.UnavailableException;
 import org.apache.cassandra.exceptions.WriteFailureException;
 import org.apache.cassandra.exceptions.WriteTimeoutException;
+import org.apache.cassandra.gms.FailureDetector;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.gms.IFailureDetector;
 import org.apache.cassandra.hints.Hint;
@@ -1750,6 +1751,9 @@ public class StorageProxy implements StorageProxyMBean
         // We have a keyspace, so filter by affinity too
         replicas = replicas.filter(IFailureDetector.isReplicaAlive)
                            .filter(snitch.filterByAffinity(keyspace.getName()));
+
+        // CASSANDRA-17411: filter out endpoints that are not alive
+        replicas = replicas.filter(replica -> FailureDetector.instance.isAlive(replica.endpoint()));
 
         // TODO have a way to compute the consistency level
         if (replicas.isEmpty())

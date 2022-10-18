@@ -19,6 +19,7 @@
 package org.apache.cassandra.schema;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.cassandra.schema.SchemaTransformation.SchemaTransformationResult;
 
@@ -63,14 +64,15 @@ public interface SchemaUpdateHandler
      * refreshed, the callbacks provided in the factory method are executed, and the updated schema version is announced.
      *
      * @param local whether we should reset with locally stored schema or fetch the schema from other nodes
-     * @return transformation result
      */
-    SchemaTransformationResult reset(boolean local);
+    void reset(boolean local);
 
     /**
-     * Clears the locally stored schema entirely. After this operation the schema is equal to {@link DistributedSchema#EMPTY}.
-     * The method does not execute any callback. It is indended to reinitialize the schema later using the method
-     * {@link #reset(boolean)}.
+     * Marks the local schema to be cleared and refreshed. Since calling this method, the update handler tries to obtain
+     * a fresh schema definition from a remote source. Once the schema definition is received, the local schema is
+     * replaced (instead of being merged which usually happens when the update is received).
+     * <p/>
+     * The returned awaitable is fulfilled when the schema is received and applied.
      */
-    void clear();
+    CompletableFuture<Void> clear();
 }

@@ -20,6 +20,7 @@ package org.apache.cassandra.schema;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
@@ -77,17 +78,18 @@ public class OfflineSchemaUpdateHandler implements SchemaUpdateHandler
     }
 
     @Override
-    public SchemaTransformationResult reset(boolean local)
+    public void reset(boolean local)
     {
         if (!local)
             throw new UnsupportedOperationException();
 
-        return apply(ignored -> SchemaKeyspace.fetchNonSystemKeyspaces(), local);
+        apply(ignored -> SchemaKeyspace.fetchNonSystemKeyspaces(), local);
     }
 
     @Override
-    public synchronized void clear()
+    public synchronized CompletableFuture<Void> clear()
     {
         this.schema = DistributedSchema.EMPTY;
+        return CompletableFuture.completedFuture(null);
     }
 }

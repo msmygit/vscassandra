@@ -35,6 +35,7 @@ import org.apache.cassandra.locator.AbstractEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.security.ThreadAwareSecurityManager;
+import org.apache.cassandra.service.EmbeddedCassandraService;
 
 /**
  * Utility methodes used by SchemaLoader and CQLTester to manage the server and its state.
@@ -188,6 +189,16 @@ public final class ServerTestUtils
     public static void cleanupSavedCaches()
     {
         cleanupDirectory(DatabaseDescriptor.getSavedCachesLocation());
+    }
+
+    public static EmbeddedCassandraService startEmbeddedCassandraService() throws IOException
+    {
+        DatabaseDescriptor.daemonInitialization();
+        mkdirs();
+        cleanup();
+        EmbeddedCassandraService service = new EmbeddedCassandraService();
+        service.start();
+        return service;
     }
 
     private ServerTestUtils()

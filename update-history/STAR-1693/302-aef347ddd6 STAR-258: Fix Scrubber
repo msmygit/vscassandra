@@ -1,0 +1,37 @@
+--- a/src/java/org/apache/cassandra/db/compaction/Scrubber.java
++++ b/src/java/org/apache/cassandra/db/compaction/Scrubber.java
+@@ -398,22 +398,14 @@
+ 
+     private boolean seekToNextPartition()
+     {
+-<<<<<<<
+-        while (!indexIterator.isExhausted())
+-=======
+         while (indexAvailable())
+->>>>>>>
+         {
+             long nextRowPositionFromIndex = indexIterator.dataPosition();
+ 
+             try
+             {
+                 dataFile.seek(nextRowPositionFromIndex);
+-<<<<<<<
+                 return true;
+-=======
+-                return;
+->>>>>>>
+             }
+             catch (Throwable th)
+             {
+@@ -428,11 +420,7 @@
+             }
+             catch (Throwable th)
+             {
+-<<<<<<<
+                 outputHandler.warn("Failed to go to the next entry in index", th);
+-=======
+-                outputHandler.warn(String.format("Failed to go to the next entry in index, index position: %d", indexIterator.indexPosition()), th);
+->>>>>>>
+                 throw Throwables.cleaned(th);
+             }
+         }

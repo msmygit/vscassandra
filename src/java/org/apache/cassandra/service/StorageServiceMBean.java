@@ -315,8 +315,14 @@ public interface StorageServiceMBean extends NotificationEmitter
     @Deprecated
     public int relocateSSTables(String keyspace, String ... cfnames) throws IOException, ExecutionException, InterruptedException;
     public int relocateSSTables(int jobs, String keyspace, String ... cfnames) throws IOException, ExecutionException, InterruptedException;
+
     /**
-     * Forces major compaction of specified token range in a single keyspace
+     * Forces major compaction of specified token range in a single keyspace.
+     *
+     * @param keyspaceName the name of the keyspace to be compacted
+     * @param startToken the token at which the compaction range starts (inclusive)
+     * @param endToken the token at which compaction range ends (inclusive)
+     * @param tableNames the names of the tables to be compacted
      */
     public void forceKeyspaceCompactionForTokenRange(String keyspaceName, String startToken, String endToken, String... tableNames) throws IOException, ExecutionException, InterruptedException;
 
@@ -860,4 +866,7 @@ public interface StorageServiceMBean extends NotificationEmitter
     void setTableCountWarnThreshold(int value);
     int getKeyspaceCountWarnThreshold();
     void setKeyspaceCountWarnThreshold(int value);
+
+    public Long getRepairRpcTimeout();
+    public void setRepairRpcTimeout(Long timeoutInMillis);
 }

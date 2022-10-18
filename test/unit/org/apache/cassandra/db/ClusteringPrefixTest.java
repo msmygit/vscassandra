@@ -34,7 +34,6 @@ import org.apache.cassandra.db.marshal.ByteArrayAccessor;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.db.marshal.ValueAccessor;
 import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.cassandra.utils.memory.AbstractAllocator;
 import org.apache.cassandra.utils.memory.MemtablePool;
 import org.apache.cassandra.utils.memory.NativeAllocator;
 import org.apache.cassandra.utils.memory.NativePool;
@@ -133,7 +132,7 @@ public class ClusteringPrefixTest
     public void testRetainableSlab(boolean onHeap) throws InterruptedException, TimeoutException
     {
         MemtablePool pool = new SlabPool(1L << 24, onHeap ? 0 : 1L << 24, 1.0f, () -> CompletableFuture.completedFuture(false));
-        AbstractAllocator allocator = ((SlabAllocator) pool.newAllocator()).allocator(null);
+        SlabAllocator allocator = (SlabAllocator) pool.newAllocator();
         try
         {
             testRetainable(ByteBufferAccessor.instance.factory(), x ->

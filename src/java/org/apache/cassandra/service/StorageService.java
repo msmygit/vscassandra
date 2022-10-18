@@ -477,7 +477,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         if (gossipActive)
         {
-            if (!isNormal())
+            if (!isNormal() && joinRing)
                 throw new IllegalStateException("Unable to stop gossip because the node is not in the normal state. Try to stop the node instead.");
 
             logger.warn("Stopping gossip by operator request");
@@ -2086,6 +2086,49 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return map;
     }
 
+    public InetAddressAndPort getNativeAddressAndPort(InetAddressAndPort endpoint)
+    {
+        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
+            return FBUtilities.getBroadcastNativeAddressAndPort();
+        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
+        {
+            try
+            {
+                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
+                return address;
+            }
+            catch (UnknownHostException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+        else
+        {
+            final String ipAddress;
+            // If RPC_ADDRESS present in gossip for this endpoint use it.  This is expected for 3.x nodes.
+            if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) != null)
+            {
+                ipAddress = Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value;
+            }
+            else
+            {
+                // otherwise just use the IP of the endpoint itself.
+                ipAddress = endpoint.getHostAddress(false);
+            }
+
+            // include the configured native_transport_port.
+            try
+            {
+                InetAddressAndPort address = InetAddressAndPort.getByNameOverrideDefaults(ipAddress, DatabaseDescriptor.getNativeTransportPort());
+                return address;
+            }
+            catch (UnknownHostException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     /**
      * Return the native address associated with an endpoint as a string.
      * @param endpoint The endpoint to get rpc address for
@@ -2093,24 +2136,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
      */
     public String getNativeAddress(InetAddressAndPort endpoint, boolean withPort)
     {
-        if (endpoint.equals(FBUtilities.getBroadcastAddressAndPort()))
-            return FBUtilities.getBroadcastNativeAddressAndPort().getHostAddress(withPort);
-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT) != null)
-        {
-            try
-            {
-                InetAddressAndPort address = InetAddressAndPort.getByName(Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.NATIVE_ADDRESS_AND_PORT).value);
-                return address.getHostAddress(withPort);
-            }
-            catch (UnknownHostException e)
-            {
-                throw new RuntimeException(e);
-            }
-        }
-        else if (Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS) == null)
-            return endpoint.address.getHostAddress() + ":" + DatabaseDescriptor.getNativeTransportPort();
-        else
-            return Gossiper.instance.getEndpointStateForEndpoint(endpoint).getApplicationState(ApplicationState.RPC_ADDRESS).value + ":" + DatabaseDescriptor.getNativeTransportPort();
+        return getNativeAddressAndPort(endpoint).getHostAddress(withPort);
     }
 
     public Map<List<String>, List<String>> getRangeToRpcaddressMap(String keyspace)
@@ -4467,6 +4493,8 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
     {
         IEndpointSnitch snitch = DatabaseDescriptor.getEndpointSnitch();
         TokenMetadata tokenMetadata = this.getTokenMetadata().cloneOnlyTokenMap();
+        if (!tokenMetadata.isMember(referenceEndpoint))
+            return Collections.emptySet();
         String dc = snitch.getDatacenter(referenceEndpoint);
         Set<Token> tokens = new HashSet<>(tokenMetadata.getTokens(referenceEndpoint));
 
@@ -5347,7 +5375,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         if (isShutdown()) // do not rely on operationMode in case it gets changed to decomissioned or other
             throw new IllegalStateException(String.format("Unable to start %s because the node was drained.", service));
 
-        if (!isNormal())
+        if (!isNormal() && joinRing) // if the node is not joining the ring, it is gossipping-only member which is in STARTING state forever
             throw new IllegalStateException(String.format("Unable to start %s because the node is not in the normal state.", service));
     }
 
@@ -5842,7 +5870,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         ColumnFamilyStore.rebuildSecondaryIndex(ksName, cfName, indices);
     }
 
-    public void resetLocalSchema() throws IOException
+    public void resetLocalSchema()
     {
         Schema.instance.resetLocalSchema();
     }
@@ -6266,4 +6294,17 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         logger.info("Changing keyspace count warn threshold from {} to {}", getKeyspaceCountWarnThreshold(), value);
         DatabaseDescriptor.setKeyspaceCountWarnThreshold(value);
     }
+
+    public Long getRepairRpcTimeout()
+    {
+        return DatabaseDescriptor.getRepairRpcTimeout(MILLISECONDS);
+    }
+
+    public void setRepairRpcTimeout(Long timeoutInMillis)
+    {
+        Preconditions.checkState(timeoutInMillis > 0);
+        DatabaseDescriptor.setRepairRpcTimeout(timeoutInMillis, MILLISECONDS);
+        logger.info("RepairRpcTimeout set to {}ms via JMX", timeoutInMillis);
+    }
+
 }

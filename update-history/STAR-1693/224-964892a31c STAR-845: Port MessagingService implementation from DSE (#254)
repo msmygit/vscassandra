@@ -1,0 +1,190 @@
+--- a/src/java/org/apache/cassandra/net/Verb.java
++++ b/src/java/org/apache/cassandra/net/Verb.java
+@@ -184,41 +184,22 @@
+     public static Verb SCHEMA_VERSION_REQ     = new Verb("SCHEMA_VERSION_REQ",     20,  P1, rpcTimeout,      MIGRATION,         () -> NoPayload.serializer,                 () -> SchemaVersionVerbHandler.instance,   SCHEMA_VERSION_RSP  );
+ 
+     // repair; mostly doesn't use callbacks and sends responses as their own request messages, with matching sessions by uuid; should eventually harmonize and make idiomatic
+-<<<<<<<
+-    REPAIR_RSP             (100, P1, repairMsgTimeout,REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             ),
+-    VALIDATION_RSP         (102, P1, longTimeout     ,ANTI_ENTROPY,      () -> ValidationResponse.serializer,        () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    VALIDATION_REQ         (101, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> ValidationRequest.serializer,         () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    SYNC_RSP               (104, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SyncResponse.serializer,              () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    SYNC_REQ               (103, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SyncRequest.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    PREPARE_MSG            (105, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    SNAPSHOT_MSG           (106, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SnapshotMessage.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    CLEANUP_MSG            (107, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> CleanupMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    PREPARE_CONSISTENT_RSP (109, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareConsistentResponse.serializer, () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    PREPARE_CONSISTENT_REQ (108, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareConsistentRequest.serializer,  () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    FINALIZE_PROPOSE_MSG   (110, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizePropose.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    FINALIZE_PROMISE_MSG   (111, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizePromise.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    FINALIZE_COMMIT_MSG    (112, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizeCommit.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    FAILED_SESSION_MSG     (113, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FailSession.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    STATUS_RSP             (115, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> StatusResponse.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-    STATUS_REQ             (114, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> StatusRequest.serializer,             () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          ),
+-=======
+-    public static Verb REPAIR_RSP             = new Verb("REPAIR_RSP",             100, P1, rpcTimeout,      REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
+-    public static Verb VALIDATION_RSP         = new Verb("VALIDATION_RSP",         102, P1, rpcTimeout,      ANTI_ENTROPY,      () -> ValidationResponse.serializer,        () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb VALIDATION_REQ         = new Verb("VALIDATION_REQ",         101, P1, rpcTimeout,      ANTI_ENTROPY,      () -> ValidationRequest.serializer,         () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb SYNC_RSP               = new Verb("SYNC_RSP",               104, P1, rpcTimeout,      ANTI_ENTROPY,      () -> SyncResponse.serializer,              () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb SYNC_REQ               = new Verb("SYNC_REQ",               103, P1, rpcTimeout,      ANTI_ENTROPY,      () -> SyncRequest.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb PREPARE_MSG            = new Verb("PREPARE_MSG",            105, P1, rpcTimeout,      ANTI_ENTROPY,      () -> PrepareMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb SNAPSHOT_MSG           = new Verb("SNAPSHOT_MSG",           106, P1, rpcTimeout,      ANTI_ENTROPY,      () -> SnapshotMessage.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb CLEANUP_MSG            = new Verb("CLEANUP_MSG",            107, P1, rpcTimeout,      ANTI_ENTROPY,      () -> CleanupMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb PREPARE_CONSISTENT_RSP = new Verb("PREPARE_CONSISTENT_RSP", 109, P1, rpcTimeout,      ANTI_ENTROPY,      () -> PrepareConsistentResponse.serializer, () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb PREPARE_CONSISTENT_REQ = new Verb("PREPARE_CONSISTENT_REQ", 108, P1, rpcTimeout,      ANTI_ENTROPY,      () -> PrepareConsistentRequest.serializer,  () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb FINALIZE_PROPOSE_MSG   = new Verb("FINALIZE_PROPOSE_MSG",   110, P1, rpcTimeout,      ANTI_ENTROPY,      () -> FinalizePropose.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb FINALIZE_PROMISE_MSG   = new Verb("FINALIZE_PROMISE_MSG",   111, P1, rpcTimeout,      ANTI_ENTROPY,      () -> FinalizePromise.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb FINALIZE_COMMIT_MSG    = new Verb("FINALIZE_COMMIT_MSG",    112, P1, rpcTimeout,      ANTI_ENTROPY,      () -> FinalizeCommit.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb FAILED_SESSION_MSG     = new Verb("FAILED_SESSION_MSG",     113, P1, rpcTimeout,      ANTI_ENTROPY,      () -> FailSession.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb STATUS_RSP             = new Verb("STATUS_RSP",             115, P1, rpcTimeout,      ANTI_ENTROPY,      () -> StatusResponse.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+-    public static Verb STATUS_REQ             = new Verb("STATUS_REQ",             114, P1, rpcTimeout,      ANTI_ENTROPY,      () -> StatusRequest.serializer,             () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+->>>>>>>
++    public static Verb REPAIR_RSP             = new Verb("REPAIR_RSP",             100, P1, repairMsgTimeout,REQUEST_RESPONSE,  () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
++    public static Verb VALIDATION_RSP         = new Verb("VALIDATION_RSP",         102, P1, longTimeout     ,ANTI_ENTROPY,      () -> ValidationResponse.serializer,        () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb VALIDATION_REQ         = new Verb("VALIDATION_REQ",         101, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> ValidationRequest.serializer,         () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb SYNC_RSP               = new Verb("SYNC_RSP",               104, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SyncResponse.serializer,              () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb SYNC_REQ               = new Verb("SYNC_REQ",               103, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SyncRequest.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb PREPARE_MSG            = new Verb("PREPARE_MSG",            105, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb SNAPSHOT_MSG           = new Verb("SNAPSHOT_MSG",           106, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> SnapshotMessage.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb CLEANUP_MSG            = new Verb("CLEANUP_MSG",            107, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> CleanupMessage.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb PREPARE_CONSISTENT_RSP = new Verb("PREPARE_CONSISTENT_RSP", 109, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareConsistentResponse.serializer, () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb PREPARE_CONSISTENT_REQ = new Verb("PREPARE_CONSISTENT_REQ", 108, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> PrepareConsistentRequest.serializer,  () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb FINALIZE_PROPOSE_MSG   = new Verb("FINALIZE_PROPOSE_MSG",   110, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizePropose.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb FINALIZE_PROMISE_MSG   = new Verb("FINALIZE_PROMISE_MSG",   111, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizePromise.serializer,           () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb FINALIZE_COMMIT_MSG    = new Verb("FINALIZE_COMMIT_MSG",    112, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FinalizeCommit.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb FAILED_SESSION_MSG     = new Verb("FAILED_SESSION_MSG",     113, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> FailSession.serializer,               () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb STATUS_RSP             = new Verb("STATUS_RSP",             115, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> StatusResponse.serializer,            () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
++    public static Verb STATUS_REQ             = new Verb("STATUS_REQ",             114, P1, repairMsgTimeout,ANTI_ENTROPY,      () -> StatusRequest.serializer,             () -> RepairMessageVerbHandler.instance,   REPAIR_RSP          );
+ 
+     public static Verb REPLICATION_DONE_RSP   = new Verb("REPLICATION_DONE_RSP",   82,  P0, rpcTimeout,      MISC,              () -> NoPayload.serializer,                 () -> ResponseVerbHandler.instance                             );
+     public static Verb REPLICATION_DONE_REQ   = new Verb("REPLICATION_DONE_REQ",   22,  P0, rpcTimeout,      MISC,              () -> NoPayload.serializer,                 () -> ReplicationDoneVerbHandler.instance, REPLICATION_DONE_RSP);
+--- a/src/java/org/apache/cassandra/repair/RepairMessageVerbHandler.java
++++ b/src/java/org/apache/cassandra/repair/RepairMessageVerbHandler.java
+@@ -133,12 +133,10 @@
+                     }
+                     logger.debug("Enqueuing response to snapshot request {} to {}", desc.sessionId, message.from());
+                     MessagingService.instance().send(message.emptyResponse(), message.from());
+-<<<<<<<
+-=======
+-                    break;
+-
+-                case VALIDATION_REQ:
+-                    // notify initiator that the message has been received, allowing this method to take as long as it needs to
++                    }
++            else if (message.verb() == VALIDATION_REQ)
++            {
++                // notify initiator that the message has been received, allowing this method to take as long as it needs to
+                     MessagingService.instance().send(message.emptyResponse(), message.from());
+                     ValidationRequest validationRequest = (ValidationRequest) message.payload;
+                     logger.debug("Validating {}", validationRequest);
+@@ -150,91 +148,8 @@
+                                      desc.keyspace, desc.columnFamily, desc.parentSessionId);
+                         MessagingService.instance().send(Message.out(VALIDATION_RSP, new ValidationResponse(desc)), message.from());
+                         return;
+->>>>>>>
+                     }
+-            else if (message.verb() == VALIDATION_REQ)
+-            {
+-                ValidationRequest validationRequest = (ValidationRequest) message.payload;
+-                logger.debug("Validating {}", validationRequest);
+-                // trigger read-only compaction
+-                ColumnFamilyStore store = ColumnFamilyStore.getIfExists(desc.keyspace, desc.columnFamily);
+-                if (store == null)
+-                {
+-                    logger.error("Table {}.{} was dropped during snapshot phase of repair {}",
+-                                 desc.keyspace, desc.columnFamily, desc.parentSessionId);
+-                    MessagingService.instance().send(Message.out(VALIDATION_RSP, new ValidationResponse(desc)), message.from());
+-                    return;
+-                }
+-
+-<<<<<<<
+-                    ActiveRepairService.instance.consistent.local.maybeSetRepairing(desc.parentSessionId);
+-                    Validator validator = new Validator(desc, message.from(), validationRequest.nowInSec,
+-                                                        isIncremental(desc.parentSessionId), previewKind(desc.parentSessionId));
+-                    ValidationManager.instance.submitValidation(store, validator);
+-                    break;
+-
+-                case SYNC_REQ:
+-                    // notify initiator that the message has been received, allowing this method to take as long as it needs to
+-                    MessagingService.instance().send(message.emptyResponse(), message.from());
+-                    // forwarded sync request
+-                    SyncRequest request = (SyncRequest) message.payload;
+-                    logger.debug("Syncing {}", request);
+-                    StreamingRepairTask task = new StreamingRepairTask(desc,
+-                                                                       request.initiator,
+-                                                                       request.src,
+-                                                                       request.dst,
+-                                                                       request.ranges,
+-                                                                       isIncremental(desc.parentSessionId) ? desc.parentSessionId : null,
+-                                                                       request.previewKind,
+-                                                                       request.asymmetric);
+-                    task.run();
+-                    break;
+ 
+-                case CLEANUP_MSG:
+-                    logger.debug("cleaning up repair");
+-                    CleanupMessage cleanup = (CleanupMessage) message.payload;
+-                    ActiveRepairService.instance.removeParentRepairSession(cleanup.parentRepairSession);
+-                    MessagingService.instance().send(message.emptyResponse(), message.from());
+-                    break;
+-
+-                case PREPARE_CONSISTENT_REQ:
+-                    ActiveRepairService.instance.consistent.local.handlePrepareMessage(message.from(), (PrepareConsistentRequest) message.payload);
+-                    break;
+-
+-                case PREPARE_CONSISTENT_RSP:
+-                    ActiveRepairService.instance.consistent.coordinated.handlePrepareResponse((PrepareConsistentResponse) message.payload);
+-                    break;
+-
+-                case FINALIZE_PROPOSE_MSG:
+-                    ActiveRepairService.instance.consistent.local.handleFinalizeProposeMessage(message.from(), (FinalizePropose) message.payload);
+-                    break;
+-
+-                case FINALIZE_PROMISE_MSG:
+-                    ActiveRepairService.instance.consistent.coordinated.handleFinalizePromiseMessage((FinalizePromise) message.payload);
+-                    break;
+-
+-                case FINALIZE_COMMIT_MSG:
+-                    ActiveRepairService.instance.consistent.local.handleFinalizeCommitMessage(message.from(), (FinalizeCommit) message.payload);
+-                    break;
+-
+-                case FAILED_SESSION_MSG:
+-                    FailSession failure = (FailSession) message.payload;
+-                    ActiveRepairService.instance.consistent.coordinated.handleFailSessionMessage(failure);
+-                    ActiveRepairService.instance.consistent.local.handleFailSessionMessage(message.from(), failure);
+-                    break;
+-
+-                case STATUS_REQ:
+-                    ActiveRepairService.instance.consistent.local.handleStatusRequest(message.from(), (StatusRequest) message.payload);
+-                    break;
+-
+-                case STATUS_RSP:
+-                    ActiveRepairService.instance.consistent.local.handleStatusResponse(message.from(), (StatusResponse) message.payload);
+-                    break;
+-
+-                default:
+-                    ActiveRepairService.instance.handleMessage(message);
+-                    break;
+-=======
+                 ActiveRepairService.instance.consistent.local.maybeSetRepairing(desc.parentSessionId);
+                 Validator validator = new Validator(desc, message.from(), validationRequest.nowInSec,
+                                                     isIncremental(desc.parentSessionId), previewKind(desc.parentSessionId));
+@@ -242,7 +157,9 @@
+             }
+             else if (message.verb() == SYNC_REQ)
+             {
+-                // forwarded sync request
++                // notify initiator that the message has been received, allowing this method to take as long as it needs to
++                    MessagingService.instance().send(message.emptyResponse(), message.from());
++                    // forwarded sync request
+                 SyncRequest request = (SyncRequest) message.payload;
+                 logger.debug("Syncing {}", request);
+                 StreamingRepairTask task = new StreamingRepairTask(desc,
+@@ -299,7 +216,6 @@
+             else
+             {
+                 ActiveRepairService.instance.handleMessage(message);
+->>>>>>>
+             }
+         }
+         catch (Exception e)
