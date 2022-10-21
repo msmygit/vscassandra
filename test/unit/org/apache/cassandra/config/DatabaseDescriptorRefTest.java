@@ -129,6 +129,7 @@ public class DatabaseDescriptorRefTest
     "org.apache.cassandra.config.YamlConfigurationLoader$PropertiesChecker$1",
     "org.apache.cassandra.config.YamlConfigurationLoader$CustomConstructor",
     "org.apache.cassandra.config.TransparentDataEncryptionOptions",
+    "org.apache.cassandra.config.StorageAttachedIndexOptions",
     "org.apache.cassandra.config.StartupChecksOptions",
     "org.apache.cassandra.config.SubnetGroups",
     "org.apache.cassandra.config.TrackWarnings",
