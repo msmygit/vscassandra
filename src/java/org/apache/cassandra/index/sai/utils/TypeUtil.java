@@ -139,9 +139,11 @@ public class TypeUtil
      */
     public static int fixedSizeOf(AbstractType<?> type)
     {
+        // LongType can now occupy up to 9 bytes as a comparable
+        // so we need to special case it here
         if (type instanceof LongType)
             return 9;
-        if (type.valueLengthIfFixed() != -1)
+        else if (type.valueLengthIfFixed() != -1)
             return type.valueLengthIfFixed();
         else if (isInetAddress(type))
             return 16;

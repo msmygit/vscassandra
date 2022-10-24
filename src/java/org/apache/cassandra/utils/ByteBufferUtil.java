@@ -906,7 +906,8 @@ public class ByteBufferUtil
             bytes[n] = (byte)b;
             n++;
         }
-
+        if (n < bytes.length)
+            Arrays.fill(bytes, n, bytes.length, (byte)0);
         return n;
     }
 }
