@@ -625,19 +625,19 @@ public abstract class DataSet<T> extends SAITester
         }
     }
 
-    public static class TimeuuidDataSet extends DataSet<UUID>
+    public static class TimeuuidDataSet extends DataSet<TimeUUID>
     {
         public TimeuuidDataSet()
         {
-            values = new UUID[NUMBER_OF_VALUES];
-            List<UUID> list = Arrays.asList(values);
+            values = new TimeUUID[NUMBER_OF_VALUES];
+            List<TimeUUID> list = Arrays.asList(values);
 
             for (int index = 0; index < values.length; index++)
             {
-                UUID value;
+                TimeUUID value;
                 while (true)
                 {
-                    value = TimeUUID.Generator.nextTimeAsUUID();
+                    value = TimeUUID.Generator.nextTimeUUID();
                     if (!list.contains(value))
                         break;
                 }

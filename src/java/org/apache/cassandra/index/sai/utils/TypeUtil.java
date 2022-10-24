@@ -39,6 +39,7 @@ import org.apache.cassandra.db.marshal.CompositeType;
 import org.apache.cassandra.db.marshal.DecimalType;
 import org.apache.cassandra.db.marshal.InetAddressType;
 import org.apache.cassandra.db.marshal.IntegerType;
+import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.db.marshal.ReversedType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.rows.Cell;
@@ -138,6 +139,8 @@ public class TypeUtil
      */
     public static int fixedSizeOf(AbstractType<?> type)
     {
+        if (type instanceof LongType)
+            return 9;
         if (type.valueLengthIfFixed() != -1)
             return type.valueLengthIfFixed();
         else if (isInetAddress(type))
