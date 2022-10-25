@@ -1191,6 +1191,12 @@ public class BlockTerms
         {
             if (components == null)
                 throw new IllegalStateException();
+            
+            // empty index
+            if (pointId == 0)
+            {
+                return null;
+            }
 
             // flush buffers
             flushLastBuffers();

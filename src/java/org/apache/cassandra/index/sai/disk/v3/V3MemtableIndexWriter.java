@@ -54,7 +54,7 @@ public class V3MemtableIndexWriter extends MemtableIndexWriter
 
         // If no rows were written we need to delete any created column index components
         // so that the index is correctly identified as being empty (only having a completion marker)
-        if (numRows == 0)
+        if (numRows == 0 || indexMetas == null)
         {
             indexDescriptor.deleteColumnIndex(indexContext);
             return 0;
