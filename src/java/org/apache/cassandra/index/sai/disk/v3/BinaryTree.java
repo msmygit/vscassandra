@@ -226,7 +226,6 @@ public class BinaryTree
 
                 this.leafOrdinals[level] = leafOrdinal;
 
-                //System.out.println("leafOrdinal="+leafOrdinal);
                 return;
             }
 
@@ -285,8 +284,6 @@ public class BinaryTree
             List<byte[]> blocks = new ArrayList<>();
 
             int totalSize = recurseIndex(minBlockTerms, false, 0, minBlockTerms.size(), writeBuffer, blocks, new BytesRef(new byte[10]));
-
-            // System.out.println("finish totalSize=" + totalSize);
 
             byte[] index = new byte[totalSize];
             int upto = 0;

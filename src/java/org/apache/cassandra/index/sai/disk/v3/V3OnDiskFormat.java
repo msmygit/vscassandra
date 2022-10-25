@@ -144,13 +144,9 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                         validateComponent(meta.orderMapCRC,
                                           IndexComponent.BLOCK_ORDERMAP,
                                           indexFiles);
-
-//                        if (indexFiles.exists(IndexComponent.BLOCK_UPPER_POSTINGS, indexFiles.isTemporary()))
-//                        {
-                            validateComponent(meta.upperPostingsCRC,
-                                              IndexComponent.BLOCK_UPPER_POSTINGS,
-                                              indexFiles);
-                        //}
+                        validateComponent(meta.upperPostingsCRC,
+                                          IndexComponent.BLOCK_UPPER_POSTINGS,
+                                          indexFiles);
                     }
                 }
             }
@@ -160,11 +156,6 @@ public class V3OnDiskFormat extends V2OnDiskFormat
             logger.error("File validation failed", th);
             return false;
         }
-
-        // validate the string index or validate the checksum of every component
-        // final Set<IndexComponent> validateComponents = checksum ? V3_INDEX_COMPONENTS : V3_STRING_INDEX_COMPONENTS;
-
-        // validateFooterAndResetPosition(IndexInput in)
 
         for (final IndexComponent indexComponent : V3_INDEX_COMPONENTS)
         {
@@ -178,7 +169,6 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                     {
                         SAICodecUtils.validateFooterAndResetPosition(input);
                     }
-                        //SAICodecUtils.validate(input);
                 }
                 catch (Throwable e)
                 {

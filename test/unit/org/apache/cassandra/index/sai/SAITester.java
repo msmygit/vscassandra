@@ -290,8 +290,6 @@ public class SAITester extends CQLTester
         {
             File file = IndexDescriptor.create(sstable).fileFor(indexComponent, indexContext);
 
-            System.out.println("corruptIndexComponent corruptionType="+corruptionType+" length="+file.length()+" exists="+file.exists()+" file="+file.absolutePath());
-
             assert file.exists();
 
             corruptionType.corrupt(file);

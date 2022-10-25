@@ -100,7 +100,6 @@ public enum IndexComponent
     BLOCK_ORDERMAP("BlockOrderMap"), // Posting block order maps
     BLOCK_TERMS_OFFSETS("BlockTermsOffsets"), // used for numeric values meta only
     BLOCK_POSTINGS_OFFSETS("BlockPostingsOffsets"), // used for numeric values meta meta only
-    // BLOCK_UPPER_POSTINGS_OFFSETS("BlockUpperPostingsOffsets"), // per-level bit packed posting list file pointers
 
     /**
      * Stores per-sstable metadata.

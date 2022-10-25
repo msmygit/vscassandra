@@ -192,7 +192,6 @@ public class BlockTerms2Test extends SaiRandomizedTest
             PostingList postings = reader.search(toBytes(15), toBytes(30));
             LongArrayList list = collect(postings);
 
-            System.out.println("list="+list);
 
             long[] expectedRowids = LongStream.rangeClosed(15, 73).toArray();
             assertArrayEquals(expectedRowids, list.toLongArray());
@@ -200,8 +199,6 @@ public class BlockTerms2Test extends SaiRandomizedTest
             // # 2
             postings = reader.search(toBytes(15), toBytes(80));
             list = collect(postings);
-
-            System.out.println("list="+list);
 
             expectedRowids = LongStream.rangeClosed(15, 73).toArray();
             long[] combinedExpected = Longs.concat(expectedRowids, LongStream.rangeClosed(74, 80).toArray());

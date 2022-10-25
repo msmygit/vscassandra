@@ -132,7 +132,6 @@ public class BinaryTreeIndex
 
         public void onLeaf(int leafNodeID, IntArrayList pathToRoot)
         {
-            System.out.println("onLeaf leafNodeID="+leafNodeID+" pathToRoot="+pathToRoot);
             checkArgument(!pathToRoot.containsInt(leafNodeID));
             checkArgument(pathToRoot.isEmpty() || leafNodeID > pathToRoot.get(pathToRoot.size() - 1));
 
@@ -149,7 +148,6 @@ public class BinaryTreeIndex
 
         public void traverse(IntArrayList pathToRoot)
         {
-            System.out.println("nodeID=" + nodeID);
             if (moveToChild())
             {
                 do
@@ -301,27 +299,4 @@ public class BinaryTreeIndex
             return MathUtil.log(numLeaves, 2) + 2;
         }
     }
-
-//    private interface BKDTreeLeafNodes {
-//        /** number of leaf nodes */
-//        int numLeaves();
-//        /**
-//         * pointer to the leaf node previously written. Leaves are order from left to right, so leaf at
-//         * {@code index} 0 is the leftmost leaf and the leaf at {@code numleaves()} -1 is the rightmost
-//         * leaf
-//         */
-//        long getLeafLP(int index);
-//    }
-
-//    BKDTreeLeafNodes leafNodes = new BKDTreeLeafNodes() {
-//        @Override
-//        public long getLeafLP(int index) {
-//            return leafBlockFPs[index];
-//        }
-//
-//        @Override
-//        public int numLeaves() {
-//            return leafBlockFPs.length;
-//        }
-//    };
 }

@@ -719,7 +719,6 @@ public class BlockTerms
                 }
                 else if (binaryTreePostingsReader.exists(nodeID))
                 {
-                    // System.out.println("Upper level postings nodeID="+nodeID);
                     final long upperPostingsFP = binaryTreePostingsReader.getPostingsFilePointer(nodeID);
                     final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
                     postingLists.add(postingsReader.peekable());
@@ -816,14 +815,11 @@ public class BlockTerms
                 BytesRef splitPackedValue = treeReader.getSplitPackedValue();
                 BytesRef splitDimValue = treeReader.getSplitDimValue().clone();
 
-                // System.out.println("visitNode splitPackedValue="+toInt(splitPackedValue)+" splitDimValue="+toInt(splitDimValue));
-
                 // Recurse on left sub-tree:
                 BinaryTree.Reader.copyBytes(cellMaxPacked, splitPackedValue);
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushLeft();
-                // System.out.println("visitNode cellMinPacked="+toInt(cellMinPacked)+" splitPackedValue="+toInt(splitPackedValue));
                 collectPostingLists(postingLists, cellMinPacked, splitPackedValue);
                 treeReader.pop();
 
@@ -835,7 +831,6 @@ public class BlockTerms
                 BinaryTree.Reader.copyBytes(splitDimValue, splitPackedValue);
 
                 treeReader.pushRight();
-                // System.out.println("visitNode2 splitPackedValue="+toInt(splitPackedValue)+" cellMaxPacked="+toInt(cellMaxPacked));
                 collectPostingLists(postingLists, splitPackedValue, cellMaxPacked);
                 treeReader.pop();
             }
@@ -1191,7 +1186,7 @@ public class BlockTerms
         {
             if (components == null)
                 throw new IllegalStateException();
-            
+
             // empty index
             if (pointId == 0)
             {
@@ -1349,43 +1344,6 @@ public class BlockTerms
             components.put(BLOCK_TERMS_DATA, termsStartFP, termsStartFP, termsLength, meta.stringMap());
             components.put(IndexComponent.POSTING_LISTS, -1, postingsWriter.getStartOffset(), postingsLength, meta.stringMap());
             components.put(IndexComponent.BLOCK_TERMS_INDEX, meta.termsIndexFP, termsIndexStartFP, termsIndexLength, meta.stringMap());
-
-//            // the upper postings crc's are available
-//            // after writing the upper postings
-//            // a new meta is created
-//            meta = new Meta(pointId,
-//                            postingsBlockSize,
-//                            maxTermLength,
-//                            termsStartFP,
-//                            termsIndexFP,
-//                            minBlockTerms.size(),
-//                            distinctTermCount,
-//                            sameTermsPostingsFP,
-//                            treePostingsResult != null ? treePostingsResult.indexFilePointer : -1,
-//                            BytesRef.deepCopyOf(minTerm.get()).bytes,
-//                            BytesRef.deepCopyOf(prevTerm.get()).bytes,
-//                            termsIndexCRC,
-//                            termsCRC,
-//                            orderMapCRC,
-//                            postingsCRC,
-//                            bitpackedCRC,
-//                            //null,
-//                            //null,
-//                            upperPostingsMetaCRC,
-//                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC : null,
-//                            null,
-//                            //upperPostingsMetaCRC != null ? upperPostingsMetaCRC.upperPostingsOffsetsCRC : null,
-//                            minRowId,
-//                            maxRowId);
-
-            // replace relevant components with the new meta string map
-//            if (upperPostingsMetaCRC != null)
-//            {
-//                final Map<String, String> map = meta.stringMap();
-//                map.putAll(upperPostingsMetaCRC.meta.stringMap());
-//                final Set<IndexComponent> comps = ImmutableSet.of(BLOCK_TERMS_DATA, BLOCK_TERMS_INDEX, BLOCK_UPPER_POSTINGS, BLOCK_POSTINGS);
-//                components.replaceMaps(map, comps);
-//            }
 
             return meta;
         }
@@ -1707,25 +1665,10 @@ public class BlockTerms
             if (!previousPostingsBlock.isEmpty())
             {
                 processBlock(previousPostingsBlock);
-                boolean orderMapWritten = writePostingsAndOrderMap(previousPostingsBlock);
+                writePostingsAndOrderMap(previousPostingsBlock);
 
-                // if the previous buffer is all same terms as the current buffer
-                // then the postings writer is kept open
-                // there should not be an order map because the row ids should be in order
-//                if (!currentPostingsBlock.isEmpty()
-//                    && currentPostingsBlock.sameTerms()
-//                    && previousPostingsBlock.sameTerms()
-//                    && previousPostingsBlock.minTerm().equals(currentPostingsBlock.minTerm()))
-//                {
-//                    assert !orderMapWritten;
-//                    // -1 demarcs a same terms block to be backfilled later with a real posting file pointer
-//                    blockPostingsFPs.addLong(-1);
-//                }
-//                else
-//                {
                 final long postingsFP = postingsWriter.finishPostings();
                 blockPostingsFPs.addLong(postingsFP);
-                //}
                 previousPostingsBlock.reset();
             }
         }

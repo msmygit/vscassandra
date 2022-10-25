@@ -903,7 +903,6 @@ public class NativeIndexDDLTest extends SAITester
                                              boolean failedNumericIndex,
                                              boolean rebuild) throws Throwable
     {
-        System.out.println("verifyRebuildIndexComponent component="+component);
         // The completion markers are valid if they exist on the file system so we only need to test
         // their removal. If we are testing with encryption then we don't want to test any components
         // that are encryptable unless they have been removed because encrypted components aren't
