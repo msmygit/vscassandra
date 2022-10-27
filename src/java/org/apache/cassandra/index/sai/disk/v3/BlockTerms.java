@@ -20,7 +20,7 @@ package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
@@ -31,15 +31,18 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 import com.google.common.primitives.UnsignedBytes;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayList;
-import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -53,14 +56,13 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.BlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.MonotonicBlockPackedReader;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.NumericValuesMeta;
-import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.LeafOrderMap;
 import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.postings.OrdinalPostingList;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
+import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
-import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.io.util.FileHandle;
@@ -68,7 +70,6 @@ import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.cassandra.utils.bytecomparable.ByteSource;
 import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.index.PointValues;
 import org.apache.lucene.store.IndexInput;
@@ -107,14 +108,8 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
  */
 public class BlockTerms
 {
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     public static final int DEFAULT_POSTINGS_BLOCK_SIZE = 1024;
-
-    public static int toInt(BytesRef term)
-    {
-        ByteSource.Peekable peekable = ByteComparable.fixedLength(term.bytes, term.offset, term.length).asPeekableBytes(ByteComparable.Version.OSS41);
-        ByteBuffer buffer2 = Int32Type.instance.fromComparableBytes(peekable, ByteComparable.Version.OSS41);
-        return Int32Type.instance.compose(buffer2);
-    }
 
     /**
      * Block terms index meta object.
@@ -267,7 +262,7 @@ public class BlockTerms
         private static final Comparator<PostingList.PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
 
         protected final IndexDescriptor indexDescriptor;
-        protected final IndexContext context;
+        protected final IndexContext indexContext;
         protected final SegmentMetadata.ComponentMetadataMap componentMetadatas;
         protected final FileHandle bitpackedHandle, postingsHandle, blockOrderMapFile, termsDataHandle, termsIndexHandle, upperPostingsHandle;
         protected final V3PerIndexFiles indexFiles;
@@ -285,18 +280,18 @@ public class BlockTerms
          * Segment reader version.
          *
          * @param indexDescriptor
-         * @param context
+         * @param indexContext
          * @param indexFiles
          * @param componentMetadatas
          * @throws IOException
          */
         public Reader(IndexDescriptor indexDescriptor,
-                      IndexContext context,
+                      IndexContext indexContext,
                       V3PerIndexFiles indexFiles,
                       SegmentMetadata.ComponentMetadataMap componentMetadatas) throws IOException
         {
             this.indexDescriptor = indexDescriptor;
-            this.context = context;
+            this.indexContext = indexContext;
             this.indexFiles = indexFiles;
             this.componentMetadatas = componentMetadatas;
 
@@ -344,7 +339,7 @@ public class BlockTerms
             this.orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(meta.postingsBlockSize - 1));
             this.orderMapRandoInput = new SeekingRandomAccessInput(IndexInputReader.create(blockOrderMapFile));
 
-            if (indexDescriptor.componentExists(IndexComponent.BLOCK_UPPER_POSTINGS, context, indexFiles.isTemporary()))
+            if (indexDescriptor.componentExists(IndexComponent.BLOCK_UPPER_POSTINGS, indexContext, indexFiles.isTemporary()))
             {
                 upperPostingsHandle = indexFiles.getFileAndCache(BLOCK_UPPER_POSTINGS);
                 try (final IndexInput upperPostingsInput = IndexInputReader.create(upperPostingsHandle))
@@ -456,58 +451,51 @@ public class BlockTerms
              */
             public boolean next() throws IOException
             {
-                try
+                if (point >= meta.pointCount)
+                    return false;
+
+                final BytesRef term = bytesCursor.seekToPointId(point);
+
+                if (term == null)
+                    throw new IllegalStateException();
+
+                final long block = point / meta.postingsBlockSize;
+                if (block > currentPostingsBlock)
                 {
-                    if (point >= meta.pointCount)
-                        return false;
-
-                    final BytesRef term = bytesCursor.seekToPointId(point);
-
-                    if (term == null)
-                        throw new IllegalStateException();
-
-                    final long block = point / meta.postingsBlockSize;
-                    if (block > currentPostingsBlock)
+                    final long fp = postingsFPs.get(block);
+                    this.currentPostingsBlock = block;
+                    if (fp > currentPostingsBlockFP)
                     {
-                        final long fp = postingsFPs.get(block);
-                        this.currentPostingsBlock = block;
-                        if (fp > currentPostingsBlockFP)
+                        this.currentPostingsBlockFP = fp;
+
+                        this.postings = new PostingsReader(postingsInput, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
+
+                        currentOrderMapFP = orderMapFPs.get(currentPostingsBlock);
+                        if (currentOrderMapFP != -1)
                         {
-                            this.currentPostingsBlockFP = fp;
-
-                            this.postings = new PostingsReader(postingsInput, currentPostingsBlockFP, QueryEventListener.PostingListEventListener.NO_OP);
-
-                            currentOrderMapFP = orderMapFPs.get(currentPostingsBlock);
-                            if (currentOrderMapFP != -1)
+                            for (int x = 0; x < meta.postingsBlockSize; x++)
                             {
-                                for (int x = 0; x < meta.postingsBlockSize; x++)
-                                {
-                                    final long rowid = postings.nextPosting();
-                                    if (rowid == PostingList.END_OF_STREAM)
-                                        break;
+                                final long rowid = postings.nextPosting();
+                                if (rowid == PostingList.END_OF_STREAM)
+                                    break;
 
-                                    final int ordinal = LeafOrderMap.getValue(orderMapRandoInput, currentOrderMapFP, x, orderMapReader);
-                                    orderMapBlockRowIds[ordinal] = rowid;
-                                }
+                                final int ordinal = LeafOrderMap.getValue(orderMapRandoInput, currentOrderMapFP, x, orderMapReader);
+                                orderMapBlockRowIds[ordinal] = rowid;
                             }
                         }
                     }
-
-                    if (currentOrderMapFP != -1)
-                        currentRowId = orderMapBlockRowIds[(int) (point % meta.postingsBlockSize)];
-                    else
-                        currentRowId = this.postings.nextPosting();
-
-                    if (currentRowId == PostingList.END_OF_STREAM)
-                        throw new IllegalStateException();
-
-                    this.point++;
-                    return true;
                 }
-                catch (EOFException ex)
-                {
-                    throw new IOException("point="+point+" meta.pointCount="+meta.pointCount, ex);
-                }
+
+                if (currentOrderMapFP != -1)
+                    currentRowId = orderMapBlockRowIds[(int) (point % meta.postingsBlockSize)];
+                else
+                    currentRowId = this.postings.nextPosting();
+
+                if (currentRowId == PostingList.END_OF_STREAM)
+                    throw new IllegalStateException();
+
+                this.point++;
+                return true;
             }
         }
 
@@ -530,16 +518,17 @@ public class BlockTerms
             return ByteComparable.fixedLength(meta.maxTerm);
         }
 
-        PostingList sameValuePostings() throws IOException
-        {
-            if (meta.sameTermsPostingsFP != -1)
-            {
-                final IndexInput input = IndexInputReader.create(postingsHandle);
-                return new PostingsReader(input, meta.sameTermsPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
-            }
-            else
-                return null;
-        }
+        //  TODO: cleanup seems unused?
+//        PostingList sameValuePostings() throws IOException
+//        {
+//            if (meta.sameTermsPostingsFP != -1)
+//            {
+//                final IndexInput input = IndexInputReader.create(postingsHandle);
+//                return new PostingsReader(input, meta.sameTermsPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+//            }
+//            else
+//                return null;
+//        }
 
         public long memoryUsage()
         {
@@ -562,10 +551,14 @@ public class BlockTerms
         public PostingList search(ByteComparable start,
                                   boolean startExclusive,
                                   ByteComparable end,
-                                  boolean endExclusive) throws IOException
+                                  boolean endExclusive,
+                                  SSTableQueryContext context,
+                                  QueryEventListener.BKDIndexEventListener perColumnEventListener) throws IOException
         {
             ByteComparable realStart = start;
             ByteComparable realEnd = end;
+
+            QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
 
             if (startExclusive && start != null)
             {
@@ -584,20 +577,43 @@ public class BlockTerms
             if (end == null)
                 realEnd = maxTerm();
 
-            return search(realStart, realEnd);
+            return search(realStart, realEnd, listener, context.queryContext);
         }
 
         /**
          * Convert ByteComparable to BytesRef and search.
          */
-        public PostingList search(ByteComparable start, ByteComparable end) throws IOException
+        public PostingList search(ByteComparable start,
+                                  ByteComparable end,
+                                  QueryEventListener.BKDIndexEventListener listener,
+                                  QueryContext context) throws IOException
         {
             final byte[] startBytes = ByteSourceInverse.readBytes(start.asComparableBytes(ByteComparable.Version.OSS41));
             final byte[] endBytes = ByteSourceInverse.readBytes(end.asComparableBytes(ByteComparable.Version.OSS41));
-            return search(new BytesRef(startBytes), new BytesRef(endBytes));
+            return search(new BytesRef(startBytes),
+                          new BytesRef(endBytes),
+                          listener,
+                          context);
         }
 
-        public PostingList intersect(BinaryTree.IntersectVisitor visitor) throws IOException
+        @SuppressWarnings("resource")
+        PostingList search(BytesRef startTerm,
+                           BytesRef endTerm,
+                           QueryEventListener.BKDIndexEventListener listener,
+                           QueryContext context) throws IOException
+        {
+            if (startTerm == null)
+                throw new IllegalArgumentException("startTerm="+startTerm);
+            if (endTerm == null)
+                throw new IllegalArgumentException();
+
+            final BinaryTree.IntersectVisitor visitor = BinaryTreePostingsReader.bkdQueryFrom(startTerm, endTerm);
+            return intersect(visitor, listener, context);
+        }
+
+        public PostingList intersect(BinaryTree.IntersectVisitor visitor,
+                                     QueryEventListener.BKDIndexEventListener listener,
+                                     QueryContext context) throws IOException
         {
             final PointValues.Relation relation = visitor.compare(new BytesRef(meta.minTerm), new BytesRef(meta.maxTerm));
 
@@ -606,6 +622,8 @@ public class BlockTerms
 
             final LongArray postingBlockFPs = new LongArray.DeferredLongArray(() -> blockPostingOffsetsReader.open());
             final LongArray orderMapFPs = new LongArray.DeferredLongArray(() -> blockOrderMapFPReader.open());
+
+            listener.onSegmentHit();
 
             // it's important to create the input streams once per query as
             // there is a significant performance cost atm
@@ -623,35 +641,46 @@ public class BlockTerms
                                                                    upperPostingsInput,
                                                                    treeReader,
                                                                    postingBlockFPs,
-                                                                   orderMapFPs) :
+                                                                   orderMapFPs,
+                                                                   context,
+                                                                   listener) :
                                                   new FilteringIntersection(postingsInput,
                                                                             upperPostingsInput,
                                                                             treeReader,
                                                                             visitor,
                                                                             postingBlockFPs,
-                                                                            orderMapFPs);
+                                                                            orderMapFPs,
+                                                                            context,
+                                                                            listener);
 
                 return intersection.execute();
             }
         }
 
-        public class Intersection
+        private class Intersection
         {
+            private final Stopwatch queryExecutionTimer = Stopwatch.createStarted();
             protected final BinaryTree.Reader treeReader;
             protected final IndexInput postingsInput, upperPostingsInput;
             protected final LongArray postingBlockFPs, orderMapFPs;
+            protected final QueryContext queryContext;
+            protected final QueryEventListener.BKDIndexEventListener listener;
 
             public Intersection(IndexInput postingsInput,
                                 IndexInput upperPostingsInput,
                                 BinaryTree.Reader treeReader,
                                 final LongArray postingBlockFPs,
-                                final LongArray orderMapFPs)
+                                final LongArray orderMapFPs,
+                                QueryContext queryContext,
+                                QueryEventListener.BKDIndexEventListener listener)
             {
                 this.postingsInput = postingsInput;
                 this.upperPostingsInput = upperPostingsInput;
                 this.treeReader = treeReader;
                 this.postingBlockFPs = postingBlockFPs;
                 this.orderMapFPs = orderMapFPs;
+                this.queryContext = queryContext;
+                this.listener = listener;
             }
 
             protected void executeInternal(final PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
@@ -680,6 +709,11 @@ public class BlockTerms
 
             protected PostingList mergePostings(PriorityQueue<PostingList.PeekablePostingList> postingLists)
             {
+                final long elapsedMicros = queryExecutionTimer.stop().elapsed(TimeUnit.MICROSECONDS);
+
+                listener.onIntersectionComplete(elapsedMicros, TimeUnit.MICROSECONDS);
+                listener.postingListsHit(postingLists.size());
+
                 if (postingLists.isEmpty())
                 {
                     FileUtils.closeQuietly(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
@@ -687,9 +721,9 @@ public class BlockTerms
                 }
                 else
                 {
-//                    if (logger.isTraceEnabled())
-//                        logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
-//                                     indexFile.path(), elapsedMicros, postingLists.size());
+                    if (logger.isTraceEnabled())
+                        logger.trace(indexContext.logMessage("[{}] Intersection completed in {} microseconds. {} leaf and internal posting lists hit."),
+                                     elapsedMicros, postingLists.size());
 
                     return MergePostingList.merge(postingLists, () -> FileUtils.close(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs));
                 }
@@ -697,6 +731,8 @@ public class BlockTerms
 
             public void collectPostingLists(PriorityQueue<PostingList.PeekablePostingList> postingLists) throws IOException
             {
+                queryContext.checkpoint();
+
                 final int nodeID = treeReader.getNodeID();
 
                 if (treeReader.isLeafNode())
@@ -704,15 +740,13 @@ public class BlockTerms
                     final int blockId = treeReader.getBlockID();
                     final long blockPostingsFP = postingBlockFPs.get(blockId);
 
-                    // System.out.println("collectPostingLists nodeID="+nodeID+" blockId="+blockId+" blockPostingsFP="+blockPostingsFP);
-
                     // A -1 postings fp means there is a single posting list
                     // for multiple leaf blocks because the values are the same
                     if (blockPostingsFP != -1)
                     {
                         final PostingsReader postings = new PostingsReader(postingsInput,
                                                                            blockPostingsFP,
-                                                                           QueryEventListener.PostingListEventListener.NO_OP);
+                                                                           listener.postingListEventListener());
                         postingLists.add(postings.peekable());
                     }
                     return;
@@ -720,7 +754,7 @@ public class BlockTerms
                 else if (binaryTreePostingsReader.exists(nodeID))
                 {
                     final long upperPostingsFP = binaryTreePostingsReader.getPostingsFilePointer(nodeID);
-                    final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, QueryEventListener.PostingListEventListener.NO_OP);
+                    final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, listener.postingListEventListener());
                     postingLists.add(postingsReader.peekable());
                     return;
                 }
@@ -748,9 +782,11 @@ public class BlockTerms
                                          BinaryTree.Reader treeReader,
                                          BinaryTree.IntersectVisitor visitor,
                                          final LongArray postingBlockFPs,
-                                         final LongArray orderMapFPs)
+                                         final LongArray orderMapFPs,
+                                         QueryContext queryContext,
+                                         QueryEventListener.BKDIndexEventListener listener)
             {
-                super(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
+                super(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs, queryContext, listener);
                 this.visitor = visitor;
             }
 
@@ -800,7 +836,8 @@ public class BlockTerms
                                                          postingsFP,
                                                          postingBlockFPs,
                                                          orderMapFPs,
-                                                         postingsInput);
+                                                         postingsInput,
+                                                         listener);
 
                 if (postings != null)
                 {
@@ -836,25 +873,13 @@ public class BlockTerms
             }
         }
 
-        @SuppressWarnings("resource")
-        PostingList search(BytesRef startTerm,
-                           BytesRef endTerm) throws IOException
-        {
-            if (startTerm == null)
-                throw new IllegalArgumentException("startTerm="+startTerm);
-            if (endTerm == null)
-                throw new IllegalArgumentException();
-
-            final BinaryTree.IntersectVisitor visitor = BinaryTreePostingsReader.bkdQueryFrom(startTerm, endTerm);
-            return intersect(visitor);
-        }
-
         PostingList filterBlock(BinaryTree.IntersectVisitor visitor,
                                 final int block,
                                 final MutableValueLong postingsFP,
                                 final LongArray blockPostingsFPs,
                                 final LongArray orderMapFPs,
-                                final IndexInput postingsInput) throws IOException
+                                final IndexInput postingsInput,
+                                QueryEventListener.BKDIndexEventListener listener) throws IOException
         {
             final long start = (long)block * (long)meta.postingsBlockSize;
 
@@ -870,7 +895,7 @@ public class BlockTerms
 
             final OrdinalPostingList postings = new PostingsReader(postingsInput,
                                                                    postingsFP.value,
-                                                                   QueryEventListener.PostingListEventListener.NO_OP);
+                                                                   listener.postingListEventListener());
 
             final long orderMapFP = orderMapFPs.get(block); // here for assertion, move lower
 

@@ -67,8 +67,6 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                                                                               IndexComponent.BLOCK_UPPER_POSTINGS,
                                                                               IndexComponent.TERMS_DATA,
                                                                               IndexComponent.POSTING_LISTS);
-    private static final Set<IndexComponent> V3_STRING_INDEX_COMPONENTS = EnumSet.of(IndexComponent.TERMS_DATA,
-                                                                                     IndexComponent.POSTING_LISTS);
 
     protected V3OnDiskFormat()
     {

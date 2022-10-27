@@ -56,6 +56,7 @@ public class V3IndexSearcher extends IndexSearcher
 
     private final BlockTerms.Reader reader;
     private final TermsReader termsReader;
+    private final QueryEventListener.BKDIndexEventListener perColumnEventListener;
 
     V3IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
                     V3PerIndexFiles perIndexFiles,
@@ -64,6 +65,8 @@ public class V3IndexSearcher extends IndexSearcher
                     IndexContext indexContext) throws IOException
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
+
+        perColumnEventListener = (QueryEventListener.BKDIndexEventListener)indexContext.getColumnQueryMetrics();
 
         reader = new BlockTerms.Reader(indexDescriptor, indexContext, perIndexFiles, segmentMetadata.componentMetadatas);
 
@@ -132,7 +135,7 @@ public class V3IndexSearcher extends IndexSearcher
             }
 
             // postings may be null, handled by toIterator
-            final PostingList postings = reader.search(lowerBound, lowerExclusive, upperBound, upperExclusive);
+            final PostingList postings = reader.search(lowerBound, lowerExclusive, upperBound, upperExclusive, context, perColumnEventListener);
             return toIterator(postings, context, defer);
         }
         else

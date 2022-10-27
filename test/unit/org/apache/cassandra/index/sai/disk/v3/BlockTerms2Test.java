@@ -134,7 +134,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
                                                                   indexFiles,
                                                                   components))
             {
-                PostingList postings = reader.search(toBytes(queryMin), toBytes(queryMax));
+                PostingList postings = reader.search(toBytes(queryMin), toBytes(queryMax), (QueryEventListener.BKDIndexEventListener) NO_OP_BKD_LISTENER, new QueryContext());
 //                PostingList postings = reader.searchLeaves(toBytes(queryMin), toBytes(queryMax));
                 postingList = collect(postings);
             }
@@ -189,7 +189,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
                                                               indexFiles,
                                                               components))
         {
-            PostingList postings = reader.search(toBytes(15), toBytes(30));
+            PostingList postings = reader.search(toBytes(15), toBytes(30), (QueryEventListener.BKDIndexEventListener) NO_OP_BKD_LISTENER, new QueryContext());
             LongArrayList list = collect(postings);
 
 
@@ -197,7 +197,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
             assertArrayEquals(expectedRowids, list.toLongArray());
 
             // # 2
-            postings = reader.search(toBytes(15), toBytes(80));
+            postings = reader.search(toBytes(15), toBytes(80), (QueryEventListener.BKDIndexEventListener) NO_OP_BKD_LISTENER, new QueryContext());
             list = collect(postings);
 
             expectedRowids = LongStream.rangeClosed(15, 73).toArray();
@@ -232,7 +232,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
                                                               indexFiles,
                                                               components))
         {
-            PostingList postings = reader.search(toBytes(15), toBytes(25));
+            PostingList postings = reader.search(toBytes(15), toBytes(25), (QueryEventListener.BKDIndexEventListener) NO_OP_BKD_LISTENER, new QueryContext());
             LongArrayList list = collect(postings);
 
             System.out.println("list="+list);
@@ -288,7 +288,7 @@ public class BlockTerms2Test extends SaiRandomizedTest
 //
 //            assertArrayEquals(rowidMatches, list.toLongArray());
 
-            PostingList postings = reader.search(toBytes(19), toBytes(30));
+            PostingList postings = reader.search(toBytes(19), toBytes(30), (QueryEventListener.BKDIndexEventListener) NO_OP_BKD_LISTENER, new QueryContext());
 
             LongArrayList list = collect(postings);
 
