@@ -78,12 +78,12 @@ public class NodeRestartTest extends SAITester
         // This barrier prevents the 2i initialization task, which makes the index queryable, from running:
         Injections.Barrier initTaskLatch =
                 Injections.newBarrier("pause_init_task_entry", 2, false)
-                          .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("runInitialBuildBlocking"))
+                          .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
                           .build();
 
         Injections.Barrier initTaskLatchExit =
                 Injections.newBarrier("pause_init_task_exit", 1, false)
-                          .add(InvokePointBuilder.newInvokePoint().atExit().onClass(StorageAttachedIndex.class).onMethod("runInitialBuildBlocking"))
+                          .add(InvokePointBuilder.newInvokePoint().atExit().onClass(StorageAttachedIndex.class).onMethod("startInitialBuild"))
                           .build();
 
         // Make sure we re-introduce existing counter injections...

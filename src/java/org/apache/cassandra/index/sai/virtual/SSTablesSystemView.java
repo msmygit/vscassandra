@@ -110,7 +110,7 @@ public class SSTablesSystemView extends AbstractVirtualTable
                             Descriptor descriptor = sstable.descriptor;
                             AbstractBounds<Token> bounds = sstable.getBounds();
 
-                            dataset.row(ks, indexContext.getIndexName(), sstable.getFilename())
+                            dataset.row(ks.name, indexContext.getIndexName(), sstable.getFilename())
                                    .column(TABLE_NAME, descriptor.cfname)
                                    .column(COLUMN_NAME, indexContext.getColumnName())
                                    .column(FORMAT_VERSION, sstableIndex.getVersion().toString())

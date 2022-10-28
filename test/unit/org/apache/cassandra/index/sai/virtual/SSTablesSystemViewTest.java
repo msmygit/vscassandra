@@ -165,7 +165,7 @@ public class SSTablesSystemViewTest extends SAITester
     {
         for (SSTableId id : ids)
         {
-            Object[] row = readRow(indexName, ids, columnName, cellCount, minSSTableRowId, maxSSTableRowId);
+            Object[] row = readRow(indexName, id, columnName, cellCount, minSSTableRowId, maxSSTableRowId);
             if (row != null)
                 return row;
         }
