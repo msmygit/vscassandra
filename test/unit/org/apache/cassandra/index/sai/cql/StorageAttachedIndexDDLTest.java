@@ -83,11 +83,11 @@ import static org.mockito.Mockito.when;
 
 public class StorageAttachedIndexDDLTest extends SAITester
 {
-    private static final Injections.Counter NDI_CREATION_COUNTER = Injections.newCounter("IndexCreationCounter")
-                                                                             .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("register"))
-                                                                             .build();
+    private static final Injections.Counter saiCreationCounter = Injections.newCounter("IndexCreationCounter")
+                                                                           .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndex.class).onMethod("register"))
+                                                                           .build();
 
-    private static final Injection failNDIInitialializaion = Injections.newCustom("fail_ndi_initialization")
+    private static final Injection failSAIInitialializaion = Injections.newCustom("fail_sai_initialization")
                                                                        .add(InvokePointBuilder.newInvokePoint().onClass(StorageAttachedIndexBuilder.class).onMethod("build"))
                                                                        .add(ActionBuilder.newActionBuilder().actions().doThrow(RuntimeException.class, Expression.quote("Injected failure!")))
                                                                        .build();
@@ -121,9 +121,9 @@ public class StorageAttachedIndexDDLTest extends SAITester
 
         createMBeanServerConnection();
 
-        Injections.inject(NDI_CREATION_COUNTER, INDEX_BUILD_COUNTER, FAIL_INDEX_GC_TRANSACTION);
+        Injections.inject(saiCreationCounter, INDEX_BUILD_COUNTER, FAIL_INDEX_GC_TRANSACTION);
 
-        NDI_CREATION_COUNTER.reset();
+        saiCreationCounter.reset();
         INDEX_BUILD_COUNTER.reset();
     }
 
@@ -266,7 +266,7 @@ public class StorageAttachedIndexDDLTest extends SAITester
 
         createIndex("CREATE CUSTOM INDEX IF NOT EXISTS ON %s(val) USING 'StorageAttachedIndex' ");
 
-        assertEquals(1, NDI_CREATION_COUNTER.get());
+        assertEquals(1, saiCreationCounter.get());
     }
 
     @Test
@@ -421,12 +421,12 @@ public class StorageAttachedIndexDDLTest extends SAITester
 
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
 
-        assertEquals(1, NDI_CREATION_COUNTER.get());
+        assertEquals(1, saiCreationCounter.get());
     }
 
     /**
-     * Verify SASI can be created and queries with NDI dependencies.
-     * Not putting in {@link MixedIndexImplementationsTest} because it uses CQLTester which doesn't load NDI dependency.
+     * Verify SASI can be created and queries with SAI dependencies.
+     * Not putting in {@link MixedIndexImplementationsTest} because it uses CQLTester which doesn't load SAI dependency.
      */
     @Test
     public void shouldCreateSASI() throws Throwable
@@ -457,7 +457,7 @@ public class StorageAttachedIndexDDLTest extends SAITester
         createTable("CREATE TABLE %s (id text PRIMARY KEY, val int)");
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex' WITH OPTIONS = {'bkd_postings_skip' : 3, 'bkd_postings_min_leaves' : 32}");
 
-        assertEquals(1, NDI_CREATION_COUNTER.get());
+        assertEquals(1, saiCreationCounter.get());
     }
 
     @Test
@@ -466,7 +466,7 @@ public class StorageAttachedIndexDDLTest extends SAITester
         createTable("CREATE TABLE %s (id text PRIMARY KEY, val int)");
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex' WITH OPTIONS = {'bkd_postings_skip' : 3}");
 
-        assertEquals(1, NDI_CREATION_COUNTER.get());
+        assertEquals(1, saiCreationCounter.get());
     }
 
     @Test
@@ -475,7 +475,7 @@ public class StorageAttachedIndexDDLTest extends SAITester
         createTable("CREATE TABLE %s (id text PRIMARY KEY, val int)");
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex' WITH OPTIONS = {'bkd_postings_min_leaves': 32}");
 
-        assertEquals(1, NDI_CREATION_COUNTER.get());
+        assertEquals(1, saiCreationCounter.get());
     }
 
     @Test
@@ -643,7 +643,7 @@ public class StorageAttachedIndexDDLTest extends SAITester
             execute("INSERT INTO %s (id1, v1, v2) VALUES ('" + i + "', " + i + ", '0')");
         flush();
 
-        Injections.inject(failNDIInitialializaion);
+        Injections.inject(failSAIInitialializaion);
         createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
         waitForAssert(() -> assertEquals(1, INDEX_BUILD_COUNTER.get()));
         waitForCompactions();
@@ -832,10 +832,9 @@ public class StorageAttachedIndexDDLTest extends SAITester
 
         if (concurrentTruncate)
         {
-            String v1IndexName = createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
-            String v2IndexName = createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
+            createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
+            createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
             truncate(true);
-            waitForIndexQueryable();
         }
         else
         {
