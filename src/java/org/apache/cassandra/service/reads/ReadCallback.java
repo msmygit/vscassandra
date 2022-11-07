@@ -182,6 +182,18 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
         return true;
     }
 
+    /** Used by CNDB */
+    protected int getFailures()
+    {
+        return failures;
+    }
+
+    /** Used by CNDB */
+    protected Map<InetAddressAndPort, RequestFailureReason> getFailureReasonByEndpoint()
+    {
+        return failureReasonByEndpoint;
+    }
+
     /**
      * Verify that a message doesn't come from an unexpected replica.
      */

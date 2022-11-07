@@ -331,6 +331,11 @@ public final class FileUtils
         close(Arrays.asList(cs));
     }
 
+    public static void close(Closeable... cs) throws IOException
+    {
+        close(Arrays.asList(cs));
+    }
+
     public static void close(Iterable<? extends AutoCloseable> cs) throws IOException
     {
         Throwable e = null;
