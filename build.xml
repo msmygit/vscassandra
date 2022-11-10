@@ -273,11 +273,11 @@
         <istrue value="${use.jdk11}"/>
     </condition>
 
-    <condition property="source.version" value="8" else="11">
-        <equals arg1="${java.version.8}" arg2="true"/>
+    <condition property="source.version" value="11" else="8">
+        <not><isset property="java.version.8"/></not>
     </condition>
-    <condition property="target.version" value="8" else="11">
-        <equals arg1="${java.version.8}" arg2="true"/>
+    <condition property="target.version" value="11" else="8">
+        <not><isset property="java.version.8"/></not>
     </condition>
 
     <!--
