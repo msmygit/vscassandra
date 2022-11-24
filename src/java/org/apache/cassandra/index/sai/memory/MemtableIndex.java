@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
 
+import javax.annotation.Nullable;
+
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
@@ -92,6 +94,11 @@ public class MemtableIndex
         return getMinTerm() == null;
     }
 
+    // Returns the minimum indexed term in the combined memory indexes.
+    // This can be null if the indexed memtable was empty. Users of the
+    // {@code MemtableIndex} requiring a non-null minimum term should
+    // use the {@link MemtableIndex#isEmpty} method.
+    @Nullable
     public ByteBuffer getMinTerm()
     {
         return Arrays.stream(rangeIndexes)
@@ -101,6 +108,11 @@ public class MemtableIndex
                      .orElse(null);
     }
 
+    // Returns the mmaximum indexed term in the combined memory indexes.
+    // This can be null if the indexed memtable was empty. Users of the
+    // {@code MemtableIndex} requiring a non-null maximum term should
+    // use the {@link MemtableIndex#isEmpty} method.
+    @Nullable
     public ByteBuffer getMaxTerm()
     {
         return Arrays.stream(rangeIndexes)
