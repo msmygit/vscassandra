@@ -58,6 +58,7 @@ import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.v3.V3ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
@@ -129,7 +130,8 @@ public class IndexContext
 
         if (Version.LATEST.equals(Version.CA))
         {
-            this.columnQueryMetrics = new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
+            //this.columnQueryMetrics = new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
+            this.columnQueryMetrics = new V3ColumnQueryMetrics(getIndexName(), tableMeta);
         }
         else
         {

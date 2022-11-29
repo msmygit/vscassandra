@@ -99,6 +99,7 @@ public class PostingsWriter implements Closeable
     private long lastSegmentRowId;
     private long maxDelta;
     private long totalPostings;
+    private int size = 0;
 
     public PostingsWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean segmented) throws IOException
     {
@@ -191,14 +192,17 @@ public class PostingsWriter implements Closeable
         return summaryOffset;
     }
 
+    /**
+     * Use in place of {@link #write(PostingList) write} to add posting row id's.
+     * @param segmentRowId
+     * @throws IOException
+     */
     public void add(long segmentRowId) throws IOException
     {
         writePosting(segmentRowId);
         totalPostings++;
         size++;
     }
-
-    private int size = 0;
 
     public long finishPostings() throws IOException
     {

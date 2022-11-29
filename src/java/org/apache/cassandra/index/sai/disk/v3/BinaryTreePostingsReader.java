@@ -33,10 +33,14 @@ import org.apache.lucene.util.BytesRef;
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 
+/**
+ * Mapping between node ID and an offset to its auxiliary posting list (containing every row id from all leaves
+ * reachable from that node. See {@link BinaryTreePostingsWriter}).
+ */
 public class BinaryTreePostingsReader
 {
-    private final int size;
     final IntLongMap index = new IntLongHashMap();
+    private final int size;
 
     public BinaryTreePostingsReader(long fp, IndexInput upperPostingsInput) throws IOException
     {

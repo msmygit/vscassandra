@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.index.sai.disk.v3;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
@@ -33,7 +32,6 @@ import javax.annotation.concurrent.ThreadSafe;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.primitives.UnsignedBytes;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -746,7 +744,7 @@ public class BlockTerms
                     {
                         final PostingsReader postings = new PostingsReader(postingsInput,
                                                                            blockPostingsFP,
-                                                                           listener.postingListEventListener());
+                                                                           listener.bkdPostingListEventListener());
                         postingLists.add(postings.peekable());
                     }
                     return;
@@ -754,7 +752,7 @@ public class BlockTerms
                 else if (binaryTreePostingsReader.exists(nodeID))
                 {
                     final long upperPostingsFP = binaryTreePostingsReader.getPostingsFilePointer(nodeID);
-                    final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, listener.postingListEventListener());
+                    final PostingsReader postingsReader = new PostingsReader(upperPostingsInput, upperPostingsFP, listener.bkdPostingListEventListener());
                     postingLists.add(postingsReader.peekable());
                     return;
                 }
@@ -895,7 +893,7 @@ public class BlockTerms
 
             final OrdinalPostingList postings = new PostingsReader(postingsInput,
                                                                    postingsFP.value,
-                                                                   listener.postingListEventListener());
+                                                                   listener.bkdPostingListEventListener());
 
             final long orderMapFP = orderMapFPs.get(block); // here for assertion, move lower
 

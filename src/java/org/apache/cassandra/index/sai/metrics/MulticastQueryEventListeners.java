@@ -43,7 +43,7 @@ public final class MulticastQueryEventListeners
         {
             this.ctx = ctx;
             this.listener = listener;
-            this.postingListEventListener = new Multicast2TriePostingListEventListener(ctx, listener.postingListEventListener());
+            this.postingListEventListener = new Multicast2TriePostingListEventListener(ctx, listener.triePostingListEventListener());
         }
 
         @Override
@@ -61,7 +61,7 @@ public final class MulticastQueryEventListeners
         }
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener triePostingListEventListener()
         {
             return postingListEventListener;
         }
@@ -77,7 +77,7 @@ public final class MulticastQueryEventListeners
         {
             this.ctx = ctx;
             this.listener = listener;
-            this.postingListEventListener = new Multicast2BKDPostingListEventListener(ctx, listener.postingListEventListener());
+            this.postingListEventListener = new Multicast2BKDPostingListEventListener(ctx, listener.bkdPostingListEventListener());
         }
 
         @Override
@@ -108,7 +108,7 @@ public final class MulticastQueryEventListeners
         }
 
         @Override
-        public QueryEventListener.PostingListEventListener postingListEventListener()
+        public QueryEventListener.PostingListEventListener bkdPostingListEventListener()
         {
             return postingListEventListener;
         }

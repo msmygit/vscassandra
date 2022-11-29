@@ -467,7 +467,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         private PostingList initPostingReader(long offset) throws IOException
         {
             final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
-            return new PostingsReader(postingsInput, summary, listener.postingListEventListener());
+            return new PostingsReader(postingsInput, summary, listener.bkdPostingListEventListener());
         }
     }
 
@@ -773,7 +773,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
         @SuppressWarnings("resource")
         private PostingList initFilteringPostingReader(FixedBitSet filter, PostingsReader.BlocksSummary header) throws IOException
         {
-            PostingsReader postingsReader = new PostingsReader(postingsInput, header, listener.postingListEventListener());
+            PostingsReader postingsReader = new PostingsReader(postingsInput, header, listener.bkdPostingListEventListener());
             return new FilteringPostingList(filter, postingsReader);
         }
     }

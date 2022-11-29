@@ -243,16 +243,6 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         {
         }
 
-        public void replaceMaps(Map<String, String> newMap, Collection<IndexComponent> comps)
-        {
-            for (IndexComponent comp : comps)
-            {
-                ComponentMetadata meta = metas.get(comp);
-                if (meta != null)
-                    metas.put(comp, new ComponentMetadata(meta.root, meta.offset, meta.length, newMap));
-            }
-        }
-
         public void put(IndexComponent indexComponent, long root, long offset, long length)
         {
             metas.put(indexComponent, new ComponentMetadata(root, offset, length));

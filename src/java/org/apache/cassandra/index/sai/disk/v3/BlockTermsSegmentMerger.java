@@ -32,6 +32,9 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;
 
+/**
+ * Merges block terms segments.
+ */
 public class BlockTermsSegmentMerger implements SegmentMerger
 {
     private ByteBuffer minTerm = null, maxTerm = null;

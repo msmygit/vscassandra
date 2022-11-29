@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -33,6 +34,10 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 
+/**
+ * Column index writer that flushes indexed data directly from the corresponding Memtable index, without buffering index
+ * data in memory.
+ */
 public class V3MemtableIndexWriter extends MemtableIndexWriter
 {
     public V3MemtableIndexWriter(MemtableIndex memtable, IndexDescriptor indexDescriptor, IndexContext indexContext, RowMapping rowMapping)
@@ -40,17 +45,21 @@ public class V3MemtableIndexWriter extends MemtableIndexWriter
         super(memtable, indexDescriptor, indexContext, rowMapping);
     }
 
-    protected long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
+    protected long flush(DecoratedKey minKey,
+                         DecoratedKey maxKey,
+                         AbstractType<?> termComparator,
+                         MemtableTermsIterator terms,
+                         long maxSegmentRowId) throws IOException
     {
-        final BlockTerms.Writer writer = new BlockTerms.Writer(indexDescriptor, indexContext);
+        final BlockTerms.Writer blockTermsWriter = new BlockTerms.Writer(indexDescriptor, indexContext);
 
         final SegmentMetadata.ComponentMetadataMap indexMetas;
         try (V3InvertedIndexWriter termsWriter = new V3InvertedIndexWriter(indexDescriptor, indexContext, false))
         {
-            indexMetas = writer.writeAll(terms, termsWriter);
+            indexMetas = blockTermsWriter.writeAll(terms, termsWriter);
         }
 
-        final long numRows = writer.pointCount();
+        final long numRows = blockTermsWriter.pointCount();
 
         // If no rows were written we need to delete any created column index components
         // so that the index is correctly identified as being empty (only having a completion marker)

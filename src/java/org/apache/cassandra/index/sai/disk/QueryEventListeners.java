@@ -56,7 +56,7 @@ public class QueryEventListeners
             public void onTraversalComplete(long traversalTotalTime, TimeUnit unit) { }
 
             @Override
-            public PostingListEventListener postingListEventListener()
+            public PostingListEventListener triePostingListEventListener()
             {
                 return NO_OP_POSTINGS_LISTENER;
             }
@@ -79,7 +79,7 @@ public class QueryEventListeners
             public void onSegmentHit() { }
 
             @Override
-            public PostingListEventListener postingListEventListener()
+            public PostingListEventListener bkdPostingListEventListener()
             {
                 return NO_OP_POSTINGS_LISTENER;
             }

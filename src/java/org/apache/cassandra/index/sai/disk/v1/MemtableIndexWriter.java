@@ -124,7 +124,7 @@ public class MemtableIndexWriter implements PerIndexWriter
 
                 long elapsed = stopwatch.elapsed(TimeUnit.MILLISECONDS);
 
-                logger.debug(indexContext.logMessage("Completed flushing {} memtable index cells to SSTable {}. Duration: {} ms. Total elapsed: {} ms"),
+                logger.info(indexContext.logMessage("Completed flushing {} memtable index cells to SSTable {}. Duration: {} ms. Total elapsed: {} ms"),
                              cellCount,
                              indexDescriptor.descriptor,
                              elapsed - start,

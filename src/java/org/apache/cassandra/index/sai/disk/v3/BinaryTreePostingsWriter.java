@@ -49,6 +49,8 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalCallback
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -65,8 +67,8 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
     @Override
     public void onLeaf(int leafID, int leafNodeID, IntArrayList pathToRoot)
     {
-        //checkArgument(!pathToRoot.containsInt(leafNodeID));
-        //checkArgument(pathToRoot.isEmpty() || leafNodeID > pathToRoot.get(pathToRoot.size() - 1));
+        checkArgument(!pathToRoot.containsInt(leafNodeID));
+        checkArgument(pathToRoot.isEmpty() || leafNodeID > pathToRoot.get(pathToRoot.size() - 1));
 
         leafNodeIDs.add(leafNodeID);
 
