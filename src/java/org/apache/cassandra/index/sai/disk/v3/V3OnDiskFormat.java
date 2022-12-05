@@ -60,7 +60,7 @@ public class V3OnDiskFormat extends V2OnDiskFormat
 
     private static final IndexFeatureSet v3IndexFeatureSet = () -> true;
 
-    private static final Set<IndexComponent> V3_INDEX_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
+    public static final Set<IndexComponent> V3_INDEX_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
                                                                               IndexComponent.META,
                                                                               IndexComponent.BLOCK_BITPACKED,
                                                                               IndexComponent.BLOCK_ORDERMAP,

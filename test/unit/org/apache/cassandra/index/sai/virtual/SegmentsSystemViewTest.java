@@ -17,8 +17,10 @@
  */
 package org.apache.cassandra.index.sai.virtual;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.common.collect.ImmutableList;
@@ -38,8 +40,10 @@ import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v3.V3OnDiskFormat;
 import org.apache.cassandra.index.sai.utils.RequiresVersion;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
@@ -161,6 +165,17 @@ public class SegmentsSystemViewTest extends SAITester
                     final String indexType = entry.getKey();
                     final String str = entry.getValue().getOrDefault(SegmentMetadata.ComponentMetadata.LENGTH, "0");
 
+                    // These components are not actually files
+                    if (Version.LATEST.equals(Version.CA))
+                    {
+                        if (indexType.equals(IndexComponent.BLOCK_ORDERMAP.toString())
+                            || indexType.equals(IndexComponent.BLOCK_TERMS_OFFSETS.toString())
+                            || indexType.equals(IndexComponent.BLOCK_POSTINGS_OFFSETS.toString()))
+                        {
+                            continue;
+                        }
+                    }
+
                     if (indexType.equals(IndexComponent.KD_TREE.toString()))
                     {
                         int maxPointsInLeafNode = Integer.parseInt(entry.getValue().get("max_points_in_leaf_node"));
@@ -211,15 +226,31 @@ public class SegmentsSystemViewTest extends SAITester
                 IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
                 indexDescriptor.hasComponent(IndexComponent.COLUMN_COMPLETION_MARKER, index.getIndexContext());
 
-                if (TypeUtil.isLiteral(sstableIndex.getIndexContext().getValidator()))
+                if (Version.LATEST.equals(Version.BA))
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext(), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext(), indexDescriptor);
+                    if (TypeUtil.isLiteral(sstableIndex.getIndexContext().getValidator()))
+                    {
+                        addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext(), indexDescriptor);
+                        addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext(), indexDescriptor);
+                    }
+                    else
+                    {
+                        addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext(), indexDescriptor);
+                        addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext(), indexDescriptor);
+                    }
                 }
-                else
+                else if (Version.LATEST.equals(Version.CA))
                 {
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext(), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext(), indexDescriptor);
+                    List<IndexComponent> comps = new ArrayList<>(V3OnDiskFormat.V3_INDEX_COMPONENTS);
+                    comps.remove(IndexComponent.META);
+                    comps.remove(IndexComponent.COLUMN_COMPLETION_MARKER);
+                    comps.remove(IndexComponent.BLOCK_ORDERMAP);
+                    comps.remove(IndexComponent.BLOCK_POSTINGS_OFFSETS);
+
+                    for (IndexComponent component : comps)
+                    {
+                        addComponentSizeToMap(lengths, component, index.getIndexContext(), indexDescriptor);
+                    }
                 }
             }
         }

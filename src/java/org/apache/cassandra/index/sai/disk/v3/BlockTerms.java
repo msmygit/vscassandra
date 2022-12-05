@@ -1306,6 +1306,8 @@ public class BlockTerms
 
             BinaryTreePostingsWriter.Result treePostingsResult = null;
 
+            final long upperPostingsStartFP, upperPostingsEndFP;
+
             if (!segmented)
             {
                 try (final V3PerIndexFiles perIndexFiles = new V3PerIndexFiles(indexDescriptor, context, segmented);
@@ -1314,6 +1316,7 @@ public class BlockTerms
                      final IndexOutput upperPostingsOut = indexDescriptor.openPerIndexOutput(BLOCK_UPPER_POSTINGS, context, true, segmented);
                      final FileHandle blockPostingsHandle = perIndexFiles.getFile(BLOCK_POSTINGS))
                 {
+                    upperPostingsStartFP = upperPostingsOut.getFilePointer();
                     final BinaryTree.Reader treeReader = new BinaryTree.Reader(minBlockTerms.size(),
                                                                                pointCount(),
                                                                                postingsBlockSize,
@@ -1329,7 +1332,13 @@ public class BlockTerms
                                                                    upperPostingsOut,
                                                                    context);
                     SAICodecUtils.writeFooter(upperPostingsOut);
+                    upperPostingsEndFP = upperPostingsOut.getFilePointer();
                 }
+            }
+            else
+            {
+                upperPostingsStartFP = 0;
+                upperPostingsEndFP = 0;
             }
 
             final long bitpackStartFP;
@@ -1337,6 +1346,8 @@ public class BlockTerms
             {
                 bitpackStartFP = bitPackOut.getFilePointer();
             }
+
+            final long bitpackEndFP;
 
             try (final IndexOutput bitPackOut = indexDescriptor.openPerIndexOutput(IndexComponent.BLOCK_BITPACKED, context, true, segmented))
             {
@@ -1379,6 +1390,7 @@ public class BlockTerms
                     }
                 }
                 SAICodecUtils.writeFooter(bitPackOut);
+                bitpackEndFP = bitPackOut.getFilePointer();
             }
 
             final FileValidation.Meta termsIndexCRC = createCRCMeta(termsIndexStartFP, IndexComponent.BLOCK_TERMS_INDEX);
@@ -1414,11 +1426,14 @@ public class BlockTerms
 
             final long termsIndexLength = termsIndexOut.getFilePointer() - termsIndexStartFP;
 
+            final long bitPackedLength = bitpackEndFP - bitpackStartFP;
+
             // Postings list file pointers are stored directly in TERMS_DATA, so a root is not needed.
             components.put(BLOCK_TERMS_DATA, termsStartFP, termsStartFP, termsLength, meta.stringMap());
-            components.put(IndexComponent.POSTING_LISTS, -1, postingsWriter.getStartOffset(), postingsLength, meta.stringMap());
+            components.put(IndexComponent.BLOCK_POSTINGS, -1, postingsWriter.getStartOffset(), postingsLength, meta.stringMap());
             components.put(IndexComponent.BLOCK_TERMS_INDEX, meta.termsIndexFP, termsIndexStartFP, termsIndexLength, meta.stringMap());
-
+            components.put(IndexComponent.BLOCK_BITPACKED, bitpackStartFP, bitpackStartFP, bitPackedLength, meta.stringMap());
+            components.put(IndexComponent.BLOCK_UPPER_POSTINGS, upperPostingsStartFP, upperPostingsStartFP, upperPostingsEndFP - upperPostingsStartFP, meta.stringMap());
             return meta;
         }
 

@@ -88,6 +88,7 @@ public class MergePointsIterators implements AutoCloseable
 
             return true;
         }
+        // when there are no more iterators
         return false;
     }
 
