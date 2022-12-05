@@ -77,7 +77,6 @@ public class PostingsReader implements OrdinalPostingList
         this.numPostings = summary.numPostings;
         this.blockMaxValues = summary.maxValues;
         this.listener = listener;
-
         this.summary = summary;
 
         reBuffer();

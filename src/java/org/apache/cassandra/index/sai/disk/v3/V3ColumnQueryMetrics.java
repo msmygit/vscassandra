@@ -24,6 +24,9 @@ import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.schema.TableMetadata;
 
+/**
+ * Combination of kdtree and trie index metrics for the version 3 index format that uses both metrics
+ */
 public class V3ColumnQueryMetrics extends ColumnQueryMetrics implements QueryEventListener.TrieIndexEventListener, QueryEventListener.BKDIndexEventListener
 {
     private final BKDIndexMetrics bkdIndexMetrics;

@@ -48,7 +48,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import static org.apache.cassandra.index.sai.disk.QueryEventListeners.NO_OP_TRIE_LISTENER;
 
 /**
- * Executes {@link Expression}s against the block terms index for an individual index segment.
+ * Executes {@link Expression}s against the block terms index for an individual version 3 index segment.
  */
 public class V3IndexSearcher extends IndexSearcher
 {
@@ -56,7 +56,7 @@ public class V3IndexSearcher extends IndexSearcher
 
     private final BlockTerms.Reader reader;
     private final TermsReader termsReader;
-    private final QueryEventListener.BKDIndexEventListener perColumnEventListener;
+    private final V3ColumnQueryMetrics perColumnEventListener;
 
     V3IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
                     V3PerIndexFiles perIndexFiles,
@@ -66,7 +66,7 @@ public class V3IndexSearcher extends IndexSearcher
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
 
-        perColumnEventListener = (QueryEventListener.BKDIndexEventListener)indexContext.getColumnQueryMetrics();
+        perColumnEventListener = (V3ColumnQueryMetrics)indexContext.getColumnQueryMetrics();
 
         reader = new BlockTerms.Reader(indexDescriptor, indexContext, perIndexFiles, segmentMetadata.componentMetadatas);
 
@@ -130,7 +130,7 @@ public class V3IndexSearcher extends IndexSearcher
             if (exp.getOp().isEquality())
             {
                 // TODO: figure out event listener
-                final PostingList postings =  termsReader.exactMatch(lowerBound, NO_OP_TRIE_LISTENER, context.queryContext);
+                final PostingList postings =  termsReader.exactMatch(lowerBound, perColumnEventListener, context.queryContext);
                 return toIterator(postings, context, defer);
             }
 
@@ -162,6 +162,6 @@ public class V3IndexSearcher extends IndexSearcher
     @Override
     public void close()
     {
-        FileUtils.closeQuietly(reader);
+        FileUtils.closeQuietly(reader, termsReader);
     }
 }

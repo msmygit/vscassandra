@@ -40,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assume.assumeTrue;
 
-@RequiresVersion(version="ba")
 public class SingleNodeQueryFailureTest extends SAITester
 {
     private static final String CREATE_TABLE_TEMPLATE = "CREATE TABLE %s (id text PRIMARY KEY, v1 int, v2 text) WITH compaction = {'class' : 'SizeTieredCompactionStrategy', 'enabled' : false }";

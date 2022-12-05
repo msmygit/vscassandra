@@ -49,6 +49,9 @@ import org.apache.lucene.store.IndexInput;
 
 import static org.apache.cassandra.utils.FBUtilities.prettyPrintMemory;
 
+/**
+ * Version 3 block terms and inverted index combination index format.
+ */
 public class V3OnDiskFormat extends V2OnDiskFormat
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());

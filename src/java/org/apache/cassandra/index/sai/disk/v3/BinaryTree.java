@@ -35,6 +35,11 @@ import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.MathUtil;
 
+/**
+ * Binary tree based on the Lucene 8.x kdtree.
+ *
+ * The index is not prefix compressed yet.
+ */
 public class BinaryTree
 {
     public interface IntersectVisitor

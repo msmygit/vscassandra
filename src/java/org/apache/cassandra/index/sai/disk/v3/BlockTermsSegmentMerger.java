@@ -33,7 +33,7 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.util.FileUtils;
 
 /**
- * Merges block terms segments.
+ * Merges index format version 3 block terms and inverted index segments.
  */
 public class BlockTermsSegmentMerger implements SegmentMerger
 {

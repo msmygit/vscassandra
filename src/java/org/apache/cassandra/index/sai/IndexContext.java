@@ -130,7 +130,6 @@ public class IndexContext
 
         if (Version.LATEST.equals(Version.CA))
         {
-            //this.columnQueryMetrics = new ColumnQueryMetrics.BKDIndexMetrics(getIndexName(), tableMeta);
             this.columnQueryMetrics = new V3ColumnQueryMetrics(getIndexName(), tableMeta);
         }
         else

@@ -53,7 +53,6 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests the virtual table exposing SSTable index segment metadata.
  */
-@RequiresVersion(version="ba")
 public class SegmentsSystemViewTest extends SAITester
 {
     private static final String SELECT = String.format("SELECT %s, %s, %s, %s " +
@@ -132,6 +131,7 @@ public class SegmentsSystemViewTest extends SAITester
 
         for (int lastValidSegmentRowId : Arrays.asList(0, 1, 2, 3, 5, 9, 25, 49, 59, 99, 101))
         {
+            System.out.println("lastValidSegmentRowId="+lastValidSegmentRowId);
             SegmentBuilder.updateLastValidSegmentRowId(lastValidSegmentRowId);
 
             // compaction to rewrite segments

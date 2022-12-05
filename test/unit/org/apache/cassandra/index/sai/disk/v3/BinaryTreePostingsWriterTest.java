@@ -96,7 +96,7 @@ public class BinaryTreePostingsWriterTest extends SaiRandomizedTest
                 final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter(config);
                 treeReader.traverse(new IntArrayList(), treePostingsWriter);
 
-                result = treePostingsWriter.finish(reader, upperPostingsOut);
+                result = treePostingsWriter.finish(reader, upperPostingsOut, indexContext);
             }
 
             try (IndexInput binaryTreeInput = dir.openInput("binarytree", IOContext.DEFAULT);

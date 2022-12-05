@@ -19,12 +19,18 @@ package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.PriorityQueue;
 
+import static org.apache.cassandra.index.sai.disk.v3.BlockTerms.unisgnedIntsToString;
+
+/**
+ * Merge streams of points iterators.
+ */
 public class MergePointsIterators implements AutoCloseable
 {
     private final MergeQueue queue;
@@ -32,13 +38,17 @@ public class MergePointsIterators implements AutoCloseable
     private final List<BlockTerms.Reader.PointsIterator> toClose;
     private long rowId = -1;
 
-    public MergePointsIterators(List<BlockTerms.Reader.PointsIterator> iterators)
+    public MergePointsIterators(List<BlockTerms.Reader.PointsIterator> iterators) throws IOException
     {
         toClose = new ArrayList<>(iterators);
         queue = new MergeQueue(iterators.size());
         for (BlockTerms.Reader.PointsIterator iterator : iterators)
         {
-            queue.add(iterator);
+            // initialize each iterator
+            if (iterator.next())
+            {
+                queue.add(iterator);
+            }
         }
     }
 
@@ -66,18 +76,17 @@ public class MergePointsIterators implements AutoCloseable
         while (queue.size() != 0)
         {
             final BlockTerms.Reader.PointsIterator iterator = queue.top();
-            if (iterator.next())
-            {
-                rowId = iterator.rowId();
-                spare.copyBytes(iterator.term());
-                queue.updateTop();
-                return true;
-            }
-            else
-            {
-                // iterator is exhausted
+
+            rowId = iterator.rowId();
+            spare.copyBytes(iterator.term());
+
+            // iterator is exhausted, remove it
+            if (!iterator.next())
                 queue.pop();
-            }
+
+            queue.updateTop();
+
+            return true;
         }
         return false;
     }

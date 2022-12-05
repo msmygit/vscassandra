@@ -20,7 +20,6 @@ package org.apache.cassandra.index.sai.metrics;
 
 import org.apache.cassandra.index.sai.utils.RequiresVersion;
 
-@RequiresVersion(version="ba")
 public class FinalSegmentFlushingFailureTest extends SegmentFlushingFailureTest
 {
     @Override

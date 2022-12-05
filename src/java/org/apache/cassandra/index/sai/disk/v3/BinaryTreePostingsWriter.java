@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.agrona.collections.IntArrayList;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
@@ -95,18 +96,18 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
         }
     }
 
-    public Result finish(BlockTerms.Reader reader, IndexOutput out) throws IOException
+    public Result finish(BlockTerms.Reader reader, IndexOutput out, IndexContext indexContext) throws IOException
     {
         try (LongArray postingOffsets = reader.blockPostingOffsetsReader.open())
         {
-            return finish(reader.meta.numPostingBlocks, reader.postingsHandle, postingOffsets, out);
+            return finish(reader.postingsHandle, postingOffsets, out, indexContext);
         }
     }
 
-    public Result finish(int numPostingBlocks,
-                         FileHandle postingsHandle,
+    public Result finish(FileHandle postingsHandle,
                          LongArray leafPostingsOffsets,
-                         IndexOutput out) throws IOException
+                         IndexOutput out,
+                         IndexContext indexContext) throws IOException
     {
         final long startFP = out.getFilePointer();
         final PostingsWriter postingsWriter = new PostingsWriter(out);
@@ -118,10 +119,9 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
                                                                    .filter(i -> nodeToChildLeaves.get(i).size() >= config.getBkdPostingsMinLeaves())
                                                                    .collect(Collectors.toList());
 
-//        logger.debug(indexContext.logMessage("Writing posting lists for {} internal and {} leaf kd-tree nodes. Leaf postings memory usage: {}."),
-//                     internalNodeIDs.size(),
-//                     leafNodeIDs.size(),
-//                     FBUtilities.prettyPrintMemory(postingsRamBytesUsed));
+            logger.debug(indexContext.logMessage("Writing posting lists for {} internal and {} leaf binary-tree nodes."),
+                         internalNodeIDs.size(),
+                         leafNodeIDs.size());
 
             final Stopwatch flushTime = Stopwatch.createStarted();
             final TreeMap<Integer, Long> nodeIDToPostingsFilePointer = new TreeMap<>();
@@ -133,12 +133,9 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
                 final Collection<Integer> leaves = nodeToChildLeaves.get(nodeID);
 
                 // leaf level posting lists are already written
-                // leaf nodes have no leaves
-                // skip
+                // leaf nodes have no leaves, skip
                 if (leaves.isEmpty())
                 {
-                    //assert nodeID >= numPostingBlocks; // assert empty leaves is a leaf node id
-
                     seenLeafNodeCount++;
 
                     continue;
@@ -167,15 +164,9 @@ public class BinaryTreePostingsWriter implements BinaryTree.BinaryTreeTraversalC
             }
             flushTime.stop();
 
-            // System.out.println("seenLeafNodeCount="+seenLeafNodeCount+" numLeafBlocks="+numPostingBlocks);
-
             logger.debug("Flushed {} upper posting lists for binary-tree nodes in {} ms.",
                          nodeIDToPostingsFilePointer.size(),
                          flushTime.elapsed(TimeUnit.MILLISECONDS));
-//
-//            logger.debug(indexContext.logMessage("Flushed {} of posting lists for kd-tree nodes in {} ms."),
-//                     FBUtilities.prettyPrintMemory(out.getFilePointer() - startFP),
-//                     flushTime.elapsed(TimeUnit.MILLISECONDS));
 
             final long indexFilePointer = out.getFilePointer();
             writeMap(nodeIDToPostingsFilePointer, out);

@@ -29,10 +29,10 @@ import org.apache.cassandra.index.sai.utils.RequiresVersion;
 
 import static org.junit.Assert.assertEquals;
 
-@RequiresVersion(version="ba")
 public class EmptyMemtableFlushTest extends SAITester
 {
     @Test
+    @RequiresVersion(version="ba")
     public void numericIndexTest() throws Throwable
     {
         requireNetwork();
@@ -52,6 +52,34 @@ public class EmptyMemtableFlushTest extends SAITester
 
         assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE, val2IndexContext).size());
         assertEquals(1, componentFiles(indexFiles(), IndexComponent.KD_TREE_POSTING_LISTS, val2IndexContext).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.META, val2IndexContext).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val2IndexContext).size());
+
+        assertEquals(0, execute("SELECT * from %s WHERE val1 = 0").size());
+        assertEquals(1, execute("SELECT * from %s WHERE val2 = 1").size());
+    }
+
+    @Test
+    @RequiresVersion(version="ca")
+    public void numericIndexTestIndexFormatVersion3() throws Throwable
+    {
+        requireNetwork();
+        createTable("CREATE TABLE %s (id int PRIMARY KEY, val1 int, val2 int)");
+        IndexContext val1IndexContext = createIndexContext(createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'"), Int32Type.instance);
+        IndexContext val2IndexContext = createIndexContext(createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'"), Int32Type.instance);
+        waitForIndexQueryable();
+        execute("INSERT INTO %s (id, val1, val2) VALUES (0, 0, 0)");
+        execute("INSERT INTO %s (id, val2) VALUES (1, 1)");
+        execute("DELETE FROM %s WHERE id = 0");
+        flush();
+        // After this we should have only 1 set of index files but 2 completion markers
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.BLOCK_TERMS_DATA, val1IndexContext).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.BLOCK_POSTINGS, val1IndexContext).size());
+        assertEquals(0, componentFiles(indexFiles(), IndexComponent.META, val1IndexContext).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val1IndexContext).size());
+
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.BLOCK_TERMS_DATA, val2IndexContext).size());
+        assertEquals(1, componentFiles(indexFiles(), IndexComponent.BLOCK_POSTINGS, val2IndexContext).size());
         assertEquals(1, componentFiles(indexFiles(), IndexComponent.META, val2IndexContext).size());
         assertEquals(1, componentFiles(indexFiles(), IndexComponent.COLUMN_COMPLETION_MARKER, val2IndexContext).size());
 

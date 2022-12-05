@@ -35,7 +35,6 @@ import org.apache.cassandra.inject.Injections;
 import static org.apache.cassandra.inject.InvokePointBuilder.newInvokePoint;
 import static org.junit.Assert.assertEquals;
 
-@RequiresVersion(version="ba")
 public class SelectiveIntersectionTest extends SAITester
 {
     private static Injections.Counter INTERSECTION_FLOW_COUNTER = Injections.newCounter("IntersectionFlowCounter")

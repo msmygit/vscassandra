@@ -20,10 +20,12 @@ package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +63,7 @@ import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.SeekingRandomAccessInput;
 import org.apache.cassandra.io.util.FileHandle;
@@ -103,11 +106,56 @@ import static org.apache.cassandra.index.sai.disk.v3.SegmentNumericValuesWriter.
  * The default postings block size is 1024.
  *
  * All major data structures are on disk thereby enabling many indexes.
+ *
+ * File validation is done via a CRC check.
+ *
+ * The kdtree and trie metrics are combined and reused.
+ *
+ * Differences with the version 1 kdtree:
+ *
+ * The binary tree index is read from disk rather than kept in heap.
+ *
+ * Variable bytes length binary tree index whereas the kdtree is fixed length bytes.
+ * This obviates the need for {@link org.apache.cassandra.index.sai.utils.TypeUtil} truncating
+ * big integer, big decimal, and enables range queries on strings.
+ *
+ * When writing upper level postings, leaf postings are read from disk instead of kept in heap.
+ *
+ * The random prefix bytes implementation is from SAI sorted terms/Lucene 8.x doc values.
+ *
+ * The order map is in a separate file rather than inline with prefix encoded bytes.
+ *
+ * Files:
+ *
+ * BLOCK_BITPACKED - Bit packed maps of block id -> bytes block file pointer, and block id -> order map file pointer.
+ *
+ * BLOCK_TERMS_DATA - Raw bytes prefix encoded in blocks of 16 {@see SortedTermsReader}
+ *
+ * BLOCK_TERMS_INDEX - Variable byte length kdtree index on-disk implementation.  Based on Lucene 8.x.
+ *
+ * BLOCK_POSTINGS - Posting lists per 1024 sized block.
+ *
+ * BLOCK_UPPER_POSTINGS - Non-block posting lists for greater than level 0 (block level) posting lists.
+ *
+ * BLOCK_ORDERMAP - Map of posting ordinals to the actual block ordinals.  Exists because posting lists
+ *                  are in row id order.
+ *
  */
 public class BlockTerms
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     public static final int DEFAULT_POSTINGS_BLOCK_SIZE = 1024;
+
+    public static String unisgnedIntsToString(BytesRef term)
+    {
+        //StringBuilder b = new StringBuilder();
+        List list = new ArrayList<>();
+        for (int x = term.offset; x < term.offset + term.length; x++)
+        {
+            list.add(term.bytes[x] & 0xff);
+        }
+        return list.toString();
+    }
 
     /**
      * Block terms index meta object.
@@ -259,6 +307,10 @@ public class BlockTerms
     {
         private static final Comparator<PostingList.PeekablePostingList> COMPARATOR = Comparator.comparingLong(PostingList.PeekablePostingList::peek);
 
+        final Meta meta;
+        final BinaryTreePostingsReader binaryTreePostingsReader;
+        protected long ramBytesUsed;
+
         protected final IndexDescriptor indexDescriptor;
         protected final IndexContext indexContext;
         protected final SegmentMetadata.ComponentMetadataMap componentMetadatas;
@@ -270,9 +322,6 @@ public class BlockTerms
         private final DirectReaders.Reader orderMapReader;
         private final MonotonicBlockPackedReader blockTermsOffsetsReader;
         private final BlockPackedReader blockOrderMapFPReader;
-        final Meta meta;
-        final BinaryTreePostingsReader binaryTreePostingsReader;
-        protected long ramBytesUsed;
 
         /**
          * Segment reader version.
@@ -327,12 +376,6 @@ public class BlockTerms
             this.blockOrderMapMeta = new NumericValuesMeta(blockOrderMapCompMeta.attributes);
             this.blockOrderMapFPReader = new BlockPackedReader(bitpackedHandle, blockOrderMapMeta);
             this.ramBytesUsed += blockOrderMapFPReader.memoryUsage();
-
-//            if (meta.numPostingBlocks != postingBlockFPs.length())
-//                throw new IllegalStateException();
-//
-//            if (meta.numPostingBlocks != orderMapFPs.length())
-//                throw new IllegalStateException();
 
             this.orderMapReader = DirectReaders.getReaderForBitsPerValue((byte) DirectWriter.unsignedBitsRequired(meta.postingsBlockSize - 1));
             this.orderMapRandoInput = new SeekingRandomAccessInput(IndexInputReader.create(blockOrderMapFile));
@@ -401,12 +444,12 @@ public class BlockTerms
              * Points iterators are sorted by current term then rowid
              */
             @Override
-            public int compareTo(PointsIterator o)
+            public int compareTo(PointsIterator other)
             {
-                final int cmp = bytesCursor.currentTerm.compareTo(o.bytesCursor.currentTerm);
+                final int cmp = bytesCursor.currentTerm.compareTo(other.bytesCursor.currentTerm);
                 if (cmp != 0)
                    return cmp;
-                return Long.compare(rowId(), o.rowId());
+                return Long.compare(rowId(), other.rowId());
             }
 
             /**
@@ -616,7 +659,10 @@ public class BlockTerms
             final PointValues.Relation relation = visitor.compare(new BytesRef(meta.minTerm), new BytesRef(meta.maxTerm));
 
             if (relation == PointValues.Relation.CELL_OUTSIDE_QUERY)
+            {
+                listener.onIntersectionEarlyExit();
                 return null;
+            }
 
             final LongArray postingBlockFPs = new LongArray.DeferredLongArray(() -> blockPostingOffsetsReader.open());
             final LongArray orderMapFPs = new LongArray.DeferredLongArray(() -> blockOrderMapFPReader.open());
@@ -657,12 +703,12 @@ public class BlockTerms
 
         private class Intersection
         {
-            private final Stopwatch queryExecutionTimer = Stopwatch.createStarted();
             protected final BinaryTree.Reader treeReader;
             protected final IndexInput postingsInput, upperPostingsInput;
             protected final LongArray postingBlockFPs, orderMapFPs;
             protected final QueryContext queryContext;
             protected final QueryEventListener.BKDIndexEventListener listener;
+            private final Stopwatch queryExecutionTimer = Stopwatch.createStarted();
 
             public Intersection(IndexInput postingsInput,
                                 IndexInput upperPostingsInput,
@@ -697,12 +743,17 @@ public class BlockTerms
                 }
                 catch (Throwable t)
                 {
-//                    if (!(t instanceof AbortedOperationException))
-//                        logger.error(indexContext.logMessage("kd-tree intersection failed on {}"), indexFile.path(), t);
-//
-//                    closeOnException();
+                    if (!(t instanceof AbortedOperationException))
+                        logger.error(indexContext.logMessage("block terms intersection failed"), t);
+
+                    closeOnException();
                     throw Throwables.cleaned(t);
                 }
+            }
+
+            protected void closeOnException()
+            {
+                FileUtils.closeQuietly(postingsInput, upperPostingsInput, treeReader, postingBlockFPs, orderMapFPs);
             }
 
             protected PostingList mergePostings(PriorityQueue<PostingList.PeekablePostingList> postingLists)
@@ -740,6 +791,8 @@ public class BlockTerms
 
                     // A -1 postings fp means there is a single posting list
                     // for multiple leaf blocks because the values are the same
+
+                    // TODO: this probably isn't necessary any longer
                     if (blockPostingsFP != -1)
                     {
                         final PostingsReader postings = new PostingsReader(postingsInput,
@@ -756,8 +809,6 @@ public class BlockTerms
                     postingLists.add(postingsReader.peekable());
                     return;
                 }
-
-                // Preconditions.checkState(!treeReader.isLeafNode(), "Leaf node %s does not have upper postings.", treeReader.getNodeID());
 
                 // Recurse on left sub-tree:
                 treeReader.pushLeft();
@@ -887,12 +938,12 @@ public class BlockTerms
             postingsFP.value = blockPostingsFPs.get(block);
 
             if (postingsFP.value == -1)
-            {
                 return null;
-            }
+
+            final PostingsReader.BlocksSummary blocksSummary = new PostingsReader.BlocksSummary(postingsInput, postingsFP.value);
 
             final OrdinalPostingList postings = new PostingsReader(postingsInput,
-                                                                   postingsFP.value,
+                                                                   blocksSummary,
                                                                    listener.bkdPostingListEventListener());
 
             final long orderMapFP = orderMapFPs.get(block); // here for assertion, move lower
@@ -1175,7 +1226,7 @@ public class BlockTerms
                         final long rowid = postings.nextPosting();
                         if (rowid == PostingList.END_OF_STREAM)
                             break;
-                         boolean newTerm = add(term, rowid, callback);
+                        add(term, rowid, callback);
                     }
                 }
             }
@@ -1273,10 +1324,10 @@ public class BlockTerms
                     final BinaryTreePostingsWriter treePostingsWriter = new BinaryTreePostingsWriter(config);
                     treeReader.traverse(new IntArrayList(), treePostingsWriter);
 
-                    treePostingsResult = treePostingsWriter.finish(minBlockTerms.size(),
-                                                                   blockPostingsHandle,
+                    treePostingsResult = treePostingsWriter.finish(blockPostingsHandle,
                                                                    new LongArrayImpl(blockPostingsFPs),
-                                                                   upperPostingsOut);
+                                                                   upperPostingsOut,
+                                                                   context);
                     SAICodecUtils.writeFooter(upperPostingsOut);
                 }
             }
@@ -1522,7 +1573,7 @@ public class BlockTerms
                 minTerm.copyBytes(term);
 
             if (prevTerm.get().compareTo(term) > 0)
-               throw new IllegalArgumentException("Terms must be in ascending lexicographic order");
+               throw new IllegalArgumentException("Terms must be in ascending lexicographic order prevTerm="+ unisgnedIntsToString(prevTerm.get())+" term="+unisgnedIntsToString(term));//Arrays.toString(prevTerm.get().bytes)+" term="+Arrays.toString(term.bytes));
 
             minRowId = Math.min(minRowId, rowid);
             maxRowId = Math.max(maxRowId, rowid);

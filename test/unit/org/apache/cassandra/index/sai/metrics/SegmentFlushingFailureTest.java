@@ -213,7 +213,7 @@ public abstract class SegmentFlushingFailureTest extends SAITester
                 .isInstanceOf(ReadFailureException.class);
     }
 
-    @Test
+    @Test // copy of the above test for index format version 3
     @RequiresVersion(version="ca")
     public void shouldZeroMemoryAfterOneOfTwoIndexesFailIndexVersion3() throws Throwable
     {

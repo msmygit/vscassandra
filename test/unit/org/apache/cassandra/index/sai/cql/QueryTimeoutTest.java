@@ -36,7 +36,6 @@ import org.apache.cassandra.inject.Injections;
 import static org.apache.cassandra.inject.InvokePointBuilder.newInvokePoint;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@RequiresVersion(version="ba")
 public class QueryTimeoutTest extends SAITester
 {
     private static final int TIMEOUT = 5000;
@@ -85,12 +84,31 @@ public class QueryTimeoutTest extends SAITester
     }
 
     @Test
+    @RequiresVersion(version="ba")
     public void delayDuringKDTreeIntersectionShouldProvokeTimeoutInReader() throws Throwable
     {
         Injection kdtree_intersection_delay = Injections.newPause("kdtree_intersection_delay", DELAY)
                                                         .add(newInvokePoint().onClass("org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader$Intersection")
                                                                                    .onMethod("collectPostingLists")
                                                                                    .at("INVOKE QueryContext.checkpoint"))
+
+                                                        .build();
+
+        Injections.inject(kdtree_intersection_delay);
+
+        assertThatThrownBy(() -> executeNet("SELECT * FROM %s WHERE v1 >= 0 AND v1 < 10000")).isInstanceOf(ReadTimeoutException.class);
+
+        waitForEquals(queryCountName, queryTimeoutsName);
+    }
+
+    @Test
+    @RequiresVersion(version="ca")
+    public void delayDuringKDTreeIntersectionShouldProvokeTimeoutInReaderVersion3() throws Throwable
+    {
+        Injection kdtree_intersection_delay = Injections.newPause("blockterms_intersection_delay", DELAY)
+                                                        .add(newInvokePoint().onClass("org.apache.cassandra.index.sai.disk.v3.BlockTerms$Reader$Intersection")
+                                                                             .onMethod("collectPostingLists")
+                                                                             .at("INVOKE QueryContext.checkpoint"))
 
                                                         .build();
 
