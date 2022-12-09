@@ -56,7 +56,6 @@ public class Operation
     }
 
     @VisibleForTesting
-    @SuppressWarnings("resource")
     protected static ListMultimap<ColumnMetadata, Expression> analyzeGroup(QueryController controller,
                                                                            OperationType op,
                                                                            List<RowFilter.Expression> expressions)
@@ -76,71 +75,73 @@ public class Operation
             IndexContext indexContext = controller.getContext(e);
             List<Expression> perColumn = analyzed.get(e.column());
 
-            AbstractAnalyzer.AnalyzerFactory analyzerFactory = indexContext.getQueryAnalyzerFactory();
-            AbstractAnalyzer analyzer = analyzerFactory.create();
-            try
+            try (AbstractAnalyzer.AnalyzerFactory analyzerFactory = indexContext.getQueryAnalyzerFactory())
             {
-                analyzer.reset(e.getIndexValue().duplicate());
-
-                // EQ can have multiple expressions e.g. text = "Hello World",
-                // becomes text = "Hello" OR text = "World" because "space" is always interpreted as a split point (by analyzer),
-                // CONTAINS/CONTAINS_KEY are always treated as multiple expressions since they currently only targetting
-                // collections.
-                boolean isMultiExpression = false;
-                switch (e.operator())
+                AbstractAnalyzer analyzer = analyzerFactory.create();
+                try
                 {
-                    case EQ:
-                        // EQ operator will always be a multiple expression because it is being used by
-                        // map entries
-                        isMultiExpression = indexContext.isNonFrozenCollection();
-                        break;
+                    analyzer.reset(e.getIndexValue().duplicate());
 
-                    case CONTAINS:
-                    case CONTAINS_KEY:
-                        isMultiExpression = true;
-                        break;
-                }
-                if (isMultiExpression)
-                {
-                    while (analyzer.hasNext())
+                    // EQ can have multiple expressions e.g. text = "Hello World",
+                    // becomes text = "Hello" OR text = "World" because "space" is always interpreted as a split point (by analyzer),
+                    // CONTAINS/CONTAINS_KEY are always treated as multiple expressions since they currently only targetting
+                    // collections.
+                    boolean isMultiExpression = false;
+                    switch (e.operator())
                     {
-                        final ByteBuffer token = analyzer.next();
-                        perColumn.add(new Expression(indexContext).add(e.operator(), token.duplicate()));
-                    }
-                }
-                else
-                // "range" or not-equals operator, combines both bounds together into the single expression,
-                // if operation of the group is AND, otherwise we are forced to create separate expressions,
-                // not-equals is combined with the range iff operator is AND.
-                {
-                    Expression range;
-                    if (perColumn.size() == 0 || op != OperationType.AND)
-                    {
-                        range = new Expression(indexContext);
-                        perColumn.add(range);
-                    }
-                    else
-                    {
-                        range = Iterables.getLast(perColumn);
-                    }
+                        case EQ:
+                            // EQ operator will always be a multiple expression because it is being used by
+                            // map entries
+                            isMultiExpression = indexContext.isNonFrozenCollection();
+                            break;
 
-                    if (!TypeUtil.isLiteral(indexContext.getValidator()))
-                    {
-                        range.add(e.operator(), e.getIndexValue().duplicate());
+                        case CONTAINS:
+                        case CONTAINS_KEY:
+                            isMultiExpression = true;
+                            break;
                     }
-                    else
+                    if (isMultiExpression)
                     {
                         while (analyzer.hasNext())
                         {
-                            ByteBuffer term = analyzer.next();
-                            range.add(e.operator(), term.duplicate());
+                            final ByteBuffer token = analyzer.next();
+                            perColumn.add(new Expression(indexContext).add(e.operator(), token.duplicate()));
+                        }
+                    }
+                    else
+                    // "range" or not-equals operator, combines both bounds together into the single expression,
+                    // if operation of the group is AND, otherwise we are forced to create separate expressions,
+                    // not-equals is combined with the range iff operator is AND.
+                    {
+                        Expression range;
+                        if (perColumn.size() == 0 || op != OperationType.AND)
+                        {
+                            range = new Expression(indexContext);
+                            perColumn.add(range);
+                        }
+                        else
+                        {
+                            range = Iterables.getLast(perColumn);
+                        }
+
+                        if (!TypeUtil.isLiteral(indexContext.getValidator()))
+                        {
+                            range.add(e.operator(), e.getIndexValue().duplicate());
+                        }
+                        else
+                        {
+                            while (analyzer.hasNext())
+                            {
+                                ByteBuffer term = analyzer.next();
+                                range.add(e.operator(), term.duplicate());
+                            }
                         }
                     }
                 }
-            }
-            finally
-            {
-                analyzer.end();
+                finally
+                {
+                    analyzer.end();
+                }
             }
         }
 
@@ -185,7 +186,7 @@ public class Operation
 
         boolean canFilter()
         {
-            return (expressionMap != null && !expressionMap.isEmpty()) || !children().isEmpty() ;
+            return (expressionMap != null && !expressionMap.isEmpty()) || !children().isEmpty();
         }
 
         List<Node> children()
@@ -289,7 +290,7 @@ public class Operation
         @Override
         RangeIterator rangeIterator(QueryController controller)
         {
-            RangeIterator.Builder builder = controller.getIndexes(OperationType.AND, expressionMap.values());
+            RangeIterator.Builder builder = controller.getIndexes(expressionMap.values());
             for (Node child : children)
             {
                 boolean canFilter = child.canFilter();
@@ -331,7 +332,7 @@ public class Operation
         RangeIterator rangeIterator(QueryController controller)
         {
             assert canFilter();
-            return controller.getIndexes(OperationType.AND, expressionMap.values()).build();
+            return controller.getIndexes(expressionMap.values()).build();
         }
     }
 }

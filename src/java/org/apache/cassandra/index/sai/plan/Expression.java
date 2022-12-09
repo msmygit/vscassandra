@@ -71,11 +71,6 @@ public class Expression
         {
             return this == EQ || this == CONTAINS_KEY || this == CONTAINS_VALUE;
         }
-
-        public boolean isEqualityOrRange()
-        {
-            return isEquality() || this == RANGE;
-        }
     }
 
     public final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
@@ -87,7 +82,6 @@ public class Expression
     protected Op operation;
 
     public Bound lower, upper;
-    public boolean upperInclusive, lowerInclusive;
 
     public Expression(IndexContext indexContext)
     {
@@ -96,6 +90,14 @@ public class Expression
         this.validator = indexContext.getValidator();
     }
 
+    /**
+     * This adds an operation to the current {@link Expression} instance and
+     * returns the current instance.
+     *
+     * @param op the CQL3 operation
+     * @param value the expression value
+     * @return the current expression with the added operation
+     */
     public Expression add(Operator op, ByteBuffer value)
     {
         boolean lowerInclusive, upperInclusive;
@@ -116,15 +118,9 @@ public class Expression
 
             case LTE:
                 if (context.getDefinition().isReversedType())
-                {
-                    this.lowerInclusive = true;
                     lowerInclusive = true;
-                }
                 else
-                {
-                    this.upperInclusive = true;
                     upperInclusive = true;
-                }
             case LT:
                 operation = Op.RANGE;
                 if (context.getDefinition().isReversedType())
@@ -135,15 +131,9 @@ public class Expression
 
             case GTE:
                 if (context.getDefinition().isReversedType())
-                {
-                    this.upperInclusive = true;
                     upperInclusive = true;
-                }
                 else
-                {
-                    this.lowerInclusive = true;
                     lowerInclusive = true;
-                }
             case GT:
                 operation = Op.RANGE;
                 if (context.getDefinition().isReversedType())
@@ -172,10 +162,7 @@ public class Expression
         {
             // suffix check
             if (TypeUtil.isLiteral(validator))
-            {
-                if (!validateStringValue(value.raw, lower.value.raw))
-                    return false;
-            }
+                return validateStringValue(value.raw, lower.value.raw);
             else
             {
                 // range or (not-)equals - (mainly) for numeric values
@@ -185,7 +172,7 @@ public class Expression
                 if (operation == Op.EQ || operation == Op.CONTAINS_KEY || operation == Op.CONTAINS_VALUE)
                     return cmp == 0;
 
-                if (cmp > 0 || (cmp == 0 && !lowerInclusive))
+                if (cmp > 0 || (cmp == 0 && !lower.inclusive))
                     return false;
             }
         }
@@ -194,16 +181,12 @@ public class Expression
         {
             // string (prefix or suffix) check
             if (TypeUtil.isLiteral(validator))
-            {
-                if (!validateStringValue(value.raw, upper.value.raw))
-                    return false;
-            }
+                return validateStringValue(value.raw, upper.value.raw);
             else
             {
                 // range - mainly for numeric values
                 int cmp = TypeUtil.comparePostFilter(upper.value, value, validator);
-                if (cmp < 0 || (cmp == 0 && !upperInclusive))
-                    return false;
+                return (cmp >= 0 || (cmp != 0 && upper.inclusive));
             }
         }
 
@@ -277,6 +260,7 @@ public class Expression
         return cmp < 0 || cmp == 0 && upper.inclusive;
     }
 
+    @Override
     public String toString()
     {
         return String.format("Expression{name: %s, op: %s, lower: (%s, %s), upper: (%s, %s)}",
@@ -288,6 +272,7 @@ public class Expression
                              upper != null && upper.inclusive);
     }
 
+    @Override
     public int hashCode()
     {
         return new HashCodeBuilder().append(context.getColumnName())
@@ -296,6 +281,7 @@ public class Expression
                                     .append(lower).append(upper).build();
     }
 
+    @Override
     public boolean equals(Object other)
     {
         if (!(other instanceof Expression))
@@ -314,7 +300,7 @@ public class Expression
     }
 
     /**
-     * A representation of a column value in it's raw and encoded form.
+     * A representation of a column value in its raw and encoded form.
      */
     public static class Value
     {
