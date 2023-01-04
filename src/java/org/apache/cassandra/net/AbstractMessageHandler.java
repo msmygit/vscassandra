@@ -311,6 +311,7 @@ public abstract class AbstractMessageHandler extends ChannelInboundHandlerAdapte
                 decoder.reactivate();
 
                 if (decoder.isActive())
+                    logger.error("!!! UNPAUSING CONNECTION {}", ClientMetrics.instance);
                     ClientMetrics.instance.unpauseConnection();
             }
         }

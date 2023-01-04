@@ -26,11 +26,16 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Reservoir;
 import org.apache.cassandra.transport.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 
 public final class ClientMetrics
 {
+
+    private static final Logger logger = LoggerFactory.getLogger(ClientMetrics.class);
+
     public static final ClientMetrics instance = new ClientMetrics();
 
     private static final MetricNameFactory factory = new DefaultNameFactory("Client");
@@ -64,8 +69,14 @@ public final class ClientMetrics
         authFailure.mark();
     }
 
-    public void pauseConnection() { pausedConnections.incrementAndGet(); }
-    public void unpauseConnection() { pausedConnections.decrementAndGet(); }
+    public void pauseConnection() {
+        logger.warn("!!! PAUSING CONNECTION {}", pausedConnections != null);
+        pausedConnections.incrementAndGet();
+    }
+    public void unpauseConnection() {
+        logger.warn("!!! UNPAUSING CONNECTION {}", pausedConnections != null);
+        pausedConnections.decrementAndGet();
+    }
 
     public void markRequestDiscarded() { requestDiscarded.mark(); }
 
@@ -91,6 +102,7 @@ public final class ClientMetrics
 
     public synchronized void init(Collection<Server> servers)
     {
+        logger.warn("!!! INITIALIZING METRICS");
         if (initialized)
             return;
 
