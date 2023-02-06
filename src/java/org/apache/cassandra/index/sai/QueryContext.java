@@ -47,6 +47,12 @@ public class QueryContext
 
     public long trieSegmentsHit = 0;
 
+    public long bkdPostingListsHit = 0;
+    public long bkdSegmentsHit = 0;
+
+    public long bkdPostingsSkips = 0;
+    public long bkdPostingsDecodes = 0;
+
     public long triePostingsSkips = 0;
     public long triePostingsDecodes = 0;
 

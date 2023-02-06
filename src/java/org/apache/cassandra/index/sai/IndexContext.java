@@ -48,6 +48,7 @@ import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.memory.MemtableIndexManager;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -90,6 +91,7 @@ public class IndexContext
     private final IndexViewManager viewManager;
     private final IndexMetrics indexMetrics;
     private final ColumnQueryMetrics columnQueryMetrics;
+    private final IndexWriterConfig indexWriterConfig;
     private final AbstractAnalyzer.AnalyzerFactory indexAnalyzerFactory;
     private final AbstractAnalyzer.AnalyzerFactory queryAnalyzerFactory;
     private final PrimaryKey.Factory primaryKeyFactory;
@@ -113,9 +115,18 @@ public class IndexContext
 
         this.indexMetadata = indexMetadata;
         this.memtableIndexManager = indexMetadata == null ? null : new MemtableIndexManager(this);
+        this.indexWriterConfig = indexMetadata == null ? IndexWriterConfig.emptyConfig()
+                                                       : IndexWriterConfig.fromOptions(String.format("%s.%s.%s",
+                                                                                                     this.keyspace,
+                                                                                                     this.table,
+                                                                                                     this.indexMetadata.name),
+                                                                                       validator,
+                                                                                       this.indexMetadata.options);
+
         this.indexMetrics = indexMetadata == null ? null : new IndexMetrics(this);
         this.viewManager = new IndexViewManager(this);
-        this.columnQueryMetrics = new ColumnQueryMetrics.TrieIndexMetrics(this);
+        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(this)
+                                              : new ColumnQueryMetrics.BKDIndexMetrics(this);
 
         // We currently only support the NoOpAnalyzer
         this.indexAnalyzerFactory = AbstractAnalyzer.fromOptions(getValidator(), Collections.emptyMap());
@@ -214,6 +225,11 @@ public class IndexContext
     public AbstractAnalyzer.AnalyzerFactory getQueryAnalyzerFactory()
     {
         return queryAnalyzerFactory;
+    }
+
+    public IndexWriterConfig getIndexWriterConfig()
+    {
+        return indexWriterConfig;
     }
 
     public View getView()

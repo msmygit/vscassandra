@@ -28,13 +28,17 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.RAMStringIndexer;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.trie.LiteralIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDTreeRamBuffer;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.FastByteOperations;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 
 /**
@@ -54,7 +58,6 @@ public abstract class SegmentBuilder
 
     /** Minimum flush size, dynamically updated as segment builds are started and completed/aborted. */
     private static volatile long minimumFlushBytes;
-    private final AbstractType<?> termComparator;
     private final NamedMemoryLimiter limiter;
     private final long lastValidSegmentRowID;
     private boolean flushed = false;
@@ -71,9 +74,53 @@ public abstract class SegmentBuilder
     private ByteBuffer minTerm;
     private ByteBuffer maxTerm;
 
+    final AbstractType<?> termComparator;
     long totalBytesAllocated;
     int rowCount = 0;
     int maxSegmentRowId = -1;
+
+    public static class KDTreeSegmentBuilder extends SegmentBuilder
+    {
+        protected final byte[] buffer;
+        private final BKDTreeRamBuffer kdTreeRamBuffer;
+        private final IndexWriterConfig indexWriterConfig;
+
+        public KDTreeSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter, IndexWriterConfig indexWriterConfig)
+        {
+            super(termComparator, limiter);
+
+            int typeSize = TypeUtil.fixedSizeOf(termComparator);
+            this.kdTreeRamBuffer = new BKDTreeRamBuffer(1, typeSize);
+            this.buffer = new byte[typeSize];
+            this.totalBytesAllocated = this.kdTreeRamBuffer.ramBytesUsed();
+            this.indexWriterConfig = indexWriterConfig;
+        }
+
+        public boolean isEmpty()
+        {
+            return kdTreeRamBuffer.numRows() == 0;
+        }
+
+        protected long addInternal(ByteBuffer term, int segmentRowId)
+        {
+            TypeUtil.toComparableBytes(term, termComparator, buffer);
+            return kdTreeRamBuffer.addPackedValue(segmentRowId, new BytesRef(buffer));
+        }
+
+        @Override
+        protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
+        {
+            try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                                    indexContext,
+                                                                    TypeUtil.fixedSizeOf(termComparator),
+                                                                    maxSegmentRowId,
+                                                                    rowCount,
+                                                                    indexWriterConfig))
+            {
+                return writer.writeAll(kdTreeRamBuffer.asPointValues());
+            }
+        }
+    }
 
     public static class RAMStringSegmentBuilder extends SegmentBuilder
     {
