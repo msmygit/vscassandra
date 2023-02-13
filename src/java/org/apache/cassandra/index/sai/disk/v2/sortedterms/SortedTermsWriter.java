@@ -159,6 +159,7 @@ public class SortedTermsWriter implements Closeable
             final int suffixLength = term.length - prefixLength;
             assert suffixLength > 0: "terms must be unique";
 
+            // avoid writing the prefix and suffix vints if the lengths can be encoded in a single byte
             termsOutput.writeByte((byte) (Math.min(prefixLength, 15) | (Math.min(15, suffixLength - 1) << 4)));
             if (prefixLength >= 15)
                 termsOutput.writeVInt(prefixLength - 15);

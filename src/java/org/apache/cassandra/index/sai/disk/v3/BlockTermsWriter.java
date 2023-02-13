@@ -462,6 +462,7 @@ public class BlockTermsWriter
                 final int prefixLength = BlockTerms.bytesDifference(writeBytesBlockPrevTerm.get(), term);
                 final int suffixLength = term.length - prefixLength;
 
+                // avoid writing the prefix and suffix vints if the lengths can be encoded in a single byte
                 termsOut.writeByte((byte) (Math.min(prefixLength, 15) | (Math.min(15, suffixLength - 1) << 4)));
 
                 if (prefixLength >= 15)

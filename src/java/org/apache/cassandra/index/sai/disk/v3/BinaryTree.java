@@ -68,6 +68,12 @@ import org.apache.lucene.util.MathUtil;
  * The index is not prefix compressed yet.
  * <p>
  * The basic code has been copied from the Lucene bkd tree and modified.
+ * The Lucene version has a preset fixed length which does not work for variable length types.
+ * This version is variable length.
+ * The kdtree/binary tree has been modified to not write the prefix bytes offset into
+ * the binary tree index, instead the leaf block ordinal is encoded into the binary tree index.
+ * The leaf block ordinal is used to lookup the prefix bytes file pointer, leaf block postings, and leaf block ordermap.
+ *
  */
 public class BinaryTree
 {
@@ -274,7 +280,13 @@ public class BinaryTree
                 return;
             }
 
-            final int len = input.readVInt();
+            // avoid vint reads if possible
+            final int token = Byte.toUnsignedInt(input.readByte());
+            final int len;
+            if (token == 255)
+                len = input.readVInt() + 255;
+            else
+                len = token;
 
             if (splitValuesStack[level] == null)
                 splitValuesStack[level] = new BytesRef(new byte[len]);
@@ -348,7 +360,7 @@ public class BinaryTree
 
             if (numLeaves == 1)
             {
-                writeBuffer.writeVInt(leavesOffset); // leaf ordinal
+                writeBuffer.writeVInt(leavesOffset); // leaf block ordinal
                 return appendBlock(writeBuffer, blocks);
             }
             else
@@ -362,8 +374,20 @@ public class BinaryTree
                 assert rightOffset >= 1;
                 minBlockTerms.get(spare, rightOffset); // TODO: in lucene 8.x splitOffset is used
 
-                // write term bytes for this node
-                writeBuffer.writeVInt(spare.get().length);
+                // avoid vint writes if possible
+                int length = spare.get().length;
+                if (length >= 255)
+                {
+                    // term is 255 or greater so write the vint
+                    writeBuffer.writeByte((byte) 255);
+                    // write the length minus the byte value of 255 to minimize
+                    // the vint bytes length written
+                    writeBuffer.writeVInt(length - 255);
+                }
+                else
+                    // most terms will be less than 255 so encode into a byte
+                    writeBuffer.writeByte((byte) length);
+
                 writeBuffer.writeBytes(spare.get().bytes, spare.get().offset, spare.get().length);
 
                 final int numBytes = appendBlock(writeBuffer, blocks);
