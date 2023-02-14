@@ -62,7 +62,7 @@ public class BinaryTreeTermsLengthTest
                     {
                         length2 = Byte.toUnsignedInt(a);
                     }
-                    
+
                     assertEquals(length, length2);
                 }
             }

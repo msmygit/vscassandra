@@ -73,7 +73,6 @@ import org.apache.lucene.util.MathUtil;
  * The kdtree/binary tree has been modified to not write the prefix bytes offset into
  * the binary tree index, instead the leaf block ordinal is encoded into the binary tree index.
  * The leaf block ordinal is used to lookup the prefix bytes file pointer, leaf block postings, and leaf block ordermap.
- *
  */
 public class BinaryTree
 {
@@ -349,11 +348,11 @@ public class BinaryTree
             return block.length;
         }
 
-        private int recurseIndex(BytesRefArray minBlockTerms,
-                                 int leavesOffset,
-                                 int numLeaves,
-                                 ByteBuffersDataOutput writeBuffer,
-                                 List<byte[]> blocks) throws IOException
+        private int recurseIndex(final BytesRefArray minBlockTerms,
+                                 final int leavesOffset,
+                                 final int numLeaves,
+                                 final ByteBuffersDataOutput writeBuffer,
+                                 final List<byte[]> blocks) throws IOException
         {
             if (logger.isTraceEnabled())
                 logger.trace("recurseIndex leavesOffset="+leavesOffset+" numLeaves="+numLeaves);
@@ -372,16 +371,16 @@ public class BinaryTree
                     logger.trace("  rightOffset="+rightOffset);
 
                 assert rightOffset >= 1;
-                minBlockTerms.get(spare, rightOffset); // TODO: in lucene 8.x splitOffset is used
+                minBlockTerms.get(spare, rightOffset);
 
                 // avoid vint writes if possible
-                int length = spare.get().length;
+                final int length = spare.get().length;
                 if (length >= 255)
                 {
                     // term is 255 or greater so write the vint
                     writeBuffer.writeByte((byte) 255);
-                    // write the length minus the byte value of 255 to minimize
-                    // the vint bytes length written
+                    // write the length minus the byte value of 255
+                    // to minimize the vint bytes length written
                     writeBuffer.writeVInt(length - 255);
                 }
                 else
