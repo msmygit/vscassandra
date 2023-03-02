@@ -17,7 +17,8 @@
  */
 package org.apache.cassandra.io.sstable.format;
 
-import org.apache.cassandra.db.RowIndexEntry;
+import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.tracing.Tracing;
 
 /**
  * Listener for receiving notifications associated with reading SSTables.
@@ -29,10 +30,22 @@ public interface SSTableReadsListener
      */
     enum SkippingReason
     {
-        BLOOM_FILTER,
-        MIN_MAX_KEYS,
-        PARTITION_INDEX_LOOKUP,
-        INDEX_ENTRY_NOT_FOUND;
+        BLOOM_FILTER("Bloom filter allows skipping sstable {}"),
+        MIN_MAX_KEYS("Check against min and max keys allows skipping sstable {}"),
+        PARTITION_INDEX_LOOKUP("Partition index lookup allows skipping sstable {}"),
+        INDEX_ENTRY_NOT_FOUND("Partition index lookup complete (bloom filter false positive) for sstable {}");
+
+        private final String message;
+
+        SkippingReason(String message)
+        {
+            this.message = message;
+        }
+
+        public void trace(Descriptor descriptor)
+        {
+            Tracing.trace(message, descriptor.id);
+        }
     }
 
     /**
@@ -40,8 +53,20 @@ public interface SSTableReadsListener
      */
     enum SelectionReason
     {
-        KEY_CACHE_HIT,
-        INDEX_ENTRY_FOUND;
+        KEY_CACHE_HIT("Key cache hit for sstable {}, size = {}"),
+        INDEX_ENTRY_FOUND("Partition index found for sstable {}, size = {}");
+
+        private final String message;
+
+        SelectionReason(String message)
+        {
+            this.message = message;
+        }
+
+        public void trace(Descriptor descriptor, AbstractRowIndexEntry entry)
+        {
+            Tracing.trace(message, descriptor.id, entry.columnsIndexCount());
+        }
     }
 
     /**
@@ -66,7 +91,7 @@ public interface SSTableReadsListener
      * @param indexEntry the index entry
      * @param reason the reason for which the SSTable has been selected
      */
-    default void onSSTableSelected(SSTableReader sstable, RowIndexEntry<?> indexEntry, SelectionReason reason)
+    default void onSSTableSelected(SSTableReader sstable, SelectionReason reason)
     {
     }
 

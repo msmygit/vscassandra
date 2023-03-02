@@ -144,12 +144,13 @@ public class SSTableTxnWriter extends Transactional.AbstractTransactional implem
                                           boolean isTransient,
                                           int sstableLevel,
                                           SerializationHeader header,
-                                          Collection<Index> indexes)
+                                          Collection<Index> indexes,
+                                          SSTable.Owner owner)
     {
         // if the column family store does not exist, we create a new default SSTableMultiWriter to use:
         LifecycleTransaction txn = LifecycleTransaction.offline(OperationType.WRITE);
         MetadataCollector collector = new MetadataCollector(metadata.get().comparator).sstableLevel(sstableLevel);
-        SSTableMultiWriter writer = SimpleSSTableMultiWriter.create(descriptor, keyCount, repairedAt, pendingRepair, isTransient, metadata, collector, header, indexes, txn);
+        SSTableMultiWriter writer = SimpleSSTableMultiWriter.create(descriptor, keyCount, repairedAt, pendingRepair, isTransient, metadata, collector, header, indexes, txn, owner);
         return new SSTableTxnWriter(txn, writer);
     }
 

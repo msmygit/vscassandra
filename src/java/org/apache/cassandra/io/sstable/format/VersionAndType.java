@@ -80,7 +80,7 @@ public final class VersionAndType
         if (components.size() != 2)
             throw new IllegalArgumentException("Invalid VersionAndType string: " + versionAndType + " (should be of the form 'big-bc')");
 
-        SSTableFormat.Type formatType = SSTableFormat.Type.validate(components.get(0));
+        SSTableFormat.Type formatType = SSTableFormat.Type.getByName(components.get(0));
         Version version = formatType.info.getVersion(components.get(1));
         return new VersionAndType(version, formatType);
     }

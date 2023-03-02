@@ -18,82 +18,65 @@
 package org.apache.cassandra.io.sstable;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 public class BloomFilterTracker
 {
-    private final AtomicLong falsePositiveCount = new AtomicLong(0);
-    private final AtomicLong truePositiveCount = new AtomicLong(0);
-    private final AtomicLong trueNegativeCount = new AtomicLong(0);
-    private long lastFalsePositiveCount = 0L;
-    private long lastTruePositiveCount = 0L;
-    private long lastTrueNegativeCount = 0L;
+    private final LongAdder falsePositiveCount = new LongAdder();
+    private final LongAdder truePositiveCount = new LongAdder();
+    private final LongAdder trueNegativeCount = new LongAdder();
+    private final AtomicLong lastFalsePositiveCount = new AtomicLong();
+    private final AtomicLong lastTruePositiveCount = new AtomicLong();
+    private final AtomicLong lastTrueNegativeCount = new AtomicLong();
 
     public void addFalsePositive()
     {
-        falsePositiveCount.incrementAndGet();
+        falsePositiveCount.increment();
     }
 
     public void addTruePositive()
     {
-        truePositiveCount.incrementAndGet();
+        truePositiveCount.increment();
     }
 
     public void addTrueNegative()
     {
-        trueNegativeCount.incrementAndGet();
+        trueNegativeCount.increment();
     }
 
     public long getFalsePositiveCount()
     {
-        return falsePositiveCount.get();
+        return falsePositiveCount.sum();
     }
 
     public long getRecentFalsePositiveCount()
     {
         long fpc = getFalsePositiveCount();
-        try
-        {
-            return (fpc - lastFalsePositiveCount);
-        }
-        finally
-        {
-            lastFalsePositiveCount = fpc;
-        }
+        long last = lastFalsePositiveCount.getAndSet(fpc);
+        return fpc - last;
     }
 
     public long getTruePositiveCount()
     {
-        return truePositiveCount.get();
+        return truePositiveCount.sum();
     }
 
     public long getRecentTruePositiveCount()
     {
         long tpc = getTruePositiveCount();
-        try
-        {
-            return (tpc - lastTruePositiveCount);
-        }
-        finally
-        {
-            lastTruePositiveCount = tpc;
-        }
+        long last = lastTruePositiveCount.getAndSet(tpc);
+        return tpc - last;
     }
 
     public long getTrueNegativeCount()
     {
-        return trueNegativeCount.get();
+        return trueNegativeCount.sum();
     }
 
     public long getRecentTrueNegativeCount()
     {
         long tnc = getTrueNegativeCount();
-        try
-        {
-            return (tnc - lastTrueNegativeCount);
-        }
-        finally
-        {
-            lastTrueNegativeCount = tnc;
-        }
+        long last = lastTrueNegativeCount.getAndSet(tnc);
+        return tnc - last;
     }
 }
