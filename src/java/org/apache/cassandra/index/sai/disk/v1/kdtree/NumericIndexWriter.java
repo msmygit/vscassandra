@@ -81,24 +81,14 @@ public class NumericIndexWriter implements Closeable
                               long numRows,
                               IndexWriterConfig config)
     {
-        checkArgument(maxSegmentRowId >= 0,
-                      "[%s] maxRowId must be non-negative value, but got %s",
-                      config.getIndexName(), maxSegmentRowId);
-
-        checkArgument(numRows >= 0,
-                      "[$s] numRows must be non-negative value, but got %s",
-                      config.getIndexName(), numRows);
+        checkArgument(maxSegmentRowId >= 0, "[%s] maxRowId must be non-negative value, but got %s", config.getIndexName(), maxSegmentRowId);
+        checkArgument(numRows >= 0, "[$s] numRows must be non-negative value, but got %s", config.getIndexName(), numRows);
 
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
         this.bytesPerDim = bytesPerDim;
         this.config = config;
-        this.writer = new BKDWriter(maxSegmentRowId + 1,
-                                    bytesPerDim,
-                                    maxPointsInLeafNode,
-                                    BKDWriter.DEFAULT_MAX_MB_SORT_IN_HEAP,
-                                    numRows,
-                                    true);
+        this.writer = new BKDWriter(maxSegmentRowId + 1, bytesPerDim, maxPointsInLeafNode, numRows);
     }
 
     @Override

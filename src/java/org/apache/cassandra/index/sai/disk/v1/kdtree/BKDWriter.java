@@ -66,9 +66,6 @@ public class BKDWriter implements Closeable
     /** Default maximum number of point in each leaf block */
     public static final int DEFAULT_MAX_POINTS_IN_LEAF_NODE = 1024;
 
-    /** Default maximum heap to use, before spilling to (slower) disk */
-    public static final float DEFAULT_MAX_MB_SORT_IN_HEAP = 16.0f;
-
     /** How many bytes each value in each dimension takes. */
     protected final int bytesPerDim;
 
@@ -99,10 +96,9 @@ public class BKDWriter implements Closeable
 
     private final long maxDoc;
 
-    public BKDWriter(long maxDoc, int bytesPerDim,
-            int maxPointsInLeafNode, double maxMBSortInHeap, long totalPointCount, boolean singleValuePerDoc)
+    public BKDWriter(long maxDoc, int bytesPerDim, int maxPointsInLeafNode, long totalPointCount)
     {
-        verifyParams(maxPointsInLeafNode, maxMBSortInHeap, totalPointCount);
+        verifyParams(maxPointsInLeafNode, totalPointCount);
         // We use tracking dir to deal with removing files on exception, so each place that
         // creates temp files doesn't need crazy try/finally/sucess logic:
         this.maxPointsInLeafNode = maxPointsInLeafNode;
@@ -117,45 +113,9 @@ public class BKDWriter implements Closeable
 
         // If we may have more than Integer.MAX_VALUE values, then we must encode ords with long (8 bytes), else we can use int (4 bytes).
         this.longOrds = totalPointCount > Integer.MAX_VALUE;
-
-        // How many bytes each doc takes in the fixed-width offline format
-        int bytesPerDoc;
-
-        // dimensional values (numDims * bytesPerDim) + ord (int or long) + docID (int)
-        if (singleValuePerDoc)
-        {
-            // Lucene only supports up to 2.1 docs, so we better not need longOrds in this case:
-            assert !longOrds;
-            bytesPerDoc = packedBytesLength + Integer.BYTES;
-        }
-        else if (longOrds)
-        {
-            bytesPerDoc = packedBytesLength + Long.BYTES + Integer.BYTES;
-        }
-        else
-        {
-            bytesPerDoc = packedBytesLength + Integer.BYTES + Integer.BYTES;
-        }
-
-        // As we recurse, we compute temporary partitions of the data, halving the
-        // number of points at each recursion.  Once there are few enough points,
-        // we can switch to sorting in heap instead of offline (on disk).  At any
-        // time in the recursion, we hold the number of points at that level, plus
-        // all recursive halves (i.e. 16 + 8 + 4 + 2) so the memory usage is 2X
-        // what that level would consume, so we multiply by 0.5 to convert from
-        // bytes to points here.  Each dimension has its own sorted partition, so
-        // we must divide by numDims as wel.
-
-        int maxPointsSortInHeap = (int) (0.5 * (maxMBSortInHeap * 1024 * 1024) / (bytesPerDoc));
-
-        // Finally, we must be able to hold at least the leaf node in heap during build:
-        if (maxPointsSortInHeap < maxPointsInLeafNode)
-        {
-            throw new IllegalArgumentException("maxMBSortInHeap=" + maxMBSortInHeap + " only allows for maxPointsSortInHeap=" + maxPointsSortInHeap + ", but this is less than maxPointsInLeafNode=" + maxPointsInLeafNode + "; either increase maxMBSortInHeap or decrease maxPointsInLeafNode");
-        }
     }
 
-    public static void verifyParams(int maxPointsInLeafNode, double maxMBSortInHeap, long totalPointCount)
+    public static void verifyParams(int maxPointsInLeafNode, long totalPointCount)
     {
         if (maxPointsInLeafNode <= 0)
         {
@@ -164,10 +124,6 @@ public class BKDWriter implements Closeable
         if (maxPointsInLeafNode > ArrayUtil.MAX_ARRAY_LENGTH)
         {
             throw new IllegalArgumentException("maxPointsInLeafNode must be <= ArrayUtil.MAX_ARRAY_LENGTH (= " + ArrayUtil.MAX_ARRAY_LENGTH + "); got " + maxPointsInLeafNode);
-        }
-        if (maxMBSortInHeap < 0.0)
-        {
-            throw new IllegalArgumentException("maxMBSortInHeap must be >= 0.0 (got: " + maxMBSortInHeap + ')');
         }
         if (totalPointCount < 0)
         {
@@ -499,7 +455,6 @@ public class BKDWriter implements Closeable
     /** Packs the two arrays, representing a balanced binary tree, into a compact byte[] structure. */
     private byte[] packIndex(long[] leafBlockFPs, byte[] splitPackedValues) throws IOException
     {
-
         int numLeaves = leafBlockFPs.length;
 
         // Possibly rotate the leaf block FPs, if the index not fully balanced binary tree (only happens
@@ -807,9 +762,8 @@ public class BKDWriter implements Closeable
 
     private void writeCommonPrefixes(DataOutput out, int commonPrefixLength, byte[] packedValue) throws IOException
     {
-            out.writeVInt(commonPrefixLength);
-            //System.out.println(commonPrefixes[dim] + " of " + bytesPerDim);
-            out.writeBytes(packedValue, 0, commonPrefixLength);
+        out.writeVInt(commonPrefixLength);
+        out.writeBytes(packedValue, 0, commonPrefixLength);
     }
 
     @Override

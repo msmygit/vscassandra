@@ -90,7 +90,7 @@ public abstract class SegmentBuilder
             super(termComparator, limiter);
 
             int typeSize = TypeUtil.fixedSizeOf(termComparator);
-            this.kdTreeRamBuffer = new BKDTreeRamBuffer(1, typeSize);
+            this.kdTreeRamBuffer = new BKDTreeRamBuffer(typeSize);
             this.buffer = new byte[typeSize];
             this.totalBytesAllocated = this.kdTreeRamBuffer.ramBytesUsed();
             this.indexWriterConfig = indexWriterConfig;

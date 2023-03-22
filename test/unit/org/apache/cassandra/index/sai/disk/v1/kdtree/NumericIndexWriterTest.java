@@ -68,7 +68,7 @@ public class NumericIndexWriterTest extends SAIRandomizedTester
     @Test
     public void shouldFlushFromRamBuffer() throws Exception
     {
-        final BKDTreeRamBuffer ramBuffer = new BKDTreeRamBuffer(1, Integer.BYTES);
+        final BKDTreeRamBuffer ramBuffer = new BKDTreeRamBuffer(Integer.BYTES);
         final int numRows = 120;
         int currentValue = numRows;
         for (int i = 0; i < numRows; ++i)
