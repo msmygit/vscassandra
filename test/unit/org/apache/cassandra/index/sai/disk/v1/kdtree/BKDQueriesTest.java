@@ -40,9 +40,9 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testInclusiveLowerBound()
     {
-        final int lowerBound = between(-10, 10);
-        final Expression expression = buildExpression(Operator.GTE, lowerBound);
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-10, 10);
+        Expression expression = buildExpression(Operator.GTE, lowerBound);
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertTrue(query.visit(toSortableBytes(lowerBound)));
@@ -56,9 +56,9 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testExclusiveLowerBound()
     {
-        final int lowerBound = between(-10, 10);
-        final Expression expression = buildExpression(Operator.GT, lowerBound);
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-10, 10);
+        Expression expression = buildExpression(Operator.GT, lowerBound);
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertFalse(query.visit(toSortableBytes(lowerBound)));
@@ -72,9 +72,9 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testInclusiveUpperBound()
     {
-        final int upperBound = between(-10, 10);
-        final Expression expression = buildExpression(Operator.LTE, upperBound);
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int upperBound = between(-10, 10);
+        Expression expression = buildExpression(Operator.LTE, upperBound);
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertTrue(query.visit(toSortableBytes(upperBound - 1)));
         assertTrue(query.visit(toSortableBytes(upperBound)));
@@ -88,9 +88,9 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testExclusiveUpperBound()
     {
-        final int upper = between(-10, 10);
-        final Expression expression = buildExpression(Operator.LT, upper);
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int upper = between(-10, 10);
+        Expression expression = buildExpression(Operator.LT, upper);
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertTrue(query.visit(toSortableBytes(upper - 1)));
         assertFalse(query.visit(toSortableBytes(upper)));
@@ -104,11 +104,10 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testInclusiveLowerAndUpperBound()
     {
-        final int lowerBound = between(-15, 15);
-        final int upperBound = lowerBound + 5;
-        final Expression expression = buildExpression(Operator.GTE, lowerBound)
-                .add(Operator.LTE, Int32Type.instance.decompose(upperBound));
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-15, 15);
+        int upperBound = lowerBound + 5;
+        Expression expression = buildExpression(Operator.GTE, lowerBound).add(Operator.LTE, Int32Type.instance.decompose(upperBound));
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertTrue(query.visit(toSortableBytes(lowerBound)));
@@ -127,11 +126,10 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testExclusiveLowerAndUpperBound()
     {
-        final int lowerBound = between(-15, 15);
-        final int upperBound = lowerBound + 5;
-        final Expression expression = buildExpression(Operator.GT, lowerBound)
-                .add(Operator.LT, Int32Type.instance.decompose(upperBound));
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-15, 15);
+        int upperBound = lowerBound + 5;
+        Expression expression = buildExpression(Operator.GT, lowerBound).add(Operator.LT, Int32Type.instance.decompose(upperBound));
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertFalse(query.visit(toSortableBytes(lowerBound)));
@@ -150,11 +148,10 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testExclusiveLowerAndInclusiveUpperBound()
     {
-        final int lowerBound = between(-15, 15);
-        final int upperBound = lowerBound + 5;
-        final Expression expression = buildExpression(Operator.GT, lowerBound)
-                .add(Operator.LTE, Int32Type.instance.decompose(upperBound));
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-15, 15);
+        int upperBound = lowerBound + 5;
+        Expression expression = buildExpression(Operator.GT, lowerBound).add(Operator.LTE, Int32Type.instance.decompose(upperBound));
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertFalse(query.visit(toSortableBytes(lowerBound)));
@@ -173,11 +170,10 @@ public class BKDQueriesTest extends SAIRandomizedTester
     @Test
     public void testInclusiveLowerAndExclusiveUpperBound()
     {
-        final int lowerBound = between(-15, 15);
-        final int upperBound = lowerBound + 5;
-        final Expression expression = buildExpression(Operator.GTE, lowerBound)
-                .add(Operator.LT, Int32Type.instance.decompose(upperBound));
-        final BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 1, 4);
+        int lowerBound = between(-15, 15);
+        int upperBound = lowerBound + 5;
+        Expression expression = buildExpression(Operator.GTE, lowerBound).add(Operator.LT, Int32Type.instance.decompose(upperBound));
+        BKDReader.IntersectVisitor query = BKDQueries.bkdQueryFrom(expression, 4);
 
         assertFalse(query.visit(toSortableBytes(lowerBound - 1)));
         assertTrue(query.visit(toSortableBytes(lowerBound)));
@@ -203,7 +199,7 @@ public class BKDQueriesTest extends SAIRandomizedTester
 
     private Expression buildExpression(Operator op, int value)
     {
-        final Expression expression = new Expression(SAITester.createIndexContext("meh", Int32Type.instance));
+        Expression expression = new Expression(SAITester.createIndexContext("meh", Int32Type.instance));
         expression.add(op, Int32Type.instance.decompose(value));
         return expression;
     }

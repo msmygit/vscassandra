@@ -27,6 +27,11 @@ public abstract class MutableOneDimPointValues extends MutablePointValues
 {
     private static final byte[] EMPTY = new byte[0];
 
+    public boolean needsSorting()
+    {
+        return size() > 1;
+    }
+
     public abstract void intersect(IntersectVisitor visitor) throws IOException;
 
     @Override

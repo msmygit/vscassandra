@@ -48,67 +48,57 @@ import static com.google.common.base.Preconditions.checkArgument;
  * Given sorted input {@link MutablePointValues}, 1-dim case allows to optimise flush process, because we don't need to
  * buffer all point values to sort them.
  */
-public class NumericIndexWriter implements Closeable
+public class NumericIndexWriter
 {
     public static final int MAX_POINTS_IN_LEAF_NODE = BKDWriter.DEFAULT_MAX_POINTS_IN_LEAF_NODE;
+
     private final BKDWriter writer;
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
-    private final int bytesPerDim;
-
+    private final int bytesPerValue;
     private final IndexWriterConfig config;
 
     /**
      * @param maxSegmentRowId maximum possible segment row ID, used to create `maxDoc` for kd-tree
-     * @param numRows must be greater than number of added rowIds, only used for validation.
      */
     public NumericIndexWriter(IndexDescriptor indexDescriptor,
                               IndexContext indexContext,
-                              int bytesPerDim,
+                              int bytesPerValue,
                               long maxSegmentRowId,
-                              long numRows,
                               IndexWriterConfig config)
     {
-        this(indexDescriptor, indexContext, MAX_POINTS_IN_LEAF_NODE, bytesPerDim, maxSegmentRowId, numRows, config);
+        this(indexDescriptor, indexContext, MAX_POINTS_IN_LEAF_NODE, bytesPerValue, maxSegmentRowId, config);
     }
 
     @VisibleForTesting
     public NumericIndexWriter(IndexDescriptor indexDescriptor,
                               IndexContext indexContext,
                               int maxPointsInLeafNode,
-                              int bytesPerDim,
+                              int bytesPerValue,
                               long maxSegmentRowId,
-                              long numRows,
                               IndexWriterConfig config)
     {
         checkArgument(maxSegmentRowId >= 0, "[%s] maxRowId must be non-negative value, but got %s", config.getIndexName(), maxSegmentRowId);
-        checkArgument(numRows >= 0, "[$s] numRows must be non-negative value, but got %s", config.getIndexName(), numRows);
 
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
-        this.bytesPerDim = bytesPerDim;
+        this.bytesPerValue = bytesPerValue;
         this.config = config;
-        this.writer = new BKDWriter(maxSegmentRowId + 1, bytesPerDim, maxPointsInLeafNode, numRows);
-    }
-
-    @Override
-    public void close() throws IOException
-    {
-        IOUtils.close(writer);
+        this.writer = new BKDWriter(maxSegmentRowId + 1, bytesPerValue, maxPointsInLeafNode);
     }
 
     @Override
     public String toString()
     {
         return MoreObjects.toStringHelper(this)
-                          .add("bytesPerDim", bytesPerDim)
+                          .add("bytesPerDim", bytesPerValue)
                           .add("bufferedPoints", writer.getPointCount())
                           .toString();
     }
 
     public static class LeafCallback implements BKDWriter.OneDimensionBKDWriterCallback
     {
-        final List<PackedLongValues> postings = new ArrayList<>();
+        List<PackedLongValues> postings = new ArrayList<>();
 
         public int numLeaves()
         {
@@ -138,14 +128,14 @@ public class NumericIndexWriter implements Closeable
     public SegmentMetadata.ComponentMetadataMap writeAll(MutableOneDimPointValues values) throws IOException
     {
         long bkdPosition;
-        final SegmentMetadata.ComponentMetadataMap components = new SegmentMetadata.ComponentMetadataMap();
+        SegmentMetadata.ComponentMetadataMap components = new SegmentMetadata.ComponentMetadataMap();
 
-        final LeafCallback leafCallback = new LeafCallback();
+        LeafCallback leafCallback = new LeafCallback();
 
         try (IndexOutput bkdOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE, indexContext, true))
         {
             // The SSTable kd-tree component file is opened in append mode, so our offset is the current file pointer.
-            final long bkdOffset = bkdOutput.getFilePointer();
+            long bkdOffset = bkdOutput.getFilePointer();
 
             bkdPosition = writer.writeField(bkdOutput, values, leafCallback);
 
@@ -154,13 +144,13 @@ public class NumericIndexWriter implements Closeable
             if (bkdPosition < 0)
                 return components;
 
-            final long bkdLength = bkdOutput.getFilePointer() - bkdOffset;
+            long bkdLength = bkdOutput.getFilePointer() - bkdOffset;
 
             Map<String, String> attributes = new LinkedHashMap<>();
-            attributes.put("max_points_in_leaf_node", Integer.toString(writer.maxPointsInLeafNode));
+            attributes.put("max_points_in_leaf_node", Integer.toString(writer.getMaxPointsInLeafNode()));
             attributes.put("num_leaves", Integer.toString(leafCallback.numLeaves()));
-            attributes.put("num_points", Long.toString(writer.pointCount));
-            attributes.put("bytes_per_dim", Long.toString(writer.bytesPerDim));
+            attributes.put("num_points", Long.toString(writer.getPointCount()));
+            attributes.put("bytes_per_dim", Long.toString(writer.getBytesPerValue()));
 
             components.put(IndexComponent.KD_TREE, bkdPosition, bkdOffset, bkdLength, attributes);
         }
@@ -168,13 +158,13 @@ public class NumericIndexWriter implements Closeable
         try (TraversingBKDReader reader = new TraversingBKDReader(indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext), bkdPosition);
              IndexOutput postingsOutput = indexDescriptor.openPerIndexOutput(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, true))
         {
-            final long postingsOffset = postingsOutput.getFilePointer();
+            long postingsOffset = postingsOutput.getFilePointer();
 
-            final OneDimBKDPostingsWriter postingsWriter = new OneDimBKDPostingsWriter(leafCallback.postings, config, indexContext);
+            OneDimBKDPostingsWriter postingsWriter = new OneDimBKDPostingsWriter(leafCallback.postings, config, indexContext);
             reader.traverse(postingsWriter);
 
             // The kd-tree postings writer already writes its own header & footer.
-            final long postingsPosition = postingsWriter.finish(postingsOutput);
+            long postingsPosition = postingsWriter.finish(postingsOutput);
 
             Map<String, String> attributes = new LinkedHashMap<>();
             attributes.put("num_leaf_postings", Integer.toString(postingsWriter.numLeafPostings));

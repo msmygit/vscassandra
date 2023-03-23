@@ -18,9 +18,7 @@
 package org.apache.cassandra.index.sai.disk.v1.kdtree;
 
 import java.io.IOException;
-import java.util.List;
 
-import com.google.common.collect.ImmutableList;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,8 +29,6 @@ import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.v1.MergeOneDimPointValues;
-import org.apache.cassandra.index.sai.disk.v1.postings.MergePostingList;
 import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.postings.PostingList;
@@ -41,13 +37,11 @@ import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.index.PointValues.Relation;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
-import org.assertj.core.util.Lists;
 
 import static org.apache.lucene.index.PointValues.Relation.CELL_CROSSES_QUERY;
 import static org.apache.lucene.index.PointValues.Relation.CELL_INSIDE_QUERY;
 import static org.apache.lucene.index.PointValues.Relation.CELL_OUTSIDE_QUERY;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -112,144 +106,6 @@ public class BKDReaderTest extends SAIRandomizedTester
         indexDescriptor = newIndexDescriptor();
         index = newIndex();
         indexContext = SAITester.createIndexContext(index, Int32Type.instance);
-    }
-
-    @Test
-    public void testInts1D() throws IOException
-    {
-        doTestInts1D();
-    }
-
-    @Test
-    public void testMerge() throws Exception
-    {
-        // Start by testing that the iteratorState returns rowIds in order
-        BKDReader reader1 = createReader(10);
-        BKDReader.IteratorState it1 = reader1.iteratorState();
-        Long expectedRowId = 0L;
-        while (it1.hasNext())
-        {
-            assertEquals(expectedRowId++, it1.next());
-        }
-        it1.close();
-
-        // Next test that an intersection only returns the query values
-        List<Long> expected = Lists.list(8L, 9L);
-        int expectedCount = 0;
-        PostingList intersection = performIntersection(reader1, buildQuery(8, 9));
-        for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
-        {
-            assertEquals(expected.get(expectedCount++), id);
-        }
-        intersection.close();
-        reader1.close();
-
-        // Finally test that merger returns the correct values
-        expected = Lists.list(8L, 9L, 18L, 19L);
-        expectedCount = 0;
-
-        reader1 = createReader(10);
-        BKDReader reader2 = createReader(10);
-
-        List<BKDReader.IteratorState> iterators = ImmutableList.of(reader1.iteratorState(), reader2.iteratorState((rowID) -> rowID + 10));
-        MergeOneDimPointValues merger = new MergeOneDimPointValues(iterators, Int32Type.instance);
-        final BKDReader reader = finishAndOpenReaderOneDim(2, merger, 20);
-
-        final int queryMin = 8;
-        final int queryMax = 9;
-
-        intersection = performIntersection(reader, buildQuery(queryMin, queryMax));
-
-        for (Long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
-        {
-            assertEquals(expected.get(expectedCount++), id);
-        }
-
-        intersection.close();
-
-        for (BKDReader.IteratorState iterator : iterators)
-        {
-            iterator.close();
-        }
-
-        reader1.close();
-        reader2.close();
-        reader.close();
-    }
-
-    private BKDReader createReader(int numRows) throws IOException
-    {
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
-        byte[] scratch = new byte[4];
-        for (int docID = 0; docID < numRows; docID++)
-        {
-            NumericUtils.intToSortableBytes(docID, scratch, 0);
-            buffer.addPackedValue(docID, new BytesRef(scratch));
-        }
-        return finishAndOpenReaderOneDim(2, buffer);
-    }
-
-    private void doTestInts1D() throws IOException
-    {
-        final int numRows = between(100, 400);
-        final BKDTreeRamBuffer buffer = new BKDTreeRamBuffer(Integer.BYTES);
-
-        byte[] scratch = new byte[4];
-        for (int docID = 0; docID < numRows; docID++)
-        {
-            NumericUtils.intToSortableBytes(docID, scratch, 0);
-            buffer.addPackedValue(docID, new BytesRef(scratch));
-        }
-
-        final BKDReader reader = finishAndOpenReaderOneDim(2, buffer);
-
-        try (BKDReader.IteratorState iterator = reader.iteratorState())
-        {
-            while (iterator.hasNext())
-            {
-                int value = NumericUtils.sortableBytesToInt(iterator.scratch, 0);
-                System.out.println("term=" + value);
-                iterator.next();
-            }
-        }
-
-        try (PostingList intersection = performIntersection(reader, NONE_MATCH))
-        {
-            assertNull(intersection);
-        }
-
-        try (PostingList collectAllIntersection = performIntersection(reader, ALL_MATCH);
-             PostingList filteringIntersection = performIntersection(reader, ALL_MATCH_WITH_FILTERING))
-        {
-            assertEquals(numRows, collectAllIntersection.size());
-            assertEquals(numRows, filteringIntersection.size());
-
-            for (int docID = 0; docID < numRows; docID++)
-            {
-                assertEquals(docID, collectAllIntersection.nextPosting());
-                assertEquals(docID, filteringIntersection.nextPosting());
-            }
-
-            assertEquals(PostingList.END_OF_STREAM, collectAllIntersection.nextPosting());
-            assertEquals(PostingList.END_OF_STREAM, filteringIntersection.nextPosting());
-        }
-
-        // Simple 1D range query:
-        final int queryMin = 42;
-        final int queryMax = 87;
-
-        final PostingList intersection = performIntersection(reader, buildQuery(queryMin, queryMax));
-
-        assertThat(intersection, is(instanceOf(MergePostingList.class)));
-        long expectedRowID = queryMin;
-        for (long id = intersection.nextPosting(); id != PostingList.END_OF_STREAM; id = intersection.nextPosting())
-        {
-            assertEquals(expectedRowID++, id);
-        }
-        assertEquals(queryMax - queryMin + 1, intersection.size());
-
-        intersection.close();
-        reader.close();
     }
 
     @Test
@@ -370,7 +226,6 @@ public class BKDReaderTest extends SAIRandomizedTester
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(buffer.numRows()),
-                                                                 buffer.numRows(),
                                                                  new IndexWriterConfig("test", 2, 8));
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(buffer.asPointValues());
@@ -395,7 +250,6 @@ public class BKDReaderTest extends SAIRandomizedTester
                                                                  maxPointsPerLeaf,
                                                                  Integer.BYTES,
                                                                  Math.toIntExact(numRows),
-                                                                 numRows,
                                                                  new IndexWriterConfig("test", 2, 8));
 
         final SegmentMetadata.ComponentMetadataMap metadata = writer.writeAll(values);

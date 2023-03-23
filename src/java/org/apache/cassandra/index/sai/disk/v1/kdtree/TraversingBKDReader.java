@@ -41,7 +41,7 @@ import org.apache.lucene.util.MathUtil;
 public class TraversingBKDReader implements Closeable
 {
     final FileHandle indexFile;
-    final int bytesPerDim;
+    final int bytesPerValue;
     final int numLeaves;
     final byte[] minPackedValue;
     final byte[] maxPackedValue;
@@ -49,7 +49,6 @@ public class TraversingBKDReader implements Closeable
     final byte[] packedIndex;
     final long pointCount;
     final int leafNodeOffset;
-    final int numDims;
     final int maxPointsInLeafNode;
     final int packedBytesLength;
 
@@ -63,10 +62,9 @@ public class TraversingBKDReader implements Closeable
             SAICodecUtils.validate(in);
             in.seek(root);
 
-            numDims = in.readVInt();
             maxPointsInLeafNode = in.readVInt();
-            bytesPerDim = in.readVInt();
-            packedBytesLength = numDims * bytesPerDim;
+            bytesPerValue = in.readVInt();
+            packedBytesLength = bytesPerValue;
 
             // Read index:
             numLeaves = in.readVInt();
@@ -79,14 +77,11 @@ public class TraversingBKDReader implements Closeable
             in.readBytes(minPackedValue, 0, packedBytesLength);
             in.readBytes(maxPackedValue, 0, packedBytesLength);
 
-            for (int dim = 0; dim < numDims; dim++)
+            if (FutureArrays.compareUnsigned(minPackedValue, 0, bytesPerValue, maxPackedValue, 0, bytesPerValue) > 0)
             {
-                if (FutureArrays.compareUnsigned(minPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim, maxPackedValue, dim * bytesPerDim, dim * bytesPerDim + bytesPerDim) > 0)
-                {
-                    String message = String.format("Min packed value %s is > max packed value %s for dimension %d.",
-                                                   new BytesRef(minPackedValue), new BytesRef(maxPackedValue), dim);
-                    throw new CorruptIndexException(message, in);
-                }
+                String message = String.format("Min packed value %s is > max packed value %s.",
+                                               new BytesRef(minPackedValue), new BytesRef(maxPackedValue));
+                throw new CorruptIndexException(message, in);
             }
 
             pointCount = in.readVLong();
@@ -255,13 +250,13 @@ public class TraversingBKDReader implements Closeable
             rightNodePositions = new int[treeDepth + 1];
             splitValuesStack = new byte[treeDepth + 1][];
             splitDims = new int[treeDepth + 1];
-            negativeDeltas = new boolean[numDims * (treeDepth + 1)];
+            negativeDeltas = new boolean[treeDepth + 1];
 
             in = new ByteArrayDataInput(packedIndex);
             splitValuesStack[0] = new byte[packedBytesLength];
             readNodeData(false);
             scratch = new BytesRef();
-            scratch.length = bytesPerDim;
+            scratch.length = bytesPerValue;
         }
 
         @Override
@@ -275,7 +270,7 @@ public class TraversingBKDReader implements Closeable
             index.leftNodePositions[level] = leftNodePositions[level];
             index.rightNodePositions[level] = rightNodePositions[level];
             index.splitValuesStack[index.level] = splitValuesStack[index.level].clone();
-            System.arraycopy(negativeDeltas, level * numDims, index.negativeDeltas, level * numDims, numDims);
+            System.arraycopy(negativeDeltas, level, index.negativeDeltas, level, 1);
             index.splitDims[level] = splitDims[level];
             return index;
         }
@@ -285,9 +280,9 @@ public class TraversingBKDReader implements Closeable
         {
             int nodePosition = leftNodePositions[level];
             super.pushLeft();
-            System.arraycopy(negativeDeltas, (level - 1) * numDims, negativeDeltas, level * numDims, numDims);
+            System.arraycopy(negativeDeltas, level - 1, negativeDeltas, level, 1);
             assert splitDim != -1;
-            negativeDeltas[level * numDims + splitDim] = true;
+            negativeDeltas[level + splitDim] = true;
             in.setPosition(nodePosition);
             readNodeData(true);
         }
@@ -297,9 +292,9 @@ public class TraversingBKDReader implements Closeable
         {
             int nodePosition = rightNodePositions[level];
             super.pushRight();
-            System.arraycopy(negativeDeltas, (level - 1) * numDims, negativeDeltas, level * numDims, numDims);
+            System.arraycopy(negativeDeltas, level - 1, negativeDeltas, level, 1);
             assert splitDim != -1;
-            negativeDeltas[level * numDims + splitDim] = false;
+            negativeDeltas[level + splitDim] = false;
             in.setPosition(nodePosition);
             readNodeData(false);
         }
@@ -323,7 +318,7 @@ public class TraversingBKDReader implements Closeable
         {
             assert !isLeafNode();
             scratch.bytes = splitValuesStack[level];
-            scratch.offset = splitDim * bytesPerDim;
+            scratch.offset = splitDim * bytesPerValue;
             return scratch;
         }
 
@@ -347,11 +342,10 @@ public class TraversingBKDReader implements Closeable
 
                 // read split dim, prefix, firstDiffByteDelta encoded as int:
                 int code = in.readVInt();
-                splitDim = code % numDims;
+                splitDim = 0;
                 splitDims[level] = splitDim;
-                code /= numDims;
-                int prefix = code % (1 + bytesPerDim);
-                int suffix = bytesPerDim - prefix;
+                int prefix = code % (1 + bytesPerValue);
+                int suffix = bytesPerValue - prefix;
 
                 if (splitValuesStack[level] == null)
                 {
@@ -360,14 +354,14 @@ public class TraversingBKDReader implements Closeable
                 System.arraycopy(splitValuesStack[level - 1], 0, splitValuesStack[level], 0, packedBytesLength);
                 if (suffix > 0)
                 {
-                    int firstDiffByteDelta = code / (1 + bytesPerDim);
-                    if (negativeDeltas[level * numDims + splitDim])
+                    int firstDiffByteDelta = code / (1 + bytesPerValue);
+                    if (negativeDeltas[level + splitDim])
                     {
                         firstDiffByteDelta = -firstDiffByteDelta;
                     }
-                    int oldByte = splitValuesStack[level][splitDim * bytesPerDim + prefix] & 0xFF;
-                    splitValuesStack[level][splitDim * bytesPerDim + prefix] = (byte) (oldByte + firstDiffByteDelta);
-                    in.readBytes(splitValuesStack[level], splitDim * bytesPerDim + prefix + 1, suffix - 1);
+                    int oldByte = splitValuesStack[level][splitDim * bytesPerValue + prefix] & 0xFF;
+                    splitValuesStack[level][splitDim * bytesPerValue + prefix] = (byte) (oldByte + firstDiffByteDelta);
+                    in.readBytes(splitValuesStack[level], splitDim * bytesPerValue + prefix + 1, suffix - 1);
                 }
 
                 int leftNumBytes;

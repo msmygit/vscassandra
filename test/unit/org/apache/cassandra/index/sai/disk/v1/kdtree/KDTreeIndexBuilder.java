@@ -116,25 +116,22 @@ public class KDTreeIndexBuilder
         final SegmentMetadata metadata;
 
         IndexContext columnContext = SAITester.createIndexContext("test", Int32Type.instance);
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                columnContext,
-                                                                TypeUtil.fixedSizeOf(type),
-                                                                maxSegmentRowId,
-                                                                size,
-                                                                IndexWriterConfig.defaultConfig("test")))
-        {
-            final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(pointValues);
-            metadata = new SegmentMetadata(0,
-                                           size,
-                                           minSegmentRowId,
-                                           maxSegmentRowId,
-                                           // min/max is unused for now
-                                           SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("a")).getToken()),
-                                           SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("b")).getToken()),
-                                           UTF8Type.instance.fromString("c"),
-                                           UTF8Type.instance.fromString("d"),
-                                           indexMetas);
-        }
+        NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                           columnContext,
+                                                           TypeUtil.fixedSizeOf(type),
+                                                           maxSegmentRowId,
+                                                           IndexWriterConfig.defaultConfig("test"));
+        final SegmentMetadata.ComponentMetadataMap indexMetas = writer.writeAll(pointValues);
+        metadata = new SegmentMetadata(0,
+                                       size,
+                                       minSegmentRowId,
+                                       maxSegmentRowId,
+                                       // min/max is unused for now
+                                       SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("a")).getToken()),
+                                       SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("b")).getToken()),
+                                       UTF8Type.instance.fromString("c"),
+                                       UTF8Type.instance.fromString("d"),
+                                       indexMetas);
 
         try (PerColumnIndexFiles indexFiles = new PerColumnIndexFiles(indexDescriptor, SAITester.createIndexContext("test", Int32Type.instance)))
         {

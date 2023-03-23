@@ -44,7 +44,7 @@ public class BKDQueries
         }
     };
 
-    public static BKDReader.IntersectVisitor bkdQueryFrom(Expression expression, int numDim, int bytesPerDim)
+    public static BKDReader.IntersectVisitor bkdQueryFrom(Expression expression, int bytesPerValue)
     {
         if (expression.lower == null && expression.upper == null)
         {
@@ -54,43 +54,40 @@ public class BKDQueries
         Bound lower = null ;
         if (expression.lower != null)
         {
-            final byte[] lowerBound = toComparableBytes(numDim, bytesPerDim, expression.lower.value.encoded, expression.validator);
+            final byte[] lowerBound = toComparableBytes(bytesPerValue, expression.lower.value.encoded, expression.validator);
             lower = new Bound(lowerBound, !expression.lower.inclusive);
         }
 
         Bound upper = null;
         if (expression.upper != null)
         {
-            final byte[] upperBound = toComparableBytes(numDim, bytesPerDim, expression.upper.value.encoded, expression.validator);
+            final byte[] upperBound = toComparableBytes(bytesPerValue, expression.upper.value.encoded, expression.validator);
             upper = new Bound(upperBound, !expression.upper.inclusive);
         }
 
-        return new RangeQueryVisitor(numDim, bytesPerDim, lower, upper);
+        return new RangeQueryVisitor(bytesPerValue, lower, upper);
     }
 
-    private static byte[] toComparableBytes(int numDim, int bytesPerDim, ByteBuffer value, AbstractType<?> type)
+    private static byte[] toComparableBytes(int bytesPerDim, ByteBuffer value, AbstractType<?> type)
     {
         byte[] buffer = new byte[TypeUtil.fixedSizeOf(type)];
-        assert buffer.length == bytesPerDim * numDim;
+        assert buffer.length == bytesPerDim;
         TypeUtil.toComparableBytes(value, type, buffer);
         return buffer;
     }
 
     private static abstract class RangeQuery implements BKDReader.IntersectVisitor
     {
-        final int numDims;
-        final int bytesPerDim;
+        final int bytesPerValue;
 
-        RangeQuery(int numDims, int bytesPerDim)
+        RangeQuery(int bytesPerValue)
         {
-            this.numDims = numDims;
-            this.bytesPerDim = bytesPerDim;
+            this.bytesPerValue = bytesPerValue;
         }
 
-        int compareUnsigned(byte[] packedValue, int dim, Bound bound)
+        int compareUnsigned(byte[] packedValue, Bound bound)
         {
-            final int offset = dim * bytesPerDim;
-            return FutureArrays.compareUnsigned(packedValue, offset, offset + bytesPerDim, bound.bound, offset, offset + bytesPerDim);
+            return FutureArrays.compareUnsigned(packedValue, 0, bytesPerValue, bound.bound, 0, bytesPerValue);
         }
     }
 
@@ -121,9 +118,9 @@ public class BKDQueries
         private final Bound lower;
         private final Bound upper;
 
-        private RangeQueryVisitor(int numDims, int bytesPerDim, Bound lower, Bound upper)
+        private RangeQueryVisitor(int bytesPerValue, Bound lower, Bound upper)
         {
-            super(numDims, bytesPerDim);
+            super(bytesPerValue);
             this.lower = lower;
             this.upper = upper;
         }
@@ -131,26 +128,23 @@ public class BKDQueries
         @Override
         public boolean visit(byte[] packedValue)
         {
-            for (int dim = 0; dim < numDims; dim++)
+            if (lower != null)
             {
-                if (lower != null)
+                int cmp = compareUnsigned(packedValue, lower);
+                if (lower.greaterThan(cmp))
                 {
-                    int cmp = compareUnsigned(packedValue, dim, lower);
-                    if (lower.greaterThan(cmp))
-                    {
-                        // value is too low, in this dimension
-                        return false;
-                    }
+                    // value is too low, in this dimension
+                    return false;
                 }
+            }
 
-                if (upper != null)
+            if (upper != null)
+            {
+                int cmp = compareUnsigned(packedValue, upper);
+                if (upper.smallerThan(cmp))
                 {
-                    int cmp = compareUnsigned(packedValue, dim, upper);
-                    if (upper.smallerThan(cmp))
-                    {
-                        // value is too high, in this dimension
-                        return false;
-                    }
+                    // value is too high
+                    return false;
                 }
             }
 
@@ -162,27 +156,24 @@ public class BKDQueries
         {
             boolean crosses = false;
 
-            for (int dim = 0; dim < numDims; dim++)
+            if (lower != null)
             {
-                if (lower != null)
-                {
-                    int maxCmp = compareUnsigned(maxPackedValue, dim, lower);
-                    if (lower.greaterThan(maxCmp))
-                        return Relation.CELL_OUTSIDE_QUERY;
+                int maxCmp = compareUnsigned(maxPackedValue, lower);
+                if (lower.greaterThan(maxCmp))
+                    return Relation.CELL_OUTSIDE_QUERY;
 
-                    int minCmp = compareUnsigned(minPackedValue, dim, lower);
-                    crosses |= lower.greaterThan(minCmp);
-                }
+                int minCmp = compareUnsigned(minPackedValue, lower);
+                crosses = lower.greaterThan(minCmp);
+            }
 
-                if (upper != null)
-                {
-                    int minCmp = compareUnsigned(minPackedValue, dim, upper);
-                    if (upper.smallerThan(minCmp))
-                        return Relation.CELL_OUTSIDE_QUERY;
+            if (upper != null)
+            {
+                int minCmp = compareUnsigned(minPackedValue, upper);
+                if (upper.smallerThan(minCmp))
+                    return Relation.CELL_OUTSIDE_QUERY;
 
-                    int maxCmp = compareUnsigned(maxPackedValue, dim, upper);
-                    crosses |= upper.smallerThan(maxCmp);
-                }
+                int maxCmp = compareUnsigned(maxPackedValue, upper);
+                crosses |= upper.smallerThan(maxCmp);
             }
 
             if (crosses)

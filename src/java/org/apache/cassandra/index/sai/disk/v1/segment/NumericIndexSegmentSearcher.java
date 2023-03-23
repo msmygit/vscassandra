@@ -83,7 +83,7 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
 
         if (exp.getOp().isEqualityOrRange())
         {
-            final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
+            final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getBytesPerValue());
             QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext(), perColumnEventListener);
             PostingList postingList = bkdReader.intersect(query, listener, context.queryContext());
             return toIterator(postingList, context);
@@ -100,8 +100,7 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
         return MoreObjects.toStringHelper(this)
                           .add("indexContext", indexContext)
                           .add("count", bkdReader.getPointCount())
-                          .add("numDimensions", bkdReader.getNumDimensions())
-                          .add("bytesPerDimension", bkdReader.getBytesPerDimension())
+                          .add("bytesPerValue", bkdReader.getBytesPerValue())
                           .toString();
     }
 

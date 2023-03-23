@@ -84,14 +84,12 @@ public class NumericIndexWriterTest extends SAIRandomizedTester
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
 
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                indexContext,
-                                                                Integer.BYTES,
-                                                                docCount, docCount,
-                                                                IndexWriterConfig.defaultConfig("test")))
-        {
-            indexMetas = writer.writeAll(pointValues);
-        }
+        NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                           indexContext,
+                                                           Integer.BYTES,
+                                                           docCount,
+                                                           IndexWriterConfig.defaultConfig("test"));
+        indexMetas = writer.writeAll(pointValues);
 
         final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
         final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);
@@ -135,14 +133,12 @@ public class NumericIndexWriterTest extends SAIRandomizedTester
                                                        .fromTermEnum(termEnum, Int32Type.instance);
 
         SegmentMetadata.ComponentMetadataMap indexMetas;
-        try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                indexContext,
-                                                                TypeUtil.fixedSizeOf(Int32Type.instance),
-                                                                maxSegmentRowId, maxSegmentRowId,
-                                                                IndexWriterConfig.defaultConfig("test")))
-        {
-            indexMetas = writer.writeAll(pointValues);
-        }
+        NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                           indexContext,
+                                                           TypeUtil.fixedSizeOf(Int32Type.instance),
+                                                           maxSegmentRowId,
+                                                           IndexWriterConfig.defaultConfig("test"));
+        indexMetas = writer.writeAll(pointValues);
 
         final FileHandle kdtreeHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext);
         final FileHandle kdtreePostingsHandle = indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext);

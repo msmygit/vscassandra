@@ -154,17 +154,13 @@ public class MemtableIndexWriter implements PerColumnIndexWriter
         }
         else
         {
-            try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                    indexContext,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
-                                                                    maxSegmentRowId,
-                                                                    // Due to stale entries in IndexMemtable, we may have more indexed rows than num of rowIds.
-                                                                    Integer.MAX_VALUE,
-                                                                    indexContext.getIndexWriterConfig()))
-            {
-                indexMetas = writer.writeAll(ImmutableOneDimPointValues.fromTermEnum(terms, termComparator));
-                numRows = writer.getPointCount();
-            }
+            NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                               indexContext,
+                                                               TypeUtil.fixedSizeOf(termComparator),
+                                                               maxSegmentRowId,
+                                                               indexContext.getIndexWriterConfig());
+            indexMetas = writer.writeAll(ImmutableOneDimPointValues.fromTermEnum(terms, termComparator));
+            numRows = writer.getPointCount();
         }
 
         // If no rows were written we need to delete any created column index components

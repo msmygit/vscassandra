@@ -110,15 +110,12 @@ public abstract class SegmentBuilder
         @Override
         protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
-            try (NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
-                                                                    indexContext,
-                                                                    TypeUtil.fixedSizeOf(termComparator),
-                                                                    maxSegmentRowId,
-                                                                    rowCount,
-                                                                    indexWriterConfig))
-            {
-                return writer.writeAll(kdTreeRamBuffer.asPointValues());
-            }
+            NumericIndexWriter writer = new NumericIndexWriter(indexDescriptor,
+                                                               indexContext,
+                                                               TypeUtil.fixedSizeOf(termComparator),
+                                                               maxSegmentRowId,
+                                                               indexWriterConfig);
+            return writer.writeAll(kdTreeRamBuffer.asPointValues());
         }
     }
 
