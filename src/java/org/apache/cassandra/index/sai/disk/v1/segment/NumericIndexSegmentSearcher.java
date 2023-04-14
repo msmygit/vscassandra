@@ -25,16 +25,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerColumnIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
+import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.postings.PostingList;
-import org.apache.cassandra.index.sai.utils.KeyRangeIterator;
 
 import static org.apache.cassandra.index.sai.disk.v1.kdtree.BKDQueries.bkdQueryFrom;
 
@@ -76,7 +76,7 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
 
     @Override
     @SuppressWarnings({"resource", "RedundantSuppression"})
-    public KeyRangeIterator search(Expression exp, SSTableQueryContext context) throws IOException
+    public KeyRangeIterator search(Expression exp, QueryContext context) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -84,8 +84,8 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
         if (exp.getOp().isEqualityOrRange())
         {
             final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getBytesPerValue());
-            QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext(), perColumnEventListener);
-            PostingList postingList = bkdReader.intersect(query, listener, context.queryContext());
+            QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
+            PostingList postingList = bkdReader.intersect(query, listener, context);
             return toIterator(postingList, context);
         }
         else

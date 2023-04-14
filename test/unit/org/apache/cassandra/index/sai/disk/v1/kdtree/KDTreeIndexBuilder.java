@@ -50,7 +50,6 @@ import org.apache.cassandra.index.sai.disk.v1.segment.IndexSegmentSearcher;
 import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.memory.MemtableTermsIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.PrimaryKeyFactory;
 import org.apache.cassandra.index.sai.utils.TermsIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.AbstractGuavaIterator;
@@ -67,7 +66,7 @@ public class KDTreeIndexBuilder
 {
     public static final PrimaryKeyMap TEST_PRIMARY_KEY_MAP = new PrimaryKeyMap()
     {
-        private final PrimaryKeyFactory primaryKeyFactory = new PrimaryKeyFactory(null);
+        private final PrimaryKey.Factory primaryKeyFactory = new PrimaryKey.Factory(null);
 
         @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId)
@@ -81,7 +80,7 @@ public class KDTreeIndexBuilder
             return key.token().getLongValue();
         }
     };
-    public static final PrimaryKeyMap.Factory TEST_PRIMARY_KEY_MAP_FACTORY = (context) -> TEST_PRIMARY_KEY_MAP;
+    public static final PrimaryKeyMap.Factory TEST_PRIMARY_KEY_MAP_FACTORY = () -> TEST_PRIMARY_KEY_MAP;
 
 
     private static final BigDecimal ONE_TENTH = BigDecimal.valueOf(1, 1);

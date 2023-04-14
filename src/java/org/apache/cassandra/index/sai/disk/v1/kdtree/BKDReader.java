@@ -242,6 +242,7 @@ public class BKDReader extends TraversingBKDReader implements Closeable
             index.pop();
         }
 
+        @SuppressWarnings({"resource", "RedundantSuppression"})
         private PeekablePostingList initPostingReader(long offset) throws IOException
         {
             final PostingsReader.BlocksSummary summary = new PostingsReader.BlocksSummary(postingsSummaryInput, offset);
