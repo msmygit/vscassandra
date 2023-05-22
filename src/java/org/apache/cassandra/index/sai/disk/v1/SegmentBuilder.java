@@ -19,6 +19,9 @@ package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -27,19 +30,34 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+import org.apache.cassandra.db.marshal.ValueAccessor;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.RAMStringIndexer;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.hnsw.ByteBufferVectorValues;
+import org.apache.cassandra.index.sai.disk.hnsw.ExtendedConcurrentHnswGraph;
+import org.apache.cassandra.index.sai.disk.hnsw.HnswGraphWriter;
+import org.apache.cassandra.index.sai.disk.hnsw.VectorPostings;
+import org.apache.cassandra.index.sai.disk.hnsw.VectorPostingsWriter;
 import org.apache.cassandra.index.sai.disk.io.BytesRefUtil;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDTreeRamBuffer;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
 import org.apache.cassandra.index.sai.disk.v1.trie.InvertedIndexWriter;
+import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.serializers.TypeSerializer;
+import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.ObjectSizes;
+import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.StringHelper;
+import org.apache.lucene.util.hnsw.ConcurrentHnswGraphBuilder;
 
 /**
  * Creates an on-heap index data structure to be flushed to an SSTable index.
@@ -160,6 +178,87 @@ public abstract class SegmentBuilder
             {
                 return writer.writeAll(ramIndexer.getTermsWithPostings());
             }
+        }
+    }
+
+    public static class VectorSegmentBuilder extends SegmentBuilder
+    {
+        final ByteBufferVectorValues vectorValues;
+        private final ConcurrentHnswGraphBuilder<float[]> builder;
+        final Map<ByteBuffer, VectorPostings<Integer>> postingsMap;
+        private final AtomicInteger nextOrdinal = new AtomicInteger();
+
+        public VectorSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter, IndexWriterConfig indexWriterConfig)
+        {
+            super(termComparator, limiter);
+            vectorValues = new ByteBufferVectorValues((TypeSerializer<float[]>) termComparator.getSerializer());
+            try
+            {
+                builder = ConcurrentHnswGraphBuilder.create(vectorValues,
+                                                            VectorEncoding.FLOAT32,
+                                                            indexWriterConfig.getSimilarityFunction(),
+                                                            indexWriterConfig.getMaximumNodeConnections(),
+                                                            indexWriterConfig.getConstructionBeamWidth());
+            }
+            catch (IOException e)
+            {
+                //TODO Handle this properly
+                throw new RuntimeException(e);
+            }
+            postingsMap = new ConcurrentSkipListMap<>((left, right) -> ValueAccessor.compare(left, ByteBufferAccessor.instance, right, ByteBufferAccessor.instance));
+        }
+
+        @Override
+        public boolean isEmpty()
+        {
+            return postingsMap.isEmpty();
+        }
+
+        @Override
+        protected long addInternal(ByteBuffer term, int segmentRowId)
+        {
+            long initialSize = memoryUsage();
+
+            var postings = postingsMap.computeIfAbsent(term, v -> {
+                var ordinal = nextOrdinal.getAndIncrement();
+                vectorValues.add(ordinal, term);
+                try
+                {
+                    builder.addGraphNode(ordinal, vectorValues);
+                }
+                catch (IOException e)
+                {
+                    throw new RuntimeException(e);
+                }
+                return new VectorPostings<>(ordinal);
+            });
+            postings.append(segmentRowId);
+
+            return memoryUsage() - initialSize;
+        }
+
+        @Override
+        protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
+        {
+            try (var vectorsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.VECTOR, indexContext));
+                 var postingsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.POSTING_LISTS, indexContext)))
+            {
+                vectorValues.write(vectorsOutput.asSequentialWriter());
+                new VectorPostingsWriter<Integer>().writePostings(postingsOutput.asSequentialWriter(), vectorValues, postingsMap, p -> p);
+                new HnswGraphWriter(new ExtendedConcurrentHnswGraph(builder.getGraph())).write(indexDescriptor.fileFor(IndexComponent.TERMS_DATA, indexContext));
+            }
+            SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();
+
+            // we don't care about root/offset/length for vector. segmentId is used in searcher
+            Map<String, String> vectorConfigs = Map.of("SEGMENT_ID", ByteBufferUtil.bytesToHex(ByteBuffer.wrap(StringHelper.randomId())));
+            metadataMap.put(IndexComponent.VECTOR, 0, 0, 0, vectorConfigs);
+
+            return metadataMap;
+        }
+
+        private long memoryUsage()
+        {
+            return ObjectSizes.measureDeep(postingsMap) + ObjectSizes.measureDeep(vectorValues) + ObjectSizes.measureDeep(builder);
         }
     }
 
