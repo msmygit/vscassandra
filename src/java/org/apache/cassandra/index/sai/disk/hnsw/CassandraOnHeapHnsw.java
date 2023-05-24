@@ -117,7 +117,7 @@ public class CassandraOnHeapHnsw<T>
         return bytesUsed.get() - initialSize;
     }
 
-    public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept)
+    public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
         NeighborQueue queue;
         try
@@ -129,7 +129,7 @@ public class CassandraOnHeapHnsw<T>
                                              similarityFunction,
                                              builder.getGraph().getView(),
                                              toAccept,
-                                             Integer.MAX_VALUE);
+                                             visitedLimit);
         }
         catch (IOException e)
         {

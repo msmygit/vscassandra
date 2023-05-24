@@ -20,14 +20,10 @@ package org.apache.cassandra.index.sai.disk.hnsw;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import javax.annotation.Nullable;
 
@@ -35,33 +31,21 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.db.marshal.ByteBufferAccessor;
-import org.apache.cassandra.db.marshal.ValueAccessor;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.serializers.TypeSerializer;
-import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
-import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.Counter;
-import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.hnsw.ConcurrentHnswGraphBuilder;
-import org.apache.lucene.util.hnsw.HnswGraphSearcher;
-import org.apache.lucene.util.hnsw.NeighborQueue;
 
 public class VectorMemtableIndex implements MemtableIndex
 {
@@ -119,7 +103,7 @@ public class VectorMemtableIndex implements MemtableIndex
         if (!graphIndex.isEmpty() && !coversFullRing(keyRange))
             bits = new KeyRangeFilteringBits(keyRange);
 
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graphIndex.search(qv, limit, bits, Integer.MAX_VALUE);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -133,14 +117,14 @@ public class VectorMemtableIndex implements MemtableIndex
             results.add(key);
         }
 
-        int maxBruteForceRows = Math.max(limit, (int)(indexContext.getIndexWriterConfig().getMaximumNodeConnections() * Math.log(graph.size())));
+        int maxBruteForceRows = Math.max(limit, (int)(indexContext.getIndexWriterConfig().getMaximumNodeConnections() * Math.log(graphIndex.size())));
         if (results.size() <= maxBruteForceRows)
             return new ReorderingRangeIterator(new PriorityQueue<>(results));
 
         ByteBuffer buffer = exp.lower.value.raw;
         float[] qv = (float[])indexContext.getValidator().getSerializer().deserialize(buffer.duplicate());
         var bits = new KeyFilteringBits(results);
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graphIndex.search(qv, limit, bits, Integer.MAX_VALUE);
         return new ReorderingRangeIterator(keyQueue);
     }
 
