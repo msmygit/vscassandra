@@ -51,6 +51,8 @@ public class VectorSiftSmallTest extends SAITester
 
         // Create table and index
         createTable("CREATE TABLE %s (pk int, val float vector[128], PRIMARY KEY(pk))");
+        disableCompaction();
+
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
         waitForIndexQueryable();
 

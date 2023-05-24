@@ -66,14 +66,9 @@ import org.apache.lucene.util.hnsw.NeighborQueue;
 public class VectorMemtableIndex implements MemtableIndex
 {
     private final IndexContext indexContext;
-    private final ByteBufferVectorValues vectorValues;
-    private final ConcurrentHnswGraphBuilder<float[]> builder;
-    final Map<ByteBuffer, VectorPostings<PrimaryKey>> postingsMap;
-    private final AtomicInteger nextOrdinal = new AtomicInteger();
-
+    private final CassandraOnHeapHnsw<PrimaryKey> graphIndex;
     private final LongAdder writeCount = new LongAdder();
-
-    private final Counter bytesUsed = Counter.newCounter();
+    private final LongAdder estimatedMemoryUsage = new LongAdder();
 
     private static final Token.KeyBound MIN_KEY_BOUND = DatabaseDescriptor.getPartitioner().getMinimumToken().minKeyBound();
 
@@ -83,36 +78,19 @@ public class VectorMemtableIndex implements MemtableIndex
     public VectorMemtableIndex(IndexContext indexContext)
     {
         this.indexContext = indexContext;
-
-        vectorValues = new ByteBufferVectorValues((TypeSerializer<float[]>) indexContext.getValidator().getSerializer());
-        postingsMap = new ConcurrentSkipListMap<>((left, right) -> ValueAccessor.compare(left, ByteBufferAccessor.instance, right, ByteBufferAccessor.instance));
-
-        try
-        {
-            builder = ConcurrentHnswGraphBuilder.create(vectorValues,
-                                                        VectorEncoding.FLOAT32,
-                                                        indexContext.getIndexWriterConfig().getSimilarityFunction(),
-                                                        indexContext.getIndexWriterConfig().getMaximumNodeConnections(),
-                                                        indexContext.getIndexWriterConfig().getConstructionBeamWidth());
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
-        bytesUsed.addAndGet(ObjectSizes.measureDeep(postingsMap) + ObjectSizes.measureDeep(vectorValues) + ObjectSizes.measureDeep(builder));
+        this.graphIndex = new CassandraOnHeapHnsw<>(indexContext.getValidator(), indexContext.getIndexWriterConfig());
     }
 
     @Override
     public synchronized void index(DecoratedKey key, Clustering clustering, ByteBuffer value, Memtable memtable, OpOrder.Group opGroup)
     {
         var primaryKey = indexContext.keyFactory().create(key, clustering);
-        long initialSize = bytesUsed.get();
-        index(primaryKey, value);
-        long allocatedBytes = bytesUsed.get() - initialSize;
+        long allocatedBytes = index(primaryKey, value);
         memtable.markExtraOnHeapUsed(allocatedBytes, opGroup);
+        estimatedMemoryUsage.add(allocatedBytes);
     }
 
-    private void index(PrimaryKey primaryKey, ByteBuffer value)
+    private long index(PrimaryKey primaryKey, ByteBuffer value)
     {
         if (minimumKey == null)
             minimumKey = primaryKey;
@@ -125,20 +103,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
         writeCount.increment();
 
-        var postings = postingsMap.computeIfAbsent(value, v -> {
-            var ordinal = nextOrdinal.getAndIncrement();
-            vectorValues.add(ordinal, value);
-            try
-            {
-                builder.addGraphNode(ordinal, vectorValues);
-            }
-            catch (IOException e)
-            {
-                throw new RuntimeException(e);
-            }
-            return new VectorPostings<>(ordinal);
-        });
-        postings.append(primaryKey);
+        return graphIndex.add(value, primaryKey);
     }
 
     @Override
@@ -151,7 +116,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
         Bits bits = null;
         // key range doesn't full token ring, we need to filter keys inside ANN search
-        if (vectorValues.size() > 0 && !coversFullRing(keyRange))
+        if (!graphIndex.isEmpty() && !coversFullRing(keyRange))
             bits = new KeyRangeFilteringBits(keyRange);
 
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
@@ -200,7 +165,7 @@ public class VectorMemtableIndex implements MemtableIndex
     @Override
     public long estimatedOnHeapMemoryUsed()
     {
-        return bytesUsed.get();
+        return estimatedMemoryUsage.sum();
     }
 
     @Override
@@ -212,7 +177,7 @@ public class VectorMemtableIndex implements MemtableIndex
     @Override
     public boolean isEmpty()
     {
-        return vectorValues.size() == 0;
+        return graphIndex.isEmpty();
     }
 
     @Nullable
@@ -229,66 +194,9 @@ public class VectorMemtableIndex implements MemtableIndex
         return null;
     }
 
-    public void writeData(IndexDescriptor indexDescriptor, IndexContext indexContext, RowMapping rowMapping) throws IOException
+    public void writeData(IndexDescriptor indexDescriptor, RowMapping rowMapping) throws IOException
     {
-        try (var vectorsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.VECTOR, indexContext));
-             var postingsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.POSTING_LISTS, indexContext)))
-        {
-            vectorValues.write(vectorsOutput.asSequentialWriter());
-            new VectorPostingsWriter<PrimaryKey>().writePostings(postingsOutput.asSequentialWriter(), vectorValues, postingsMap, p -> rowMapping.get(p));
-            new HnswGraphWriter(new ExtendedConcurrentHnswGraph(builder.getGraph())).write(indexDescriptor.fileFor(IndexComponent.TERMS_DATA, indexContext));
-        }
-    }
-
-    private long ramBytesUsed()
-    {
-        if (vectorValues.size() == 0)
-            return 0;
-
-        long vectorValuesBytes = vectorValues.ramBytesUsed();
-
-        long graphBytes;
-        try
-        {
-            graphBytes = builder.getGraph().ramBytesUsed();
-        }
-        catch (NullPointerException e)
-        {
-            graphBytes = ObjectSizes.measureDeep(builder);
-        }
-
-        return graphBytes + vectorValuesBytes;
-
-
-
-
-
-
-
-
-
-
-
-//        long graphSize;
-//        try
-//        {
-//            graphSize = builder.getGraph().ramBytesUsed();
-//        }
-//        catch (NullPointerException e)
-//        {
-//            e.printStackTrace();
-//            graphSize = ObjectSizes.measureDeep(builder);
-//        }
-
-//        return graphSize;
-
-//        return ObjectSizes.measureDeep(postingsMap) + ObjectSizes.measureDeep(vectorValues) + ObjectSizes.measureDeep(builder);
-//        return ObjectSizes.measureDeep(builder);
-    }
-
-    private Collection<PrimaryKey> keysFromOrdinal(int node)
-    {
-        return postingsMap.get(vectorValues.bufferValue(node)).postings;
+        graphIndex.writeData(indexDescriptor, indexContext, p -> rowMapping.get(p));
     }
 
     private class KeyRangeFilteringBits implements Bits
@@ -303,14 +211,14 @@ public class VectorMemtableIndex implements MemtableIndex
         @Override
         public boolean get(int node)
         {
-            var keys = keysFromOrdinal(node);
+            var keys = graphIndex.keysFromOrdinal(node);
             return keys.stream().anyMatch(k -> keyRange.contains(k.partitionKey()));
         }
 
         @Override
         public int length()
         {
-            return vectorValues.size();
+            return graphIndex.size();
         }
     }
 
@@ -361,7 +269,7 @@ public class VectorMemtableIndex implements MemtableIndex
         @Override
         public boolean get(int i)
         {
-            var pk = keysFromOrdinal(i);
+            var pk = graphIndex.keysFromOrdinal(i);
             return results.stream().anyMatch(pk::contains);
         }
 

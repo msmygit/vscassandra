@@ -27,21 +27,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.cassandra.serializers.TypeSerializer;
 import org.apache.cassandra.utils.ObjectSizes;
+import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 //TODO Could potentially move these offheap
 public class ByteBufferVectorValues implements RandomAccessVectorValues<float[]>
 {
+    public static final long EMPTY_SIZE = ObjectSizes.measureDeep(new ByteBufferVectorValues(null));
+
     private final AtomicInteger cachedDimensions = new AtomicInteger();
     private final TypeSerializer<float[]> serializer;
     private final Map<Integer, ByteBuffer> values = new ConcurrentSkipListMap<>();
-    private final long emptySize;
+
+    private final Counter bytesUsed = Counter.newCounter();
 
     public ByteBufferVectorValues(TypeSerializer<float[]> serializer)
     {
         this.serializer = serializer;
-        this.emptySize = ObjectSizes.measureDeep(values);
+        bytesUsed.addAndGet(EMPTY_SIZE);
     }
 
     @Override
@@ -68,9 +72,10 @@ public class ByteBufferVectorValues implements RandomAccessVectorValues<float[]>
         return serializer.deserialize(values.get(i));
     }
 
-    public void add(int ordinal, ByteBuffer buffer)
+    public long add(int ordinal, ByteBuffer buffer)
     {
         values.put(ordinal, buffer);
+        return bytesUsed.addAndGet(ObjectSizes.measureDeep(values) - bytesUsed.get());
     }
 
     @Override
@@ -82,16 +87,6 @@ public class ByteBufferVectorValues implements RandomAccessVectorValues<float[]>
     public ByteBuffer bufferValue(int node)
     {
         return values.get(node);
-    }
-
-    public long ramBytesUsed()
-    {
-        if (values.isEmpty())
-            return emptySize;
-
-        return emptySize +
-               (dimension() * 4 + RamUsageEstimator.HASHTABLE_RAM_BYTES_PER_ENTRY) * values.size() +
-               values.size() * RamUsageEstimator.NUM_BYTES_OBJECT_REF + RamUsageEstimator.NUM_BYTES_ARRAY_HEADER;
     }
 
     public void write(SequentialWriter writer) throws IOException

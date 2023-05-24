@@ -21,20 +21,28 @@ package org.apache.cassandra.index.sai.disk.hnsw;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.apache.cassandra.utils.ObjectSizes;
+import org.apache.lucene.util.Counter;
+
 public class VectorPostings<T>
 {
+    public static final long EMPTY_SIZE = ObjectSizes.measureDeep(new VectorPostings<Long>(0));
     public final int ordinal;
     public final List<T> postings;
+
+    private final Counter bytesUsed = Counter.newCounter();
 
     public VectorPostings(int ordinal)
     {
         this.ordinal = ordinal;
         // we expect that the overwhelmingly most common cardinality will be 1, so optimize for reads
         postings = new CopyOnWriteArrayList<>();
+        bytesUsed.addAndGet(EMPTY_SIZE);
     }
 
-    public void append(T key)
+    public long append(T key)
     {
         postings.add(key);
+        return bytesUsed.addAndGet(ObjectSizes.measureDeep(postings) - bytesUsed.get());
     }
 }

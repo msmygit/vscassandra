@@ -38,6 +38,7 @@ import org.apache.cassandra.index.sai.disk.RAMStringIndexer;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.hnsw.ByteBufferVectorValues;
+import org.apache.cassandra.index.sai.disk.hnsw.CassandraOnHeapHnsw;
 import org.apache.cassandra.index.sai.disk.hnsw.ExtendedConcurrentHnswGraph;
 import org.apache.cassandra.index.sai.disk.hnsw.HnswGraphWriter;
 import org.apache.cassandra.index.sai.disk.hnsw.VectorPostings;
@@ -56,6 +57,7 @@ import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
+import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.hnsw.ConcurrentHnswGraphBuilder;
 
@@ -183,70 +185,30 @@ public abstract class SegmentBuilder
 
     public static class VectorSegmentBuilder extends SegmentBuilder
     {
-        final ByteBufferVectorValues vectorValues;
-        private final ConcurrentHnswGraphBuilder<float[]> builder;
-        final Map<ByteBuffer, VectorPostings<Integer>> postingsMap;
-        private final AtomicInteger nextOrdinal = new AtomicInteger();
+        private final CassandraOnHeapHnsw<Integer> graphIndex;
 
         public VectorSegmentBuilder(AbstractType<?> termComparator, NamedMemoryLimiter limiter, IndexWriterConfig indexWriterConfig)
         {
             super(termComparator, limiter);
-            vectorValues = new ByteBufferVectorValues((TypeSerializer<float[]>) termComparator.getSerializer());
-            try
-            {
-                builder = ConcurrentHnswGraphBuilder.create(vectorValues,
-                                                            VectorEncoding.FLOAT32,
-                                                            indexWriterConfig.getSimilarityFunction(),
-                                                            indexWriterConfig.getMaximumNodeConnections(),
-                                                            indexWriterConfig.getConstructionBeamWidth());
-            }
-            catch (IOException e)
-            {
-                //TODO Handle this properly
-                throw new RuntimeException(e);
-            }
-            postingsMap = new ConcurrentSkipListMap<>((left, right) -> ValueAccessor.compare(left, ByteBufferAccessor.instance, right, ByteBufferAccessor.instance));
+            graphIndex = new CassandraOnHeapHnsw<>(termComparator, indexWriterConfig);
         }
 
         @Override
         public boolean isEmpty()
         {
-            return postingsMap.isEmpty();
+            return graphIndex.isEmpty();
         }
 
         @Override
         protected long addInternal(ByteBuffer term, int segmentRowId)
         {
-            long initialSize = memoryUsage();
-
-            var postings = postingsMap.computeIfAbsent(term, v -> {
-                var ordinal = nextOrdinal.getAndIncrement();
-                vectorValues.add(ordinal, term);
-                try
-                {
-                    builder.addGraphNode(ordinal, vectorValues);
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
-                return new VectorPostings<>(ordinal);
-            });
-            postings.append(segmentRowId);
-
-            return memoryUsage() - initialSize;
+            return graphIndex.add(term, segmentRowId);
         }
 
         @Override
         protected SegmentMetadata.ComponentMetadataMap flushInternal(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
         {
-            try (var vectorsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.VECTOR, indexContext));
-                 var postingsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.POSTING_LISTS, indexContext)))
-            {
-                vectorValues.write(vectorsOutput.asSequentialWriter());
-                new VectorPostingsWriter<Integer>().writePostings(postingsOutput.asSequentialWriter(), vectorValues, postingsMap, p -> p);
-                new HnswGraphWriter(new ExtendedConcurrentHnswGraph(builder.getGraph())).write(indexDescriptor.fileFor(IndexComponent.TERMS_DATA, indexContext));
-            }
+            graphIndex.writeData(indexDescriptor, indexContext, p -> p);
             SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();
 
             // we don't care about root/offset/length for vector. segmentId is used in searcher
@@ -254,11 +216,6 @@ public abstract class SegmentBuilder
             metadataMap.put(IndexComponent.VECTOR, 0, 0, 0, vectorConfigs);
 
             return metadataMap;
-        }
-
-        private long memoryUsage()
-        {
-            return ObjectSizes.measureDeep(postingsMap) + ObjectSizes.measureDeep(vectorValues) + ObjectSizes.measureDeep(builder);
         }
     }
 
