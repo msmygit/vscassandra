@@ -19,7 +19,6 @@
 package org.apache.cassandra.cql3.validation.entities;
 
 import java.util.Arrays;
-import java.util.List;
 
 import org.junit.Test;
 
@@ -30,10 +29,10 @@ import org.apache.cassandra.db.marshal.ListType;
 import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 
+import static java.lang.String.format;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static java.lang.String.format;
 
 public class WritetimeOrTTLTest extends CQLTester
 {
@@ -339,8 +338,6 @@ public class WritetimeOrTTLTest extends CQLTester
         assertRows("SELECT writetime(v) FROM %s", row(10L), row(1L));
         assertRows("SELECT min(writetime(v)) FROM %s", row(1L));
         assertRows("SELECT max(writetime(v)) FROM %s", row(10L));
-        assertRows("SELECT min(maxwritetime(v)) FROM %s", row(1L));
-        assertRows("SELECT max(maxwritetime(v)) FROM %s", row(10L));
 
         // Frozen collection
         // Note that currently the tested system functions (min and max) return collections in their serialized format,
@@ -350,8 +347,6 @@ public class WritetimeOrTTLTest extends CQLTester
         assertRows("SELECT writetime(fs) FROM %s", row(10L), row(1L));
         assertRows("SELECT min(writetime(fs)) FROM %s", row(1L));
         assertRows("SELECT max(writetime(fs)) FROM %s", row(10L));
-        assertRows("SELECT min(maxwritetime(fs)) FROM %s", row(1L));
-        assertRows("SELECT max(maxwritetime(fs)) FROM %s", row(10L));
 
         // Multi-cell collection
         // Note that currently the tested system functions (min and max) return collections in their serialized format,
@@ -361,8 +356,6 @@ public class WritetimeOrTTLTest extends CQLTester
         assertRows("SELECT writetime(s) FROM %s", row(Arrays.asList(10L, 20L, 20L)), row(Arrays.asList(1L, 2L, 2L)));
         assertRows("SELECT min(writetime(s)) FROM %s", row(ListType.getInstance(LongType.instance, false).decompose(Arrays.asList(1L, 2L, 2L))));
         assertRows("SELECT max(writetime(s)) FROM %s", row(ListType.getInstance(LongType.instance, false).decompose(Arrays.asList(10L, 20L, 20L))));
-        assertRows("SELECT min(maxwritetime(s)) FROM %s", row(2L));
-        assertRows("SELECT max(maxwritetime(s)) FROM %s", row(20L));
     }
 
     private void assertRows(String query, Object[]... rows) throws Throwable

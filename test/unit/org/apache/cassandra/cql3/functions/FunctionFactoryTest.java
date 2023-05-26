@@ -86,7 +86,7 @@ public class FunctionFactoryTest extends CQLTester
     };
 
     private static final UUID uuid = UUID.fromString("62c3e96f-55cd-493b-8c8e-5a18883a1698");
-    private static final TimeUUID timeUUID = TimeUUID.fromString("00346642-2d2f-11ed-a261-0242ac120002");
+    private static final UUID timeUUID = UUID.fromString("00346642-2d2f-11ed-a261-0242ac120002");
     private static final BigInteger bigint = new BigInteger("12345678901234567890");
     private static final BigDecimal bigdecimal = new BigDecimal("1234567890.1234567890");
     private static final Date date = new Date();
@@ -236,7 +236,6 @@ public class FunctionFactoryTest extends CQLTester
         testLiteral("{false}", set(false));
         testLiteral(String.format("{%s}", uuid), set(uuid));
         testLiteral(String.format("{%s}", timeUUID), set(timeUUID));
-        testLiteral(String.format("{%s, %s}", uuid, timeUUID), set(uuid, timeUUID.asUUID()));
     }
 
     @Test
@@ -276,7 +275,6 @@ public class FunctionFactoryTest extends CQLTester
         testLiteral("[false]", list(false));
         testLiteral(String.format("[%s]", uuid), list(uuid));
         testLiteral(String.format("[%s]", timeUUID), list(timeUUID));
-        testLiteral(String.format("[%s, %s]", uuid, timeUUID), list(uuid, timeUUID.asUUID()));
     }
 
     @Test
