@@ -65,14 +65,12 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.io.util.DataOutputBuffer;
-import org.apache.cassandra.locator.IEndpointSnitch;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.metrics.RestorableMeter;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.nodes.virtual.NodeConstants;
 import org.apache.cassandra.nodes.virtual.NodesSystemViews;
 import org.apache.cassandra.schema.CompactionParams;
-import org.apache.cassandra.schema.UserFunctions;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -80,11 +78,11 @@ import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.Tables;
 import org.apache.cassandra.schema.Types;
+import org.apache.cassandra.schema.UserFunctions;
 import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.service.paxos.Commit;
 import org.apache.cassandra.service.paxos.PaxosState;
 import org.apache.cassandra.streaming.StreamOperation;
-import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.CassandraVersion;
 import org.apache.cassandra.utils.FBUtilities;
@@ -409,16 +407,6 @@ public final class SystemKeyspace
                          BuiltViews,
                          PreparedStatements,
                          Repairs);
-    }
-
-    private static volatile Map<TableId, Pair<CommitLogPosition, Long>> truncationRecords;
-
-    public enum BootstrapState
-    {
-        NEEDS_BOOTSTRAP,
-        COMPLETED,
-        IN_PROGRESS,
-        DECOMMISSIONED
     }
 
     public static void updateCompactionHistory(UUID id,
