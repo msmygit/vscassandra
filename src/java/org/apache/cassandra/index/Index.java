@@ -44,8 +44,6 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.internal.CollatedViewIndexBuilder;
-import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -646,18 +644,9 @@ public interface Index
 
         /**
          * @param executionController the collection of OpOrder.Groups which the ReadCommand is being performed under.
-         * @param tombstonesToSkip
          * @return partitions from the base table matching the criteria of the search.
          */
-        public UnfilteredPartitionIterator search(ReadExecutionController executionController, Set<PrimaryKey> tombstonesToSkip);
-
-        /**
-         * @return true if the query being searched involves an ORDER BY clause
-         */
-        default Expression getOrderBy()
-        {
-            return null;
-        }
+        public UnfilteredPartitionIterator search(ReadExecutionController executionController);
 
         /**
          * Replica filtering protection may fetch data that doesn't match query conditions.

@@ -24,7 +24,6 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.*;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sasi.disk.Token;
 import org.apache.cassandra.index.sasi.plan.Operation.OperationType;
 import org.apache.cassandra.io.util.FileUtils;
@@ -73,7 +72,7 @@ public class SASIIndexSearcher implements Index.Searcher
     }
 
     @Override
-    public UnfilteredPartitionIterator search(ReadExecutionController executionController, Set<PrimaryKey> tombstonesToSkip)
+    public UnfilteredPartitionIterator search(ReadExecutionController executionController)
     {
         return new ResultIterator(analyze(), controller, executionController);
     }

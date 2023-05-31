@@ -19,7 +19,6 @@
 package org.apache.cassandra.index;
 
 import java.nio.ByteBuffer;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
@@ -38,7 +37,6 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
@@ -97,7 +95,7 @@ public final class ExpressionFilteringIndex extends StubIndex
             }
 
             @Override
-            public UnfilteredPartitionIterator search(ReadExecutionController executionController, Set<PrimaryKey> tombstonesToSkip)
+            public UnfilteredPartitionIterator search(ReadExecutionController executionController)
             {
                 searches.incrementAndGet();
 

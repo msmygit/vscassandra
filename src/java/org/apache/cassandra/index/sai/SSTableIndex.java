@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -236,9 +235,9 @@ public class SSTableIndex implements SegmentOrdering
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, Set<PrimaryKey> tombstonesToSkip, int limit) throws IOException
+    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
     {
-        return searchableIndex.limitToTopResults(context, iterator, exp, tombstonesToSkip, limit);
+        return searchableIndex.limitToTopResults(context, iterator, exp, limit);
     }
 
     public String toString()

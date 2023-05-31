@@ -25,7 +25,6 @@ import java.util.function.BiFunction;
 import org.apache.cassandra.Util;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.*;
@@ -237,7 +236,7 @@ public class StubIndex implements Index
         }
 
         @Override
-        public UnfilteredPartitionIterator search(ReadExecutionController executionController, Set<PrimaryKey> tombstonesToSkip)
+        public UnfilteredPartitionIterator search(ReadExecutionController executionController)
         {
             return Util.executeLocally((PartitionRangeReadCommand)command, baseCfs, executionController);
         }

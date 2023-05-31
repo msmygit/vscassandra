@@ -22,12 +22,10 @@ package org.apache.cassandra.index.internal;
 
 import java.nio.ByteBuffer;
 import java.util.NavigableSet;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.*;
@@ -64,7 +62,7 @@ public abstract class CassandraIndexSearcher implements Index.Searcher
 
     @SuppressWarnings("resource") // Both the OpOrder and 'indexIter' are closed on exception, or through the closing of the result
     // of this method.
-    public UnfilteredPartitionIterator search(ReadExecutionController executionController, Set<PrimaryKey> tombstonesToSkip)
+    public UnfilteredPartitionIterator search(ReadExecutionController executionController)
     {
         // the value of the index expression is the partition key in the index table
         DecoratedKey indexKey = index.getBackingTable().get().decorateKey(expression.getIndexValue());
