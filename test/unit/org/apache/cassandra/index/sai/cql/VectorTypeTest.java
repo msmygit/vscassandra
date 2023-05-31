@@ -357,6 +357,36 @@ public class VectorTypeTest extends SAITester
     }
 
     @Test
+    public void nullVectorInDifferentSSTableTest() throws Throwable
+    {
+        createTable("CREATE TABLE %s (pk int, str_val text, val vector<float, 3>, PRIMARY KEY(pk))");
+        createIndex("CREATE CUSTOM INDEX ON %s(str_val) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        // sstable-1 has no vector
+        execute("INSERT INTO %s (pk, str_val) VALUES (1, 'A')"); // no vector
+
+        flush();
+
+        UntypedResultSet result = execute("SELECT * FROM %s WHERE str_val = 'A' ORDER BY val ann of [2.5, 3.5, 4.5] LIMIT 2");
+        assertThat(result).hasSize(0);
+
+        // memtable index has no str_val
+        execute("INSERT INTO %s (pk, val) VALUES (0, ?)", vector(1.0f, 2.0f ,3.0f));
+
+        result = execute("SELECT * FROM %s WHERE str_val = 'A' ORDER BY val ann of [2.5, 3.5, 4.5] LIMIT 2");
+        assertThat(result).hasSize(1);
+
+        // sstable-2 has no str_val
+        flush();
+
+        result = execute("SELECT * FROM %s WHERE str_val = 'A' ORDER BY val ann of [2.5, 3.5, 4.5] LIMIT 2");
+        assertThat(result).hasSize(1);
+    }
+
+
+    @Test
     public void testMultiVectorOrderingsNotAllowed() throws Throwable
     {
         createTable("CREATE TABLE %s (pk int, str_val text, val1 vector<float, 3>, val2 vector<float, 3>, PRIMARY KEY(pk))");
