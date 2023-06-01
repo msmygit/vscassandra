@@ -26,6 +26,7 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
 
@@ -41,7 +42,9 @@ public class PerIndexFiles implements Closeable
         this.indexContext = indexContext;
         if (indexContext.isVector())
         {
-            // TODO  lucene doesn't follow SAI file patterns and lucene manages its own file access
+            files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
+            files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
+            files.put(IndexComponent.VECTOR, indexDescriptor.createPerIndexFileHandle(IndexComponent.VECTOR, indexContext, temporary));
         }
         else if (TypeUtil.isLiteral(indexContext.getValidator()))
         {
@@ -73,6 +76,11 @@ public class PerIndexFiles implements Closeable
     public FileHandle kdtreePostingLists()
     {
         return getFile(IndexComponent.KD_TREE_POSTING_LISTS);
+    }
+
+    public FileHandle vectors()
+    {
+        return getFile(IndexComponent.VECTOR);
     }
 
     private FileHandle getFile(IndexComponent indexComponent)
