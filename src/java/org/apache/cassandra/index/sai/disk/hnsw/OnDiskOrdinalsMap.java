@@ -32,6 +32,7 @@ public class OnDiskOrdinalsMap
 
     private final FileHandle fh;
     private final int size;
+    // the offset where we switch from recording ordinal -> rows, to row -> ordinal
     private final long rowOrdinalOffset;
 
     public OnDiskOrdinalsMap(FileHandle fh)
