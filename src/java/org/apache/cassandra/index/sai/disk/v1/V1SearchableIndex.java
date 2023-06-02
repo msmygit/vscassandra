@@ -21,6 +21,7 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import com.google.common.collect.ImmutableList;
@@ -79,18 +80,15 @@ public class V1SearchableIndex implements SearchableIndex
         {
             this.indexFiles = new PerIndexFiles(sstableContext.indexDescriptor, indexContext, false);
 
-            ImmutableList.Builder<Segment> segmentsBuilder = ImmutableList.builder();
-
             final MetadataSource source = MetadataSource.loadColumnMetadata(sstableContext.indexDescriptor, indexContext);
 
             metadatas = SegmentMetadata.load(source, sstableContext.indexDescriptor.primaryKeyFactory);
 
-            for (SegmentMetadata metadata : metadatas)
-            {
-                segmentsBuilder.add(new Segment(indexContext, sstableContext, indexFiles, metadata));
-            }
-
-            segments = segmentsBuilder.build();
+            segments = metadatas
+                       .stream()
+                       .sorted(Comparator.comparing(m -> m.minKey))
+                       .map(m -> new Segment(indexContext, sstableContext, indexFiles, m))
+                       .collect(ImmutableList.toImmutableList());
             assert !segments.isEmpty();
 
             this.minKey = metadatas.get(0).minKey.partitionKey();

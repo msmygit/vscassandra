@@ -19,12 +19,14 @@
 package org.apache.cassandra.index.sai.disk.hnsw;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.utils.Pair;
 
 public class OnDiskOrdinalsMap
 {
@@ -40,9 +42,44 @@ public class OnDiskOrdinalsMap
         this.fh = fh;
         try (var reader = fh.createReader())
         {
+            logger.debug("file length is {}", reader.length());
             this.size = reader.readInt();
             reader.seek(reader.length() - 8);
             this.rowOrdinalOffset = reader.readLong();
+
+            // ordinal -> row offsets
+            reader.seek(4);
+            for (int j = 0; j < size; j++)
+                reader.readLong();
+
+            // ordinal -> rows
+            int ordinal = 0;
+            for (int j = 0; j < size; j++)
+            {
+                var count = reader.readInt();
+                var L = new ArrayList<Integer>();
+                for (int i = 0; i < count; i++)
+                    L.add(reader.readInt());
+                logger.debug(String.format("ordinal %s -> rows %s", ordinal++, L));
+            }
+            assert reader.getFilePointer() == rowOrdinalOffset : String.format("reader.getFilePointer() %s != rowOrdinalOffset %s", reader.getFilePointer(), rowOrdinalOffset);
+
+            assert (reader.length() - rowOrdinalOffset) % 8 == 0;
+            reader.seek(rowOrdinalOffset);
+            var L = new ArrayList<Pair<Integer, Integer>>();
+            while (reader.getFilePointer() < reader.length() - 8)
+            {
+                var rowId = reader.readInt();
+                var vectorOrdinal = reader.readInt();
+                L.add(Pair.create(rowId, vectorOrdinal));
+            }
+            for (int n = 0; n < L.size(); n++)
+            {
+                var p = L.get(n);
+                assert p.left < size;
+                var vectorOrdinal = p.right;
+                assert vectorOrdinal < size : String.format("vectorOrdinal %s is out of bounds %s at entry %s", vectorOrdinal, size, n);
+            }
         }
         catch (IOException e)
         {
@@ -96,6 +133,9 @@ public class OnDiskOrdinalsMap
             // not found
             if (index < 0)
                 return -1;
+            reader.seek(rowOrdinalOffset + index * 8);
+            var id = reader.readInt();
+            assert id == rowId : "id mismatch: " + id + " != " + rowId;
 
             return reader.readInt();
         }
