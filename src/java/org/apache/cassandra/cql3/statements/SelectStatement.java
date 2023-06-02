@@ -123,7 +123,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
     /**
      * The comparator used to orders results when multiple keys are selected (using IN).
      */
-    private final ColumnComparator<List<ByteBuffer>> orderingComparator;
+    private final Comparator<List<ByteBuffer>> orderingComparator;
 
     // Used by forSelection below
     private static final Parameters defaultParameters = new Parameters(Collections.emptyList(),
@@ -140,7 +140,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
                            StatementRestrictions restrictions,
                            boolean isReversed,
                            AggregationSpecification aggregationSpec,
-                           ColumnComparator<List<ByteBuffer>> orderingComparator,
+                           Comparator<List<ByteBuffer>> orderingComparator,
                            Term limit,
                            Term perPartitionLimit)
     {
@@ -1014,7 +1014,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
 
     private boolean needIndexOrdering()
     {
-        return orderingComparator != null && orderingComparator.indexOrdering();
+        return orderingComparator != null && orderingComparator instanceof ColumnComparator && ((ColumnComparator<List<ByteBuffer>>) orderingComparator).indexOrdering();
     }
 
     /**
@@ -1024,8 +1024,10 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
     {
         if (cqlRows.size() == 0 || !needsPostQueryOrdering())
             return;
+        if (!(orderingComparator instanceof ColumnComparator))
+            return;
 
-        Comparator<List<ByteBuffer>> comparator = orderingComparator.prepareFor(table, options);
+        Comparator<List<ByteBuffer>> comparator = ((ColumnComparator<List<ByteBuffer>>) orderingComparator).prepareFor(table, options);
         if (comparator != null)
             Collections.sort(cqlRows.rows, comparator);
     }
@@ -1097,7 +1099,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
             checkFalse(aggregationSpec == AggregationSpecification.AGGREGATE_EVERYTHING && perPartitionLimit != null,
                        "PER PARTITION LIMIT is not allowed with aggregate queries.");
 
-            ColumnComparator<List<ByteBuffer>> orderingComparator = null;
+            Comparator<List<ByteBuffer>> orderingComparator = null;
             boolean isReversed = false;
 
             if (!orderingColumns.isEmpty())
@@ -1107,7 +1109,11 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
                 orderingComparator = getOrderingComparator(selection, restrictions, orderingColumns);
                 isReversed = isReversed(table, orderingColumns, restrictions);
                 if (isReversed)
-                    orderingComparator = orderingComparator.reverse();
+                {
+                    // if we're doing a simple clustered column order by desc, then getOrderingComparator
+                    // will return null; this will turn that into a simple byte-ordered reverse comparator
+                    orderingComparator = Collections.reverseOrder(orderingComparator);
+                }
             }
 
             checkDisjunctionIsSupported(table, restrictions);
