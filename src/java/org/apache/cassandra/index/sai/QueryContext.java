@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.PriorityQueue;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -29,9 +30,12 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.carrotsearch.hppc.ObjectFloatHashMap;
+import com.carrotsearch.hppc.ObjectFloatMap;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.ScoredPrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 /**
@@ -76,6 +80,11 @@ public class QueryContext
     public int hnswNodeCacheHits;
 
     private TreeSet<PrimaryKey> shadowedPrimaryKeys; // allocate when needed
+
+    /**
+     * if the same key has different scored from different sstables, we don't know which is latest, reset it to -1 and compute in-flight
+     */
+    private final ObjectFloatMap<PrimaryKey> scorePerKey = new ObjectFloatHashMap<>();
 
     @VisibleForTesting
     public QueryContext()
@@ -133,5 +142,33 @@ public class QueryContext
         if (shadowedPrimaryKeys == null)
             return Collections.emptyNavigableSet();
         return shadowedPrimaryKeys;
+    }
+
+    public void recordScore(PrimaryKey primaryKey, float score)
+    {
+        boolean exists = scorePerKey.containsKey(primaryKey);
+        if (exists && Float.compare(scorePerKey.get(primaryKey), score) != 0)
+        {
+            // found primary key with different score from different sstable. we don't know which vector is the latest. compute it later
+            scorePerKey.put(primaryKey, -1);
+        }
+        else if (!exists)
+        {
+            scorePerKey.put(primaryKey, score);
+        }
+    }
+
+    public void recordScores(PriorityQueue<PrimaryKey> keyQueue)
+    {
+        for (PrimaryKey primaryKey : keyQueue)
+        {
+            if (primaryKey instanceof ScoredPrimaryKey)
+                recordScore(((ScoredPrimaryKey) primaryKey).primaryKey, ((ScoredPrimaryKey) primaryKey).score);
+        }
+    }
+
+    public float getScoreForKey(PrimaryKey primaryKey)
+    {
+        return scorePerKey.getOrDefault(primaryKey, -1);
     }
 }

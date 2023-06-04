@@ -138,7 +138,7 @@ public class VectorMemtableIndex implements MemtableIndex
     }
 
     @Override
-    public RangeIterator<PrimaryKey> search(Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
+    public RangeIterator<PrimaryKey> search(QueryContext context, Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
     {
         assert expr.getOp() == Expression.Op.ANN : "Only ANN is supported for vector search, received " + expr.getOp();
 
@@ -161,6 +161,7 @@ public class VectorMemtableIndex implements MemtableIndex
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        context.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -188,13 +189,14 @@ public class VectorMemtableIndex implements MemtableIndex
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        context.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
     @Override
     public Iterator<Pair<ByteComparable, Iterator<PrimaryKey>>> iterator(DecoratedKey min, DecoratedKey max)
     {
-        // REVIEWME where would we need this?
+        // only used by non-vector index
         throw new UnsupportedOperationException();
     }
 

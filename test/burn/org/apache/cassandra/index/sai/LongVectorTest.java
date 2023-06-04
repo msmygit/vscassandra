@@ -20,7 +20,6 @@ package org.apache.cassandra.index.sai;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
@@ -35,10 +34,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 
 import org.apache.cassandra.db.memtable.TrieMemtable;
-import org.apache.cassandra.inject.ActionBuilder;
-import org.apache.cassandra.inject.Injections;
-import org.apache.cassandra.inject.InvokePointBuilder;
-import org.apache.cassandra.stress.StressAction;
 
 public class LongVectorTest extends SAITester
 {
@@ -59,7 +54,7 @@ public class LongVectorTest extends SAITester
 
     public void testConcurrentOps(Consumer<Integer> op) throws ExecutionException, InterruptedException
     {
-        createTable(String.format("CREATE TABLE %%s (key int primary key, value vector<float, %s>)", dimension));
+        createTable(String.format("CREATE TABLE %%s (key int primary key, value vector<float, %s>, score float)", dimension));
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function': 'dot_product' }");
         waitForIndexQueryable();
 
