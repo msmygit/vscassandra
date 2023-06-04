@@ -152,6 +152,7 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue) throws IOException
     {
         int originalSize = queue.size();
+        // FIXME why close early?
         try (var iterator = new RowIdIterator(queue))
         {
             return new ReorderingPostingList(iterator, originalSize);

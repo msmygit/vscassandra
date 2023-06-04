@@ -37,6 +37,7 @@ import javax.annotation.Nullable;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.restrictions.Restriction;
+import org.apache.cassandra.cql3.selection.Selection;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
@@ -422,11 +423,11 @@ public interface Index
      * Return a comparator that reorders query result before sending to client
      *
      * @param restriction restriction that requires current index
-     * @param columnIndex idx of the indexed column in returned row
-     * @param options query options
+     * @param selection   query selection
+     * @param options     query options
      * @return comparator that for post-query ordering; or null if not supported
      */
-    default Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options)
+    default Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, Selection selection, QueryOptions options)
     {
         return null;
     }

@@ -62,7 +62,7 @@ public class LongVectorTest extends SAITester
 
     public void testConcurrentOps(Op op) throws ExecutionException, InterruptedException
     {
-        createTable(String.format("CREATE TABLE %%s (key int primary key, value vector<float, %s>)", dimension));
+        createTable(String.format("CREATE TABLE %%s (key int primary key, value vector<float, %s>, score float)", dimension));
         createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function': 'dot_product' }");
         waitForIndexQueryable();
 

@@ -29,25 +29,33 @@ import javax.annotation.Nullable;
 import com.google.common.base.Preconditions;
 import org.apache.commons.lang3.tuple.Triple;
 
+import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.filter.RowFilter;
+import org.apache.cassandra.db.marshal.FloatType;
 import org.apache.cassandra.db.partitions.BasePartitionIterator;
 import org.apache.cassandra.db.partitions.PartitionIterator;
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
+import org.apache.cassandra.db.rows.BTreeRow;
 import org.apache.cassandra.db.rows.BaseRowIterator;
+import org.apache.cassandra.db.rows.BufferCell;
+import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
+import org.apache.cassandra.db.rows.Rows;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.utils.InMemoryPartitionIterator;
 import org.apache.cassandra.index.sai.utils.InMemoryUnfilteredPartitionIterator;
 import org.apache.cassandra.index.sai.utils.PartitionInfo;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.FBUtilities;
@@ -77,9 +85,17 @@ public class VectorTopKProcessor
 
     private int rowCount = 0;
 
-    public VectorTopKProcessor(ReadCommand command)
+    // FIXME make it a score function
+    @Nullable
+    private final QueryContext context;
+
+    @Nullable
+    private final ColumnMetadata scoredColumn;
+
+    public VectorTopKProcessor(ReadCommand command, QueryContext queryContext)
     {
         this.command = command;
+        this.context = queryContext;
 
         Pair<IndexContext, float[]> annIndexAndExpression = findTopKIndexContext();
         Preconditions.checkNotNull(annIndexAndExpression);
@@ -87,6 +103,8 @@ public class VectorTopKProcessor
         this.indexContext = annIndexAndExpression.left;
         this.queryVector = annIndexAndExpression.right;
         this.limit = command.limits().count();
+
+        this.scoredColumn = command.metadata().getColumn(ColumnIdentifier.getInterned("score", true));
     }
 
     /**
@@ -108,7 +126,7 @@ public class VectorTopKProcessor
                 Row staticRow = partition.staticRow();
                 PartitionInfo partitionInfo = PartitionInfo.create(partition);
                 // compute key and static row score once per partition
-                float keyAndStaticScore = getScoreForRow(key, staticRow);
+                float keyAndStaticScore = getScoreForRow(key, staticRow, null, true);
 
                 while (partition.hasNext())
                 {
@@ -123,8 +141,19 @@ public class VectorTopKProcessor
                     }
 
                     Row row = (Row) unfiltered;
-                    float rowScore = getScoreForRow(null, row);
-                    topK.add(Triple.of(partitionInfo, row, keyAndStaticScore + rowScore));
+
+                    Cell<?> scoreCell = scoredColumn != null ? row.getCell(scoredColumn) : null;
+                    float rowScore = getScoreForRow(key, row, scoreCell, false) + keyAndStaticScore;
+                    // FIXME refactor
+                    if (scoredColumn != null && scoreCell == null)
+                    {
+                        Row.Builder withScoreBuilder = BTreeRow.unsortedBuilder();
+                        withScoreBuilder.newRow(row.clustering());
+                        withScoreBuilder.addCell(BufferCell.live(scoredColumn, 0, FloatType.instance.decompose(rowScore)));
+                        row = Rows.merge(row, withScoreBuilder.build());
+                    }
+
+                    topK.add(Triple.of(partitionInfo, row, rowScore));
 
                     // when exceeding limit, remove row with low score
                     while (topK.size() > limit)
@@ -157,7 +186,7 @@ public class VectorTopKProcessor
     /**
      * Sum the scores from different vector indexes for the row
      */
-    private float getScoreForRow(DecoratedKey key, Row row)
+    private float getScoreForRow(DecoratedKey key, Row row, Cell<?> scoreCell, boolean partitionLevel)
     {
         ColumnMetadata column = indexContext.getDefinition();
 
@@ -170,7 +199,20 @@ public class VectorTopKProcessor
         if ((column.isClusteringColumn() || column.isRegular()) && row.isStatic())
             return 0;
 
-        ByteBuffer value = indexContext.getValueOf(key, row, FBUtilities.nowInSeconds());
+        // if the query context has score, e.g. at replica side
+        if (context != null && key != null && row != null)
+        {
+            PrimaryKey primaryKey = indexContext.keyFactory().create(key, row.clustering());
+            float score = context.getScoreForKey(primaryKey);
+            if (score >= 0)
+                return score;
+        }
+
+        // if the row already included score, e.g. at coordinator
+        if (scoreCell != null)
+            return FloatType.instance.compose(scoreCell.buffer().duplicate());
+
+        ByteBuffer value = indexContext.getValueOf(partitionLevel ? key : null, row, FBUtilities.nowInSeconds());
         if (value != null)
         {
             float[] vector = TypeUtil.decomposeVector(indexContext, value);

@@ -191,6 +191,7 @@ public class VectorMemtableIndex implements MemtableIndex
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        queryContext.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -218,6 +219,7 @@ public class VectorMemtableIndex implements MemtableIndex
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        context.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -226,6 +228,7 @@ public class VectorMemtableIndex implements MemtableIndex
     {
         // This method is only used when merging an in-memory index with a RowMapping. This is done a different
         // way with the graph using the writeData method below.
+        // only used by non-vector index
         throw new UnsupportedOperationException();
     }
 
