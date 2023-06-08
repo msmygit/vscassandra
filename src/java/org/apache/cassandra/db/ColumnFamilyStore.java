@@ -3354,19 +3354,6 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         if (DatabaseDescriptor.isAutoSnapshot())
             snapshot(Keyspace.getTimestampedSnapshotNameWithPrefix(name, ColumnFamilyStore.SNAPSHOT_DROP_PREFIX));
 
-        if (getTracker().isDummy())
-        {
-            // offline services (e.g. standalone compactor) don't have Memtables or CommitLog. An attempt to flush would
-            // throw an exception
-            logger.debug("Memtables and CommitLog are disabled; not recycling or flushing {}", metadata);
-        }
-        else
-        {
-            if (logger.isTraceEnabled())
-                logger.trace("Recycling CL segments for dropping {}", metadata);
-            CommitLog.instance.forceRecycleAllSegments(Collections.singleton(metadata.id));
-        }
-
         if (logger.isTraceEnabled())
             logger.trace("Dropping CFS {}: shutting down compaction strategy", name);
         strategyContainer.shutdown();
@@ -3374,6 +3361,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean, Memtable.Owner
         // wait for any outstanding reads/writes that might affect the CFS
         if (logger.isTraceEnabled())
             logger.trace("Dropping CFS {}: waiting for read and write barriers", name);
+
         Keyspace.writeOrder.awaitNewBarrier();
         readOrdering.awaitNewBarrier();
     }
