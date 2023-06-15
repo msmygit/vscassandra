@@ -20,6 +20,7 @@ package org.apache.cassandra.cql3;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.guardrails.Guardrails;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.TableMetadata;
@@ -160,6 +161,29 @@ public class UpdateParameters
 
         if (path != null && column.type.isMultiCell())
             Guardrails.columnValueSize.guard(path.dataSize(), column.name.toString(), false, state);
+
+        if (column.type.isVector())
+        {
+            if (metadata.indexes.stream()
+                                .anyMatch(im -> im.options.containsKey("target") &&
+                                                im.options.get("target").equals(column.name.toString()) &&
+                                                im.options.containsKey("similarity_function") &&
+                                                im.options.get("similarity_function").equals("cosine")))
+            {
+                float[] vector = ((VectorType<?>)column.type).composeAsFloat(value);
+                boolean hasNonZeroValue = false;
+                for (int i = 0; i < vector.length; i++)
+                {
+                    if (vector[i] != 0)
+                    {
+                        hasNonZeroValue = true;
+                        break;
+                    }
+                }
+                if (!hasNonZeroValue)
+                    throw new InvalidRequestException("Zero vectors cannot be indexed with a cosine similarity");
+            }
+        }
 
         Cell<?> cell = ttl == LivenessInfo.NO_TTL
                        ? BufferCell.live(column, timestamp, value, path)
