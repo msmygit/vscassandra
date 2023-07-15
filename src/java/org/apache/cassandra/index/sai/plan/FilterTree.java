@@ -74,6 +74,7 @@ public class FilterTree
 
     private boolean localSatisfiedBy(DecoratedKey key, Unfiltered currentCluster, Row staticRow)
     {
+        // FIXME
         if (currentCluster == null || !currentCluster.isRow())
             return false;
 
@@ -120,7 +121,7 @@ public class FilterTree
 
     private boolean singletonMatch(ByteBuffer value, Expression filter)
     {
-        boolean match = value != null && filter.isSatisfiedBy(value);
+        boolean match = filter.isSatisfiedBy(value);
         // If this is NOT_EQ operation we have to
         // inverse match flag (to check against other expressions),
         if (filter.getOp() == Op.NOT_EQ)

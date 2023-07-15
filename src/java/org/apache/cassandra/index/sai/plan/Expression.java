@@ -209,6 +209,9 @@ public class Expression
         if (validator.isVector())
             return true;
 
+        if (context == null)
+            return false;
+
         if (!TypeUtil.isValid(columnValue, validator))
         {
             logger.error(context.logMessage("Value is not valid for indexed column {} with {}"), context.getColumnName(), validator);

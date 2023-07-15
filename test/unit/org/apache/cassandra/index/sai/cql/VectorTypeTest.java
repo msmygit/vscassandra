@@ -274,6 +274,7 @@ public class VectorTypeTest extends VectorTester
         assertThat(result).hasSize(0);
     }
 
+    // FIXME test in-mem update
     @Test
     public void testQueryTableWithNulls() throws Throwable
     {
@@ -283,7 +284,12 @@ public class VectorTypeTest extends VectorTester
 
         execute("INSERT INTO %s (pk, str_val, val) VALUES (0, 'A', null)");
         var result = execute("SELECT * FROM %s ORDER BY val ANN OF [2.5, 3.5, 4.5] LIMIT 1");
-        assertThat(result).hasSize(0);
+        assertThat(result).hasSize(1);
+
+        flush();
+
+        result = execute("SELECT * FROM %s ORDER BY val ANN OF [2.5, 3.5, 4.5] LIMIT 1");
+        assertThat(result).hasSize(1);
 
         execute("INSERT INTO %s (pk, str_val, val) VALUES (1, 'B', [4.0, 5.0, 6.0])");
         result = execute("SELECT pk FROM %s ORDER BY val ANN OF [2.5, 3.5, 4.5] LIMIT 1");

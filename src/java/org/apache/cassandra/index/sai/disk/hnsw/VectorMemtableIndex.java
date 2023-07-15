@@ -38,17 +38,18 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.memory.KeyRangeIterator;
 import org.apache.cassandra.index.sai.memory.MemtableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Pair;
@@ -70,6 +71,7 @@ public class VectorMemtableIndex implements MemtableIndex
     private PrimaryKey maximumKey;
 
     private final NavigableSet<PrimaryKey> primaryKeys = new ConcurrentSkipListSet<>();
+    private final NavigableSet<PrimaryKey> primaryKeysWithNullVector = new ConcurrentSkipListSet<>();
 
     public VectorMemtableIndex(IndexContext indexContext)
     {
@@ -80,10 +82,13 @@ public class VectorMemtableIndex implements MemtableIndex
     @Override
     public void index(DecoratedKey key, Clustering clustering, ByteBuffer value, Memtable memtable, OpOrder.Group opGroup)
     {
-        if (value == null || value.remaining() == 0)
-            return;
-
         var primaryKey = indexContext.keyFactory().create(key, clustering);
+        if (value == null || value.remaining() == 0)
+        {
+            primaryKeysWithNullVector.add(primaryKey);
+            return;
+        }
+
         long allocatedBytes = index(primaryKey, value);
         memtable.markExtraOnHeapUsed(allocatedBytes, opGroup);
     }
@@ -110,6 +115,7 @@ public class VectorMemtableIndex implements MemtableIndex
     @Override
     public void update(DecoratedKey key, Clustering clustering, ByteBuffer oldValue, ByteBuffer newValue, Memtable memtable, OpOrder.Group opGroup)
     {
+        // FIXME
         int oldRemaining = oldValue == null ? 0 : oldValue.remaining();
         int newRemaining = newValue == null ? 0 : newValue.remaining();
         if (oldRemaining == 0 && newRemaining == 0)
@@ -143,6 +149,43 @@ public class VectorMemtableIndex implements MemtableIndex
 
     @Override
     public RangeIterator<PrimaryKey> search(QueryContext queryContext, Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
+    {
+        RangeIterator<PrimaryKey> iterator = searchANN(queryContext, expr, keyRange, limit);
+        long annResult = iterator.getCount();
+        if (annResult >= limit || primaryKeysWithNullVector.isEmpty())
+            return iterator;
+
+        return extendWithNullVectors(iterator, limit - annResult);
+    }
+
+    private RangeIterator<PrimaryKey> extendWithNullVectors(RangeIterator<PrimaryKey> iterator, long gap)
+    {
+        return extendWithNullVectors(iterator, null, gap);
+    }
+
+    private RangeIterator<PrimaryKey> extendWithNullVectors(RangeIterator<PrimaryKey> iterator, @Nullable Set<PrimaryKey> filter, long gap)
+    {
+        PriorityQueue<PrimaryKey> nullVectorsKeys = new PriorityQueue<>();
+        Iterator<PrimaryKey> nullVectorKeysIterator = primaryKeysWithNullVector.iterator();
+        PrimaryKey min = null;
+        PrimaryKey max = null;
+        while (nullVectorsKeys.size() < gap && nullVectorKeysIterator.hasNext())
+        {
+            PrimaryKey next = nullVectorKeysIterator.next();
+            if (filter != null && !filter.contains(next))
+                continue;
+
+            if (min == null)
+                min = next;
+            max = next;
+            nullVectorsKeys.add(next);
+        }
+
+        RangeIterator<PrimaryKey> nullVectorsIterator = new KeyRangeIterator(min, max, nullVectorsKeys);
+        return RangeUnionIterator.<PrimaryKey>builder().add(iterator).add(nullVectorsIterator).build();
+    }
+
+    public RangeIterator<PrimaryKey> searchANN(QueryContext queryContext, Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
     {
         assert expr.getOp() == Expression.Op.ANN : "Only ANN is supported for vector search, received " + expr.getOp();
 
@@ -210,9 +253,8 @@ public class VectorMemtableIndex implements MemtableIndex
         float[] qv = TypeUtil.decomposeVector(indexContext, buffer);
         var bits = new KeyFilteringBits(results);
         var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
-        if (keyQueue.isEmpty())
-            return RangeIterator.emptyKeys();
-        return new ReorderingRangeIterator(keyQueue);
+        var annIterator = keyQueue.isEmpty() ? RangeIterator.emptyKeys() : new ReorderingRangeIterator(keyQueue);
+        return annIterator.getCount() >= limit || primaryKeysWithNullVector.isEmpty() ? annIterator : extendWithNullVectors(annIterator, results, annIterator.getCount() - limit);
     }
 
     @Override

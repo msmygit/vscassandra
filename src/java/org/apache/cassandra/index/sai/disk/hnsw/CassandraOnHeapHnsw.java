@@ -136,7 +136,7 @@ public class CassandraOnHeapHnsw<T>
             }
             catch (InvalidRequestException e)
             {
-                logger.trace("Ignoring invalid vector during index build against existing data: {}", e);
+                logger.trace("Ignoring invalid vector during index build against existing data: {}", e.getMessage(), e);
                 return 0;
             }
         }
