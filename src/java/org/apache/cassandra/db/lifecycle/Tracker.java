@@ -604,9 +604,14 @@ public class Tracker
             subscriber.handleNotification(notification, this);
     }
 
-    public void publishMetrics(MetricsNotification metricsNotification)
+    public void publishWriterMetrics(WriterMetricsNotification writerMetricsNotification)
     {
-        notify(metricsNotification);
+        notify(writerMetricsNotification);
+    }
+
+    public void publishCompactorMetrics(CompactorMetricsNotification compactorMetricsNotification)
+    {
+        notify(compactorMetricsNotification);
     }
 
     public boolean isDummy()

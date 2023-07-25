@@ -18,7 +18,7 @@
 
 package org.apache.cassandra.notifications;
 
-public class MetricsNotification implements INotification
+public class WriterMetricsNotification implements INotification
 {
     private final long bytesInserted;
     private final long partitionsRead;
@@ -26,7 +26,7 @@ public class MetricsNotification implements INotification
     private final double sstablePartitionReadLatencyNanos;
     private final double flushTimePerKbNanos;
 
-    public MetricsNotification(long bytesInserted, long partitionsRead, double flushSize, double sstablePartitionReadLatencyNanos, double flushTimePerKbNanos)
+    public WriterMetricsNotification(long bytesInserted, long partitionsRead, double flushSize, double sstablePartitionReadLatencyNanos, double flushTimePerKbNanos)
     {
         this.bytesInserted = bytesInserted;
         this.partitionsRead = partitionsRead;

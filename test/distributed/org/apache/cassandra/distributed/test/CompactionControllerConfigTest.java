@@ -31,7 +31,8 @@ import org.apache.cassandra.db.compaction.unified.AdaptiveController;
 import org.apache.cassandra.db.compaction.unified.Controller;
 import org.apache.cassandra.db.compaction.unified.StaticController;
 import org.apache.cassandra.distributed.Cluster;
-import org.apache.cassandra.notifications.MetricsNotification;
+import org.apache.cassandra.notifications.CompactorMetricsNotification;
+import org.apache.cassandra.notifications.WriterMetricsNotification;
 
 import static org.apache.cassandra.distributed.shared.FutureUtils.waitOn;
 import static org.junit.Assert.assertNotNull;
@@ -192,10 +193,13 @@ public class CompactionControllerConfigTest extends TestBaseImpl
 
             cluster.get(1).runOnInstance(() ->
                                          {
-                                             CompactionManager.publishMetrics();
+                                             CompactionManager.publishWriterMetrics();
+                                             CompactionManager.publishCompactorMetrics();
                                              ColumnFamilyStore cfs = Keyspace.open("ks").getColumnFamilyStore("tbl");
-                                             MetricsNotification metricsNotification = cfs.metrics().createMetricsNotification();
+                                             WriterMetricsNotification metricsNotification = cfs.metrics().createWriterMetricsNotification();
                                              assertNotNull(metricsNotification);
+                                             CompactorMetricsNotification compactorMetricsNotification = cfs.metrics().createCompactorMetricsNotification();
+                                             assertNotNull(compactorMetricsNotification);
                                          });
 
         }

@@ -37,7 +37,8 @@ import org.apache.cassandra.db.compaction.unified.StaticController;
 import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.metrics.TableMetrics;
-import org.apache.cassandra.notifications.MetricsNotification;
+import org.apache.cassandra.notifications.CompactorMetricsNotification;
+import org.apache.cassandra.notifications.WriterMetricsNotification;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.Pair;
 import org.mockito.Mock;
@@ -494,25 +495,34 @@ public class BackgroundCompactionsTest
         double flushSize = 1024;
         double readLatency = 20;
         double flushTime = 15;
+        double compactionTime = 30;
 
         ColumnFamilyStore cfs = mock(ColumnFamilyStore.class);
         Tracker data = mock(Tracker.class);
         TableMetrics tableMetrics = mock(TableMetrics.class);
-        MetricsNotification metricsNotification = new MetricsNotification(bytesInserted, partitionsRead, flushSize, readLatency, flushTime);
+        WriterMetricsNotification writerMetricsNotification = new WriterMetricsNotification(bytesInserted, partitionsRead, flushSize, readLatency, flushTime);
 
-        assertEquals(bytesInserted, metricsNotification.getBytesInserted());
-        assertEquals(partitionsRead, metricsNotification.getPartitionsRead());
-        assertEquals(flushSize, metricsNotification.getFlushSize(), 0.01);
-        assertEquals(readLatency, metricsNotification.getSstablePartitionReadLatencyNanos(), 0.01);
-        assertEquals(flushTime, metricsNotification.getFlushTimePerKbNanos(), 0.01);
+        assertEquals(bytesInserted, writerMetricsNotification.getBytesInserted());
+        assertEquals(partitionsRead, writerMetricsNotification.getPartitionsRead());
+        assertEquals(flushSize, writerMetricsNotification.getFlushSize(), 0.01);
+        assertEquals(readLatency, writerMetricsNotification.getSstablePartitionReadLatencyNanos(), 0.01);
+        assertEquals(flushTime, writerMetricsNotification.getFlushTimePerKbNanos(), 0.01);
+
+        CompactorMetricsNotification compactorMetricsNotification = new CompactorMetricsNotification(compactionTime);
+
+        assertEquals(compactorMetricsNotification.getCompactionTimePerKbNanos(), compactionTime, 0.01);
 
         when(cfs.metrics()).thenReturn(tableMetrics);
-        when(tableMetrics.createMetricsNotification()).thenReturn(metricsNotification);
+        when(tableMetrics.createWriterMetricsNotification()).thenReturn(writerMetricsNotification);
+        when(tableMetrics.createCompactorMetricsNotification()).thenReturn(compactorMetricsNotification);
         when(cfs.getTracker()).thenReturn(data);
-        doCallRealMethod().when(cfs).publishMetrics();
+        doCallRealMethod().when(cfs).publishWriterMetrics();
+        doCallRealMethod().when(cfs).publishCompactorMetrics();
 
-        cfs.publishMetrics();
-        Mockito.verify(data, times(1)).publishMetrics(metricsNotification);
+        cfs.publishWriterMetrics();
+        Mockito.verify(data, times(1)).publishWriterMetrics(writerMetricsNotification);
 
+        cfs.publishCompactorMetrics();
+        Mockito.verify(data, times(1)).publishCompactorMetrics(compactorMetricsNotification);
     }
 }

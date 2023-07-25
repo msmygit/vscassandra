@@ -63,7 +63,8 @@ import org.apache.cassandra.io.compress.CompressionMetadata;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.metadata.MetadataCollector;
 import org.apache.cassandra.metrics.Sampler.SamplerType;
-import org.apache.cassandra.notifications.MetricsNotification;
+import org.apache.cassandra.notifications.CompactorMetricsNotification;
+import org.apache.cassandra.notifications.WriterMetricsNotification;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.TableMetadata;
@@ -1074,9 +1075,14 @@ public class TableMetrics
             sstablePartitionReadLatency.update(elapsedNanos / (double) intersectingCount);
     }
 
-    public MetricsNotification createMetricsNotification()
+    public WriterMetricsNotification createWriterMetricsNotification()
     {
-        return new MetricsNotification(bytesInserted.getCount(), readRequests.getCount(), flushSizeOnDisk().get(), sstablePartitionReadLatency.get(), flushTimePerKb.get());
+        return new WriterMetricsNotification(bytesInserted.getCount(), readRequests.getCount(), flushSizeOnDisk().get(), sstablePartitionReadLatency.get(), flushTimePerKb.get());
+    }
+
+    public CompactorMetricsNotification createCompactorMetricsNotification()
+    {
+        return new CompactorMetricsNotification(compactionTimePerKb.get());
     }
 
     /**

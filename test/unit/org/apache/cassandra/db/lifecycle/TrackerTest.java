@@ -471,12 +471,16 @@ public class TrackerTest
     public void testPublishMetrics()
     {
         ColumnFamilyStore cfs = MockSchema.newCFS();
-        MetricsNotification metricsNotification = mock(MetricsNotification.class);
+        WriterMetricsNotification writerMetricsNotification = mock(WriterMetricsNotification.class);
         Tracker tracker = Tracker.newDummyTracker(cfs.metadata);
         MockListener listener = new MockListener(false);
         tracker.subscribe(listener);
-        tracker.publishMetrics(metricsNotification);
-        assert(listener.received.get(0) instanceof MetricsNotification);
+        tracker.publishWriterMetrics(writerMetricsNotification);
+        assert(listener.received.get(0) instanceof WriterMetricsNotification);
+
+        CompactorMetricsNotification compactorMetricsNotification = mock(CompactorMetricsNotification.class);
+        tracker.publishCompactorMetrics(compactorMetricsNotification);
+        assert(listener.received.get(1) instanceof CompactorMetricsNotification);
     }
 
 }
