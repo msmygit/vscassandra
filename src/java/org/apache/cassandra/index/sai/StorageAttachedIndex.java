@@ -533,7 +533,7 @@ public class StorageAttachedIndex implements Index
     }
 
     @Override
-    public Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options)
+    public Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options, List<List<ByteBuffer>> cqlRows)
     {
         // For now, only support ANN
         assert restriction instanceof SingleColumnRestriction.AnnRestriction;
@@ -545,13 +545,19 @@ public class StorageAttachedIndex implements Index
 
         float[] target = TypeUtil.decomposeVector(indexContext, annRestriction.value(options).duplicate());
 
-        return (leftBuf, rightBuf) -> {
-            float[] left = TypeUtil.decomposeVector(indexContext, leftBuf.get(columnIndex).duplicate());
-            double scoreLeft = function.compare(left, target);
+        Map<ByteBuffer, Double> scoreMap = new HashMap<>();
+        for (List<ByteBuffer> row : cqlRows)
+        {
+            ByteBuffer vectorBuffer = row.get(columnIndex);
+            float[] vector = TypeUtil.decomposeVector(indexContext, vectorBuffer.duplicate());
+            double score = function.compare(vector, target);
+            scoreMap.put(vectorBuffer.duplicate(), score);
+        }
 
-            float[] right = TypeUtil.decomposeVector(indexContext, rightBuf.get(columnIndex).duplicate());
-            double scoreRight = function.compare(right, target);
-            return Double.compare(scoreRight, scoreLeft); // descending order
+        return (leftRow, rightRow) -> {
+            Double leftScore = scoreMap.get(leftRow.get(columnIndex));
+            Double rightScore = scoreMap.get(rightRow.get(columnIndex));
+            return Double.compare(rightScore, leftScore);
         };
     }
 
