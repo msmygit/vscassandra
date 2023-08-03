@@ -29,8 +29,8 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -57,7 +57,7 @@ public class Segment implements Closeable, SegmentOrdering
     // per-segment
     public final SegmentMetadata metadata;
 
-    private final IndexSearcher index;
+    public final IndexSearcher index;
 
     public Segment(IndexContext indexContext, SSTableContext sstableContext, PerIndexFiles indexFiles, SegmentMetadata metadata) throws IOException
     {
@@ -136,7 +136,7 @@ public class Segment implements Closeable, SegmentOrdering
      * @param limit      the num of rows to returned, used by ANN index
      * @return range iterator of sstable row ids that matches given expression
      */
-    public RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer, int limit) throws IOException
     {
         return index.search(expression, keyRange, context, defer, limit);
     }
@@ -157,7 +157,7 @@ public class Segment implements Closeable, SegmentOrdering
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
     {
         return index.limitToTopResults(context, iterator, exp, limit);
     }

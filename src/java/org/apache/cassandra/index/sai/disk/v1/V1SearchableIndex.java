@@ -31,8 +31,8 @@ import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -61,7 +61,7 @@ import static org.apache.cassandra.index.sai.virtual.SegmentsSystemView.TABLE_NA
 public class V1SearchableIndex implements SearchableIndex
 {
     private final IndexContext indexContext;
-    private final ImmutableList<Segment> segments;
+    public final ImmutableList<Segment> segments;
     private final List<SegmentMetadata> metadatas;
     private final DecoratedKey minKey;
     private final DecoratedKey maxKey; // in token order
@@ -162,10 +162,10 @@ public class V1SearchableIndex implements SearchableIndex
 
     @Override
     public List<RangeIterator<Long>> search(Expression expression,
-                                            AbstractBounds<PartitionPosition> keyRange,
-                                            QueryContext context,
-                                            boolean defer,
-                                            int limit) throws IOException
+                                                         AbstractBounds<PartitionPosition> keyRange,
+                                                         SSTableQueryContext context,
+                                                         boolean defer,
+                                                         int limit) throws IOException
     {
         List<RangeIterator<Long>> iterators = new ArrayList<>();
 
@@ -181,7 +181,7 @@ public class V1SearchableIndex implements SearchableIndex
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
     {
         RangeUnionIterator.Builder<PrimaryKey> unionIteratorBuilder = new RangeUnionIterator.Builder<>(segments.size());
         for (Segment segment : segments)
