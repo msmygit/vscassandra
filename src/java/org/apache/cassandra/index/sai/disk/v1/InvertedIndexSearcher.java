@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.SSTableQueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -37,6 +37,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
@@ -82,14 +83,21 @@ public class InvertedIndexSearcher extends IndexSearcher
         return 0;
     }
 
-    @SuppressWarnings("resource")
-    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    @Override
+    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer, int limit) throws IOException
     {
         PostingList postingList = searchPosting(exp, context);
         return toSSTableRowIdsIterator(postingList, context);
     }
 
-    private PostingList searchPosting(Expression exp, QueryContext context)
+    // Interim placeholder method
+    @Override
+    public PostingList searchPosting(SSTableQueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    {
+        return null;
+    }
+
+    private PostingList searchPosting(Expression exp, SSTableQueryContext context)
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -98,8 +106,8 @@ public class InvertedIndexSearcher extends IndexSearcher
             throw new IllegalArgumentException(indexContext.logMessage("Unsupported expression: " + exp));
 
         final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
-        QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
-        return reader.exactMatch(term, listener, context);
+        QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
+        return reader.exactMatch(term, listener, context.queryContext);
     }
 
     @Override
