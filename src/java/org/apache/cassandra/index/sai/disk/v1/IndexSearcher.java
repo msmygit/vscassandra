@@ -23,7 +23,7 @@ import java.io.IOException;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
@@ -92,9 +92,9 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
      * @param limit        the num of rows to returned, used by ANN index
      * @return {@link RangeIterator} of sstable row ids that match given expression
      */
-    public abstract RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext queryContext, boolean defer, int limit) throws IOException;
+    public abstract RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
 
-    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, SSTableQueryContext queryContext) throws IOException
+    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyKeys();
@@ -104,13 +104,13 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
                                                                         metadata.minSSTableRowId,
                                                                         metadata.maxSSTableRowId,
                                                                         metadata.segmentRowIdOffset,
-                                                                        queryContext.queryContext,
+                                                                        queryContext,
                                                                         postingList.peekable());
 
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
     }
 
-    RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, SSTableQueryContext queryContext) throws IOException
+    RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyLongs();
@@ -121,11 +121,11 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
                                                                         metadata.minSSTableRowId,
                                                                         metadata.maxSSTableRowId,
                                                                         metadata.segmentRowIdOffset,
-                                                                        queryContext.queryContext,
+                                                                        queryContext,
                                                                         sstablePosting.peekable());
 
         return new SSTableRowIdsRangeIterator(indexContext, searcherContext);
     }
 
-    public abstract PostingList searchPosting(SSTableQueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException;
+    public abstract PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException;
 }

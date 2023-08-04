@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -84,7 +84,7 @@ public class InvertedIndexSearcher extends IndexSearcher
     }
 
     @Override
-    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         PostingList postingList = searchPosting(exp, context);
         return toSSTableRowIdsIterator(postingList, context);
@@ -92,12 +92,12 @@ public class InvertedIndexSearcher extends IndexSearcher
 
     // Interim placeholder method
     @Override
-    public PostingList searchPosting(SSTableQueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    public PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         return null;
     }
 
-    private PostingList searchPosting(Expression exp, SSTableQueryContext context)
+    private PostingList searchPosting(Expression exp, QueryContext context)
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -106,8 +106,8 @@ public class InvertedIndexSearcher extends IndexSearcher
             throw new IllegalArgumentException(indexContext.logMessage("Unsupported expression: " + exp));
 
         final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
-        QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
-        return reader.exactMatch(term, listener, context.queryContext);
+        QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
+        return reader.exactMatch(term, listener, context);
     }
 
     @Override

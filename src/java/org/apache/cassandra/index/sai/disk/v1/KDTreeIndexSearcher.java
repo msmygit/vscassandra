@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -79,7 +79,7 @@ public class KDTreeIndexSearcher extends IndexSearcher
     }
 
     @Override
-    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         PostingList postingList = searchPosting(exp, context);
         return toSSTableRowIdsIterator(postingList, context);
@@ -87,12 +87,12 @@ public class KDTreeIndexSearcher extends IndexSearcher
 
     // Interim placeholder method
     @Override
-    public PostingList searchPosting(SSTableQueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    public PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         return null;
     }
 
-    private PostingList searchPosting(Expression exp, SSTableQueryContext context)
+    private PostingList searchPosting(Expression exp, QueryContext context)
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -100,8 +100,8 @@ public class KDTreeIndexSearcher extends IndexSearcher
         if (exp.getOp().isEqualityOrRange())
         {
             final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
-            QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context.queryContext, perColumnEventListener);
-            return bkdReader.intersect(query, listener, context.queryContext);
+            QueryEventListener.BKDIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
+            return bkdReader.intersect(query, listener, context);
         }
         else
         {

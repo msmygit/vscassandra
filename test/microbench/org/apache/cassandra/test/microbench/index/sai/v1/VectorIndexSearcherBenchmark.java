@@ -41,7 +41,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
 import org.apache.cassandra.index.sai.disk.PostingList;
@@ -79,7 +79,7 @@ public class VectorIndexSearcherBenchmark extends SaiRandomizedTest
     private static final String KEYSPACE = "ks";
     private static final String TABLE = "tab";
     private static final int DIMENSION = 16;
-    private static final int numSSTables = 50;
+    private static final int numSSTables = 10;
     private static final int N = 10_000;
     private IndexSearcher searcher;
     private IndexContext indexContext;
@@ -136,7 +136,7 @@ public class VectorIndexSearcherBenchmark extends SaiRandomizedTest
     public void doTestEqQueriesAgainstStringIndex() throws Exception
     {
         Expression expression = new Expression(indexContext).add(Operator.ANN, randomVectorBytes());
-        PostingList results = searcher.searchPosting(SSTableQueryContext.forTest(), expression, bounds, 1);
+        PostingList results = searcher.searchPosting(QueryContext.forTest(), expression, bounds, 1);
     }
 
     @TearDown(Level.Trial)

@@ -52,7 +52,7 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.CheckpointingIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -78,7 +78,7 @@ public class QueryController
 
     private final ColumnFamilyStore cfs;
     private final ReadCommand command;
-    private final SSTableQueryContext queryContext;
+    private final QueryContext queryContext;
     private final TableQueryMetrics tableQueryMetrics;
     private final RowFilter.FilterElement filterOperation;
     private final IndexFeatureSet indexFeatureSet;
@@ -93,7 +93,7 @@ public class QueryController
                            ReadCommand command,
                            RowFilter.FilterElement filterOperation,
                            IndexFeatureSet indexFeatureSet,
-                           SSTableQueryContext queryContext,
+                           QueryContext queryContext,
                            TableQueryMetrics tableQueryMetrics)
     {
         this.cfs = cfs;
@@ -195,7 +195,7 @@ public class QueryController
         }
         finally
         {
-            queryContext.queryContext.checkpoint();
+            queryContext.checkpoint();
         }
     }
 
@@ -225,7 +225,7 @@ public class QueryController
         Map<Memtable, List<RangeIterator<PrimaryKey>>> iteratorsByMemtable = expressions
                                                                     .stream()
                                                                     .flatMap(expr -> {
-                                                                        return expr.context.iteratorsForSearch(queryContext.queryContext, expr, mergeRange, getLimit()).stream();
+                                                                        return expr.context.iteratorsForSearch(queryContext, expr, mergeRange, getLimit()).stream();
                                                                     }).collect(Collectors.groupingBy(pair -> pair.left,
                                                                                                      Collectors.mapping(pair -> pair.right, Collectors.toList())));
 
@@ -259,17 +259,17 @@ public class QueryController
 
             Iterable<RangeIterator<PrimaryKey>> allIntersections = Iterables.concat(sstableIntersections, memtableIntersections);
 
-            queryContext.queryContext.sstablesHit += queryView.referencedIndexes
+            queryContext.sstablesHit += queryView.referencedIndexes
                                         .stream()
                                         .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
-            queryContext.queryContext.checkpoint();
+            queryContext.checkpoint();
             RangeIterator<PrimaryKey> union = RangeUnionIterator.build(allIntersections);
 
             Set<SSTableIndex> emptySSTableIndexSet = ImmutableSet.of();
             return new CheckpointingIterator<>(union,
                                                queryView.referencedIndexes,
                                                annQueryViewInHybridSearch == null ? emptySSTableIndexSet : annQueryViewInHybridSearch.referencedIndexes,
-                                               queryContext.queryContext);
+                                               queryContext);
         }
         catch (Throwable t)
         {
@@ -291,7 +291,7 @@ public class QueryController
                 return RangeIterator.emptyKeys();
 
             PrimaryKeyMap primaryKeyMap = pkFactory.newPerSSTablePrimaryKeyMap();
-            return SSTableRowIdKeyRangeIterator.create(primaryKeyMap, queryContext.queryContext, sstableRowIdsIterator);
+            return SSTableRowIdKeyRangeIterator.create(primaryKeyMap, queryContext, sstableRowIdsIterator);
         }
         catch (IOException e)
         {
@@ -301,7 +301,7 @@ public class QueryController
 
     private RangeIterator<PrimaryKey> reorderAndLimitBy(RangeIterator<PrimaryKey> original, Memtable memtable, Expression expression)
     {
-        return expression.context.reorderMemtable(memtable, queryContext.queryContext, original, expression, getLimit());
+        return expression.context.reorderMemtable(memtable, queryContext, original, expression, getLimit());
     }
 
     private RangeIterator<PrimaryKey> reorderAndLimitBySSTableRowIds(RangeIterator<Long> original, SSTableReader sstable, QueryViewBuilder.QueryView annQueryView)
@@ -430,7 +430,7 @@ public class QueryController
      */
     public void finish()
     {
-        if (tableQueryMetrics != null) tableQueryMetrics.record(queryContext.queryContext);
+        if (tableQueryMetrics != null) tableQueryMetrics.record(queryContext);
     }
 
     /**

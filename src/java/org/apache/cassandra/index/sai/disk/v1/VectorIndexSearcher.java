@@ -33,7 +33,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
@@ -87,14 +87,14 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     }
 
     @Override
-    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, SSTableQueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         PostingList results = searchPosting(context, exp, keyRange, limit);
         return toSSTableRowIdsIterator(results, context);
     }
 
     @Override
-    public PostingList searchPosting(SSTableQueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    public PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -107,17 +107,17 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             return bitsOrPostingList.postingList();
 
         float[] queryVector = exp.lower.value.vector;
-        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context.queryContext);
+        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context);
     }
 
     /**
      * Return bit set if needs to search HNSW; otherwise return posting list to bypass HNSW
      */
-    private BitsOrPostingList bitsOrPostingListForKeyRange(SSTableQueryContext context, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    private BitsOrPostingList bitsOrPostingListForKeyRange(QueryContext context, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         // not restricted
         if (RangeUtil.coversFullRing(keyRange))
-            return new BitsOrPostingList(context.queryContext.bitsetForShadowedPrimaryKeys(metadata, primaryKeyMap, graph));
+            return new BitsOrPostingList(context.bitsetForShadowedPrimaryKeys(metadata, primaryKeyMap, graph));
 
         PrimaryKey firstPrimaryKey = keyFactory.createTokenOnly(keyRange.left.getToken());
         PrimaryKey lastPrimaryKey = keyFactory.createTokenOnly(keyRange.right.getToken());
@@ -131,7 +131,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         // if it covers entire segment, skip bit set
         if (minSSTableRowId <= metadata.minSSTableRowId && maxSSTableRowId >= metadata.maxSSTableRowId)
-            return new BitsOrPostingList(context.queryContext.bitsetForShadowedPrimaryKeys(metadata, primaryKeyMap, graph));
+            return new BitsOrPostingList(context.bitsetForShadowedPrimaryKeys(metadata, primaryKeyMap, graph));
 
         minSSTableRowId = Math.max(minSSTableRowId, metadata.minSSTableRowId);
         maxSSTableRowId = Math.min(maxSSTableRowId, metadata.maxSSTableRowId);
@@ -187,7 +187,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
     {
         // the iterator represents keys from all the segments in our sstable -- we'll only pull of those that
         // are from our own token range so we can use row ids to order the results by vector similarity.
@@ -233,7 +233,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         // else ask hnsw to perform a search limited to the bits we created
         float[] queryVector = exp.lower.value.vector;
-        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context.queryContext);
+        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context);
         return toPrimaryKeyIterator(results, context);
     }
 

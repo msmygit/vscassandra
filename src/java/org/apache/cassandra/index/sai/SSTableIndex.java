@@ -140,7 +140,7 @@ public class SSTableIndex implements SegmentOrdering
 
     public List<RangeIterator<Long>> searchSSTableRowIds(Expression expression,
                                       AbstractBounds<PartitionPosition> keyRange,
-                                      SSTableQueryContext context,
+                                      QueryContext context,
                                       boolean defer,
                                       int limit) throws IOException
     {
@@ -226,7 +226,7 @@ public class SSTableIndex implements SegmentOrdering
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(SSTableQueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
     {
         return searchableIndex.limitToTopResults(context, iterator, exp, limit);
     }

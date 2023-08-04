@@ -27,7 +27,7 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.index.sai.SSTableQueryContext;
+import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
@@ -62,7 +62,7 @@ public interface SearchableIndex extends Closeable, SegmentOrdering
 
     public List<RangeIterator<Long>> search(Expression expression,
                                             AbstractBounds<PartitionPosition> keyRange,
-                                            SSTableQueryContext context,
+                                            QueryContext context,
                                             boolean defer, int limit) throws IOException;
 
     public void populateSystemView(SimpleDataSet dataSet, SSTableReader sstable);
