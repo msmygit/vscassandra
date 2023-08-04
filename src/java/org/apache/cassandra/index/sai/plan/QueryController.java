@@ -265,10 +265,9 @@ public class QueryController
             queryContext.checkpoint();
             RangeIterator<PrimaryKey> union = RangeUnionIterator.build(allIntersections);
 
-            Set<SSTableIndex> emptySSTableIndexSet = ImmutableSet.of();
             return new CheckpointingIterator<>(union,
                                                queryView.referencedIndexes,
-                                               annQueryViewInHybridSearch == null ? emptySSTableIndexSet : annQueryViewInHybridSearch.referencedIndexes,
+                                               annQueryViewInHybridSearch == null ? Collections.emptySet() : annQueryViewInHybridSearch.referencedIndexes,
                                                queryContext);
         }
         catch (Throwable t)
