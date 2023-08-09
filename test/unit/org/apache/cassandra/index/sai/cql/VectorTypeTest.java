@@ -175,6 +175,9 @@ public class VectorTypeTest extends VectorTester
 
         result = execute("SELECT * FROM %s WHERE b=true ORDER BY v ANN OF [3.1, 4.1, 5.1] LIMIT 2");
         assertThat(result).hasSize(2);
+
+        result = execute("SELECT * FROM %s WHERE b=true ORDER BY v ANN OF [3.1, 4.1, 5.1] LIMIT 1");
+        assertThat(result).hasSize(1);
     }
 
     @Test
@@ -506,6 +509,42 @@ public class VectorTypeTest extends VectorTester
             assertRowsIgnoringOrder(result,
                                     row(i, 1),
                                     row(i, 2));
+        }
+    }
+
+    @Test
+    public void testANNWithAllowFiltering() throws Throwable
+    {
+        createTable("CREATE TABLE %s (pk int, c int, v vector<float, 2>, PRIMARY KEY(pk, c))");
+        createIndex("CREATE CUSTOM INDEX ON %s(v) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (pk, c, v) VALUES (1, 1, [1.0, 1.0])");
+        execute("INSERT INTO %s (pk, c, v) VALUES (1, 2, [1.0, 1.2])");
+        execute("INSERT INTO %s (pk, c, v) VALUES (1, 3, [1.0, 1.3])");
+        execute("INSERT INTO %s (pk, c, v) VALUES (2, 1, [1.0, 2.0])");
+        execute("INSERT INTO %s (pk, c, v) VALUES (3, 1, [1.0, 3.0])");
+        execute("INSERT INTO %s (pk, c, v) VALUES (3, 2, [1.0, 3.2])");
+
+        // as a precondition, check we have more than 2 rows, so that there's something to LIMIT later
+        {
+            var result = execute("SELECT * FROM %s WHERE c>=2 ALLOW FILTERING");
+            assertThat(result).hasSizeGreaterThan(2);
+        }
+
+        {
+            var result = execute("SELECT * FROM %s WHERE c>=2 LIMIT 2 ALLOW FILTERING");
+            assertThat(result).hasSize(2);
+        }
+
+        {
+            var result = execute("SELECT * FROM %s WHERE c>=2 ORDER BY v ANN OF [1.0, 1.0] LIMIT 2 ALLOW FILTERING");
+            assertThat(result).hasSize(2);
+        }
+
+        {
+            var result = execute("SELECT * FROM %s WHERE c>=2 ORDER BY v ANN OF [1.0, 1.0] LIMIT 1 ALLOW FILTERING");
+            assertThat(result).hasSize(1);
         }
     }
 
