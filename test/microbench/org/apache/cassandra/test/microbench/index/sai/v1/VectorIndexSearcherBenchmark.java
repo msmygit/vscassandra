@@ -136,7 +136,7 @@ public class VectorIndexSearcherBenchmark extends SaiRandomizedTest
     public void doTestEqQueriesAgainstStringIndex() throws Exception
     {
         Expression expression = new Expression(indexContext).add(Operator.ANN, randomVectorBytes());
-        PostingList results = searcher.searchPosting(QueryContext.forTest(), expression, bounds, 1);
+        PostingList results = searcher.searchPosting(new QueryContext(), expression, bounds, 1);
     }
 
     @TearDown(Level.Trial)

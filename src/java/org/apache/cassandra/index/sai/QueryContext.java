@@ -84,12 +84,6 @@ public class QueryContext
         this(DatabaseDescriptor.getRangeRpcTimeout(TimeUnit.MILLISECONDS));
     }
 
-    @VisibleForTesting
-    public static QueryContext forTest()
-    {
-        return new QueryContext();
-    }
-
     public QueryContext(long executionQuotaMs)
     {
         this.executionQuotaNano = TimeUnit.MILLISECONDS.toNanos(executionQuotaMs);
