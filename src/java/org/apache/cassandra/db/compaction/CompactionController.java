@@ -94,12 +94,6 @@ public class CompactionController extends AbstractCompactionController
             return;
         }
 
-        if (ignoreOverlaps())
-        {
-            logger.debug("not refreshing overlaps - running with ignoreOverlaps activated");
-            return;
-        }
-
         if (cfs.getNeverPurgeTombstones())
         {
             logger.debug("not refreshing overlaps for {}.{} - neverPurgeTombstones is enabled", cfs.keyspace.getName(), cfs.getTableName());
@@ -124,7 +118,7 @@ public class CompactionController extends AbstractCompactionController
         if (this.overlappingSSTables != null)
             close();
 
-        if (compacting == null || ignoreOverlaps())
+        if (compacting == null)
             overlappingSSTables = Refs.tryRef(Collections.<SSTableReader>emptyList());
         else
             overlappingSSTables = cfs.getAndReferenceOverlappingLiveSSTables(compacting);
