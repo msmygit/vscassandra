@@ -18,6 +18,13 @@
 
 package org.apache.cassandra.distributed.test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.apache.cassandra.utils.memory.BufferPool;
+import org.apache.cassandra.utils.memory.BufferPools;
+import org.apache.cassandra.utils.memory.LongBufferPoolTest;
 import org.awaitility.Awaitility;
 import org.junit.Test;
 
@@ -34,6 +41,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import static org.apache.cassandra.distributed.action.GossipHelper.decommission;
 import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
 import static org.apache.cassandra.distributed.api.Feature.NATIVE_PROTOCOL;
@@ -46,6 +55,7 @@ import static org.apache.cassandra.distributed.shared.AssertUtils.row;
  */
 public class HintedHandoffAddRemoveNodesTest extends TestBaseImpl
 {
+    private static final Logger logger = LoggerFactory.getLogger(HintedHandoffAddRemoveNodesTest.class);
     /**
      * Replaces Python dtest {@code hintedhandoff_test.py:TestHintedHandoff.test_hintedhandoff_decom()}.
      */
@@ -89,6 +99,35 @@ public class HintedHandoffAddRemoveNodesTest extends TestBaseImpl
         }
     }
 
+
+    static final class Debug implements BufferPool.Debug
+    {
+        @Override
+        public void registerNormal(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Registering chunk {}", chunk);
+        }
+
+        @Override
+        public void acquire(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Acquiring chunk {}", chunk);
+        }
+
+        @Override
+        public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
+        {
+            logger.info("DUPA: Recycling chunk {} to {}", oldVersion, newVersion);
+        }
+
+        @Override
+        public void recyclePartial(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Partially recycling chunk {}", chunk);
+        }
+    }
+
+
     @Test
     public void shouldBootstrapWithHintsOutstanding() throws Exception
     {
@@ -98,6 +137,10 @@ public class HintedHandoffAddRemoveNodesTest extends TestBaseImpl
                                         .withConfig(config -> config.with(NETWORK, GOSSIP, NATIVE_PROTOCOL))
                                         .start())
         {
+            cluster.get(1).runOnInstance(() -> BufferPools.forNetworking().debug(new Debug()));
+            cluster.get(2).runOnInstance(() -> BufferPools.forNetworking().debug(new Debug()));
+            cluster.get(3).runOnInstance(() -> BufferPools.forNetworking().debug(new Debug()));
+
             cluster.schemaChange(withKeyspace("CREATE KEYSPACE %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2}"));
             cluster.schemaChange(withKeyspace("CREATE TABLE %s.boot_hint_test (key int PRIMARY KEY, value int)"));
 

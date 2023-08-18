@@ -28,6 +28,9 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.util.RandomAccessReader;
 
@@ -35,6 +38,7 @@ import static org.junit.Assert.*;
 
 public class BufferPoolTest
 {
+    private static final Logger logger = LoggerFactory.getLogger(BufferPoolTest.class);
     private BufferPool bufferPool;
 
     @Before
@@ -163,10 +167,46 @@ public class BufferPoolTest
         requestDoubleMaxMemory();
     }
 
+    static final class Debug implements BufferPool.Debug
+    {
+        @Override
+        public void registerNormal(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Registering chunk {}", chunk);
+        }
+
+        @Override
+        public void acquire(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Acquiring chunk {}", chunk);
+        }
+
+        @Override
+        public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
+        {
+            logger.info("DUPA: Recycling chunk {} to {}", oldVersion, newVersion);
+        }
+
+        @Override
+        public void recyclePartial(BufferPool.Chunk chunk)
+        {
+            logger.info("DUPA: Partially recycling chunk {}", chunk);
+        }
+    }
+
     @Test
     public void testRecycle()
     {
         requestUpToSize(RandomAccessReader.DEFAULT_BUFFER_SIZE, 3 * BufferPool.NORMAL_CHUNK_SIZE);
+    }
+
+    @Test
+    public void testRecycleUnusedChunk()
+    {
+        bufferPool.debug(new Debug());
+        ByteBuffer buffer = bufferPool.get(RandomAccessReader.DEFAULT_BUFFER_SIZE, BufferType.OFF_HEAP);
+        bufferPool.put(buffer);
+        bufferPool.unsafeReset();
     }
 
     private void requestDoubleMaxMemory()

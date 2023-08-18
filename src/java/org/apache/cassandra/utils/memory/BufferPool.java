@@ -36,6 +36,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.Uninterruptibles;
+
+import org.apache.commons.lang.ObjectUtils;
 
 import net.nicoulaj.compilecommand.annotations.Inline;
 import org.apache.cassandra.concurrent.InfiniteLoopExecutor;
@@ -310,7 +313,7 @@ public class BufferPool
         localPool.get().release();
     }
 
-    interface Debug
+    public interface Debug
     {
         public static Debug NO_OP = new Debug()
         {
@@ -629,6 +632,7 @@ public class BufferPool
 
         private void clearForEach(Consumer<Chunk> consumer)
         {
+            logger.info("Clearing {} chunks:\n{}\n{}\n{}", count, this.chunk0, this.chunk1, this.chunk2);
             int oldCount = count;
             Chunk chunk0 = this.chunk0, chunk1 = this.chunk1, chunk2 = this.chunk2;
             count = 0;
@@ -1114,7 +1118,7 @@ public class BufferPool
      * When we reiceve a release request we work out the position by comparing the buffer
      * address to our base address and we simply release the units.
      */
-    final static class Chunk
+    public final static class Chunk
     {
         enum Status
         {
@@ -1175,6 +1179,7 @@ public class BufferPool
         void acquire(LocalPool owner)
         {
             assert this.owner == null;
+            logger.info("Acquiring chunk {} for {}", this, owner, new Exception("acquire trace"));
             this.owner = owner;
         }
 
@@ -1185,6 +1190,7 @@ public class BufferPool
          */
         void release()
         {
+            logger.info("Releasing chunk {}", this);
             this.owner = null;
             boolean statusUpdated = setEvicted();
             assert statusUpdated : "Status of chunk " + this + " was not IN_USE.";
@@ -1269,7 +1275,17 @@ public class BufferPool
             Status expectedStatus = recycler.canRecyclePartially() ? Status.IN_USE : Status.EVICTED;
             boolean statusUpdated = setStatus(expectedStatus, Status.IN_USE);
             // impossible: could only happen if another thread updated the status in the meantime
-            assert statusUpdated : "Status of chunk " + this + " was not " + expectedStatus;
+            if (!statusUpdated)
+            {
+                logger.info("DUPA Status of chunk {} was not {} but {}", this, expectedStatus, this.status());
+                for (int i = 0; i < 100; i++)
+                {
+                    logger.info("{} waiting for deallocate... status of chunk: {} for chunk {}", i, this.status(), this);
+                    Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS);
+                }
+                throw new AssertionError("Status of chunk " + this + " was not " + expectedStatus);
+            }
+//            assert statusUpdated : "Status of chunk " + this + " was not " + expectedStatus;
 
             recycler.recycle(this);
         }
@@ -1510,7 +1526,7 @@ public class BufferPool
         @Override
         public String toString()
         {
-            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d, owner %s, recycler %s]", slab, Long.toBinaryString(freeSlots), capacity(), free(), owner, recycler);
+            return String.format("[slab %s/%s, slots bitmap %s, capacity %d, free %d, owner %s, recycler %s]", ObjectUtils.identityToString(slab), slab, Long.toBinaryString(freeSlots), capacity(), free(), owner, recycler);
         }
 
         @VisibleForTesting
@@ -1533,6 +1549,7 @@ public class BufferPool
         {
             if (chunk != null)
             {
+                logger.info("Trying to unsafe recycle chunk {}", chunk);
                 chunk.owner = null;
                 chunk.freeSlots = 0L;
                 chunk.recycleFully();
@@ -1546,7 +1563,11 @@ public class BufferPool
 
         private boolean setStatus(Status current, Status update)
         {
-            return statusUpdater.compareAndSet(this, current, update);
+            boolean updated = statusUpdater.compareAndSet(this, current, update);
+            logger.info("Setting chunk {} status from {} to {} has {}; current value={}", this, current, update, updated ? "succeeded" : "failed", this.status());
+            if (!updated)
+                logger.info("DUPA after failed status set; stackrace:", new Exception("failed status set"));
+            return updated;
         }
 
         private boolean setInUse()
@@ -1595,6 +1616,7 @@ public class BufferPool
         overflowMemoryUsage.reset();
         memoryInUse.reset();
         memoryAllocated.set(0);
+        //localPool.get().release();
         localPool.get().unsafeRecycle();
         globalPool.unsafeFree();
     }
