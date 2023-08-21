@@ -419,15 +419,14 @@ public interface Index
     public RowFilter getPostIndexQueryFilter(RowFilter filter);
 
     /**
-     * Return a comparator that reorders query result before sending to client
+     * Return a list of sorted scores in descending order from query results before sending to client
      *
      * @param restriction restriction that requires current index
      * @param columnIndex idx of the indexed column in returned row
      * @param options query options
-     * @param cqlRows list of lists of byte buffers based on the returned rows
-     * @return comparator that for post-query ordering; or null if not supported
+     * @return list of scores from post-query sorting; or null if not supported
      */
-    default Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options, List<List<ByteBuffer>> cqlRows)
+    default List<Double> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options)
     {
         return null;
     }

@@ -55,6 +55,7 @@ import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.restrictions.Restriction;
 import org.apache.cassandra.cql3.restrictions.SingleColumnRestriction;
+import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.CassandraWriteContext;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -69,6 +70,7 @@ import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.ValueComparators;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.Row;
@@ -533,11 +535,10 @@ public class StorageAttachedIndex implements Index
     }
 
     @Override
-    public Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options, List<List<ByteBuffer>> cqlRows)
+    public List<Double> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options)
     {
         // For now, only support ANN
         assert restriction instanceof SingleColumnRestriction.AnnRestriction;
-
         Preconditions.checkState(indexContext.isVector());
 
         SingleColumnRestriction.AnnRestriction annRestriction = (SingleColumnRestriction.AnnRestriction) restriction;
@@ -545,20 +546,26 @@ public class StorageAttachedIndex implements Index
 
         float[] target = TypeUtil.decomposeVector(indexContext, annRestriction.value(options).duplicate());
 
-        Map<ByteBuffer, Double> scoreMap = new HashMap<>();
-        for (List<ByteBuffer> row : cqlRows)
-        {
-            ByteBuffer vectorBuffer = row.get(columnIndex);
-            float[] vector = TypeUtil.decomposeVector(indexContext, vectorBuffer.duplicate());
-            double score = function.compare(vector, target);
-            scoreMap.put(vectorBuffer.duplicate(), score);
-        }
+        ByteBuffer leftByteBuf = annRestriction.value(options).position(-columnIndex);
+        ByteBuffer rightByteBuf = annRestriction.value(options).position(columnIndex);
 
-        return (leftRow, rightRow) -> {
-            Double leftScore = scoreMap.get(leftRow.get(columnIndex));
-            Double rightScore = scoreMap.get(rightRow.get(columnIndex));
-            return Double.compare(rightScore, leftScore);
-        };
+        float[] leftVector = TypeUtil.decomposeVector(indexContext, leftByteBuf);
+        float[] rightVector = TypeUtil.decomposeVector(indexContext, rightByteBuf);
+
+        double scoreLeft = function.compare(leftVector, target);
+        double scoreRight = function.compare(rightVector, target);
+
+        List<Pair<ByteBuffer, Double>> pairs = new ArrayList<>();
+        pairs.add(Pair.create(leftByteBuf, scoreLeft));
+        pairs.add(Pair.create(rightByteBuf, scoreRight));
+
+        Collections.sort(pairs, (l, r) -> Double.compare(scoreLeft, scoreRight));
+        List<Double> listScores = new ArrayList<>(pairs.size() * 2);
+        for (Pair<ByteBuffer, Double> p : pairs)
+        {
+            listScores.add(p.right);
+        }
+        return listScores;
     }
 
     @Override

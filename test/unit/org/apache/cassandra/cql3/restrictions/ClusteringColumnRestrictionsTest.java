@@ -1881,7 +1881,7 @@ public class ClusteringColumnRestrictionsTest
         }
     }
 
-    private static TableMetadata newTableMetadata(Sort... sorts)
+    public static TableMetadata newTableMetadata(Sort... sorts)
     {
         List<AbstractType<?>> types = new ArrayList<>();
 
@@ -1920,7 +1920,7 @@ public class ClusteringColumnRestrictionsTest
      * @param values the equality value
      * @return a new <code>MultiColumnRestriction.EQ</code> instance for the specified clustering column
      */
-    private static Restriction newMultiEq(TableMetadata tableMetadata, int firstIndex, ByteBuffer... values)
+    public static Restriction newMultiEq(TableMetadata tableMetadata, int firstIndex, ByteBuffer... values)
     {
         List<ColumnMetadata> columnMetadatas = new ArrayList<>();
         for (int i = 0; i < values.length; i++)
@@ -2054,7 +2054,7 @@ public class ClusteringColumnRestrictionsTest
         return Iterables.get(set, i);
     }
 
-    private static enum Sort
+    public static enum Sort
     {
         ASC,
         DESC;

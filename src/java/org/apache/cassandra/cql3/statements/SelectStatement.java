@@ -42,7 +42,6 @@ import org.apache.cassandra.guardrails.Guardrails;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.Schema;
-import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.cql3.*;
@@ -1022,10 +1021,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         if (cqlRows.size() == 0 || !needsPostQueryOrdering())
             return;
 
-        List<List<ByteBuffer>> cqlRowsBuffers = cqlRows.rows;
-        Comparator<List<ByteBuffer>> comparator = orderingComparator.prepareFor(table, options, cqlRowsBuffers);
-        if (comparator != null)
-            Collections.sort(cqlRowsBuffers, comparator);
+        List<Double> listSortedScores = orderingComparator.prepareFor(table, options);
     }
 
     public static class RawStatement extends QualifiedStatement<SelectStatement>
@@ -1500,9 +1496,9 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         /**
          * Produces a prepared {@link ColumnComparator} for current table and query-options
          */
-        public Comparator<T> prepareFor(TableMetadata table, QueryOptions options, List<List<ByteBuffer>> rows)
+        public List<Double> prepareFor(TableMetadata table, QueryOptions options)
         {
-            return this;
+            return (List<Double>) this;
         }
     }
 
@@ -1560,11 +1556,11 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         }
 
         @Override
-        public Comparator<List<ByteBuffer>> prepareFor(TableMetadata table, QueryOptions options, List<List<ByteBuffer>> cqlRows)
+        public List<Double> prepareFor(TableMetadata table, QueryOptions options)
         {
             Index index = restriction.findSupportingIndex(IndexRegistry.obtain(table));
             assert index != null;
-            return index.getPostQueryOrdering(restriction, columnIndex, options, cqlRows);
+            return index.postQuerySort(restriction, columnIndex, options);
         }
 
         @Override
