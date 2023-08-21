@@ -19,9 +19,7 @@ package org.apache.cassandra.test.microbench.index.sai.v1;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -31,11 +29,7 @@ import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.Operator;
-import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
-import org.apache.cassandra.cql3.restrictions.ClusteringColumnRestrictionsTest;
-import org.apache.cassandra.cql3.restrictions.Restriction;
-import org.apache.cassandra.cql3.restrictions.SingleRestriction;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.commitlog.CommitLog;
@@ -58,8 +52,6 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.KeyspaceParams;
-import org.apache.cassandra.schema.TableMetadata;
-import org.apache.cassandra.utils.ByteBufferUtil;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -67,15 +59,12 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
-import static org.apache.cassandra.cql3.restrictions.ClusteringColumnRestrictionsTest.newMultiEq;
-import static org.apache.cassandra.cql3.restrictions.ClusteringColumnRestrictionsTest.newTableMetadata;
 import static org.apache.cassandra.index.sai.LongVectorTest.randomVector;
 import static org.apache.cassandra.index.sai.SAITester.waitForIndexQueryable;
 
@@ -93,13 +82,8 @@ public class VectorIndexSearcherBenchmark extends SaiRandomizedTest
     private static final int numSSTables = 10;
     private static final int N = 10_000;
     private IndexSearcher searcher;
-    private Restriction testRestriction;
-    private StorageAttachedIndex sai;
     private IndexContext indexContext;
     private AbstractBounds<PartitionPosition> bounds;
-
-    @Param({ "10000"})
-    int batchSize;
 
     @Setup(Level.Trial)
     public void setupCQLTester()
@@ -153,13 +137,6 @@ public class VectorIndexSearcherBenchmark extends SaiRandomizedTest
     {
         Expression expression = new Expression(indexContext).add(Operator.ANN, randomVectorBytes());
         PostingList results = searcher.searchPosting(new QueryContext(), expression, bounds, 1);
-
-        TableMetadata tableMetadata = newTableMetadata(ClusteringColumnRestrictionsTest.Sort.ASC, ClusteringColumnRestrictionsTest.Sort.ASC, ClusteringColumnRestrictionsTest.Sort.ASC);
-        ByteBuffer value1 = ByteBufferUtil.bytes(1);
-        ByteBuffer value2 = ByteBufferUtil.bytes(2);
-        testRestriction = newMultiEq(tableMetadata, 1, value1, value2);
-
-        List<Double> listScores = sai.postQuerySort(testRestriction, 1, QueryOptions.DEFAULT);
     }
 
     @TearDown(Level.Trial)
