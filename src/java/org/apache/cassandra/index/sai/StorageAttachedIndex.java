@@ -546,8 +546,8 @@ public class StorageAttachedIndex implements Index
 
         float[] target = TypeUtil.decomposeVector(indexContext, annRestriction.value(options).duplicate());
 
-        ByteBuffer leftByteBuf = annRestriction.value(options).position(-columnIndex);
-        ByteBuffer rightByteBuf = annRestriction.value(options).position(columnIndex);
+        ByteBuffer leftByteBuf = annRestriction.value(options).position(columnIndex).duplicate();
+        ByteBuffer rightByteBuf = annRestriction.value(options).position(columnIndex).duplicate();
 
         float[] leftVector = TypeUtil.decomposeVector(indexContext, leftByteBuf);
         float[] rightVector = TypeUtil.decomposeVector(indexContext, rightByteBuf);
