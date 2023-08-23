@@ -426,7 +426,7 @@ public interface Index
      * @param options query options
      * @return list of scores from post-query sorting; or null if not supported
      */
-    default List<Double> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options)
+    default Comparator<List<ByteBuffer>> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options)
     {
         return null;
     }

@@ -535,9 +535,7 @@ public class StorageAttachedIndex implements Index
     }
 
     @Override
-    public List<Double> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options)
-    {
-        // For now, only support ANN
+    public Comparator<List<ByteBuffer>> postQuerySort(Restriction restriction, int columnIndex, QueryOptions options) {
         assert restriction instanceof SingleColumnRestriction.AnnRestriction;
         Preconditions.checkState(indexContext.isVector());
 
@@ -546,26 +544,20 @@ public class StorageAttachedIndex implements Index
 
         float[] target = TypeUtil.decomposeVector(indexContext, annRestriction.value(options).duplicate());
 
-        ByteBuffer leftByteBuf = annRestriction.value(options).position(columnIndex).duplicate();
-        ByteBuffer rightByteBuf = annRestriction.value(options).position(columnIndex).duplicate();
+        return (leftBuf, rightBuf) -> {
+            float[] left = TypeUtil.decomposeVector(indexContext, leftBuf.get(columnIndex).duplicate());
+            double scoreLeft = function.compare(left, target);
 
-        float[] leftVector = TypeUtil.decomposeVector(indexContext, leftByteBuf);
-        float[] rightVector = TypeUtil.decomposeVector(indexContext, rightByteBuf);
+            float[] right = TypeUtil.decomposeVector(indexContext, rightBuf.get(columnIndex).duplicate());
+            double scoreRight = function.compare(right, target);
 
-        double scoreLeft = function.compare(leftVector, target);
-        double scoreRight = function.compare(rightVector, target);
+            // Decorate by holding the vectors and their similarity scores in a Pair object
+            Pair<float[], Double> decoratedLeft = Pair.create(left, scoreLeft);
+            Pair<float[], Double> decoratedRight = Pair.create(right, scoreRight);
 
-        List<Pair<ByteBuffer, Double>> pairs = new ArrayList<>();
-        pairs.add(Pair.create(leftByteBuf, scoreLeft));
-        pairs.add(Pair.create(rightByteBuf, scoreRight));
-
-        Collections.sort(pairs, (l, r) -> Double.compare(scoreLeft, scoreRight));
-        List<Double> listScores = new ArrayList<>(pairs.size() * 2);
-        for (Pair<ByteBuffer, Double> p : pairs)
-        {
-            listScores.add(p.right);
-        }
-        return listScores;
+            // Compare vectors indirectly by sorting them based on their scores in descending order
+            return Double.compare(decoratedRight.right, decoratedLeft.right);
+        };
     }
 
     @Override

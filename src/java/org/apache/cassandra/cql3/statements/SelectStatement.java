@@ -1016,12 +1016,14 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
     /**
      * Orders results when multiple keys are selected (using IN)
      */
-    private void orderResults(ResultSet cqlRows, QueryOptions options)
+    public void orderResults(ResultSet cqlRows, QueryOptions options)
     {
         if (cqlRows.size() == 0 || !needsPostQueryOrdering())
             return;
 
-        List<Double> listSortedScores = orderingComparator.prepareFor(table, options);
+        Comparator<List<ByteBuffer>> comparator = orderingComparator.prepareFor(table, options);
+        if (comparator != null)
+            Collections.sort(cqlRows.rows, comparator);
     }
 
     public static class RawStatement extends QualifiedStatement<SelectStatement>
@@ -1496,9 +1498,9 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         /**
          * Produces a prepared {@link ColumnComparator} for current table and query-options
          */
-        public List<Double> prepareFor(TableMetadata table, QueryOptions options)
+        public Comparator<T> prepareFor(TableMetadata table, QueryOptions options)
         {
-            return (List<Double>) this;
+            return this;
         }
     }
 
@@ -1556,7 +1558,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         }
 
         @Override
-        public List<Double> prepareFor(TableMetadata table, QueryOptions options)
+        public Comparator<List<ByteBuffer>> prepareFor(TableMetadata table, QueryOptions options)
         {
             Index index = restriction.findSupportingIndex(IndexRegistry.obtain(table));
             assert index != null;
