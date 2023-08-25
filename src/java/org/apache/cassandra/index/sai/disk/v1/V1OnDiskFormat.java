@@ -67,6 +67,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     private static final Set<IndexComponent> VECTOR_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
                                                                             IndexComponent.META,
                                                                             IndexComponent.VECTOR,
+                                                                            IndexComponent.PQ,
                                                                             IndexComponent.TERMS_DATA,
                                                                             IndexComponent.POSTING_LISTS);
     private static final Set<IndexComponent> LITERAL_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
@@ -222,7 +223,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         for (IndexComponent indexComponent : perIndexComponents(indexContext))
         {
-            // VSTODO: lucene doesn't follow SAI naming patterns and manage its own validation
+            // VSTODO: add checksums to Vector components
             if (!isBuildCompletionMarker(indexComponent) && !(indexContext.isVector()))
             {
                 try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext))
