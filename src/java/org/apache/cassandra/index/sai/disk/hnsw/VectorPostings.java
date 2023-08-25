@@ -24,11 +24,16 @@ import java.util.function.Function;
 
 import com.google.common.base.Preconditions;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.agrona.collections.IntArrayList;
 import org.apache.lucene.util.RamUsageEstimator;
 
 public class VectorPostings<T>
 {
+    private static final Logger logger = LoggerFactory.getLogger(VectorPostings.class);
+
     private final List<T> postings;
     private final int ordinal;
 

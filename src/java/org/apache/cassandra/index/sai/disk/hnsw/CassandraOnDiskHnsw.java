@@ -19,35 +19,38 @@
 package org.apache.cassandra.index.sai.disk.hnsw;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.function.Function;
+import java.util.logging.Logger;
 import java.util.stream.IntStream;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
-import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
-import org.apache.lucene.index.VectorEncoding;
+import org.apache.cassandra.utils.Pair;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.hnsw.HnswGraphSearcher;
+import org.apache.lucene.util.hnsw.HnswSearcher;
 import org.apache.lucene.util.hnsw.NeighborQueue;
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
+import org.apache.lucene.util.hnsw.NeighborSimilarity;
 
 public class CassandraOnDiskHnsw implements AutoCloseable
 {
+    private static final Logger logger = Logger.getLogger(CassandraOnDiskHnsw.class.getName());
+
     private final Function<QueryContext, VectorsWithCache> vectorsSupplier;
     private final OnDiskOrdinalsMap ordinalsMap;
     private final OnDiskHnswGraph hnsw;
     private final VectorSimilarityFunction similarityFunction;
-    private final VectorCache vectorCache;
 
     private static final int OFFSET_CACHE_MIN_BYTES = 100_000;
 
@@ -55,24 +58,41 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     {
         similarityFunction = context.getIndexWriterConfig().getSimilarityFunction();
 
+        long pqSegmentOffset = componentMetadatas.get(IndexComponent.PQ).offset;
+        var compressedVectors = CompressedVectors.load(indexFiles.pq(), pqSegmentOffset);
+
         long vectorsSegmentOffset = componentMetadatas.get(IndexComponent.VECTOR).offset;
-        vectorsSupplier = (qc) -> new VectorsWithCache(new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset), qc);
+        List<float[]> inMemoryOriginals;
+        if (compressedVectors == null && !CompressedVectors.DISABLE_INMEMORY_VECTORS)
+            inMemoryOriginals = cacheOriginalVectors(indexFiles, vectorsSegmentOffset);
+        else
+            inMemoryOriginals = null;
+        vectorsSupplier = (qc) -> {
+            OnDiskVectors odv = new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset);
+            return new VectorsWithCache(odv, compressedVectors, inMemoryOriginals);
+        };
 
         SegmentMetadata.ComponentMetadata postingListsMetadata = componentMetadatas.get(IndexComponent.POSTING_LISTS);
         ordinalsMap = new OnDiskOrdinalsMap(indexFiles.postingLists(), postingListsMetadata.offset, postingListsMetadata.length);
 
         SegmentMetadata.ComponentMetadata termsMetadata = componentMetadatas.get(IndexComponent.TERMS_DATA);
         hnsw = new OnDiskHnswGraph(indexFiles.termsData(), termsMetadata.offset, termsMetadata.length, OFFSET_CACHE_MIN_BYTES);
-        var mockContext = new QueryContext();
-        try (var vectors = new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset))
+    }
+
+    private static List<float[]> cacheOriginalVectors(PerIndexFiles indexFiles, long vectorsSegmentOffset)
+    {
+        try (var odv = new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset))
         {
-            vectorCache = VectorCache.load(hnsw.getView(mockContext), vectors, CassandraRelevantProperties.SAI_HNSW_VECTOR_CACHE_BYTES.getInt());
+            List<float[]> vectors = new ArrayList<>(odv.size());
+            for (int i = 0; i < odv.size(); i++)
+                vectors.add(odv.vectorValue(i));
+            return vectors;
         }
     }
 
     public long ramBytesUsed()
     {
-        return hnsw.getCacheSizeInBytes() + vectorCache.ramBytesUsed();
+        return hnsw.getCacheSizeInBytes();
     }
 
     public int size()
@@ -88,18 +108,26 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     {
         CassandraOnHeapHnsw.validateIndexable(queryVector, similarityFunction);
 
-        NeighborQueue queue;
         try (var vectors = vectorsSupplier.apply(context); var view = hnsw.getView(context))
         {
-            queue = HnswGraphSearcher.search(queryVector,
-                                             topK,
-                                             vectors,
-                                             VectorEncoding.FLOAT32,
-                                             similarityFunction,
-                                             view,
-                                             ordinalsMap.ignoringDeleted(acceptBits),
-                                             vistLimit);
-            return annRowIdsToPostings(queue);
+            NeighborSimilarity.ScoreFunction sf;
+            if (CompressedVectors.DISABLE_INMEMORY_VECTORS)
+            {
+                sf = (i) -> {
+                    var other = vectors.originalVector(i);
+                    return similarityFunction.compare(queryVector, other);
+                };
+            }
+            else
+            {
+                sf = (i) -> vectors.approximateSimilarity(i, queryVector, similarityFunction);
+            }
+            var queue = new HnswSearcher.Builder<>(view,
+                                                   vectors.originalVectors,
+                                                   sf)
+                        .build()
+                        .search(topK, ordinalsMap.ignoringDeleted(acceptBits), vistLimit);
+            return annRowIdsToPostings(queryVector, queue, vectors, topK);
         }
         catch (IOException e)
         {
@@ -109,22 +137,22 @@ public class CassandraOnDiskHnsw implements AutoCloseable
 
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable
     {
-        private final NeighborQueue queue;
+        private final OfInt ordinals;
         private final OnDiskOrdinalsMap.RowIdsView rowIdsView = ordinalsMap.getRowIdsView();
 
         private PrimitiveIterator.OfInt segmentRowIdIterator = IntStream.empty().iterator();
 
-        public RowIdIterator(NeighborQueue queue)
+        public RowIdIterator(OfInt ordinals)
         {
-            this.queue = queue;
+            this.ordinals = ordinals;
         }
 
         @Override
         public boolean hasNext() {
-            while (!segmentRowIdIterator.hasNext() && queue.size() > 0) {
+            while (!segmentRowIdIterator.hasNext() && ordinals.hasNext()) {
                 try
                 {
-                    var ordinal = queue.pop();
+                    var ordinal = ordinals.next();
                     segmentRowIdIterator = Arrays.stream(rowIdsView.getSegmentRowIdsMatching(ordinal)).iterator();
                 }
                 catch (IOException e)
@@ -149,12 +177,24 @@ public class CassandraOnDiskHnsw implements AutoCloseable
         }
     }
 
-    private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue) throws IOException
+    private ReorderingPostingList annRowIdsToPostings(float[] queryVector, NeighborQueue queue, VectorsWithCache vectors, int topK) throws IOException
     {
-        int originalSize = queue.size();
-        try (var iterator = new RowIdIterator(queue))
+        // order the top K results by their true similarity
+        // VSTODO is the boxing here material?
+        Pair<Integer, Float>[] nodesWithScore = new Pair[queue.size()];
+        for (int i = 0; i < nodesWithScore.length; i++)
         {
-            return new ReorderingPostingList(iterator, originalSize);
+            var n = queue.pop();
+            var score = similarityFunction.compare(queryVector, vectors.originalVector(n));
+            nodesWithScore[i] = Pair.create(n, score);
+        }
+        // sort both nodes and scores by their respective scores
+        Arrays.sort(nodesWithScore, Comparator.comparingDouble((Pair<Integer, Float> p) -> p.right).reversed());
+        var nodes = Arrays.stream(nodesWithScore).limit(topK).mapToInt(p -> p.left).iterator();
+
+        try (var iterator = new RowIdIterator(nodes))
+        {
+            return new ReorderingPostingList(iterator, topK);
         }
     }
 
@@ -170,52 +210,46 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     }
 
     @NotThreadSafe
-    class VectorsWithCache implements RandomAccessVectorValues<float[]>, AutoCloseable
+    class VectorsWithCache implements AutoCloseable
     {
-        private final OnDiskVectors vectors;
-        private final QueryContext queryContext;
+        private final OnDiskVectors originalVectors;
+        private final CompressedVectors compressedVectors;
+        private final List<float[]> inMemoryOriginals;
 
-        public VectorsWithCache(OnDiskVectors vectors, QueryContext queryContext)
+        public VectorsWithCache(OnDiskVectors originalVectors, CompressedVectors compressedVectors, List<float[]> inMemoryOriginals)
         {
-            this.vectors = vectors;
-            this.queryContext = queryContext;
+            this.originalVectors = originalVectors;
+            this.compressedVectors = compressedVectors;
+            this.inMemoryOriginals = inMemoryOriginals;
         }
 
-        @Override
         public int size()
         {
-            return vectors.size();
+            return originalVectors.size();
         }
 
-        @Override
         public int dimension()
         {
-            return vectors.dimension();
+            return originalVectors.dimension();
         }
 
-        @Override
-        public float[] vectorValue(int i) throws IOException
+        // VSTODO read vectors during search as described in DiskANN
+        public float[] originalVector(int i)
         {
-            queryContext.hnswVectorsAccessed++;
-            var cached = vectorCache.get(i);
-            if (cached != null)
-            {
-                queryContext.hnswVectorCacheHits++;
-                return cached;
+            return originalVectors.vectorValue(i);
+        }
+
+        public float approximateSimilarity(int ordinal, float[] other, VectorSimilarityFunction similarityFunction)
+        {
+            if (compressedVectors == null) {
+                return similarityFunction.compare(inMemoryOriginals.get(ordinal), other);
             }
-
-            return vectors.vectorValue(i);
-        }
-
-        @Override
-        public RandomAccessVectorValues<float[]> copy()
-        {
-            throw new UnsupportedOperationException();
+            return compressedVectors.decodedSimilarity(ordinal, other, similarityFunction);
         }
 
         public void close()
         {
-            vectors.close();
+            originalVectors.close();
         }
     }
 }
