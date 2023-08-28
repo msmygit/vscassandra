@@ -114,6 +114,9 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
 
     private final boolean isReversed;
 
+    private static int columnIndex;
+    private static SingleRestriction restriction;
+
     /**
      * The <code>AggregationSpecification</code> used to make the aggregates.
      */
@@ -1021,9 +1024,9 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         if (cqlRows.size() == 0 || !needsPostQueryOrdering())
             return;
 
-        Comparator<List<ByteBuffer>> comparator = orderingComparator.prepareFor(table, options);
-        if (comparator != null)
-            Collections.sort(cqlRows.rows, comparator);
+        Index index = restriction.findSupportingIndex(IndexRegistry.obtain(table));
+        assert index != null;
+        index.postQuerySort(restriction, columnIndex, options);
     }
 
     public static class RawStatement extends QualifiedStatement<SelectStatement>
@@ -1494,14 +1497,6 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         {
             return false;
         }
-
-        /**
-         * Produces a prepared {@link ColumnComparator} for current table and query-options
-         */
-        public Comparator<T> prepareFor(TableMetadata table, QueryOptions options)
-        {
-            return this;
-        }
     }
 
     private static class ReversedColumnComparator<T> extends ColumnComparator<T>
@@ -1555,14 +1550,6 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         public boolean indexOrdering()
         {
             return true;
-        }
-
-        @Override
-        public Comparator<List<ByteBuffer>> prepareFor(TableMetadata table, QueryOptions options)
-        {
-            Index index = restriction.findSupportingIndex(IndexRegistry.obtain(table));
-            assert index != null;
-            return index.postQuerySort(restriction, columnIndex, options);
         }
 
         @Override
