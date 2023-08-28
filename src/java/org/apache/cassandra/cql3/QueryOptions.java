@@ -168,7 +168,7 @@ public abstract class QueryOptions
      * <code>QueryOptions</code> contains the column specifications.</p>
      *
      * @return the option names
-     * @throws UnsupportedOperationException If this <code>QueryOptions</code> does not contains the column
+     * @throws UnsupportedOperationException If this <code>QueryOptions</code> does not contain the column
      * specifications.
      */
     public ImmutableList<ColumnSpecification> getColumnSpecifications()
