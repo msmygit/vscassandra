@@ -5,8 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -15,7 +13,9 @@ import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.ColumnIdentifier;
+import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.Lists;
+import org.apache.cassandra.cql3.PageSize;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.ResultSet;
@@ -23,6 +23,7 @@ import org.apache.cassandra.cql3.Term;
 import org.apache.cassandra.cql3.restrictions.SingleColumnRestriction;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.gms.Gossiper;
@@ -30,10 +31,10 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.transport.ProtocolVersion;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.apache.cassandra.cql3.statements.RequestValidations.invalidRequest;
-import static org.apache.cassandra.index.sai.LongVectorTest.randomVector;
 import static org.apache.cassandra.index.sai.SAITester.waitForIndexQueryable;
 
 
@@ -41,10 +42,11 @@ public class StorageAttachedIndexTest
 {
     private static final String KEYSPACE = "ks";
     private static final String TABLE = "tab";
-    private static final int DIMENSION = 3;
+    private static final int DIMENSION = 2;
     private static final int numSSTables = 2;
-    private static final int N = 10;
     private ColumnFamilyStore cfs;
+    private List<ByteBuffer> byteBufferList;
+    private List<CQLTester.Vector<Float>> vectorFloatList;
     private SingleColumnRestriction.AnnRestriction testRestriction;
     private StorageAttachedIndex sai;
 
@@ -61,17 +63,24 @@ public class StorageAttachedIndexTest
         Gossiper.instance.maybeInitializeLocalState(0);
         SchemaLoader.createKeyspace(KEYSPACE, KeyspaceParams.simple(1));
         QueryProcessor.executeInternal(String.format("CREATE TABLE %s.%s (key int primary key, value vector<float, %s>)", KEYSPACE, TABLE, DIMENSION));
-        QueryProcessor.executeInternal(String.format("CREATE CUSTOM INDEX ON %s.%s(value) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function': 'dot_product' }", KEYSPACE, TABLE));
+        QueryProcessor.executeInternal(String.format("CREATE CUSTOM INDEX ON %s.%s(value) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function': 'dot_product'}", KEYSPACE, TABLE));
         waitForIndexQueryable(KEYSPACE, TABLE);
-        var keys = IntStream.range(0, N).boxed().collect(Collectors.toList());
-        Collections.shuffle(keys);
+
+        vectorFloatList = new ArrayList<>();
+        CQLTester.Vector<Float> vector1 = vector(1f, 2f);
+        CQLTester.Vector<Float> vector2 = vector(3f, 4f);
+        CQLTester.Vector<Float> vector3 = vector(5f, 6f);
+        vectorFloatList.add(vector1);
+        vectorFloatList.add(vector2);
+        vectorFloatList.add(vector3);
 
         cfs = ColumnFamilyStore.getIfExists(KEYSPACE, TABLE);
+
         for (int i = 0; i < numSSTables ; i++)
         {
-            for (int j = 0; j < N; j++)
+            for (CQLTester.Vector<Float> vectorFloat : vectorFloatList)
             {
-                QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, value) VALUES (?, ?)", KEYSPACE, TABLE), i, randomVector(DIMENSION));
+                QueryProcessor.executeInternal(String.format("INSERT INTO %s.%s (key, value) VALUES (?, ?)", KEYSPACE, TABLE), i, vectorFloat);
             }
             cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
         }
@@ -83,11 +92,12 @@ public class StorageAttachedIndexTest
         if (!(columnDef.type instanceof VectorType))
             throw invalidRequest("ANN is only supported against DENSE FLOAT32 columns");
 
-        List<ByteBuffer> byteBufferList = new ArrayList<>();
-
-        byteBufferList.add(ByteBuffer.wrap(new byte[]{1, 2, 3}));
-        byteBufferList.add(ByteBuffer.wrap(new byte[]{4, 5, 6}));
-        byteBufferList.add(ByteBuffer.wrap(new byte[]{120, 110, 90}));
+        // Convert List<CQLTester.Vector<Float>> to List<ByteBuffer>
+        byteBufferList = new ArrayList<>();
+        for (CQLTester.Vector<Float> vector : vectorFloatList) {
+            ByteBuffer buffer = floatVectorToByteBuffer(vector);
+            byteBufferList.add(buffer);
+        }
 
         Term terms = new Lists.Value(byteBufferList);
 
@@ -96,23 +106,44 @@ public class StorageAttachedIndexTest
         sai = (StorageAttachedIndex) cfs.getIndexManager().getIndexByName(String.format("%s_value_idx", TABLE));
     }
 
+    @SafeVarargs
+    protected final <T> CQLTester.Vector<T> vector(T... values)
+    {
+        return new CQLTester.Vector<>(values);
+    }
+
+    protected CQLTester.Vector<Float> vector(float[] v)
+    {
+        var v2 = new Float[v.length];
+        for (int i = 0; i < v.length; i++)
+            v2[i] = v[i];
+        return new CQLTester.Vector<>(v2);
+    }
+
+    private static ByteBuffer floatVectorToByteBuffer(CQLTester.Vector<Float> vector) {
+        ByteBuffer buffer = ByteBuffer.allocate(vector.size() * 4);  // 4 bytes per float
+        for (Float value : vector) {
+            buffer.putFloat(value);
+        }
+        buffer.flip();
+        return buffer;
+    }
+
     @Test
     public void testOrderResults() {
         ResultSet.ResultMetadata resultMetadata = new ResultSet.ResultMetadata(new ArrayList<>(cfs.metadata.get().columns()));
         ResultSet resultSet = new ResultSet(resultMetadata);
-        QueryOptions queryOptions = QueryOptions.DEFAULT;
+        QueryOptions queryOptions = QueryOptions.create(ConsistencyLevel.ONE,
+                                                        byteBufferList,
+                                                        false,
+                                                        PageSize.inRows(1),
+                                                        null,
+                                                        null,
+                                                        ProtocolVersion.CURRENT,
+                                                        KEYSPACE);
 
         List<List<ByteBuffer>> rows = new ArrayList<>();
-        List<ByteBuffer> row1 = new ArrayList<>();
-        row1.add(ByteBuffer.wrap(new byte[]{1}));
-        rows.add(row1);
-        List<ByteBuffer> row2 = new ArrayList<>();
-        row2.add(ByteBuffer.wrap(new byte[]{3}));
-        rows.add(row2);
-        List<ByteBuffer> row3 = new ArrayList<>();
-        row3.add(ByteBuffer.wrap(new byte[]{2}));
-        rows.add(row3);
-
+        rows.add(byteBufferList);
         resultSet.rows = rows;
 
         SelectStatement selectStatementInstance = (SelectStatement) QueryProcessor.prepareInternal("SELECT key, value FROM " + KEYSPACE + '.' + TABLE).statement;
