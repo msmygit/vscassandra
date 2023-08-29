@@ -72,11 +72,8 @@ public class CompactionController extends AbstractCompactionController
 
     /**
      * Make sure all parameters are properly initialized
-     * @param cfs
-     * @param compacting
-     * @param gcBefore
-     * @param limiter
-     * @param tombstoneOption
+     *
+     * Do not call ignoreOverlaps() in constructor
      */
     public CompactionController(ColumnFamilyStore cfs, Set<SSTableReader> compacting, int gcBefore, RateLimiter limiter, TombstoneOption tombstoneOption)
     {
