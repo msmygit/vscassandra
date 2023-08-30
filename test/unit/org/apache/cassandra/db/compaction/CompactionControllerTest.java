@@ -69,7 +69,6 @@ public class CompactionControllerTest extends SchemaLoader
     private static CountDownLatch createCompactionControllerLatch = new CountDownLatch(1);
     private static CountDownLatch compaction1RefreshLatch = new CountDownLatch(1);
     private static CountDownLatch refreshCheckLatch = new CountDownLatch(1);
-    private static CountDownLatch compaction1FinishLatch = new CountDownLatch(1);
     private static int overlapRefreshCounter = 0;
 
     @BeforeClass
@@ -233,7 +232,6 @@ public class CompactionControllerTest extends SchemaLoader
         createCompactionControllerLatch = new CountDownLatch(1);
         compaction1RefreshLatch = new CountDownLatch(1);
         refreshCheckLatch = new CountDownLatch(1);
-        compaction1FinishLatch = new CountDownLatch(1);
         testOverlapIterator(false);
     }
 
@@ -282,7 +280,6 @@ public class CompactionControllerTest extends SchemaLoader
         //this compaction will be paused by the BMRule
         Thread t = new Thread(() -> {
             task.run();
-            compaction1FinishLatch.countDown();
         });
 
         //start a compaction for the second sstable (compaction2)
@@ -318,7 +315,7 @@ public class CompactionControllerTest extends SchemaLoader
         assertEquals(2, overlapRefreshCounter);
 
         refreshCheckLatch.countDown();
-        compaction1FinishLatch.await();
+        t.join();
     }
 
     private void applyMutation(TableMetadata cfm, DecoratedKey key, long timestamp)
