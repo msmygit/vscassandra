@@ -55,6 +55,8 @@ public class Descriptor
 
     public static String TMP_EXT = ".tmp";
 
+    public static final String EXTENSION = ".db";
+
     public static final char FILENAME_SEPARATOR = '-';
 
     private static final Splitter filenameSplitter = Splitter.on(FILENAME_SEPARATOR);

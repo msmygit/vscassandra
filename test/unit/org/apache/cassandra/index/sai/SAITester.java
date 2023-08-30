@@ -20,13 +20,14 @@
  */
 package org.apache.cassandra.index.sai;
 
+import java.io.DataInput;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -39,22 +40,29 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.management.AttributeNotFoundException;
-import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
-import com.google.common.base.Predicates;
 import com.google.common.collect.Sets;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
+import com.carrotsearch.randomizedtesting.generators.RandomStrings;
 import com.datastax.driver.core.QueryTrace;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Session;
-import com.datastax.driver.core.exceptions.ReadFailureException;
+import org.apache.cassandra.concurrent.Stage;
+import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.ColumnIdentifier;
+import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -63,18 +71,16 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
-import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.metrics.QueryEventListeners;
-import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.disk.v1.segment.SegmentBuilder;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.ResourceLeakDetector;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.io.sstable.Component;
@@ -83,14 +89,13 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
-import org.apache.cassandra.schema.MockSchema;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.service.StorageService;
-import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.lucene.codecs.CodecUtil;
-import org.awaitility.Awaitility;
 
+import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_RANDOM_SEED;
 import static org.apache.cassandra.inject.ActionBuilder.newActionBuilder;
 import static org.apache.cassandra.inject.Expression.quote;
 import static org.apache.cassandra.inject.InvokePointBuilder.newInvokePoint;
@@ -98,126 +103,147 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class SAITester extends CQLTester
+public abstract class SAITester extends CQLTester
 {
-    protected static final String CREATE_KEYSPACE_TEMPLATE = "CREATE KEYSPACE IF NOT EXISTS %s WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'}";
+    protected static final Logger logger = LoggerFactory.getLogger(SAITester.class);
+
+    protected static final String CREATE_KEYSPACE_TEMPLATE = "CREATE KEYSPACE IF NOT EXISTS %s WITH replication = " +
+                                                             "{'class': 'SimpleStrategy', 'replication_factor': '1'}";
 
     protected static final String CREATE_TABLE_TEMPLATE = "CREATE TABLE %s (id1 TEXT PRIMARY KEY, v1 INT, v2 TEXT) WITH compaction = " +
-            "{'class' : 'SizeTieredCompactionStrategy', 'enabled' : false }";
-    protected static final String CREATE_INDEX_TEMPLATE = "CREATE CUSTOM INDEX IF NOT EXISTS ON %%s(%s) USING 'StorageAttachedIndex'";
+                                                          "{'class' : 'SizeTieredCompactionStrategy', 'enabled' : false }";
+    protected static final String CREATE_INDEX_TEMPLATE = "CREATE INDEX IF NOT EXISTS ON %%s(%s) USING 'sai'";
 
-    protected static int ASSERTION_TIMEOUT_SECONDS = 15;
+    protected static final ColumnIdentifier V1_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v1", true);
+    protected static final ColumnIdentifier V2_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v2", true);
 
-    protected static final Injections.Counter INDEX_BUILD_COUNTER = Injections.newCounter("IndexBuildCounter")
-                                                                              .add(newInvokePoint().onClass(CompactionManager.class)
-                                                                                                   .onMethod("submitIndexBuild", "SecondaryIndexBuilder", "TableOperationObserver"))
-                                                                              .build();
+    protected static final Injections.Counter indexBuildCounter = Injections.newCounter("IndexBuildCounter")
+                                                                            .add(newInvokePoint().onClass(CompactionManager.class)
+                                                                                                 .onMethod("submitIndexBuild",
+                                                                                                           "SecondaryIndexBuilder",
+                                                                                                           "ActiveCompactionsTracker"))
+                                                                            .build();
 
     protected static final Injections.Counter perSSTableValidationCounter = Injections.newCounter("PerSSTableValidationCounter")
-                                                                                      .add(newInvokePoint().onClass(IndexDescriptor.class)
-                                                                                                           .onMethod("validatePerSSTableComponents"))
+                                                                                      .add(newInvokePoint().onClass(OnDiskFormat.class)
+                                                                                                           .onMethod("validatePerSSTableIndexComponents"))
                                                                                       .build();
 
     protected static final Injections.Counter perColumnValidationCounter = Injections.newCounter("PerColumnValidationCounter")
-                                                                                     .add(newInvokePoint().onClass(IndexDescriptor.class)
-                                                                                                          .onMethod("validatePerIndexComponents"))
+                                                                                     .add(newInvokePoint().onClass(OnDiskFormat.class)
+                                                                                                          .onMethod("validatePerColumnIndexComponents"))
                                                                                      .build();
 
-    protected static ColumnIdentifier V1_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v1", true);
-    protected static ColumnIdentifier V2_COLUMN_IDENTIFIER = ColumnIdentifier.getInterned("v2", true);
+    private static Randomization random;
 
     public static final ClusteringComparator EMPTY_COMPARATOR = new ClusteringComparator();
 
-    public static final PrimaryKey.Factory TEST_FACTORY = Version.LATEST.onDiskFormat().primaryKeyFactory(EMPTY_COMPARATOR);
+    public static final PrimaryKey.Factory TEST_FACTORY = new PrimaryKey.Factory(EMPTY_COMPARATOR);
 
-
-    static
+    @BeforeClass
+    public static void setUpClass()
     {
-        Version.ALL.size();
-    }
+        CQLTester.setUpClass();
 
-    public enum CorruptionType
-    {
-        REMOVED
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        if (!file.tryDelete())
-                            throw new IOException("Unable to delete file: " + file);
-                    }
-                },
-        EMPTY_FILE
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(0).close();
-                    }
-                },
-        TRUNCATED_HEADER
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(2).close();
-                    }
-                },
-        TRUNCATED_DATA
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        // header length is not fixed, use footer length to navigate a given data position
-                        FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(file.length() - CodecUtil.footerLength() - 2).close();
-                    }
-                },
-        TRUNCATED_FOOTER
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        FileChannel.open(file.toPath(), StandardOpenOption.WRITE).truncate(file.length() - CodecUtil.footerLength() + 2).close();
-                    }
-                },
-        APPENDED_DATA
-                {
-                    @Override
-                    public void corrupt(File file) throws IOException
-                    {
-                        try (RandomAccessFile raf = new RandomAccessFile(file.toJavaIOFile(), "rw"))
-                        {
-                            raf.seek(file.length());
-
-                            byte[] corruptedData = new byte[100];
-                            new Random().nextBytes(corruptedData);
-                            raf.write(corruptedData);
-                        }
-                    }
-                };
-
-        public abstract void corrupt(File file) throws IOException;
+        // Ensure that the on-disk format statics are loaded before the test run
+        Version.LATEST.onDiskFormat();
     }
 
     @Rule
     public TestRule testRules = new ResourceLeakDetector();
 
+    @Rule
+    public FailureWatcher failureRule = new FailureWatcher();
+
     @After
     public void removeAllInjections()
     {
         Injections.deleteAll();
+        CassandraRelevantProperties.SAI_MINIMUM_POSTINGS_LEAVES.setInt(64);
+        CassandraRelevantProperties.SAI_POSTINGS_SKIP.setInt(3);
+        V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMIT);
     }
 
-    public static IndexContext createIndexContext(String name, AbstractType<?> validator, ColumnFamilyStore cfs)
+    public static Randomization getRandom()
     {
-        return new IndexContext(cfs.getKeyspaceName(),
-                                cfs.getTableName(),
-                                UTF8Type.instance,
-                                new ClusteringComparator(),
-                                ColumnMetadata.regularColumn("sai", "internal", name, validator),
-                                IndexTarget.Type.SIMPLE,
-                                IndexMetadata.fromSchemaMetadata(name, IndexMetadata.Kind.CUSTOM, null),
-                                cfs);
+        if (random == null)
+            random = new Randomization();
+        return random;
+    }
+
+    public enum CorruptionType
+    {
+        REMOVED
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                if (!file.tryDelete())
+                    throw new IOException("Unable to delete file: " + file);
+            }
+        },
+        EMPTY_FILE
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE))
+                {
+                    channel.truncate(0);
+                }
+            }
+        },
+        TRUNCATED_HEADER
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE))
+                {
+                    channel.truncate(2);
+                }
+            }
+        },
+        TRUNCATED_DATA
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                // header length is not fixed, use footer length to navigate a given data position
+                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE))
+                {
+                    channel.truncate(file.length() - CodecUtil.footerLength() - 2);
+                }
+            }
+        },
+        TRUNCATED_FOOTER
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE))
+                {
+                    channel.truncate(file.length() - CodecUtil.footerLength() + 2);
+                }
+            }
+        },
+        APPENDED_DATA
+        {
+            @Override
+            public void corrupt(File file) throws IOException
+            {
+                try (RandomAccessFile raf = new RandomAccessFile(file.toJavaIOFile(), "rw"))
+                {
+                    raf.seek(file.length());
+
+                    byte[] corruptedData = new byte[100];
+                    new Random().nextBytes(corruptedData);
+                    raf.write(corruptedData);
+                }
+            }
+        };
+
+        public abstract void corrupt(File file) throws IOException;
     }
 
     public static IndexContext createIndexContext(String name, AbstractType<?> validator)
@@ -228,20 +254,12 @@ public class SAITester extends CQLTester
                                 new ClusteringComparator(),
                                 ColumnMetadata.regularColumn("sai", "internal", name, validator),
                                 IndexTarget.Type.SIMPLE,
-                                IndexMetadata.fromSchemaMetadata(name, IndexMetadata.Kind.CUSTOM, null),
-                                MockSchema.newCFS("test_ks"));
+                                IndexMetadata.fromSchemaMetadata(name, IndexMetadata.Kind.CUSTOM, null));
     }
 
-    public static IndexContext createIndexContext(String columnName, String indexName, AbstractType<?> validator)
+    protected StorageAttachedIndexGroup getCurrentIndexGroup()
     {
-        return new IndexContext("test_ks",
-                                "test_cf",
-                                UTF8Type.instance,
-                                new ClusteringComparator(),
-                                ColumnMetadata.regularColumn("sai", "internal", columnName, validator),
-                                IndexTarget.Type.SIMPLE,
-                                IndexMetadata.fromSchemaMetadata(indexName, IndexMetadata.Kind.CUSTOM, null),
-                                MockSchema.newCFS("test_ks"));
+        return StorageAttachedIndexGroup.getIndexGroup(getCurrentColumnFamilyStore());
     }
 
     protected void simulateNodeRestart()
@@ -251,22 +269,19 @@ public class SAITester extends CQLTester
 
     protected void simulateNodeRestart(boolean wait)
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        cfs.indexManager.listIndexes().forEach(index -> {
-            ((StorageAttachedIndexGroup)cfs.indexManager.getIndexGroup(index)).reset();
-        });
-        cfs.indexManager.listIndexes().forEach(index -> cfs.indexManager.buildIndex(index));
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        cfs.indexManager.listIndexes().forEach(index -> ((StorageAttachedIndexGroup)cfs.indexManager.getIndexGroup(index)).reset());
+        cfs.indexManager.listIndexes().forEach(cfs.indexManager::buildIndex);
         cfs.indexManager.executePreJoinTasksBlocking(true);
         if (wait)
         {
-            waitForIndexQueryable();
+            waitForTableIndexesQueryable();
         }
     }
 
     protected void corruptIndexComponent(IndexComponent indexComponent, CorruptionType corruptionType) throws Exception
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
             File file = IndexDescriptor.create(sstable).fileFor(indexComponent);
@@ -276,8 +291,7 @@ public class SAITester extends CQLTester
 
     protected void corruptIndexComponent(IndexComponent indexComponent, IndexContext indexContext, CorruptionType corruptionType) throws Exception
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
             File file = IndexDescriptor.create(sstable).fileFor(indexComponent, indexContext);
@@ -285,36 +299,10 @@ public class SAITester extends CQLTester
         }
     }
 
-    protected void waitForAssert(Runnable runnableAssert, long timeout, TimeUnit unit)
-    {
-        Awaitility.await().dontCatchUncaughtExceptions().atMost(timeout, unit).untilAsserted(runnableAssert::run);
-    }
-
-    protected void waitForAssert(Runnable assertion)
-    {
-        waitForAssert(() -> assertion.run(), ASSERTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    }
-
     protected boolean indexNeedsFullRebuild(String index)
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         return cfs.indexManager.needsFullRebuild(index);
-    }
-
-    protected boolean isIndexQueryable()
-    {
-        return isIndexQueryable(KEYSPACE, currentTable());
-    }
-
-    protected boolean isIndexQueryable(String keyspace, String table)
-    {
-        ColumnFamilyStore cfs = Keyspace.open(keyspace).getColumnFamilyStore(table);
-        for (Index index : cfs.indexManager.listIndexes())
-        {
-            if (!cfs.indexManager.isIndexQueryable(index))
-                return false;
-        }
-        return true;
     }
 
     protected void verifyInitialIndexFailed(String indexName)
@@ -323,24 +311,32 @@ public class SAITester extends CQLTester
         waitForAssert(() -> assertTrue(indexNeedsFullRebuild(indexName)));
     }
 
-    protected boolean verifyChecksum(IndexContext context)
+    protected boolean verifyChecksum(IndexContext indexContext)
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
 
         for (SSTableReader sstable : cfs.getLiveSSTables())
         {
             IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
-            if (!indexDescriptor.validatePerSSTableComponentsChecksum() || !indexDescriptor.validatePerIndexComponentsChecksum(context))
+            if (!indexDescriptor.validatePerSSTableComponents(IndexValidation.CHECKSUM)
+                || !indexDescriptor.validatePerIndexComponents(indexContext, IndexValidation.CHECKSUM))
                 return false;
         }
         return true;
     }
 
-    protected static void assertFailureReason(ReadFailureException e, RequestFailureReason reason)
+    protected boolean validateComponents(IndexContext indexContext)
     {
-        int expected = reason.codeForNativeProtocol();
-        int actual = e.getFailuresMap().get(FBUtilities.getBroadcastAddressAndPort().address);
-        assertEquals(expected, actual);
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+
+        for (SSTableReader sstable : cfs.getLiveSSTables())
+        {
+            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
+            if (!indexDescriptor.validatePerSSTableComponents(IndexValidation.HEADER_FOOTER)
+                || !indexDescriptor.validatePerIndexComponents(indexContext, IndexValidation.HEADER_FOOTER))
+                return false;
+        }
+        return true;
     }
 
     protected Object getMBeanAttribute(ObjectName name, String attribute) throws Exception
@@ -370,46 +366,14 @@ public class SAITester extends CQLTester
         return metricValue;
     }
 
-    public void waitForIndexQueryable()
-    {
-        waitForIndexQueryable(KEYSPACE, currentTable());
-    }
-
-    public void waitForIndexQueryable(String keyspace, String table)
-    {
-        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, table)), 60, TimeUnit.SECONDS);
-    }
-
-    protected void startCompaction() throws Throwable
-    {
-        Iterable<ColumnFamilyStore> tables = StorageService.instance.getValidColumnFamilies(true, false, KEYSPACE, currentTable());
-        tables.forEach(table ->
-        {
-            int gcBefore = CompactionManager.getDefaultGcBefore(table, FBUtilities.nowInSeconds());
-            CompactionManager.instance.submitMaximal(table, gcBefore, false);
-        });
-    }
-
     public void waitForCompactions()
     {
-        waitForAssert(() -> assertFalse(CompactionManager.instance.isCompacting(ColumnFamilyStore.all(), Predicates.alwaysTrue())), 10, TimeUnit.SECONDS);
+        waitForAssert(() -> assertFalse(CompactionManager.instance.isCompacting(ColumnFamilyStore.all(), ssTableReader -> true)), 10, TimeUnit.SECONDS);
     }
 
     protected void waitForCompactionsFinished()
     {
         waitForAssert(() -> assertEquals(0, getCompactionTasks()), 10, TimeUnit.SECONDS);
-    }
-
-    protected void waitForEquals(ObjectName name, ObjectName name2)
-    {
-        waitForAssert(() -> {
-            long jmxValue = ((Number) getMetricValue(name)).longValue();
-            long jmxValue2 = ((Number) getMetricValue(name2)).longValue();
-
-            jmxValue2 += 2; // add 2 for the first 2 queries in setupCluster
-
-            assertEquals(jmxValue, jmxValue2);
-        }, 10, TimeUnit.SECONDS);
     }
 
     protected void waitForEquals(ObjectName name, long value)
@@ -421,8 +385,9 @@ public class SAITester extends CQLTester
     {
         try
         {
-            return new ObjectName(String.format("org.apache.cassandra.metrics:type=StorageAttachedIndex,keyspace=%s,table=%s,index=%s,scope=%s,name=%s",
-                    keyspace, table, index, type, name));
+            return new ObjectName(String.format("org.apache.cassandra.metrics:type=StorageAttachedIndex," +
+                                                "keyspace=%s,table=%s,index=%s,scope=%s,name=%s",
+                                                keyspace, table, index, type, name));
         }
         catch (Throwable ex)
         {
@@ -434,13 +399,29 @@ public class SAITester extends CQLTester
     {
         try
         {
-            return new ObjectName(String.format("org.apache.cassandra.metrics:type=StorageAttachedIndex,keyspace=%s,table=%s,scope=%s,name=%s",
-                    keyspace, table, type, name));
+            return new ObjectName(String.format("org.apache.cassandra.metrics:type=StorageAttachedIndex," +
+                                                "keyspace=%s,table=%s,scope=%s,name=%s",
+                                                keyspace, table, type, name));
         }
         catch (Throwable ex)
         {
             throw Throwables.unchecked(ex);
         }
+    }
+
+    protected long getSegmentBufferSpaceLimit()
+    {
+        return V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.limitBytes();
+    }
+
+    protected long getSegmentBufferUsedBytes()
+    {
+        return V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.currentBytesUsed();
+    }
+
+    protected int getColumnIndexBuildsInProgress()
+    {
+        return SegmentBuilder.getActiveBuilderCount();
     }
 
     protected void upgradeSSTables()
@@ -457,31 +438,28 @@ public class SAITester extends CQLTester
 
     protected long totalDiskSpaceUsed()
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         return cfs.metric.totalDiskSpaceUsed.getCount();
     }
 
     protected long indexDiskSpaceUse()
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        return Objects.requireNonNull(StorageAttachedIndexGroup.getIndexGroup(cfs)).totalDiskUsage();
+        return getCurrentIndexGroup().totalDiskUsage();
     }
 
     protected int getOpenIndexFiles()
     {
-        ColumnFamilyStore cfs = Schema.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
-        return StorageAttachedIndexGroup.getIndexGroup(cfs).openIndexFiles();
+        return getCurrentIndexGroup().openIndexFiles();
     }
 
     protected long getDiskUsage()
     {
-        ColumnFamilyStore cfs = Schema.instance.getKeyspaceInstance(KEYSPACE).getColumnFamilyStore(currentTable());
-        return StorageAttachedIndexGroup.getIndexGroup(cfs).diskUsage();
+        return getCurrentIndexGroup().diskUsage();
     }
 
     protected void verifyNoIndexFiles()
     {
-        assertTrue(indexFiles().size() == 0);
+        assertTrue(indexFiles().isEmpty());
     }
 
     protected void verifyIndexFiles(IndexContext numericIndexContext, IndexContext literalIndexContext, int numericFiles, int literalFiles)
@@ -505,20 +483,17 @@ public class SAITester extends CQLTester
     {
         Set<File> indexFiles = indexFiles();
 
-        for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perSSTableComponents())
+        for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perSSTableIndexComponents(false))
         {
-            Set<File> tableFiles = componentFiles(indexFiles, new Component(Component.Type.CUSTOM, Version.LATEST.fileNameFormatter().format(indexComponent, null)));
+            Set<File> tableFiles = componentFiles(indexFiles, Version.LATEST.makePerSSTableComponent(indexComponent));
             assertEquals(tableFiles.toString(), perSSTableFiles, tableFiles.size());
         }
 
         if (literalIndexContext != null)
         {
-            for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perIndexComponents(literalIndexContext))
+            for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perColumnIndexComponents(literalIndexContext))
             {
-                Set<File> stringIndexFiles = componentFiles(indexFiles,
-                                                            new Component(Component.Type.CUSTOM,
-                                                                          Version.LATEST.fileNameFormatter().format(indexComponent,
-                                                                                                                    literalIndexContext)));
+                Set<File> stringIndexFiles = componentFiles(indexFiles, Version.LATEST.makePerIndexComponent(indexComponent, literalIndexContext));
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(literalCompletionMarkers, stringIndexFiles.size());
                 else
@@ -528,72 +503,15 @@ public class SAITester extends CQLTester
 
         if (numericIndexContext != null)
         {
-            for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perIndexComponents(numericIndexContext))
+            for (IndexComponent indexComponent : Version.LATEST.onDiskFormat().perColumnIndexComponents(numericIndexContext))
             {
-                Set<File> numericIndexFiles = componentFiles(indexFiles,
-                                                             new Component(Component.Type.CUSTOM,
-                                                                           Version.LATEST.fileNameFormatter().format(indexComponent,
-                                                                                                                     numericIndexContext)));
+                Set<File> numericIndexFiles = componentFiles(indexFiles, Version.LATEST.makePerIndexComponent(indexComponent, numericIndexContext));
                 if (isBuildCompletionMarker(indexComponent))
                     assertEquals(numericCompletionMarkers, numericIndexFiles.size());
                 else
                     assertEquals(numericIndexFiles.toString(), numericFiles, numericIndexFiles.size());
             }
         }
-    }
-
-    protected boolean isBuildCompletionMarker(IndexComponent indexComponent)
-    {
-        return (indexComponent == IndexComponent.GROUP_COMPLETION_MARKER) ||
-               (indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER);
-
-    }
-
-    protected Set<File> indexFiles()
-    {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        Set<Component> components = cfs.indexManager.listIndexGroups()
-                                                    .stream()
-                                                    .filter(g -> g instanceof StorageAttachedIndexGroup)
-                                                    .map(Index.Group::getComponents)
-                                                    .flatMap(Set::stream)
-                                                    .collect(Collectors.toSet());
-
-        Set<File> indexFiles = new HashSet<>();
-        for (Component component : components)
-        {
-            List<File> files = cfs.getDirectories().getCFDirectories()
-                    .stream()
-                    .flatMap(dir -> Arrays.stream(dir.tryList()))
-                    .filter(File::isFile)
-                    .filter(f -> f.name().endsWith(component.name))
-                    .collect(Collectors.toList());
-            indexFiles.addAll(files);
-        }
-        return indexFiles;
-    }
-
-    protected ObjectName bufferSpaceObjectName(String name) throws MalformedObjectNameException
-    {
-        return new ObjectName(String.format("org.apache.cassandra.metrics:type=StorageAttachedIndex,name=%s", name));
-    }
-
-    protected long getSegmentBufferSpaceLimit() throws Exception
-    {
-        ObjectName limitBytesName = bufferSpaceObjectName("SegmentBufferSpaceLimitBytes");
-        return (long) (Long) getMetricValue(limitBytesName);
-    }
-
-    protected Object getSegmentBufferUsedBytes() throws Exception
-    {
-        ObjectName usedBytesName = bufferSpaceObjectName("SegmentBufferSpaceUsedBytes");
-        return getMetricValue(usedBytesName);
-    }
-
-    protected Object getColumnIndexBuildsInProgress() throws Exception
-    {
-        ObjectName buildersInProgressName = bufferSpaceObjectName("ColumnIndexBuildsInProgress");
-        return getMetricValue(buildersInProgressName);
     }
 
     protected void verifySSTableIndexes(String indexName, int count)
@@ -610,8 +528,8 @@ public class SAITester extends CQLTester
 
     protected void verifySSTableIndexes(String indexName, int sstableContextCount, int sstableIndexCount)
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        StorageAttachedIndexGroup indexGroup = StorageAttachedIndexGroup.getIndexGroup(cfs);
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        StorageAttachedIndexGroup indexGroup = getCurrentIndexGroup();
         int contextCount = indexGroup.sstableContextManager().size();
         assertEquals("Expected " + sstableContextCount +" SSTableContexts, but got " + contextCount, sstableContextCount, contextCount);
 
@@ -620,9 +538,77 @@ public class SAITester extends CQLTester
         assertEquals("Expected " + sstableIndexCount +" SSTableIndexes, but got " + sstableIndexes.toString(), sstableIndexCount, sstableIndexes.size());
     }
 
+    protected boolean isBuildCompletionMarker(IndexComponent indexComponent)
+    {
+        return (indexComponent == IndexComponent.GROUP_COMPLETION_MARKER) ||
+               (indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER);
+
+    }
+
+    protected Set<File> indexFiles()
+    {
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        Set<Component> components = cfs.indexManager.listIndexGroups()
+                                                    .stream()
+                                                    .filter(g -> g instanceof StorageAttachedIndexGroup)
+                                                    .map(Index.Group::getComponents)
+                                                    .flatMap(Set::stream)
+                                                    .collect(Collectors.toSet());
+
+        Set<File> indexFiles = new HashSet<>();
+        for (Component component : components)
+        {
+            List<File> files = cfs.getDirectories().getCFDirectories()
+                                  .stream()
+                                  .flatMap(dir -> Arrays.stream(dir.tryList()))
+                                  .filter(File::isFile)
+                                  .filter(f -> f.name().endsWith(component.name))
+                                  .collect(Collectors.toList());
+            indexFiles.addAll(files);
+        }
+        return indexFiles;
+    }
+
+    protected Set<File> componentFiles(Collection<File> indexFiles, Component component)
+    {
+        return indexFiles.stream().filter(c -> c.name().endsWith(component.name)).collect(Collectors.toSet());
+    }
+
+    public String createTable(String query)
+    {
+        return createTable(KEYSPACE, query);
+    }
+
+    @Override
+    public UntypedResultSet execute(String query, Object... values)
+    {
+        return executeFormattedQuery(formatQuery(query), values);
+    }
+
+    @Override
+    public Session sessionNet()
+    {
+        return sessionNet(getDefaultVersion());
+    }
+
+    public void flush(String keyspace, String table)
+    {
+        ColumnFamilyStore store = Keyspace.open(keyspace).getColumnFamilyStore(table);
+        if (store != null)
+            store.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
+    }
+
+    public void compact(String keyspace, String table)
+    {
+
+        ColumnFamilyStore store = Keyspace.open(keyspace).getColumnFamilyStore(table);
+        if (store != null)
+            store.forceMajorCompaction();
+    }
+
     protected void truncate(boolean snapshot)
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         if (snapshot)
             cfs.truncateBlocking();
         else
@@ -636,13 +622,12 @@ public class SAITester extends CQLTester
 
     protected void reloadSSTableIndex()
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        StorageAttachedIndexGroup.getIndexGroup(cfs).unsafeReload();
+        getCurrentIndexGroup().unsafeReload();
     }
 
     protected void runInitializationTask() throws Exception
     {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         for (Index i : cfs.indexManager.listIndexes())
         {
             assert i instanceof StorageAttachedIndex;
@@ -656,21 +641,52 @@ public class SAITester extends CQLTester
         return CompactionManager.instance.getActiveCompactions() + CompactionManager.instance.getPendingTasks();
     }
 
-    protected String getSingleTraceStatement(Session session, String query, String contains) throws Throwable
+    protected int snapshot(String snapshotName)
     {
-        query = String.format(query, KEYSPACE + "." + currentTable());
-        QueryTrace trace = session.execute(session.prepare(query).bind().enableTracing()).getExecutionInfo().getQueryTrace();
-        waitForTracingEvents();
-
-        for (QueryTrace.Event event : trace.getEvents())
-        {
-            if (event.getDescription().contains(contains))
-                return event.getDescription();
-        }
-        return null;
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        Set<SSTableReader> snapshottedSSTables = cfs.snapshot(snapshotName);
+        return snapshottedSSTables.size();
     }
 
-    protected void assertNumRows(int expected, String query, Object... args) throws Throwable
+    protected void restoreSnapshot(String snapshot)
+    {
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        Directories.SSTableLister lister = cfs.getDirectories().sstableLister(Directories.OnTxnErr.IGNORE).snapshots(snapshot);
+        restore(cfs, lister);
+    }
+
+    protected void restore(ColumnFamilyStore cfs, Directories.SSTableLister lister)
+    {
+        File dataDirectory = cfs.getDirectories().getDirectoryForNewSSTables();
+
+        for (File file : lister.listFiles())
+        {
+            file.tryMove(new File(dataDirectory.absolutePath() + File.pathSeparator() + file.name()));
+        }
+        cfs.loadNewSSTables();
+    }
+
+    public static void copyTo(DataInput in, OutputStream out, int length) throws IOException
+    {
+        byte[] buffer = new byte[64 * 1024];
+        int copiedBytes = 0;
+
+        while (copiedBytes + buffer.length < length)
+        {
+            in.readFully(buffer);
+            out.write(buffer);
+            copiedBytes += buffer.length;
+        }
+
+        if (copiedBytes < length)
+        {
+            int left = length - copiedBytes;
+            in.readFully(buffer, 0, left);
+            out.write(buffer, 0, left);
+        }
+    }
+
+    protected void assertNumRows(int expected, String query, Object... args)
     {
         ResultSet rs = executeNet(String.format(query, args));
         assertEquals(expected, rs.all().size());
@@ -682,36 +698,6 @@ public class SAITester extends CQLTester
                          .add(newInvokePoint().onClass(invokeClass).onMethod(method))
                          .add(newActionBuilder().actions().doThrow(exception, quote("Injected failure!")))
                          .build();
-    }
-
-    protected int snapshot(String snapshotName)
-    {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        Set<SSTableReader> snapshottedSSTables = cfs.snapshot(snapshotName);
-        return snapshottedSSTables.size();
-    }
-
-    protected List<String> restoreSnapshot(String snapshot)
-    {
-        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
-        Directories.SSTableLister lister = cfs.getDirectories().sstableLister(Directories.OnTxnErr.IGNORE).snapshots(snapshot);
-        return restore(cfs, lister);
-    }
-
-    protected List<String> restore(ColumnFamilyStore cfs, Directories.SSTableLister lister)
-    {
-        File dataDirectory = cfs.getDirectories().getDirectoryForNewSSTables();
-
-        List<String> fileNames = new ArrayList<>();
-        for (File file : lister.listFiles())
-        {
-            if (file.tryMove(new File(dataDirectory.absolutePath() + File.pathSeparator() + file.name())))
-            {
-                fileNames.add(file.name());
-            }
-        }
-        cfs.loadNewSSTables();
-        return fileNames;
     }
 
     protected void assertValidationCount(int perSSTable, int perColumn)
@@ -746,7 +732,7 @@ public class SAITester extends CQLTester
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(table);
         for (SSTable sstable : cfs.getLiveSSTables())
         {
-            Set<Component> components = sstable.components;
+            Set<Component> components = sstable.getComponents();
             StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
             Set<Component> ndiComponents = group == null ? Collections.emptySet() : group.getComponents();
 
@@ -762,37 +748,157 @@ public class SAITester extends CQLTester
         }
     }
 
-    protected Set<File> componentFiles(Collection<File> indexFiles, Component component)
+    protected static void setBDKPostingsWriterSizing(int minimumPostingsLeaves, int postingsSkip)
     {
-        return indexFiles.stream().filter(c -> c.name().endsWith(component.name)).collect(Collectors.toSet());
+        CassandraRelevantProperties.SAI_MINIMUM_POSTINGS_LEAVES.setString(Integer.toString(minimumPostingsLeaves));
+        CassandraRelevantProperties.SAI_POSTINGS_SKIP.setString(Integer.toString(postingsSkip));
     }
 
-    protected Set<File> componentFiles(Collection<File> indexFiles, IndexComponent indexComponent, IndexContext indexContext)
+    protected static void setSegmentWriteBufferSpace(final int segmentSize)
     {
-        String componentName = Version.LATEST.fileNameFormatter().format(indexComponent, indexContext);
-        return indexFiles.stream().filter(c -> c.name().endsWith(componentName)).collect(Collectors.toSet());
+        V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(segmentSize);
     }
 
-    protected static void setSegmentWriteBufferSpace(final int segmentSize) throws Exception
+    protected String getSingleTraceStatement(Session session, String query, String contains)
     {
-        NamedMemoryLimiter limiter = (NamedMemoryLimiter) V1OnDiskFormat.class.getDeclaredField("SEGMENT_BUILD_MEMORY_LIMITER").get(null);
-        Field limitBytes = limiter.getClass().getDeclaredField("limitBytes");
-        limitBytes.setAccessible(true);
-        Field modifiersField = Field.class.getDeclaredField("modifiers");
-        modifiersField.setAccessible(true);
-        modifiersField.setInt(limitBytes, limitBytes.getModifiers() & ~Modifier.FINAL);
-        limitBytes.set(limiter, segmentSize);
-        limitBytes = V1OnDiskFormat.class.getDeclaredField("SEGMENT_BUILD_MEMORY_LIMIT");
-        limitBytes.setAccessible(true);
-        modifiersField.setInt(limitBytes, limitBytes.getModifiers() & ~Modifier.FINAL);
-        limitBytes.set(limiter, segmentSize);
+        query = String.format(query, KEYSPACE + '.' + currentTable());
+        QueryTrace trace = session.execute(session.prepare(query).bind().enableTracing()).getExecutionInfo().getQueryTrace();
+        waitForTracingEvents();
+
+        for (QueryTrace.Event event : trace.getEvents())
+        {
+            if (event.getDescription().contains(contains))
+                return event.getDescription();
+        }
+        return null;
     }
 
+    /**
+     *  Because the tracing executor is single threaded, submitting an empty event should ensure
+     *  that all tracing events mutations have been applied.
+     */
+    protected void waitForTracingEvents()
+    {
+        try
+        {
+            Stage.TRACING.executor().submit(() -> {}).get();
+        }
+        catch (Throwable t)
+        {
+            JVMStabilityInspector.inspectThrowable(t);
+            logger.error("Failed to wait for tracing events", t);
+        }
+    }
+
+    public static class Randomization
+    {
+        private final long seed;
+        private final Random random;
+
+        Randomization()
+        {
+            seed = TEST_RANDOM_SEED.getLong(System.nanoTime());
+            random = new Random(seed);
+        }
+
+        public void printSeedOnFailure()
+        {
+            logger.error("Randomized test failed. To rerun test use -D{}={}", TEST_RANDOM_SEED.getKey(), seed);
+        }
+
+        public int nextInt()
+        {
+            return random.nextInt();
+        }
+
+        public int nextInt(int max)
+        {
+            return RandomInts.randomInt(random, max);
+        }
+
+        public int nextIntBetween(int minValue, int maxValue)
+        {
+            return RandomInts.randomIntBetween(random, minValue, maxValue);
+        }
+
+        public long nextLong()
+        {
+            return random.nextLong();
+        }
+
+        public short nextShort()
+        {
+            return (short)random.nextInt(Short.MAX_VALUE + 1);
+        }
+
+        public byte nextByte()
+        {
+            return (byte)random.nextInt(Byte.MAX_VALUE + 1);
+        }
+
+        public BigInteger nextBigInteger(int maxNumBits)
+        {
+            return new BigInteger(RandomInts.randomInt(random, maxNumBits), random);
+        }
+
+        public BigInteger nextBigInteger(int minNumBits, int maxNumBits)
+        {
+            return new BigInteger(RandomInts.randomIntBetween(random, minNumBits, maxNumBits), random);
+        }
+
+        public BigDecimal nextBigDecimal(int minUnscaledValue, int maxUnscaledValue, int minScale, int maxScale)
+        {
+            return BigDecimal.valueOf(RandomInts.randomIntBetween(random, minUnscaledValue, maxUnscaledValue),
+                                      RandomInts.randomIntBetween(random, minScale, maxScale));
+        }
+
+        public float nextFloat()
+        {
+            return random.nextFloat();
+        }
+
+        public double nextDouble()
+        {
+            return random.nextDouble();
+        }
+
+        public String nextAsciiString(int minLength, int maxLength)
+        {
+            return RandomStrings.randomAsciiOfLengthBetween(random, minLength, maxLength);
+        }
+
+        public String nextTextString(int minLength, int maxLength)
+        {
+            return RandomStrings.randomRealisticUnicodeOfLengthBetween(random, minLength, maxLength);
+        }
+
+        public boolean nextBoolean()
+        {
+            return random.nextBoolean();
+        }
+
+        public void nextBytes(byte[] bytes)
+        {
+            random.nextBytes(bytes);
+        }
+    }
+
+    public static class FailureWatcher extends TestWatcher
+    {
+        @Override
+        protected void failed(Throwable e, Description description)
+        {
+            if (random != null)
+                random.printSeedOnFailure();
+        }
+    }
     /**
      * Run repeated verification task concurrently with target test
      */
     protected static class TestWithConcurrentVerification
     {
+        private static final int verificationMaxInMs = 300_000; // 300s
+
         private final Runnable verificationTask;
         private final CountDownLatch verificationStarted = new CountDownLatch(1);
 
@@ -800,7 +906,6 @@ public class SAITester extends CQLTester
         private final CountDownLatch taskCompleted = new CountDownLatch(1);
 
         private final int verificationIntervalInMs;
-        private final int verificationMaxInMs = 300_000; // 300s
 
         public TestWithConcurrentVerification(Runnable verificationTask, Runnable targetTask)
         {

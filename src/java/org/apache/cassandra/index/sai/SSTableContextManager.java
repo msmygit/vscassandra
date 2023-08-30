@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index.sai;
 
-import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
@@ -34,12 +33,12 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.utils.Pair;
 
 /**
- * Manage per-sstable {@link SSTableContext} for {@link StorageAttachedIndexGroup}
+ * Manages per-sstable {@link SSTableContext}s for {@link StorageAttachedIndexGroup}
  */
 @ThreadSafe
 public class SSTableContextManager
 {
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger logger = LoggerFactory.getLogger(SSTableContextManager.class);
 
     private final ConcurrentHashMap<SSTableReader, SSTableContext> sstableContexts = new ConcurrentHashMap<>();
 
@@ -48,13 +47,12 @@ public class SSTableContextManager
      *
      * @param removed SSTables being removed
      * @param added SSTables being added
-     * @param validate if true, header and footer will be validated.
+     * @param validation Controls how indexes should be validated
      *
      * @return a set of contexts for SSTables with valid per-SSTable components, and a set of
      * SSTables with invalid or missing components
      */
-    @SuppressWarnings("resource")
-    public Pair<Set<SSTableContext>, Set<SSTableReader>> update(Collection<SSTableReader> removed, Iterable<SSTableReader> added, boolean validate)
+    public Pair<Set<SSTableContext>, Set<SSTableReader>> update(Collection<SSTableReader> removed, Iterable<SSTableReader> added, IndexValidation validation)
     {
         release(removed);
 
@@ -70,7 +68,7 @@ public class SSTableContextManager
 
             IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
 
-            if (!indexDescriptor.isPerSSTableBuildComplete())
+            if (!indexDescriptor.isPerSSTableIndexBuildComplete())
             {
                 // Don't even try to validate or add the context if the completion marker is missing.
                 continue;
@@ -79,9 +77,8 @@ public class SSTableContextManager
             try
             {
                 // Only validate on restart or newly refreshed SSTable. Newly built files are unlikely to be corrupted.
-                if (validate && !sstableContexts.containsKey(sstable) && !indexDescriptor.validatePerSSTableComponents())
+                if (!sstableContexts.containsKey(sstable) && !indexDescriptor.validatePerSSTableComponents(validation))
                 {
-                    logger.warn(indexDescriptor.logMessage("Invalid per-SSTable component for SSTable {}"), sstable.descriptor);
                     invalid.add(sstable);
                     removeInvalidSSTableContext(sstable);
                     continue;
@@ -115,7 +112,7 @@ public class SSTableContextManager
     }
 
     /**
-     * @return total disk usage of all per-sstable index files
+     * @return total disk usage (in bytes) of all per-sstable index files
      */
     long diskUsage()
     {
@@ -140,11 +137,11 @@ public class SSTableContextManager
         sstableContexts.clear();
     }
 
-    @SuppressWarnings("resource")
+    @SuppressWarnings("EmptyTryBlock")
     private void removeInvalidSSTableContext(SSTableReader sstable)
     {
-        SSTableContext invalidContext = sstableContexts.remove(sstable);
-        if (invalidContext != null)
-            invalidContext.close();
+        try (SSTableContext ignored = sstableContexts.remove(sstable))
+        {
+        }
     }
 }

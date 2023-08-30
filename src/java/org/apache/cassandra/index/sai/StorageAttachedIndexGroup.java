@@ -17,13 +17,11 @@
  */
 package org.apache.cassandra.index.sai;
 
-import java.lang.invoke.MethodHandles;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -32,7 +30,7 @@ import javax.annotation.concurrent.ThreadSafe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-
+import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +44,7 @@ import org.apache.cassandra.db.lifecycle.Tracker;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
@@ -74,13 +73,12 @@ import org.apache.cassandra.utils.Throwables;
 @ThreadSafe
 public class StorageAttachedIndexGroup implements Index.Group, INotificationConsumer
 {
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger logger = LoggerFactory.getLogger(StorageAttachedIndexGroup.class);
 
     private final TableQueryMetrics queryMetrics;
     private final TableStateMetrics stateMetrics;
     private final IndexGroupMetrics groupMetrics;
-    
-    private final Set<StorageAttachedIndex> indices = Sets.newConcurrentHashSet();
+    private final Set<StorageAttachedIndex> indexes = Sets.newConcurrentHashSet();
     private final ColumnFamilyStore baseCfs;
 
     private final SSTableContextManager contextManager;
@@ -100,32 +98,32 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     @Nullable
     public static StorageAttachedIndexGroup getIndexGroup(ColumnFamilyStore cfs)
     {
-        return (StorageAttachedIndexGroup)cfs.indexManager.getIndexGroup(StorageAttachedIndexGroup.class);
+        return (StorageAttachedIndexGroup) cfs.indexManager.getIndexGroup(StorageAttachedIndexGroup.class);
     }
 
     @Override
     public Set<Index> getIndexes()
     {
-        return ImmutableSet.copyOf(indices);
+        return ImmutableSet.copyOf(indexes);
     }
 
     @Override
     public void addIndex(Index index)
     {
         assert index instanceof StorageAttachedIndex;
-        indices.add((StorageAttachedIndex) index);
+        indexes.add((StorageAttachedIndex) index);
     }
 
     @Override
     public void removeIndex(Index index)
     {
         assert index instanceof StorageAttachedIndex;
-        boolean removed = indices.remove(index);
+        boolean removed = indexes.remove(index);
         assert removed : "Cannot remove non-existing index " + index;
         /*
          * per index files are dropped via {@link StorageAttachedIndex#getInvalidateTask()}
          */
-        if (indices.isEmpty())
+        if (indexes.isEmpty())
         {
             for (SSTableReader sstable : contextManager.sstables())
                 sstable.unregisterComponents(IndexDescriptor.create(sstable).getLivePerSSTableComponents(), baseCfs.getTracker());
@@ -145,32 +143,10 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     }
 
     @Override
-    public void unload()
-    {
-        contextManager.clear();
-
-        queryMetrics.release();
-        groupMetrics.release();
-        stateMetrics.release();
-        baseCfs.getTracker().unsubscribe(this);
-    }
-
-    @Override
-    public boolean supportsMultipleContains()
-    {
-        return true;
-    }
-
-    @Override
-    public boolean supportsDisjunction()
-    {
-        return true;
-    }
-
-    @Override
+    @SuppressWarnings("SuspiciousMethodCalls")
     public boolean containsIndex(Index index)
     {
-        return index instanceof StorageAttachedIndex && indices.contains(index);
+        return indexes.contains(index);
     }
 
     @Override
@@ -183,28 +159,25 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                                     Memtable memtable)
     {
         final Set<Index.Indexer> indexers =
-                indices.stream().filter(indexSelector)
-                                .map(i -> i.indexerFor(key, columns, nowInSec, ctx, transactionType, memtable))
-                                .filter(Objects::nonNull)
-                                .collect(Collectors.toSet());
+                indexes.stream().filter(indexSelector)
+                       .map(i -> i.indexerFor(key, columns, nowInSec, ctx, transactionType, memtable))
+                       .filter(Objects::nonNull)
+                       .collect(Collectors.toSet());
 
-        return indexers.isEmpty() ? null : new StorageAttachedIndex.IndexerAdapter()
+        return indexers.isEmpty() ? null : new Index.Indexer()
         {
             @Override
             public void insertRow(Row row)
             {
-                forEach(indexer -> indexer.insertRow(row));
+                for (Index.Indexer indexer : indexers)
+                    indexer.insertRow(row);
             }
 
             @Override
             public void updateRow(Row oldRow, Row newRow)
             {
-                forEach(indexer -> indexer.updateRow(oldRow, newRow));
-            }
-
-            private void forEach(Consumer<Index.Indexer> action)
-            {
-                indexers.forEach(action::accept);
+                for (Index.Indexer indexer : indexers)
+                    indexer.updateRow(oldRow, newRow);
             }
         };
     }
@@ -212,23 +185,23 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     @Override
     public StorageAttachedIndexQueryPlan queryPlanFor(RowFilter rowFilter)
     {
-        return StorageAttachedIndexQueryPlan.create(baseCfs, queryMetrics, indices, rowFilter);
+        return StorageAttachedIndexQueryPlan.create(baseCfs, queryMetrics, indexes, rowFilter);
     }
 
     @Override
     public SSTableFlushObserver getFlushObserver(Descriptor descriptor, LifecycleNewTracker tracker, TableMetadata tableMetadata)
     {
-        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata.partitioner, tableMetadata.comparator);
+        IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, tableMetadata.comparator);
         try
         {
-            return new StorageAttachedIndexWriter(indexDescriptor, indices, tracker);
+            return StorageAttachedIndexWriter.createFlushObserverWriter(indexDescriptor, indexes, tracker);
         }
         catch (Throwable t)
         {
             String message = "Unable to create storage-attached index writer on SSTable flush." +
                              " All indexes from this table are going to be marked as non-queryable and will need to be rebuilt.";
             logger.error(indexDescriptor.logMessage(message), t);
-            indices.forEach(StorageAttachedIndex::makeIndexNonQueryable);
+            indexes.forEach(StorageAttachedIndex::makeIndexNonQueryable);
             return null;
         }
     }
@@ -243,16 +216,15 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     @Override
     public Set<Component> getComponents()
     {
-        return getComponents(indices);
+        return getComponents(indexes);
     }
 
-    static Set<Component> getComponents(Collection<StorageAttachedIndex> indices)
+    private Set<Component> getComponents(Collection<StorageAttachedIndex> indices)
     {
         Set<Component> components = Version.LATEST.onDiskFormat()
-                                                  .perSSTableComponents()
+                                                  .perSSTableIndexComponents(baseCfs.metadata.get().comparator.size() > 0)
                                                   .stream()
-                                                  .map(c -> new Component(Component.Type.CUSTOM,
-                                                                          Version.LATEST.fileNameFormatter().format(c, null)))
+                                                  .map(Version.LATEST::makePerSSTableComponent)
                                                   .collect(Collectors.toSet());
         indices.forEach(index -> components.addAll(index.getComponents()));
         return components;
@@ -265,7 +237,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     {
         IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
         Set<Component> components = indexDescriptor.getLivePerSSTableComponents();
-        indices.stream().forEach(index -> components.addAll(indexDescriptor.getLivePerIndexComponents(index.getIndexContext())));
+        indices.forEach(index -> components.addAll(indexDescriptor.getLivePerIndexComponents(index.getIndexContext())));
         return components;
     }
 
@@ -277,25 +249,24 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         {
             SSTableAddedNotification notice = (SSTableAddedNotification) notification;
 
-            // Avoid validation for index files just written following Memtable flush. ZCS streaming should
-            // validate index checksum.
-            boolean validate = notice.fromStreaming() || !notice.memtable().isPresent();
-            onSSTableChanged(Collections.emptySet(), notice.added, indices, validate);
+            // Avoid validation for index files just written following Memtable flush. Otherwise, the new SSTables have
+            // come either from import, streaming, or a standalone tool, where they have also already been validated.
+            onSSTableChanged(Collections.emptySet(), notice.added, indexes, IndexValidation.NONE);
         }
         else if (notification instanceof SSTableListChangedNotification)
         {
             SSTableListChangedNotification notice = (SSTableListChangedNotification) notification;
 
             // Avoid validation for index files just written during compaction.
-            onSSTableChanged(notice.removed, notice.added, indices, false);
+            onSSTableChanged(notice.removed, notice.added, indexes, IndexValidation.NONE);
         }
         else if (notification instanceof MemtableRenewedNotification)
         {
-            indices.forEach(index -> index.getIndexContext().renewMemtable(((MemtableRenewedNotification) notification).renewed));
+            indexes.forEach(index -> index.getIndexContext().getMemtableIndexManager().renewMemtable(((MemtableRenewedNotification) notification).renewed));
         }
         else if (notification instanceof MemtableDiscardedNotification)
         {
-            indices.forEach(index -> index.getIndexContext().discardMemtable(((MemtableDiscardedNotification) notification).memtable));
+            indexes.forEach(index -> index.getIndexContext().getMemtableIndexManager().discardMemtable(((MemtableDiscardedNotification) notification).memtable));
         }
     }
 
@@ -327,9 +298,9 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      * files being corrupt or being unable to successfully update their views
      */
     synchronized Set<StorageAttachedIndex> onSSTableChanged(Collection<SSTableReader> removed, Iterable<SSTableReader> added,
-                                                            Set<StorageAttachedIndex> indexes, boolean validate)
+                                                            Set<StorageAttachedIndex> indexes, IndexValidation validation)
     {
-        Pair<Set<SSTableContext>, Set<SSTableReader>> results = contextManager.update(removed, added, validate);
+        Pair<Set<SSTableContext>, Set<SSTableReader>> results = contextManager.update(removed, added, validation);
 
         if (!results.right.isEmpty())
         {
@@ -338,19 +309,19 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
                 indexDescriptor.deletePerSSTableIndexComponents();
                 // Column indexes are invalid if their SSTable-level components are corrupted so delete
                 // their associated index files and mark them non-queryable.
-                indices.forEach(index -> {
+                indexes.forEach(index -> {
                     indexDescriptor.deleteColumnIndex(index.getIndexContext());
                     index.makeIndexNonQueryable();
                 });
             });
-            return indices;
+            return indexes;
         }
 
         Set<StorageAttachedIndex> incomplete = new HashSet<>();
 
         for (StorageAttachedIndex index : indexes)
         {
-            Set<SSTableContext> invalid = index.getIndexContext().onSSTableChanged(removed, results.left, validate);
+            Collection<SSTableContext> invalid = index.getIndexContext().onSSTableChanged(removed, results.left, validation);
 
             if (!invalid.isEmpty())
             {
@@ -364,6 +335,42 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
         return incomplete;
     }
 
+    @Override
+    public boolean validateSSTableAttachedIndexes(Collection<SSTableReader> sstables, boolean throwOnIncomplete)
+    {
+        boolean complete = true;
+
+        for (SSTableReader sstable : sstables)
+        {
+            IndexDescriptor indexDescriptor = IndexDescriptor.create(sstable);
+
+            if (indexDescriptor.isPerSSTableIndexBuildComplete())
+            {
+                indexDescriptor.checksumPerSSTableComponents();
+
+                for (StorageAttachedIndex index : indexes)
+                {
+                    if (indexDescriptor.isPerColumnIndexBuildComplete(index.getIndexContext()))
+                        indexDescriptor.checksumPerIndexComponents(index.getIndexContext());
+                    else if (throwOnIncomplete)
+                        throw new IllegalStateException(indexDescriptor.logMessage("Incomplete per-column index build"));
+                    else
+                        complete = false;
+                }
+            }
+            else if (throwOnIncomplete)
+            {
+                throw new IllegalStateException(indexDescriptor.logMessage("Incomplete per-SSTable index build"));
+            }
+            else
+            {
+                complete = false;
+            }
+        }
+
+        return complete;    
+    }
+
     /**
      * open index files by checking number of {@link SSTableContext} and {@link SSTableIndex},
      * so transient open files during validation and files that are still open for in-flight requests will not be tracked.
@@ -372,11 +379,11 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      */
     public int openIndexFiles()
     {
-        return contextManager.openFiles() + indices.stream().mapToInt(index -> index.getIndexContext().openPerIndexFiles()).sum();
+        return contextManager.openFiles() + indexes.stream().mapToInt(index -> index.getIndexContext().openPerIndexFiles()).sum();
     }
 
     /**
-     * @return total disk usage of all per-sstable index files
+     * @return total disk usage (in bytes) of all per-sstable index files
      */
     public long diskUsage()
     {
@@ -388,7 +395,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      */
     public int totalIndexBuildsInProgress()
     {
-        return (int) indices.stream().filter(i -> baseCfs.indexManager.isIndexBuilding(i.getIndexMetadata().name)).count();
+        return (int) indexes.stream().filter(i -> baseCfs.indexManager.isIndexBuilding(i.getIndexMetadata().name)).count();
     }
 
     /**
@@ -396,7 +403,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      */
     public int totalQueryableIndexCount()
     {
-        return (int) indices.stream().filter(i -> baseCfs.indexManager.isIndexQueryable(i)).count();
+        return Ints.checkedCast(indexes.stream().filter(baseCfs.indexManager::isIndexQueryable).count());
     }
 
     /**
@@ -404,7 +411,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      */
     public int totalIndexCount()
     {
-        return indices.size();
+        return indexes.size();
     }
 
     /**
@@ -412,7 +419,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
      */
     public long totalDiskUsage()
     {
-        return diskUsage() + indices.stream().flatMap(i -> i.getIndexContext().getView().getIndexes().stream())
+        return diskUsage() + indexes.stream().flatMap(index -> index.getIndexContext().getView().getIndexes().stream())
                                     .mapToLong(SSTableIndex::sizeOfPerColumnComponents).sum();
     }
 
@@ -433,14 +440,14 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     }
 
     /**
-     * simulate index loading on restart with index file validation validation
+     * simulate index loading on restart with index file validation
      */
     @VisibleForTesting
     public void unsafeReload()
     {
         contextManager.clear();
-        onSSTableChanged(baseCfs.getLiveSSTables(), Collections.emptySet(), indices, false);
-        onSSTableChanged(Collections.emptySet(), baseCfs.getLiveSSTables(), indices, true);
+        onSSTableChanged(baseCfs.getLiveSSTables(), Collections.emptySet(), indexes, IndexValidation.NONE);
+        onSSTableChanged(Collections.emptySet(), baseCfs.getLiveSSTables(), indexes, IndexValidation.HEADER_FOOTER);
     }
 
     /**
@@ -450,7 +457,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
     public void reset()
     {
         contextManager.clear();
-        indices.forEach(index -> index.makeIndexNonQueryable());
-        onSSTableChanged(baseCfs.getLiveSSTables(), Collections.emptySet(), indices, false);
+        indexes.forEach(StorageAttachedIndex::makeIndexNonQueryable);
+        onSSTableChanged(baseCfs.getLiveSSTables(), Collections.emptySet(), indexes, IndexValidation.NONE);
     }
 }

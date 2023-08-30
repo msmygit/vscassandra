@@ -15,80 +15,106 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
+import org.apache.cassandra.config.CassandraRelevantProperties;
+import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.index.sai.disk.PerSSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.disk.v1.bitpack.NumericValuesWriter;
+import org.apache.cassandra.index.sai.disk.v1.keystore.KeyStoreWriter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.lucene.util.IOUtils;
+import org.apache.cassandra.io.util.FileUtils;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
-/**
- * Writes all SSTable-attached index token and offset structures.
- */
-public class SSTableComponentsWriter implements PerSSTableWriter
+public class SSTableComponentsWriter implements PerSSTableIndexWriter
 {
     protected static final Logger logger = LoggerFactory.getLogger(SSTableComponentsWriter.class);
 
     private final IndexDescriptor indexDescriptor;
-    private final NumericValuesWriter tokenWriter;
-    private final NumericValuesWriter offsetWriter;
     private final MetadataWriter metadataWriter;
+    private final NumericValuesWriter partitionSizeWriter;
+    private final NumericValuesWriter tokenWriter;
+    private final KeyStoreWriter partitionKeysWriter;
+    private final KeyStoreWriter clusteringKeysWriter;
 
-    private long currentKeyPartitionOffset;
+    private long partitionId = -1;
 
+    @SuppressWarnings({"resource", "RedundantSuppression"})
     public SSTableComponentsWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         this.indexDescriptor = indexDescriptor;
-
         this.metadataWriter = new MetadataWriter(indexDescriptor.openPerSSTableOutput(IndexComponent.GROUP_META));
-
-        this.tokenWriter = new NumericValuesWriter(indexDescriptor.componentName(IndexComponent.TOKEN_VALUES),
-                                                   indexDescriptor.openPerSSTableOutput(IndexComponent.TOKEN_VALUES),
-                                                   metadataWriter, false);
-        this.offsetWriter = new NumericValuesWriter(indexDescriptor.componentName(IndexComponent.OFFSETS_VALUES),
-                                                    indexDescriptor.openPerSSTableOutput(IndexComponent.OFFSETS_VALUES),
-                                                    metadataWriter, true);
+        this.tokenWriter = new NumericValuesWriter(indexDescriptor, IndexComponent.TOKEN_VALUES, metadataWriter, false);
+        this.partitionSizeWriter = new NumericValuesWriter(indexDescriptor, IndexComponent.PARTITION_SIZES, metadataWriter, true);
+        IndexOutputWriter partitionKeyBlocksWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.PARTITION_KEY_BLOCKS);
+        NumericValuesWriter partitionKeyBlockOffsetWriter = new NumericValuesWriter(indexDescriptor, IndexComponent.PARTITION_KEY_BLOCK_OFFSETS, metadataWriter, true);
+        this.partitionKeysWriter = new KeyStoreWriter(indexDescriptor.componentName(IndexComponent.PARTITION_KEY_BLOCKS),
+                                                      metadataWriter,
+                                                      partitionKeyBlocksWriter,
+                                                      partitionKeyBlockOffsetWriter,
+                                                      CassandraRelevantProperties.SAI_SORTED_TERMS_PARTITION_BLOCK_SHIFT.getInt(),
+                                                      false);
+        if (indexDescriptor.hasClustering())
+        {
+            IndexOutputWriter clusteringKeyBlocksWriter = indexDescriptor.openPerSSTableOutput(IndexComponent.CLUSTERING_KEY_BLOCKS);
+            NumericValuesWriter clusteringKeyBlockOffsetWriter = new NumericValuesWriter(indexDescriptor, IndexComponent.CLUSTERING_KEY_BLOCK_OFFSETS, metadataWriter, true);
+            this.clusteringKeysWriter = new KeyStoreWriter(indexDescriptor.componentName(IndexComponent.CLUSTERING_KEY_BLOCKS),
+                                                           metadataWriter,
+                                                           clusteringKeyBlocksWriter,
+                                                           clusteringKeyBlockOffsetWriter,
+                                                           CassandraRelevantProperties.SAI_SORTED_TERMS_CLUSTERING_BLOCK_SHIFT.getInt(),
+                                                           true);
+        }
+        else
+        {
+            this.clusteringKeysWriter = null;
+        }
     }
 
     @Override
-    public void startPartition(long position)
+    public void startPartition(DecoratedKey partitionKey) throws IOException
     {
-        currentKeyPartitionOffset = position;
+        partitionId++;
+        partitionKeysWriter.add(v -> ByteSource.of(partitionKey.getKey(), v));
+        if (indexDescriptor.hasClustering())
+            clusteringKeysWriter.startPartition();
     }
 
     @Override
     public void nextRow(PrimaryKey primaryKey) throws IOException
     {
-        recordCurrentTokenOffset(primaryKey.token().getLongValue(), currentKeyPartitionOffset);
+        tokenWriter.add(primaryKey.token().getLongValue());
+        partitionSizeWriter.add(partitionId);
+        if (indexDescriptor.hasClustering())
+            clusteringKeysWriter.add(indexDescriptor.clusteringComparator.asByteComparable(primaryKey.clustering()));
     }
 
     @Override
-    public void complete(Stopwatch stopwatch) throws IOException
+    public void complete() throws IOException
     {
-        IOUtils.close(tokenWriter, offsetWriter, metadataWriter);
-        indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
+        try
+        {
+            indexDescriptor.createComponentOnDisk(IndexComponent.GROUP_COMPLETION_MARKER);
+        }
+        finally
+        {
+            FileUtils.close(tokenWriter, partitionSizeWriter, partitionKeysWriter, clusteringKeysWriter, metadataWriter);
+        }
     }
 
     @Override
-    public void abort(Throwable accumulator)
+    public void abort()
     {
-        logger.debug(indexDescriptor.logMessage("Aborting token/offset writer for {}..."), indexDescriptor.descriptor);
+        logger.debug(indexDescriptor.logMessage("Aborting per-SSTable index component writer for {}..."), indexDescriptor.sstableDescriptor);
         indexDescriptor.deletePerSSTableIndexComponents();
-    }
-
-    @VisibleForTesting
-    public void recordCurrentTokenOffset(long tokenValue, long keyOffset) throws IOException
-    {
-        tokenWriter.add(tokenValue);
-        offsetWriter.add(keyOffset);
     }
 }

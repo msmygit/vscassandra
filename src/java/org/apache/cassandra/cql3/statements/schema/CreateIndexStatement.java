@@ -53,6 +53,12 @@ import static com.google.common.collect.Iterables.tryFind;
 
 public final class CreateIndexStatement extends AlterSchemaStatement
 {
+    public static final String INVALID_CUSTOM_INDEX_TARGET = "Column '%s' is longer than the permissible name length of %d characters or" +
+                                                             " contains non-alphanumeric-underscore characters";
+    public static final String ONLY_PARTITION_KEY = "Cannot create secondary index on the only partition key column %s";
+    public static final String INDEX_ALREADY_EXISTS = "Index '%s' already exists";
+    public static final String INDEX_DUPLICATE_OF_EXISTING = "Index %s is a duplicate of existing index %s";
+
     private final String indexName;
     private final String tableName;
     private final List<IndexTarget.Raw> rawIndexTargets;
@@ -126,7 +132,7 @@ public final class CreateIndexStatement extends AlterSchemaStatement
             if (ifNotExists)
                 return schema;
 
-            throw ire("Index '%s' already exists", indexName);
+            throw ire(INDEX_ALREADY_EXISTS, indexName);
         }
 
         if (table.isCounter())
@@ -192,7 +198,7 @@ public final class CreateIndexStatement extends AlterSchemaStatement
             if (ifNotExists)
                 return schema;
 
-            throw ire("Index %s is a duplicate of existing index %s", index.name, equalIndex.name);
+            throw ire(INDEX_DUPLICATE_OF_EXISTING, index.name, equalIndex.name);
         }
 
         TableMetadata newTable = table.withSwapped(table.indexes.with(index));
@@ -226,8 +232,7 @@ public final class CreateIndexStatement extends AlterSchemaStatement
             throw ire("Column '%s' doesn't exist", target.column);
 
         if ((kind == IndexMetadata.Kind.CUSTOM) && !SchemaConstants.isValidName(target.column.toString()))
-            throw ire("Column '%s' is longer than the permissible name length of %d characters or" +
-                      " contains non-alphanumeric-underscore characters", target.column, SchemaConstants.NAME_LENGTH);
+            throw ire(INVALID_CUSTOM_INDEX_TARGET, target.column, SchemaConstants.NAME_LENGTH);
 
         if (column.type.referencesDuration())
         {
@@ -253,7 +258,7 @@ public final class CreateIndexStatement extends AlterSchemaStatement
         }
 
         if (column.isPartitionKey() && table.partitionKeyColumns().size() == 1)
-            throw ire("Cannot create secondary index on the only partition key column %s", column);
+            throw ire(ONLY_PARTITION_KEY, column);
 
         if (column.type.isFrozenCollection() && target.type != Type.FULL)
             throw ire("Cannot create %s() index on frozen column %s. Frozen collections are immutable and must be fully " +

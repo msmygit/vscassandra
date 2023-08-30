@@ -26,80 +26,80 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
-import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
 import org.junit.Test;
 
-import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.utils.ArrayPostingList;
-import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
+import org.apache.cassandra.index.sai.disk.ArrayPostingList;
+import org.apache.cassandra.index.sai.postings.PeekablePostingList;
+import org.apache.cassandra.index.sai.postings.PostingList;
+import org.apache.cassandra.index.sai.utils.SAIRandomizedTester;
 
-public class MergePostingListTest extends SaiRandomizedTest
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
+public class MergePostingListTest extends SAIRandomizedTester
 {
     @Test
     public void shouldMergeInterleavedPostingLists() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 4, 6 }),
-                new ArrayPostingList(new int[]{ 2, 3, 4 }),
-                new ArrayPostingList(new int[]{ 1, 6 }),
-                new ArrayPostingList(new int[]{ 2, 5 }),
-                new ArrayPostingList(new int[]{ 3, 6 }),
-                new ArrayPostingList(new int[]{ 3, 5, 6 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 4, 6),
+                                                                          new ArrayPostingList(2, 3, 4),
+                                                                          new ArrayPostingList(1, 6),
+                                                                          new ArrayPostingList(2, 5),
+                                                                          new ArrayPostingList(3, 6),
+                                                                          new ArrayPostingList(3, 5, 6));
 
         final PostingList merged = MergePostingList.merge(lists);
 
-        assertPostingListEquals(new ArrayPostingList(new int[]{ 1, 2, 3, 4, 5, 6 }), merged);
+        assertPostingListEquals(new ArrayPostingList(1, 2, 3, 4, 5, 6), merged);
     }
 
     @Test
     public void shouldMergeDisjointPostingLists() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 6 }),
-                new ArrayPostingList(new int[]{ 8, 9, 11 }),
-                new ArrayPostingList(new int[]{ 15 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 6),
+                                                                          new ArrayPostingList(8, 9, 11),
+                                                                          new ArrayPostingList(15));
 
         final PostingList merged = MergePostingList.merge(lists);
 
-        assertPostingListEquals(new ArrayPostingList(new int[]{ 1, 6, 8, 9, 11, 15 }), merged);
+        assertPostingListEquals(new ArrayPostingList(1, 6, 8, 9, 11, 15), merged);
     }
 
     @Test
     public void shouldMergeSinglePostingList() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(new int[]{ 1, 4, 6 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 4, 6));
 
         final PostingList merged = MergePostingList.merge(lists);
 
-        assertPostingListEquals(new ArrayPostingList(new int[]{ 1, 4, 6 }), merged);
+        assertPostingListEquals(new ArrayPostingList(1, 4, 6), merged);
     }
 
     @Test
     public void shouldMergeSamePostingLists() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(new int[]{ 0 }),
-                                                                                      new ArrayPostingList(new int[]{ 0 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(0),
+                                                                          new ArrayPostingList(0));
 
         final PostingList merged = MergePostingList.merge(lists);
 
-        assertPostingListEquals(new ArrayPostingList(new int[]{ 0 }), merged);
+        assertPostingListEquals(new ArrayPostingList(0), merged);
     }
 
     @Test
     public void shouldAdvanceAllMergedLists() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 5, 10 }),
-                new ArrayPostingList(new int[]{ 2, 3, 8 }),
-                new ArrayPostingList(new int[]{ 3, 5, 9 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 5, 10),
+                                                                          new ArrayPostingList(2, 3, 8),
+                                                                          new ArrayPostingList(3, 5, 9));
 
         final PostingList merged = MergePostingList.merge(lists);
-        final PostingList expected = new ArrayPostingList(new int[]{ 1, 2, 3, 5, 8, 9, 10 });
+        final PostingList expected = new ArrayPostingList(1, 2, 3, 5, 8, 9, 10);
 
-        assertEquals(expected.advance(9),
-                     merged.advance(9));
+        assertEquals(expected.advance(9), merged.advance(9));
 
         assertPostingListEquals(expected, merged);
     }
@@ -108,38 +108,37 @@ public class MergePostingListTest extends SaiRandomizedTest
     @Test
     public void shouldConsumeDuplicatedPostingOnAdvance() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 4, 6 }),
-                new ArrayPostingList(new int[]{ 2, 3, 4 }),
-                new ArrayPostingList(new int[]{ 1, 6 }),
-                new ArrayPostingList(new int[]{ 2, 5 }),
-                new ArrayPostingList(new int[]{ 3, 6 }),
-                new ArrayPostingList(new int[]{ 3, 5, 6 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 4, 6),
+                                                                          new ArrayPostingList(2, 3, 4),
+                                                                          new ArrayPostingList(1, 6),
+                                                                          new ArrayPostingList(2, 5),
+                                                                          new ArrayPostingList(3, 6),
+                                                                          new ArrayPostingList(3, 5, 6));
 
         final PostingList merged = MergePostingList.merge(lists);
 
         assertEquals(2, merged.advance(2));
         assertEquals(4, merged.advance(4));
-        assertPostingListEquals(new ArrayPostingList(new int[]{ 5, 6 }), merged);
+        assertPostingListEquals(new ArrayPostingList(5, 6), merged);
     }
 
     @Test
     public void shouldInterleaveNextAndAdvance() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 4, 6 }),
-                new ArrayPostingList(new int[]{ 2, 3, 4 }),
-                new ArrayPostingList(new int[]{ 1, 6 }),
-                new ArrayPostingList(new int[]{ 2, 5 }),
-                new ArrayPostingList(new int[]{ 3, 6 }),
-                new ArrayPostingList(new int[]{ 3, 5, 6 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 4, 6),
+                                                                          new ArrayPostingList(2, 3, 4),
+                                                                          new ArrayPostingList(1, 6),
+                                                                          new ArrayPostingList(2, 5),
+                                                                          new ArrayPostingList(3, 6),
+                                                                          new ArrayPostingList(3, 5, 6));
 
-        final PostingList merged = MergePostingList.merge(lists);
-
-        assertEquals(2, merged.advance(2));
-        assertEquals(3, merged.nextPosting());
-        assertEquals(5, merged.advance(5));
-        assertEquals(6, merged.nextPosting());
+        try (PostingList merged = MergePostingList.merge(lists))
+        {
+            assertEquals(2, merged.advance(2));
+            assertEquals(3, merged.nextPosting());
+            assertEquals(5, merged.advance(5));
+            assertEquals(6, merged.nextPosting());
+        }
     }
 
     @Test
@@ -151,46 +150,50 @@ public class MergePostingListTest extends SaiRandomizedTest
     @Test
     public void shouldNotSkipUnconsumedElementOnAdvance() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 1, 2 }),
-                new ArrayPostingList(new int[]{ 3 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 2),
+                                                                          new ArrayPostingList(3));
 
-        final PostingList merged = MergePostingList.merge(lists);
-        assertEquals(1, merged.nextPosting());
-        assertEquals(2, merged.advance(2));
-        assertEquals(3, merged.nextPosting());
+        try (PostingList merged = MergePostingList.merge(lists))
+        {
+            assertEquals(1, merged.nextPosting());
+            assertEquals(2, merged.advance(2));
+            assertEquals(3, merged.nextPosting());
+        }
     }
 
     @Test
     public void shouldNotReadFromExhaustedChild() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(
-                new ArrayPostingList(new int[]{ 2 }),
-                new ArrayPostingList(new int[]{ 1, 3, 4 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(2),
+                                                                          new ArrayPostingList(1, 3, 4));
 
-        final PostingList merged = MergePostingList.merge(lists);
-        assertEquals(1, merged.nextPosting());
-        assertEquals(3, merged.advance(3));
-        assertEquals(4, merged.advance(4));
+        try (PostingList merged = MergePostingList.merge(lists))
+        {
+            assertEquals(1, merged.nextPosting());
+            assertEquals(3, merged.advance(3));
+            assertEquals(4, merged.advance(4));
+        }
     }
 
     @Test
     public void shouldSkipDuplicates() throws IOException
     {
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(new int[]{ 1, 1, 2, 2, 2, 2, 5, 5 }),
-                                                                                      new ArrayPostingList(new int[]{ 1, 2, 2, 3, 3, 4, 4, 5 }));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(1, 1, 2, 2, 2, 2, 5, 5),
+                                                                          new ArrayPostingList(1, 2, 2, 3, 3, 4, 4, 5));
 
-        final PostingList merged = MergePostingList.merge(lists);
-        assertEquals(1, merged.nextPosting());
-        assertEquals(2, merged.nextPosting());
-        assertEquals(3, merged.advance(3));
-        assertEquals(4, merged.advance(4));
-        assertEquals(5, merged.nextPosting());
-        assertEquals(PostingList.END_OF_STREAM, merged.nextPosting());
+        try (PostingList merged = MergePostingList.merge(lists))
+        {
+            assertEquals(1, merged.nextPosting());
+            assertEquals(2, merged.nextPosting());
+            assertEquals(3, merged.advance(3));
+            assertEquals(4, merged.advance(4));
+            assertEquals(5, merged.nextPosting());
+            assertEquals(PostingList.END_OF_STREAM, merged.nextPosting());
+        }
     }
 
     @Test
-    public void shouldInterleaveNextAndAdvanceOnRandom() throws IOException
+    public void shouldInterleaveNextAndAdvanceOnRandom()
     {
         for (int i = 0; i < 1000; ++i)
         {
@@ -198,36 +201,36 @@ public class MergePostingListTest extends SaiRandomizedTest
         }
     }
 
-    private PriorityQueue<PostingList.PeekablePostingList> newPriorityQueue(PostingList...postingLists)
+    private PriorityQueue<PeekablePostingList> newPriorityQueue(PostingList...postingLists)
     {
-        PriorityQueue<PostingList.PeekablePostingList> queue = new PriorityQueue<>(postingLists.length, Comparator.comparingLong(PostingList.PeekablePostingList::peek));
+        PriorityQueue<PeekablePostingList> queue = new PriorityQueue<>(postingLists.length, Comparator.comparingLong(PeekablePostingList::peek));
         for (PostingList postingList : postingLists)
-            queue.add(postingList.peekable());
+            queue.add(PeekablePostingList.makePeekable(postingList));
         return queue;
     }
     
-    private void testAdvancingOnRandom() throws IOException
+    private void testAdvancingOnRandom()
     {
         final int postingsCount = nextInt(1, 50_000);
         final int postingListCount = nextInt(5, 50);
 
         final AtomicInteger rowId = new AtomicInteger();
-        final int[] postings = IntStream.generate(() -> rowId.addAndGet(nextInt(0, 10)))
-                                        .limit(postingsCount)
-                                        .toArray();
-        final int[] postingsWithoutDuplicates = IntStream.of(postings)
-                                                         .distinct()
-                                                         .toArray();
+        final long[] postings = LongStream.generate(() -> rowId.addAndGet(nextInt(0, 10)))
+                                          .limit(postingsCount)
+                                          .toArray();
+        final long[] postingsWithoutDuplicates = LongStream.of(postings)
+                                                           .distinct()
+                                                           .toArray();
 
         // split postings into multiple lists
-        final Map<Integer, List<Integer>> splitPostings = Arrays.stream(postings)
-                                                                .boxed()
-                                                                .collect(Collectors.groupingBy(it -> nextInt(postingListCount)));
+        final Map<Integer, List<Long>> splitPostings = Arrays.stream(postings)
+                                                             .boxed()
+                                                             .collect(Collectors.groupingBy(it -> nextInt(postingListCount)));
 
-        final PriorityQueue<PostingList.PeekablePostingList> splitPostingLists = new PriorityQueue<>(splitPostings.size(), Comparator.comparingLong(PostingList.PeekablePostingList::peek));
-        for (List<Integer> split : splitPostings.values())
+        final PriorityQueue<PeekablePostingList> splitPostingLists = new PriorityQueue<>(splitPostings.size(), Comparator.comparingLong(PeekablePostingList::peek));
+        for (List<Long> split : splitPostings.values())
         {
-            splitPostingLists.add(new ArrayPostingList(Ints.toArray(split)).peekable());
+            splitPostingLists.add(PeekablePostingList.makePeekable(new ArrayPostingList(Longs.toArray(split))));
         }
 
         final PostingList merge = MergePostingList.merge(splitPostingLists);
@@ -254,17 +257,13 @@ public class MergePostingListTest extends SaiRandomizedTest
             {
                 final int skips = nextInt(0, 10);
                 idx = Math.min(idx + skips, postingsWithoutDuplicates.length - 1);
-                final int rowID = postingsWithoutDuplicates[idx];
+                final long rowID = postingsWithoutDuplicates[idx];
                 actions.add((postingList) -> {
                     while (true)
                     {
                         try
                         {
                             return postingList.advance(rowID);
-                        }
-                        catch (ArrayPostingList.LookupException ignore)
-                        {
-                            // continue
                         }
                         catch (Exception e)
                         {
@@ -286,52 +285,49 @@ public class MergePostingListTest extends SaiRandomizedTest
 
     private void testAdvancingToAllElements()
     {
-        final int[] postings1 = randomPostings();
-        final int[] postings2 = randomPostings();
+        final long[] postings1 = randomPostings();
+        final long[] postings2 = randomPostings();
 
-        final int[] mergedPostings = IntStream.concat(IntStream.of(postings1), IntStream.of(postings2))
-                                              .distinct()
-                                              .sorted()
-                                              .toArray();
+        final long[] mergedPostings = LongStream.concat(LongStream.of(postings1), LongStream.of(postings2))
+                                                .distinct()
+                                                .sorted()
+                                                .toArray();
 
-        final PriorityQueue<PostingList.PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(postings1), new ArrayPostingList(postings2));
+        final PriorityQueue<PeekablePostingList> lists = newPriorityQueue(new ArrayPostingList(postings1), new ArrayPostingList(postings2));
 
-        final PostingList merged = MergePostingList.merge(lists);
-
-        // tokens are equal row IDs in this test case
-        for (int targetRowID : mergedPostings)
+        try (PostingList merged = MergePostingList.merge(lists))
         {
-            long rowID;
-            while (true)
+            // tokens are equal row IDs in this test case
+            for (long targetRowID : mergedPostings)
             {
-                try
+                long rowID;
+                while (true)
                 {
-                    rowID = merged.advance(targetRowID);
-                    break;
+                    try
+                    {
+                        rowID = merged.advance(targetRowID);
+                        break;
+                    }
+                    catch (Exception e)
+                    {
+                        fail();
+                    }
                 }
-                catch (ArrayPostingList.LookupException ignore)
-                {
-                    // continue
-                }
-                catch (Exception e)
-                {
-                    fail();
-                }
+                assertEquals(targetRowID, rowID);
             }
-            assertEquals(targetRowID, rowID);
         }
     }
 
-    private int[] randomPostings()
+    private long[] randomPostings()
     {
         final AtomicInteger rowId = new AtomicInteger();
-        return IntStream.generate(() -> rowId.getAndAdd(randomIntBetween(0, 5)))
-                        .limit(randomIntBetween(1 << 10, 1 << 12))
-                        .toArray();
+        return LongStream.generate(() -> rowId.getAndAdd(getRandom().nextIntBetween(0, 5)))
+                         .limit(getRandom().nextIntBetween(1 << 10, 1 << 12))
+                         .toArray();
     }
 
     private interface PostingListAdvance
     {
-        long advance(PostingList list) throws IOException;
+        long advance(PostingList list);
     }
 }

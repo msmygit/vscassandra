@@ -18,27 +18,25 @@
 
 package org.apache.cassandra.index.sai.view;
 
-import java.lang.invoke.MethodHandles;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
+import com.google.common.base.MoreObjects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Interval;
 import org.apache.cassandra.utils.IntervalTree;
 
-public class RangeTermTree implements TermTree
+public class RangeTermTree
 {
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger logger = LoggerFactory.getLogger(RangeTermTree.class);
 
     protected final ByteBuffer min, max;
     protected final AbstractType<?> comparator;
@@ -53,23 +51,34 @@ public class RangeTermTree implements TermTree
         this.comparator = comparator;
     }
 
-    public Set<SSTableIndex> search(Expression e)
+    public List<SSTableIndex> search(Expression e)
     {
         ByteBuffer minTerm = e.lower == null ? min : e.lower.value.encoded;
         ByteBuffer maxTerm = e.upper == null ? max : e.upper.value.encoded;
 
-        return new HashSet<>(rangeTree.search(Interval.create(new Term(minTerm, comparator),
-                                                              new Term(maxTerm, comparator),
-                                                              null)));
+        return rangeTree.search(Interval.create(new Term(minTerm, comparator),
+                                                new Term(maxTerm, comparator),
+                                                null));
     }
 
-    static class Builder extends TermTree.Builder
+    static class Builder
     {
+        private final AbstractType<?> comparator;
+        private ByteBuffer min, max;
+
         final List<Interval<Term, SSTableIndex>> intervals = new ArrayList<>();
 
         protected Builder(AbstractType<?> comparator)
         {
-            super(comparator);
+            this.comparator = comparator;
+        }
+
+        public final void add(SSTableIndex index)
+        {
+            addIndex(index);
+
+            min = min == null || TypeUtil.compare(min, index.minTerm(), comparator) > 0 ? index.minTerm() : min;
+            max = max == null || TypeUtil.compare(max, index.maxTerm(), comparator) < 0 ? index.maxTerm() : max;
         }
 
         public void addIndex(SSTableIndex index)
@@ -89,7 +98,7 @@ public class RangeTermTree implements TermTree
             intervals.add(interval);
         }
 
-        public TermTree build()
+        public RangeTermTree build()
         {
             return new RangeTermTree(min, max, IntervalTree.build(intervals), comparator);
         }
@@ -110,9 +119,16 @@ public class RangeTermTree implements TermTree
             this.comparator = comparator;
         }
 
+        @Override
         public int compareTo(Term o)
         {
             return TypeUtil.compare(term, o.term, comparator);
+        }
+
+        @Override
+        public String toString()
+        {
+            return MoreObjects.toStringHelper(this).add("term", comparator.getString(term)).toString();
         }
     }
 }

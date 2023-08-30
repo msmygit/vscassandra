@@ -25,13 +25,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 
-import javax.annotation.Nonnull;
-
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
@@ -41,121 +36,90 @@ import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.BooleanType;
 import org.apache.cassandra.db.marshal.CompositeType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
-import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
-import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
-import org.apache.cassandra.index.sai.memory.MemtableIndex;
+import org.apache.cassandra.index.sai.memory.MemtableIndexManager;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.RangeIterator;
-import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.sai.view.IndexViewManager;
 import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
-import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
-import org.apache.cassandra.utils.concurrent.OpOrder;
 
 /**
- * Manage metadata for each column index.
+ * Manages metadata for each column index.
  */
 public class IndexContext
 {
     private static final Logger logger = LoggerFactory.getLogger(IndexContext.class);
 
-    private static final Set<AbstractType<?>> EQ_ONLY_TYPES =
-            ImmutableSet.of(UTF8Type.instance, AsciiType.instance, BooleanType.instance, UUIDType.instance);
-
-    public static final String ENABLE_SEGMENT_COMPACTION_OPTION_NAME = "enable_segment_compaction";
+    private static final Set<AbstractType<?>> EQ_ONLY_TYPES = ImmutableSet.of(UTF8Type.instance,
+                                                                              AsciiType.instance,
+                                                                              BooleanType.instance,
+                                                                              UUIDType.instance);
 
     private final AbstractType<?> partitionKeyType;
     private final ClusteringComparator clusteringComparator;
 
     private final String keyspace;
     private final String table;
-    private final ColumnMetadata column;
-    private final IndexTarget.Type indexType;;
+    private final ColumnMetadata columnMetadata;
+    private final IndexTarget.Type indexType;
     private final AbstractType<?> validator;
-    private final Memtable.Owner owner;
 
     // Config can be null if the column context is "fake" (i.e. created for a filtering expression).
-    private final IndexMetadata config;
+    @Nullable
+    private final IndexMetadata indexMetadata;
 
-    private final ConcurrentMap<Memtable, MemtableIndex> liveMemtables = new ConcurrentHashMap<>();
+    private final MemtableIndexManager memtableIndexManager;
 
     private final IndexViewManager viewManager;
     private final IndexMetrics indexMetrics;
     private final ColumnQueryMetrics columnQueryMetrics;
-    private final IndexWriterConfig indexWriterConfig;
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
-    private final AbstractAnalyzer.AnalyzerFactory queryAnalyzerFactory;
     private final PrimaryKey.Factory primaryKeyFactory;
 
-    private final boolean segmentCompactionEnabled;
-
-    public IndexContext(@Nonnull String keyspace,
-                        @Nonnull String table,
-                        @Nonnull AbstractType<?> partitionKeyType,
-                        @Nonnull ClusteringComparator clusteringComparator,
-                        @Nonnull ColumnMetadata column,
-                        @Nonnull IndexTarget.Type indexType,
-                        IndexMetadata config,
-                        @Nonnull Memtable.Owner owner)
+    public IndexContext(String keyspace,
+                        String table,
+                        AbstractType<?> partitionKeyType,
+                        ClusteringComparator clusteringComparator,
+                        ColumnMetadata columnMetadata,
+                        IndexTarget.Type indexType,
+                        @Nullable IndexMetadata indexMetadata)
     {
-        this.keyspace = keyspace;
-        this.table = table;
-        this.partitionKeyType = partitionKeyType;
-        this.clusteringComparator = clusteringComparator;
-        this.column = column;
-        this.indexType = indexType;
-        this.config = config;
+        this.keyspace = Objects.requireNonNull(keyspace);
+        this.table = Objects.requireNonNull(table);
+        this.partitionKeyType = Objects.requireNonNull(partitionKeyType);
+        this.clusteringComparator = Objects.requireNonNull(clusteringComparator);
+        this.columnMetadata = Objects.requireNonNull(columnMetadata);
+        this.indexType = Objects.requireNonNull(indexType);
+        this.validator = TypeUtil.cellValueType(columnMetadata, indexType);
+        this.primaryKeyFactory = new PrimaryKey.Factory(clusteringComparator);
+
+        this.indexMetadata = indexMetadata;
+        this.memtableIndexManager = indexMetadata == null ? null : new MemtableIndexManager(this);
+
+        this.indexMetrics = indexMetadata == null ? null : new IndexMetrics(this);
         this.viewManager = new IndexViewManager(this);
-        this.indexMetrics = new IndexMetrics(this);
-        this.validator = TypeUtil.cellValueType(column, indexType);
-        this.owner = owner;
+        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(this)
+                                              : new ColumnQueryMetrics.BalancedTreeIndexMetrics(this);
 
-        this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(keyspace, table, getIndexName())
-                                              : new ColumnQueryMetrics.BKDIndexMetrics(keyspace, table, getIndexName());
-
-        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(clusteringComparator);
-
-        if (config != null)
-        {
-            String fullIndexName = String.format("%s.%s.%s", this.keyspace, this.table, this.config.name);
-            this.indexWriterConfig = IndexWriterConfig.fromOptions(fullIndexName, validator, config.options);
-            this.analyzerFactory = AbstractAnalyzer.fromOptions(getValidator(), config.options);
-            this.queryAnalyzerFactory = AbstractAnalyzer.hasQueryAnalyzer(config.options)
-                                        ? AbstractAnalyzer.fromOptionsQueryAnalyzer(getValidator(), config.options)
-                                        : this.analyzerFactory;
-            this.segmentCompactionEnabled = Boolean.parseBoolean(config.options.getOrDefault(ENABLE_SEGMENT_COMPACTION_OPTION_NAME, "true"));
-        }
-        else
-        {
-            this.indexWriterConfig = IndexWriterConfig.emptyConfig();
-            this.analyzerFactory = AbstractAnalyzer.fromOptions(getValidator(), Collections.EMPTY_MAP);
-            this.queryAnalyzerFactory = this.analyzerFactory;
-            this.segmentCompactionEnabled = true;
-        }
-
-        logger.info(logMessage("Initialized index context with index writer config: {}"), indexWriterConfig);
+        this.analyzerFactory = indexMetadata == null ? AbstractAnalyzer.fromOptions(getValidator(), Collections.emptyMap())
+                                                     : AbstractAnalyzer.fromOptions(getValidator(), indexMetadata.options);
     }
 
     public AbstractType<?> keyValidator()
@@ -168,9 +132,9 @@ public class IndexContext
         return primaryKeyFactory;
     }
 
-    public ClusteringComparator comparator()
+    public String getKeyspace()
     {
-        return clusteringComparator;
+        return keyspace;
     }
 
     public IndexMetrics getIndexMetrics()
@@ -183,124 +147,27 @@ public class IndexContext
         return columnQueryMetrics;
     }
 
-    public String getKeyspace()
-    {
-        return keyspace;
-    }
-
     public String getTable()
     {
         return table;
     }
 
-    public Memtable.Owner owner()
+    public IndexMetadata getIndexMetadata()
     {
-        return owner;
-    }
-
-    public void index(DecoratedKey key, Row row, Memtable memtable, OpOrder.Group opGroup)
-    {
-        MemtableIndex current = liveMemtables.get(memtable);
-
-        // We expect the relevant IndexMemtable to be present most of the time, so only make the
-        // call to computeIfAbsent() if it's not. (see https://bugs.openjdk.java.net/browse/JDK-8161372)
-        MemtableIndex target = (current != null)
-                               ? current
-                               : liveMemtables.computeIfAbsent(memtable, mt -> new MemtableIndex(this));
-
-        long start = System.nanoTime();
-
-        if (isNonFrozenCollection())
-        {
-            Iterator<ByteBuffer> bufferIterator = getValuesOf(row, FBUtilities.nowInSeconds());
-            if (bufferIterator != null)
-            {
-                while (bufferIterator.hasNext())
-                {
-                    ByteBuffer value = bufferIterator.next();
-                    target.index(key, row.clustering(), value, memtable, opGroup);
-                }
-            }
-        }
-        else
-        {
-            ByteBuffer value = getValueOf(key, row, FBUtilities.nowInSeconds());
-            target.index(key, row.clustering(), value, memtable, opGroup);
-        }
-        indexMetrics.memtableIndexWriteLatency.update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-    }
-
-    public void renewMemtable(Memtable renewed)
-    {
-        for (Memtable memtable : liveMemtables.keySet())
-        {
-            // remove every index but the one that corresponds to the post-truncate Memtable
-            if (renewed != memtable)
-            {
-                liveMemtables.remove(memtable);
-            }
-        }
-    }
-
-    public void discardMemtable(Memtable discarded)
-    {
-        liveMemtables.remove(discarded);
-    }
-
-    public MemtableIndex getPendingMemtableIndex(LifecycleNewTracker tracker)
-    {
-        return liveMemtables.keySet().stream()
-                            .filter(m -> tracker.equals(m.getFlushTransaction()))
-                            .findFirst()
-                            .map(liveMemtables::get)
-                            .orElse(null);
-    }
-
-    public RangeIterator searchMemtable(Expression e, AbstractBounds<PartitionPosition> keyRange)
-    {
-        Collection<MemtableIndex> memtables = liveMemtables.values();
-
-        if (memtables.isEmpty())
-        {
-            return RangeIterator.empty();
-        }
-
-        RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
-
-        for (MemtableIndex index : memtables)
-        {
-            builder.add(index.search(e, keyRange));
-        }
-
-        return builder.build();
-    }
-
-    public long liveMemtableWriteCount()
-    {
-        return liveMemtables.values().stream().mapToLong(MemtableIndex::writeCount).sum();
-    }
-
-    public long estimatedOnHeapMemIndexMemoryUsed()
-    {
-        return liveMemtables.values().stream().mapToLong(MemtableIndex::estimatedOnHeapMemoryUsed).sum();
-    }
-
-    public long estimatedOffHeapMemIndexMemoryUsed()
-    {
-        return liveMemtables.values().stream().mapToLong(MemtableIndex::estimatedOffHeapMemoryUsed).sum();
+        return indexMetadata;
     }
 
     /**
      * @return A set of SSTables which have attached to them invalid index components.
      */
-    public Set<SSTableContext> onSSTableChanged(Collection<SSTableReader> oldSSTables, Collection<SSTableContext> newSSTables, boolean validate)
+    public Collection<SSTableContext> onSSTableChanged(Collection<SSTableReader> oldSSTables, Collection<SSTableContext> newSSTables, IndexValidation validation)
     {
-        return viewManager.update(oldSSTables, newSSTables, validate);
+        return viewManager.update(oldSSTables, newSSTables, validation);
     }
 
     public ColumnMetadata getDefinition()
     {
-        return column;
+        return columnMetadata;
     }
 
     public AbstractType<?> getValidator()
@@ -310,37 +177,32 @@ public class IndexContext
 
     public boolean isNonFrozenCollection()
     {
-        return TypeUtil.isNonFrozenCollection(column.type);
+        return TypeUtil.isNonFrozenCollection(columnMetadata.type);
     }
 
     public boolean isFrozen()
     {
-        return TypeUtil.isFrozen(column.type);
+        return TypeUtil.isFrozen(columnMetadata.type);
     }
 
     public String getColumnName()
     {
-        return column.name.toString();
+        return columnMetadata.name.toString();
     }
 
+    @Nullable
     public String getIndexName()
     {
-        return this.config == null ? null : config.name;
+        return indexMetadata == null ? null : indexMetadata.name;
     }
 
+    /**
+     * Returns an {@link AbstractAnalyzer.AnalyzerFactory} for use by write and query paths to transform
+     * literal values.
+     */
     public AbstractAnalyzer.AnalyzerFactory getAnalyzerFactory()
     {
         return analyzerFactory;
-    }
-
-    public AbstractAnalyzer.AnalyzerFactory getQueryAnalyzerFactory()
-    {
-        return queryAnalyzerFactory;
-    }
-
-    public IndexWriterConfig getIndexWriterConfig()
-    {
-        return indexWriterConfig;
     }
 
     public View getView()
@@ -348,12 +210,19 @@ public class IndexContext
         return viewManager.getView();
     }
 
+    public MemtableIndexManager getMemtableIndexManager()
+    {
+        assert memtableIndexManager != null : "Attempt to use memtable index manager on non-indexed context";
+
+        return memtableIndexManager;
+    }
+
     /**
      * @return total number of per-index open files
      */
     public int openPerIndexFiles()
     {
-        return viewManager.getView().size() * Version.LATEST.onDiskFormat().openFilesPerIndex(this);
+        return viewManager.getView().size() * Version.LATEST.onDiskFormat().openFilesPerColumnIndex(this);
     }
 
     public void drop(Collection<SSTableReader> sstablesToRebuild)
@@ -361,62 +230,54 @@ public class IndexContext
         viewManager.drop(sstablesToRebuild);
     }
 
-    public boolean isIndexed()
+    public boolean isNotIndexed()
     {
-        return config != null;
+        return indexMetadata == null;
     }
 
     /**
-     * Called when index is dropped. Mark all {@link SSTableIndex} as released and per-column index files
-     * will be removed when in-flight queries completed and {@code obsolete} is true.
-     *
-     * @param obsolete true if index files should be deleted after invalidate; false otherwise.
+     * Called when index is dropped. Clear all live in-memory indexes and close
+     * analyzer factories. Mark all {@link SSTableIndex} as released and per-column index files
+     * will be removed when in-flight queries are completed.
      */
-    public void invalidate(boolean obsolete)
+    public void invalidate()
     {
-        liveMemtables.clear();
-        viewManager.invalidate(obsolete);
-        indexMetrics.release();
-        columnQueryMetrics.release();
-
+        viewManager.invalidate();
         analyzerFactory.close();
-        if (queryAnalyzerFactory != analyzerFactory)
-        {
-            queryAnalyzerFactory.close();
-        }
-    }
-
-    @VisibleForTesting
-    public ConcurrentMap<Memtable, MemtableIndex> getLiveMemtables()
-    {
-        return liveMemtables;
+        if (memtableIndexManager != null)
+            memtableIndexManager.invalidate();
+        if (indexMetrics != null)
+            indexMetrics.release();
+        if (columnQueryMetrics != null)
+            columnQueryMetrics.release();
     }
 
     public boolean supports(Operator op)
     {
-        if (op.isLike() || op == Operator.LIKE) return false;
+        if (op == Operator.LIKE ||
+            op == Operator.LIKE_CONTAINS ||
+            op == Operator.LIKE_PREFIX ||
+            op == Operator.LIKE_MATCHES ||
+            op == Operator.LIKE_SUFFIX) return false;
 
-        Expression.Op operator = Expression.Op.valueOf(op);
+        Expression.IndexOperator operator = Expression.IndexOperator.valueOf(op);
 
         if (isNonFrozenCollection())
         {
-            if (indexType == IndexTarget.Type.KEYS) return operator == Expression.Op.CONTAINS_KEY;
-            if (indexType == IndexTarget.Type.VALUES) return operator == Expression.Op.CONTAINS_VALUE;
-            return indexType == IndexTarget.Type.KEYS_AND_VALUES && operator == Expression.Op.EQ;
+            if (indexType == IndexTarget.Type.KEYS) return operator == Expression.IndexOperator.CONTAINS_KEY;
+            if (indexType == IndexTarget.Type.VALUES) return operator == Expression.IndexOperator.CONTAINS_VALUE;
+            return indexType == IndexTarget.Type.KEYS_AND_VALUES && operator == Expression.IndexOperator.EQ;
         }
 
         if (indexType == IndexTarget.Type.FULL)
-            return operator == Expression.Op.EQ;
+            return operator == Expression.IndexOperator.EQ;
 
         AbstractType<?> validator = getValidator();
 
-        if (operator == Expression.Op.IN)
-            return true;
-
-        if (operator != Expression.Op.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
+        if (operator != Expression.IndexOperator.EQ && EQ_ONLY_TYPES.contains(validator)) return false;
 
         // RANGE only applicable to non-literal indexes
-        return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.Op.RANGE);
+        return (operator != null) && !(TypeUtil.isLiteral(validator) && operator == Expression.IndexOperator.RANGE);
     }
 
     public ByteBuffer getValueOf(DecoratedKey key, Row row, int nowInSecs)
@@ -424,15 +285,15 @@ public class IndexContext
         if (row == null)
             return null;
 
-        switch (column.kind)
+        switch (columnMetadata.kind)
         {
             case PARTITION_KEY:
                 return partitionKeyType instanceof CompositeType
-                       ? CompositeType.extractComponent(key.getKey(), column.position())
+                       ? CompositeType.extractComponent(key.getKey(), columnMetadata.position())
                        : key.getKey();
             case CLUSTERING:
                 // skip indexing of static clustering when regular column is indexed
-                return row.isStatic() ? null : row.clustering().bufferAt(column.position());
+                return row.isStatic() ? null : row.clustering().bufferAt(columnMetadata.position());
 
             // treat static cell retrieval the same was as regular
             // only if row kind is STATIC otherwise return null
@@ -440,7 +301,7 @@ public class IndexContext
                 if (!row.isStatic())
                     return null;
             case REGULAR:
-                Cell cell = row.getCell(column);
+                Cell<?> cell = row.getCell(columnMetadata);
                 return cell == null || !cell.isLive(nowInSecs) ? null : cell.buffer();
 
             default:
@@ -453,7 +314,7 @@ public class IndexContext
         if (row == null)
             return null;
 
-        switch (column.kind)
+        switch (columnMetadata.kind)
         {
             // treat static cell retrieval the same was as regular
             // only if row kind is STATIC otherwise return null
@@ -461,7 +322,11 @@ public class IndexContext
                 if (!row.isStatic())
                     return null;
             case REGULAR:
-                return TypeUtil.collectionIterator(validator, row.getComplexColumnData(column), column, indexType, nowInSecs);
+                return TypeUtil.collectionIterator(validator,
+                                                   row.getComplexColumnData(columnMetadata),
+                                                   columnMetadata,
+                                                   indexType,
+                                                   nowInSecs);
 
             default:
                 return null;
@@ -482,6 +347,7 @@ public class IndexContext
         return TypeUtil.isLiteral(getValidator());
     }
 
+    @Override
     public boolean equals(Object obj)
     {
         if (obj == this)
@@ -492,24 +358,25 @@ public class IndexContext
 
         IndexContext other = (IndexContext) obj;
 
-        return Objects.equals(column, other.column) &&
-               Objects.equals(indexType, other.indexType) &&
-               Objects.equals(config, other.config) &&
+        return Objects.equals(columnMetadata, other.columnMetadata) &&
+               (indexType == other.indexType) &&
+               Objects.equals(indexMetadata, other.indexMetadata) &&
                Objects.equals(partitionKeyType, other.partitionKeyType) &&
                Objects.equals(clusteringComparator, other.clusteringComparator);
     }
 
+    @Override
     public int hashCode()
     {
-        return Objects.hash(column, indexType, config, partitionKeyType, clusteringComparator);
+        return Objects.hash(columnMetadata, indexType, indexMetadata, partitionKeyType, clusteringComparator);
     }
 
     /**
      * A helper method for constructing consistent log messages for specific column indexes.
-     *
+     * <p>
      * Example: For the index "idx" in keyspace "ks" on table "tb", calling this method with the raw message
      * "Flushing new index segment..." will produce...
-     *
+     * <p>
      * "[ks.tb.idx] Flushing new index segment..."
      *
      * @param message The raw content of a logging message, without information identifying it with an index.
@@ -519,50 +386,49 @@ public class IndexContext
     public String logMessage(String message)
     {
         // Index names are unique only within a keyspace.
-        return String.format("[%s.%s.%s] %s", keyspace, table, config == null ? "?" : config.name, message);
+        return String.format("[%s.%s.%s] %s", keyspace, table, indexMetadata == null ? "?" : indexMetadata.name, message);
     }
 
     /**
      * @return the indexes that are built on the given SSTables on the left and corrupted indexes'
      * corresponding contexts on the right
      */
-    public Pair<Set<SSTableIndex>, Set<SSTableContext>> getBuiltIndexes(Collection<SSTableContext> sstableContexts, boolean validate)
+    public Pair<Collection<SSTableIndex>, Collection<SSTableContext>> getBuiltIndexes(Collection<SSTableContext> sstableContexts, IndexValidation validation)
     {
         Set<SSTableIndex> valid = new HashSet<>(sstableContexts.size());
         Set<SSTableContext> invalid = new HashSet<>();
 
-        for (SSTableContext context : sstableContexts)
+        for (SSTableContext sstableContext : sstableContexts)
         {
-            if (context.sstable.isMarkedCompacted())
+            if (sstableContext.sstable.isMarkedCompacted())
                 continue;
 
-            if (!context.indexDescriptor.isPerIndexBuildComplete(this))
+            if (!sstableContext.indexDescriptor.isPerColumnIndexBuildComplete(this))
             {
-                logger.debug(logMessage("An on-disk index build for SSTable {} has not completed."), context.descriptor());
+                logger.debug(logMessage("An on-disk index build for SSTable {} has not completed."), sstableContext.descriptor());
                 continue;
             }
 
-            if (context.indexDescriptor.isIndexEmpty(this))
+            if (sstableContext.indexDescriptor.isIndexEmpty(this))
             {
                 logger.debug(logMessage("No on-disk index was built for SSTable {} because the SSTable " +
-                                                "had no indexable rows for the index."), context.descriptor());
+                                        "had no indexable rows for the index."), sstableContext.descriptor());
                 continue;
             }
 
             try
             {
-                if (validate)
+                if (validation != IndexValidation.NONE)
                 {
-                    if (!context.indexDescriptor.validatePerIndexComponents(this))
+                    if (!sstableContext.indexDescriptor.validatePerIndexComponents(this, validation))
                     {
-                        logger.warn(logMessage("Invalid per-column component for SSTable {}"), context.descriptor());
-                        invalid.add(context);
+                        invalid.add(sstableContext);
                         continue;
                     }
                 }
 
-                SSTableIndex index = new SSTableIndex(context, this);
-                logger.debug(logMessage("Successfully created index for SSTable {}."), context.descriptor());
+                SSTableIndex index = sstableContext.newSSTableIndex(this);
+                logger.debug(logMessage("Successfully created index for SSTable {}."), sstableContext.descriptor());
 
                 // Try to add new index to the set, if set already has such index, we'll simply release and move on.
                 // This covers situation when SSTable collection has the same SSTable multiple
@@ -574,8 +440,8 @@ public class IndexContext
             }
             catch (Throwable e)
             {
-                logger.warn(logMessage("Failed to update per-column components for SSTable {}"), context.descriptor(), e);
-                invalid.add(context);
+                logger.warn(logMessage("Failed to update per-column components for SSTable {}"), sstableContext.descriptor(), e);
+                invalid.add(sstableContext);
             }
         }
 
@@ -583,7 +449,7 @@ public class IndexContext
     }
 
     /**
-     * @return the number of indexed rows in this index (aka. pair of term and rowId)
+     * @return the number of indexed rows in this index (aka. a pair of term and rowId)
      */
     public long getCellCount()
     {
@@ -613,27 +479,5 @@ public class IndexContext
                         .stream()
                         .mapToLong(SSTableIndex::indexFileCacheSize)
                         .sum();
-    }
-
-    public IndexFeatureSet indexFeatureSet()
-    {
-        IndexFeatureSet.Accumulator accumulator = new IndexFeatureSet.Accumulator();
-        getView().getIndexes().stream().map(SSTableIndex::indexFeatureSet).forEach(set -> accumulator.accumulate(set));
-        return accumulator.complete();
-    }
-
-    /**
-     * Returns true if index segments should be compacted into one segment after building the index.
-     *
-     * By default, this option is set to true. A user is able to override this by setting
-     * <code>enable_segment_compaction</code> to false in the index options.
-     * This is an expert-only option.
-     * Disabling compaction improves performance of writes at the expense of significantly reducing performance
-     * of read queries. A user should never turn compaction off on a production system
-     * unless diagnosing a performance issue.
-     */
-    public boolean isSegmentCompactionEnabled()
-    {
-        return this.segmentCompactionEnabled;
     }
 }

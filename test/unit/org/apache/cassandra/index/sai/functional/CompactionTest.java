@@ -118,12 +118,12 @@ public class CompactionTest extends SAITester
     }
 
     @Test
-    public void testConcurrentQueryWithCompaction() throws Throwable
+    public void testConcurrentQueryWithCompaction()
     {
         createTable(CREATE_TABLE_TEMPLATE);
         String v1IndexName = createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
         String v2IndexName = createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
-        waitForIndexQueryable();
+        waitForTableIndexesQueryable();
 
         int num = 10;
         for (int i = 0; i < num; i++)
@@ -145,7 +145,7 @@ public class CompactionTest extends SAITester
                     throw new RuntimeException(e);
                 }
             }
-        }, () -> upgradeSSTables());
+        }, this::upgradeSSTables);
 
         compactionTest.start();
 
@@ -236,36 +236,36 @@ public class CompactionTest extends SAITester
             Injections.inject(compactionLatch);
 
             TestWithConcurrentVerification compactionTask = new TestWithConcurrentVerification(
-                    () -> {
-                        try
-                        {
-                            upgradeSSTables();
-                            fail("Expected CompactionInterruptedException");
-                        }
-                        catch (Exception e)
-                        {
-                            assertTrue("Expected CompactionInterruptedException, but got " + e,
-                                       Throwables.isCausedBy(e, CompactionInterruptedException.class));
-                        }
-                    },
-                    () -> {
-                        try
-                        {
-                            waitForAssert(() -> Assert.assertEquals(1, compactionLatch.getCount()));
+            () -> {
+                try
+                {
+                    upgradeSSTables();
+                    fail("Expected CompactionInterruptedException");
+                }
+                catch (Exception e)
+                {
+                    assertTrue("Expected CompactionInterruptedException, but got " + e,
+                               Throwables.isCausedBy(e, CompactionInterruptedException.class::isInstance));
+                }
+            },
+            () -> {
+                try
+                {
+                    waitForAssert(() -> Assert.assertEquals(1, compactionLatch.getCount()));
 
-                            // build indexes on SSTables that will be compacted soon
-                            createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
-                            createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
-                            waitForIndexQueryable();
+                    // build indexes on SSTables that will be compacted soon
+                    createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
+                    createIndex(String.format(CREATE_INDEX_TEMPLATE, "v2"));
+                    waitForTableIndexesQueryable();
 
-                            // continue in-progress compaction
-                            compactionLatch.countDown();
-                        }
-                        catch (Exception e)
-                        {
-                            throw new RuntimeException(e);
-                        }
-                    }, -1 // run verification task once
+                    // continue in-progress compaction
+                    compactionLatch.countDown();
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }, -1 // run verification task once
             );
 
             compactionTask.start();
@@ -301,33 +301,33 @@ public class CompactionTest extends SAITester
         assertNotEquals(0, getDiskUsage());
 
         Injections.Barrier compactionLatch =
-                Injections.newBarrier("pause_compaction_for_drop", 2, false)
-                          .add(InvokePointBuilder.newInvokePoint().onClass(SSTableIndexWriter.class).onMethod("addRow"))
-                          .build();
+        Injections.newBarrier("pause_compaction_for_drop", 2, false)
+                  .add(InvokePointBuilder.newInvokePoint().onClass(SSTableIndexWriter.class).onMethod("addRow"))
+                  .build();
         try
         {
             // pause in-progress compaction
             Injections.inject(compactionLatch);
 
             TestWithConcurrentVerification compactionTask = new TestWithConcurrentVerification(
-                    () -> upgradeSSTables(),
-                    () -> {
-                        try
-                        {
-                            waitForAssert(() -> Assert.assertEquals(1, compactionLatch.getCount()));
+            this::upgradeSSTables,
+            () -> {
+                try
+                {
+                    waitForAssert(() -> Assert.assertEquals(1, compactionLatch.getCount()));
 
-                            // drop all indexes
-                            dropIndex("DROP INDEX %s." + v1IndexName);
-                            dropIndex("DROP INDEX %s." + v2IndexName);
+                    // drop all indexes
+                    dropIndex("DROP INDEX %s." + v1IndexName);
+                    dropIndex("DROP INDEX %s." + v2IndexName);
 
-                            // continue in-progress compaction
-                            compactionLatch.countDown();
-                        }
-                        catch (Throwable e)
-                        {
-                            throw new RuntimeException(e);
-                        }
-                    }, -1 // run verification task once
+                    // continue in-progress compaction
+                    compactionLatch.countDown();
+                }
+                catch (Throwable e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }, -1 // run verification task once
             );
 
             compactionTask.start();
@@ -345,10 +345,10 @@ public class CompactionTest extends SAITester
         // verify indexes are dropped
         // verify indexes are dropped
         assertThatThrownBy(() -> executeNet("SELECT id1 FROM %s WHERE v1>=0"))
-                .isInstanceOf(InvalidQueryException.class)
-                .hasMessage(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE);
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE);
         assertThatThrownBy(() -> executeNet("SELECT id1 FROM %s WHERE v2='0'"))
-                .isInstanceOf(InvalidQueryException.class)
-                .hasMessage(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE);
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE);
     }
 }

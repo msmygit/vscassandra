@@ -27,6 +27,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
 public class ValueIterator<CONCRETE extends ValueIterator<CONCRETE>> extends Walker<CONCRETE>
 {
     private final ByteSource limit;
+    private final TransitionBytesCollector collector;
     private IterationPosition stack;
     private long next;
 
@@ -55,15 +56,27 @@ public class ValueIterator<CONCRETE extends ValueIterator<CONCRETE>> extends Wal
 
     protected ValueIterator(Rebufferer source, long root)
     {
+        this(source, root, false);
+    }
+
+    protected ValueIterator(Rebufferer source, long root, boolean collecting)
+    {
         super(source, root);
         limit = null;
+        collector = collecting ? new TransitionBytesCollector() : null;
         initializeNoLeftBound(root, 256);
     }
 
     protected ValueIterator(Rebufferer source, long root, ByteComparable start, ByteComparable end, boolean admitPrefix)
     {
+        this(source, root, start, end, admitPrefix, false);
+    }
+
+    protected ValueIterator(Rebufferer source, long root, ByteComparable start, ByteComparable end, boolean admitPrefix, boolean collecting)
+    {
         super(source, root);
         limit = end != null ? end.asComparableBytes(BYTE_COMPARABLE_VERSION) : null;
+        collector = collecting ? new TransitionBytesCollector() : null;
 
         if (start != null)
             initializeWithLeftBound(root, start.asComparableBytes(BYTE_COMPARABLE_VERSION), admitPrefix, limit != null);
@@ -151,6 +164,14 @@ public class ValueIterator<CONCRETE extends ValueIterator<CONCRETE>> extends Wal
     }
 
     /**
+     * Returns the payload node position without advancing.
+     */
+    protected long peekNode()
+    {
+        return next;
+    }
+
+    /**
      * Returns the payload node position.
      *
      * This method must be async-read-safe, see {@link #advanceNode()}.
@@ -161,6 +182,12 @@ public class ValueIterator<CONCRETE extends ValueIterator<CONCRETE>> extends Wal
         if (next != -1)
             next = advanceNode();
         return toReturn;
+    }
+
+    protected ByteComparable nextCollectedValue()
+    {
+        assert collector != null : "Cannot get a collected value from a non-collecting iterator";
+        return collector.toByteComparable();
     }
 
     private long advanceNode()

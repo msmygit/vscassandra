@@ -26,7 +26,7 @@ import com.datastax.driver.core.ResultSet;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.disk.v1.kdtree.NumericIndexWriter;
+import org.apache.cassandra.index.sai.disk.v1.bbtree.NumericIndexWriter;
 
 import static org.junit.Assert.assertEquals;
 
@@ -38,8 +38,6 @@ public class FlushingTest extends SAITester
         createTable(CREATE_TABLE_TEMPLATE);
         createIndex(String.format(CREATE_INDEX_TEMPLATE, "v1"));
 
-        // BDKWriter#valueCount is updated when leaf values are written at BKDWriter#writeLeakBlock on every
-        // BKDWriter#DEFAULT_MAX_POINTS_IN_LEAF_NODE (1024) number of points, see LUCENE-8765
         int overwrites = NumericIndexWriter.MAX_POINTS_IN_LEAF_NODE + 1;
         for (int j = 0; j < overwrites; j++)
         {

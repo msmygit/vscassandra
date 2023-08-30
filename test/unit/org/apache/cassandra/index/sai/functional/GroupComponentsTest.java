@@ -24,11 +24,10 @@ import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -38,25 +37,27 @@ import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class GroupComponentsTest extends SAITester
 {
     @Test
-    public void testInvalidateWithoutObsolete() throws Throwable
+    public void testInvalidateWithoutObsolete()
     {
-        createTable("CREATE TABLE %s (pk int primary key, value int)");
-        createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
+        createTable("CREATE TABLE %s (pk int primary key, value text)");
+        createIndex("CREATE INDEX ON %s(value) USING 'sai'");
         execute("INSERT INTO %s (pk) VALUES (1)");
         flush();
 
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+        assertNotNull(group);
+
         StorageAttachedIndex index = (StorageAttachedIndex) group.getIndexes().iterator().next();
         SSTableReader sstable = Iterables.getOnlyElement(cfs.getLiveSSTables());
 
-        Set<Component> components = group.getLiveComponents(sstable, getIndexesFromGroup(group));
-        assertEquals(Version.LATEST.onDiskFormat().perSSTableComponents().size() + 1, components.size());
+        Set<Component> components = StorageAttachedIndexGroup.getLiveComponents(sstable, getIndexesFromGroup(group));
+        assertEquals(Version.LATEST.onDiskFormat().perSSTableIndexComponents(false).size() + 1, components.size());
 
         // index files are released but not removed
         cfs.invalidate(true, false);
@@ -66,44 +67,46 @@ public class GroupComponentsTest extends SAITester
     }
 
     @Test
-    public void getLiveComponentsForEmptyIndex() throws Throwable
+    public void getLiveComponentsForEmptyIndex()
     {
-        createTable("CREATE TABLE %s (pk int primary key, value int)");
-        createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
+        createTable("CREATE TABLE %s (pk int primary key, value text)");
+        createIndex("CREATE INDEX ON %s(value) USING 'sai'");
         execute("INSERT INTO %s (pk) VALUES (1)");
         flush();
 
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+        assertNotNull(group);
+
         Set<SSTableReader> sstables = cfs.getLiveSSTables();
 
         assertEquals(1, sstables.size());
 
-        Set<Component> components = group.getLiveComponents(sstables.iterator().next(), getIndexesFromGroup(group));
+        Set<Component> components = StorageAttachedIndexGroup.getLiveComponents(sstables.iterator().next(), getIndexesFromGroup(group));
 
-        assertEquals(Version.LATEST.onDiskFormat().perSSTableComponents().size() + 1, components.size());
+        assertEquals(Version.LATEST.onDiskFormat().perSSTableIndexComponents(false).size() + 1, components.size());
     }
 
     @Test
-    public void getLiveComponentsForPopulatedIndex() throws Throwable
+    public void getLiveComponentsForPopulatedIndex()
     {
-        createTable("CREATE TABLE %s (pk int primary key, value int)");
-        IndexContext indexContext = createIndexContext(createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'"), Int32Type.instance);
-        waitForIndexQueryable();
-        execute("INSERT INTO %s (pk, value) VALUES (1, 1)");
+        createTable("CREATE TABLE %s (pk int primary key, value text)");
+        IndexContext indexContext = createIndexContext(createIndex("CREATE INDEX ON %s(value) USING 'sai'"), UTF8Type.instance);
+        execute("INSERT INTO %s (pk, value) VALUES (1, '1')");
         flush();
 
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+        assertNotNull(group);
+
         Set<SSTableReader> sstables = cfs.getLiveSSTables();
 
         assertEquals(1, sstables.size());
 
-        Set<Component> components = group.getLiveComponents(sstables.iterator().next(), getIndexesFromGroup(group));
+        Set<Component> components = StorageAttachedIndexGroup.getLiveComponents(sstables.iterator().next(), getIndexesFromGroup(group));
 
-        assertEquals(Version.LATEST.onDiskFormat().perSSTableComponents().size() +
-                     Version.LATEST.onDiskFormat().perIndexComponents(indexContext).size(),
+        assertEquals(Version.LATEST.onDiskFormat().perSSTableIndexComponents(false).size() +
+                     Version.LATEST.onDiskFormat().perColumnIndexComponents(indexContext).size(),
                      components.size());
     }
 

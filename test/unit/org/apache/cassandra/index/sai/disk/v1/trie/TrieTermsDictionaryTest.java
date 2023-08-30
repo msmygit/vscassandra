@@ -33,26 +33,27 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
+import org.apache.cassandra.index.sai.utils.SAIRandomizedTester;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
-import static org.apache.cassandra.utils.bytecomparable.ByteComparable.Version.OSS41;
 import static org.apache.cassandra.utils.bytecomparable.ByteComparable.compare;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-public class TrieTermsDictionaryTest extends SaiRandomizedTest
+public class TrieTermsDictionaryTest extends SAIRandomizedTester
 {
     private IndexDescriptor indexDescriptor;
-    private String index;
     private IndexContext indexContext;
 
     @Before
     public void setup() throws Throwable
     {
         indexDescriptor = newIndexDescriptor();
-        index = newIndex();
+        String index = newIndex();
         indexContext = SAITester.createIndexContext(index, UTF8Type.instance);
     }
 
@@ -65,7 +66,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
     private void doTestExactMatch() throws Exception
     {
         long fp;
-        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, false))
+        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext))
         {
             writer.add(asByteComparable("ab"), 0);
             writer.add(asByteComparable("abb"), 1);
@@ -75,7 +76,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, null);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.exactMatch(asByteComparable("a")));
@@ -93,7 +94,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
         final List<ByteComparable> byteComparables = generateSortedByteComparables();
 
         long fp;
-        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, false))
+        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext))
         {
             for (int i = 0; i < byteComparables.size(); ++i)
             {
@@ -102,10 +103,9 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
-             TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, null);
+             TrieTermsIterator iterator = new TrieTermsIterator(input.instantiateRebufferer(), fp))
         {
-            final Iterator<Pair<ByteComparable, Long>> iterator = reader.iterator();
             final Iterator<ByteComparable> expected = byteComparables.iterator();
             int offset = 0;
             while (iterator.hasNext())
@@ -113,7 +113,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
                 assertTrue(expected.hasNext());
                 final Pair<ByteComparable, Long> actual = iterator.next();
 
-                assertEquals(0, compare(expected.next(), actual.left, OSS41));
+                assertEquals(0, compare(expected.next(), actual.left, ByteComparable.Version.OSS41));
                 assertEquals(offset++, actual.right.longValue());
             }
             assertFalse(expected.hasNext());
@@ -126,7 +126,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
         final List<ByteComparable> byteComparables = generateSortedByteComparables();
 
         long fp;
-        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, false))
+        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext))
         {
             for (int i = 0; i < byteComparables.size(); ++i)
             {
@@ -135,22 +135,22 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
             fp = writer.complete(new MutableLong());
         }
 
-        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, null);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             final ByteComparable expectedMaxTerm = byteComparables.get(byteComparables.size() - 1);
             final ByteComparable actualMaxTerm = reader.getMaxTerm();
-            assertEquals(0, compare(expectedMaxTerm, actualMaxTerm, OSS41));
+            assertEquals(0, compare(expectedMaxTerm, actualMaxTerm, ByteComparable.Version.OSS41));
 
             final ByteComparable expectedMinTerm = byteComparables.get(0);
             final ByteComparable actualMinTerm = reader.getMinTerm();
-            assertEquals(0, compare(expectedMinTerm, actualMinTerm, OSS41));
+            assertEquals(0, compare(expectedMinTerm, actualMinTerm, ByteComparable.Version.OSS41));
         }
     }
 
     private List<ByteComparable> generateSortedByteComparables()
     {
-        final int numKeys = randomIntBetween(16, 512);
+        final int numKeys = getRandom().nextIntBetween(16, 512);
         final List<String> randomStrings = Stream.generate(() -> randomSimpleString(4, 48))
                                                  .limit(numKeys)
                                                  .sorted()

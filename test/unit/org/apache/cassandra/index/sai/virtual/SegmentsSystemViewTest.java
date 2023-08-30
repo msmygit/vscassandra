@@ -17,8 +17,10 @@
  */
 package org.apache.cassandra.index.sai.virtual;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.common.collect.ImmutableList;
@@ -34,17 +36,18 @@ import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.v1.segment.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.service.StorageService;
 
+import static org.apache.cassandra.config.CassandraRelevantProperties.TEST_ENCRYPTION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -78,7 +81,7 @@ public class SegmentsSystemViewTest extends SAITester
                                                                       KEYSPACE);
 
     @BeforeClass
-    public static void setup() throws Exception
+    public static void setup()
     {
         VirtualKeyspaceRegistry.instance.register(new VirtualKeyspace(SchemaConstants.VIRTUAL_VIEWS, ImmutableList.of(new SegmentsSystemView(SchemaConstants.VIRTUAL_VIEWS))));
 
@@ -88,58 +91,61 @@ public class SegmentsSystemViewTest extends SAITester
     @Test
     public void testSegmentsMetadata() throws Throwable
     {
-        createTable("CREATE TABLE %s (k int, c int, v1 int, v2 text, PRIMARY KEY (k, c))");
-        String numericIndex = createIndex("CREATE CUSTOM INDEX ON %s(v1) USING 'StorageAttachedIndex'");
-        String stringIndex = createIndex("CREATE CUSTOM INDEX ON %s(v2) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
+        createTable("CREATE TABLE %s (k int, c int, v1 text, PRIMARY KEY (k, c))");
+        String literalIndex = createIndex("CREATE CUSTOM INDEX ON %s(v1) USING 'StorageAttachedIndex'");
 
         int num = 100;
 
-        String insert = "INSERT INTO %s(k, c, v1, v2) VALUES (?, ?, ?, ?)";
+        String insert = "INSERT INTO %s(k, c, v1) VALUES (?, ?, ?)";
 
         // the virtual table should be empty before adding contents
-        assertEmpty(execute(SELECT, numericIndex));
-        assertEmpty(execute(SELECT, stringIndex));
+        assertEmpty(execute(SELECT, literalIndex));
 
         // insert rows and verify that the virtual table is empty before flushing
         for (int i = 0; i < num / 2; i++)
-            execute(insert, i, 10, 100, "1000");
-        assertEmpty(execute(SELECT, numericIndex));
-        assertEmpty(execute(SELECT, stringIndex));
+            execute(insert, i, 10, "1000");
+        assertEmpty(execute(SELECT, literalIndex));
 
         // flush the memtable and verify the new record in the virtual table
         flush();
         Object[] row1 = row(0L, (long)(num / 2), 0L, (long)(num / 2 - 1));
-        assertRows(execute(SELECT, numericIndex), row1);
-        assertRows(execute(SELECT, stringIndex), row1);
+        assertRows(execute(SELECT, literalIndex), row1);
 
         // flush a second memtable and verify both the old and the new record in the virtual table
         for (int i = num / 2; i < num; i++)
-            execute(insert, i, 20, 200, "2000");
+            execute(insert, i, 20, "2000");
         flush();
         Object[] row2 = row(0L, (long)(num / 2), 0L, (long)(num / 2 - 1));
-        assertRows(execute(SELECT, numericIndex), row1, row2);
-        assertRows(execute(SELECT, stringIndex), row1, row2);
+        assertRows(execute(SELECT, literalIndex), row1, row2);
 
         // force compaction, there is only 1 sstable
         compact();
         waitForCompactions();
         Object[] row3 = row(0L, (long)num, 0L, (long)(num - 1));
-        assertRows(execute(SELECT, numericIndex), row3);
-        assertRows(execute(SELECT, stringIndex), row3);
+        assertRows(execute(SELECT, literalIndex), row3);
 
         for (int lastValidSegmentRowId : Arrays.asList(0, 1, 2, 3, 5, 9, 25, 49, 59, 99, 101))
         {
             SegmentBuilder.updateLastValidSegmentRowId(lastValidSegmentRowId);
 
             // compaction to rewrite segments
-            StorageService.instance.upgradeSSTables(KEYSPACE, false, new String[] { currentTable() });
-            // however many segments we create during the build we should always end up with
-            // just 1 segment with all the rows in it
-            Object[] segmentRow = row(0L, (long)num, 0L, (long)(num - 1));
-            assertRows(execute(SELECT, numericIndex), segmentRow);
-            assertRows(execute(SELECT, stringIndex), segmentRow);
+            StorageService.instance.upgradeSSTables(KEYSPACE, false, currentTable());
 
+            List<Object[]> segmentRows = new ArrayList<>();
+
+            for (int row = 0; row < num / (lastValidSegmentRowId + 1); row++)
+                segmentRows.add(row((long)(row * (lastValidSegmentRowId + 1)),
+                                    (long)(lastValidSegmentRowId + 1),
+                                    (long)(row * (lastValidSegmentRowId + 1)),
+                                    (long)(row * (lastValidSegmentRowId + 1) + lastValidSegmentRowId)));
+            long prevMaxSSTableRowId = segmentRows.isEmpty() ? -1L : (long)segmentRows.get(segmentRows.size() - 1)[3];
+            if (prevMaxSSTableRowId < 99L)
+            {
+                segmentRows.add(row(prevMaxSSTableRowId + 1, 99 - prevMaxSSTableRowId, prevMaxSSTableRowId + 1, 99L));
+            }
+
+            UntypedResultSet resultSet = execute(SELECT, literalIndex);
+            assertRows(execute(SELECT, literalIndex), segmentRows.toArray(new Object[][]{}));
             // verify index metadata length
             Map<String, Long> indexLengths = new HashMap<>();
             for (UntypedResultSet.Row row : execute(SELECT_INDEX_METADATA))
@@ -159,41 +165,25 @@ public class SegmentsSystemViewTest extends SAITester
                     final String indexType = entry.getKey();
                     final String str = entry.getValue().getOrDefault(SegmentMetadata.ComponentMetadata.LENGTH, "0");
 
-                    if (indexType.equals(IndexComponent.KD_TREE.toString()))
-                    {
-                        int maxPointsInLeafNode = Integer.parseInt(entry.getValue().get("max_points_in_leaf_node"));
-
-                        assertEquals(1024, maxPointsInLeafNode);
-                    }
-                    else if (indexType.equals(IndexComponent.KD_TREE_POSTING_LISTS.toString()))
-                    {
-                        int numLeafPostings = Integer.parseInt(entry.getValue().get("num_leaf_postings"));
-
-                        assertTrue(numLeafPostings > 0);
-                    }
-
                     final long length = Long.parseLong(str);
 
                     final long value = indexLengths.getOrDefault(indexType, 0L);
                     indexLengths.put(indexType, value + length);
                 }
             }
-            if (!Boolean.parseBoolean(System.getProperty("cassandra.test.encryption", "false")))
-                assertEquals(indexFileLengths(currentTable()), indexLengths);
+            if (!TEST_ENCRYPTION.getBoolean())
+                assertEquals(indexFileLengths(), indexLengths);
         }
 
         // drop the numeric index and verify that there are not entries for it in the table
-        dropIndex("DROP INDEX %s." + numericIndex);
-        assertEmpty(execute(SELECT, numericIndex));
-        assertNotEquals(0, execute(SELECT, stringIndex).size());
+        assertNotEquals(0, execute(SELECT, literalIndex).size());
 
         // drop the string index and verify that there are not entries for it in the table
-        dropIndex("DROP INDEX %s." +  stringIndex);
-        assertEmpty(execute(SELECT, numericIndex));
-        assertEmpty(execute(SELECT, stringIndex));
+        dropIndex("DROP INDEX %s." +  literalIndex);
+        assertEmpty(execute(SELECT, literalIndex));
     }
 
-    private HashMap<String, Long> indexFileLengths(String table) throws Exception
+    private HashMap<String, Long> indexFileLengths()
     {
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
 
@@ -214,18 +204,13 @@ public class SegmentsSystemViewTest extends SAITester
                     addComponentSizeToMap(lengths, IndexComponent.TERMS_DATA, index.getIndexContext(), indexDescriptor);
                     addComponentSizeToMap(lengths, IndexComponent.POSTING_LISTS, index.getIndexContext(), indexDescriptor);
                 }
-                else
-                {
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE, index.getIndexContext(), indexDescriptor);
-                    addComponentSizeToMap(lengths, IndexComponent.KD_TREE_POSTING_LISTS, index.getIndexContext(), indexDescriptor);
-                }
             }
         }
 
         return lengths;
     }
 
-    private void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, IndexContext indexContext, IndexDescriptor indexDescriptor)
+    private static void addComponentSizeToMap(HashMap<String, Long> map, IndexComponent key, IndexContext indexContext, IndexDescriptor indexDescriptor)
     {
         map.compute(key.name(), (typeName, acc) -> {
             final long size = indexDescriptor.sizeOnDiskOfPerIndexComponent(key, indexContext);

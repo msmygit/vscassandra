@@ -20,6 +20,7 @@
  */
 package org.apache.cassandra.index;
 
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
@@ -512,13 +513,13 @@ public interface Index
          * Notification of the start of a partition update.
          * This event always occurs before any other during the update.
          */
-        public void begin();
+        default public void begin() {};
 
         /**
          * Notification of a top level partition delete.
          * @param deletionTime
          */
-        public void partitionDelete(DeletionTime deletionTime);
+        default public void partitionDelete(DeletionTime deletionTime) {};
 
         /**
          * Notification of a RangeTombstone.
@@ -526,7 +527,7 @@ public interface Index
          * and a notification will be passed for each of them.
          * @param tombstone
          */
-        public void rangeTombstone(RangeTombstone tombstone);
+        default public void rangeTombstone(RangeTombstone tombstone) {};
 
         /**
          * Notification that a new row was inserted into the Memtable holding the partition.
@@ -536,7 +537,7 @@ public interface Index
          *
          * @param row the Row being inserted into the base table's Memtable.
          */
-        public void insertRow(Row row);
+        default public void insertRow(Row row) {};
 
         /**
          * Notification of a modification to a row in the base table's Memtable.
@@ -557,7 +558,7 @@ public interface Index
          * @param newRowData data that was not present in the existing row and is being inserted
          *                   into the base table's Memtable
          */
-        public void updateRow(Row oldRowData, Row newRowData);
+        default public void updateRow(Row oldRowData, Row newRowData) {};
 
         /**
          * Notification that a row was removed from the partition.
@@ -575,13 +576,13 @@ public interface Index
          *
          * @param row data being removed from the base table
          */
-        public void removeRow(Row row);
+        default public void removeRow(Row row) {};
 
         /**
          * Notification of the end of the partition update.
          * This event always occurs after all others for the particular update.
          */
-        public void finish();
+        default public void finish() {};
     }
 
     /*
@@ -777,6 +778,23 @@ public interface Index
          * @return the SSTable components created by this group
          */
         Set<Component> getComponents();
+
+        /**
+         * Validates all indexes in the group against the specified SSTables.
+         *
+         * @param sstables SSTables for which indexes in the group should be built
+         * @param throwOnIncomplete whether to throw an error if any index in the group is incomplete
+         *
+         * @return true if all indexes in the group are complete and valid
+         *         false if any index is incomplete and {@code throwOnIncomplete} is false
+         *
+         * @throws IllegalStateException if {@code throwOnIncomplete} is true and any index in the group is incomplete
+         * @throws UncheckedIOException if there is a problem validating any on-disk component of an index in the group
+         */
+        default boolean validateSSTableAttachedIndexes(Collection<SSTableReader> sstables, boolean throwOnIncomplete)
+        {
+            return true;
+        }
 
         /**
          * @return true if this index group is capable of supporting multiple contains restrictions, false otherwise

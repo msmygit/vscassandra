@@ -19,35 +19,31 @@
 package org.apache.cassandra.index.sai.disk.io;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.base.Throwables;
 
-import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.SequentialWriterOption;
 import org.apache.lucene.store.IndexInput;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 public class TrackingIndexFileUtils extends IndexFileUtils
 {
-    private final Map<TrackingIndexInput, String> openInputs = Collections.synchronizedMap(new HashMap<>());
+    private final Map<TrackedForwardingIndexInput, String> openInputs = Collections.synchronizedMap(new HashMap<>());
 
     public TrackingIndexFileUtils(SequentialWriterOption writerOption)
     {
-        setWriterOption(writerOption);
+        super(writerOption);
     }
 
     @Override
     public IndexInput openInput(FileHandle handle)
     {
-        TrackingIndexInput input = new TrackingIndexInput(super.openInput(handle));
+        TrackedForwardingIndexInput input = new TrackedForwardingIndexInput(super.openInput(handle));
         openInputs.put(input, Throwables.getStackTraceAsString(new RuntimeException("Input created")));
         return input;
     }
@@ -57,41 +53,64 @@ public class TrackingIndexFileUtils extends IndexFileUtils
         return new HashMap<>(openInputs);
     }
 
-    public static void reset()
+    public class TrackedForwardingIndexInput extends IndexInput
     {
-        setWriterOption(IndexFileUtils.defaultWriterOption);
-    }
+        private final IndexInput delegate;
 
-    public class TrackingIndexInput extends FilterIndexInput
-    {
-        TrackingIndexInput(IndexInput delegate)
+        protected TrackedForwardingIndexInput(IndexInput delegate)
         {
-            super(delegate);
+            super(delegate.toString());
+            this.delegate = delegate;
         }
 
         @Override
         public void close() throws IOException
         {
-            super.close();
+            delegate.close();
             final String creationStackTrace = openInputs.remove(this);
             assertNotNull("Closed unregistered input: " + this, creationStackTrace);
         }
-    }
 
-    public static void setWriterOption(SequentialWriterOption option)
-    {
-        try
+        @Override
+        public long getFilePointer()
         {
-            Field writerOption = IndexFileUtils.class.getDeclaredField("writerOption");
-            writerOption.setAccessible(true);
-            Field modifiersField = Field.class.getDeclaredField("modifiers");
-            modifiersField.setAccessible(true);
-            modifiersField.setInt(writerOption, writerOption.getModifiers() & ~Modifier.FINAL);
-            writerOption.set(null, option);
+            return delegate.getFilePointer();
         }
-        catch (Throwable e)
+
+        @Override
+        public void seek(long pos) throws IOException
         {
-            fail();
+            delegate.seek(pos);
+        }
+
+        @Override
+        public long length()
+        {
+            return delegate.length();
+        }
+
+        @Override
+        public IndexInput slice(String sliceDescription, long offset, long length) throws IOException
+        {
+            return delegate.slice(sliceDescription, offset, length);
+        }
+
+        @Override
+        public byte readByte() throws IOException
+        {
+            return delegate.readByte();
+        }
+
+        @Override
+        public void readBytes(byte[] b, int offset, int len) throws IOException
+        {
+            delegate.readBytes(b, offset, len);
+        }
+
+        @Override
+        public String toString()
+        {
+            return delegate.toString();
         }
     }
 }

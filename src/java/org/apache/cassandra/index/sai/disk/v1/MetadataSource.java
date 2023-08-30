@@ -25,22 +25,19 @@ import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.lucene.store.BufferedChecksumIndexInput;
-import org.apache.lucene.store.ByteArrayIndexInput;
+import org.apache.lucene.store.ByteArrayDataInput;
+import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.BytesRef;
 
 @NotThreadSafe
 public class MetadataSource
 {
-    private final Version version;
     private final Map<String, BytesRef> components;
 
-    private MetadataSource(Version version, Map<String, BytesRef> components)
+    private MetadataSource(Map<String, BytesRef> components)
     {
-        this.version = version;
         this.components = components;
     }
 
@@ -57,11 +54,10 @@ public class MetadataSource
     private static MetadataSource load(IndexInput indexInput) throws IOException
     {
         Map<String, BytesRef> components = new HashMap<>();
-        Version version;
 
         try (BufferedChecksumIndexInput input = new BufferedChecksumIndexInput(indexInput))
         {
-            version = SAICodecUtils.checkHeader(input);
+            SAICodecUtils.checkHeader(input);
             final int num = input.readInt();
 
             for (int x = 0; x < num; x++)
@@ -83,10 +79,10 @@ public class MetadataSource
             SAICodecUtils.checkFooter(input);
         }
 
-        return new MetadataSource(version, components);
+        return new MetadataSource(components);
     }
 
-    public IndexInput get(String name)
+    public DataInput get(String name)
     {
         BytesRef bytes = components.get(name);
 
@@ -96,11 +92,6 @@ public class MetadataSource
                                                              name, components.keySet()));
         }
 
-        return new ByteArrayIndexInput(name, bytes.bytes);
-    }
-
-    public Version getVersion()
-    {
-        return version;
+        return new ByteArrayDataInput(bytes.bytes);
     }
 }

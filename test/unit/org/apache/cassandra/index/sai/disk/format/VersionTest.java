@@ -18,21 +18,17 @@
 package org.apache.cassandra.index.sai.disk.format;
 
 import org.junit.BeforeClass;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class VersionTest
 {
     @BeforeClass
-    public static void initialise() throws Throwable
+    public static void initialise()
     {
         DatabaseDescriptor.daemonInitialization();
     }
@@ -41,7 +37,6 @@ public class VersionTest
     public void supportedVersionsWillParse()
     {
         assertEquals(Version.AA, Version.parse("aa"));
-        assertEquals(Version.BA, Version.parse("ba"));
     }
 
     @Test

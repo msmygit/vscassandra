@@ -40,7 +40,6 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -49,18 +48,16 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQL3Type;
+import org.apache.cassandra.cql3.CqlBuilder;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.CassandraWriteContext;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.DeletionTime;
-import org.apache.cassandra.db.RangeTombstone;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.WriteContext;
 import org.apache.cassandra.db.compaction.CompactionManager;
-import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -76,13 +73,10 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.SecondaryIndexBuilder;
-import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.TargetParser;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.analyzer.LuceneAnalyzer;
 import org.apache.cassandra.index.sai.analyzer.NonTokenizingOptions;
-import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
-import org.apache.cassandra.index.sai.disk.StorageAttachedIndexWriter;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -90,6 +84,7 @@ import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.io.sstable.SSTableIdFactory;
 import org.apache.cassandra.io.sstable.format.SSTableFlushObserver;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.ColumnMetadata;
@@ -97,20 +92,29 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.utils.concurrent.OpOrder;
 
 public class StorageAttachedIndex implements Index
 {
+    public static final String NAME = "sai";
+
+    @VisibleForTesting
+    public static final String ANALYSIS_ON_KEY_COLUMNS_MESSAGE = "Analysis options are not supported on primary key columns, but found ";
+    
     private static final Logger logger = LoggerFactory.getLogger(StorageAttachedIndex.class);
 
     private static class StorageAttachedIndexBuildingSupport implements IndexBuildingSupport
     {
+        @Override
         public SecondaryIndexBuilder getIndexBuildTask(ColumnFamilyStore cfs,
                                                        Set<Index> indexes,
                                                        Collection<SSTableReader> sstablesToRebuild,
                                                        boolean isFullRebuild)
         {
-            NavigableMap<SSTableReader, Set<StorageAttachedIndex>> sstables = new TreeMap<>(SSTableReader.idComparator);
+            NavigableMap<SSTableReader, Set<StorageAttachedIndex>> sstables = new TreeMap<>(Comparator.comparing(s -> s.descriptor.id, SSTableIdFactory.COMPARATOR));
             StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(cfs);
+
+            assert group != null : "Index group does not exist for table " + cfs.keyspace + '.' + cfs.name;
 
             indexes.stream()
                    .filter((i) -> i instanceof StorageAttachedIndex)
@@ -125,37 +129,27 @@ public class StorageAttachedIndex implements Index
                                 if (!isFullRebuild)
                                 {
                                     ss = sstablesToRebuild.stream()
-                                                          .filter(s -> !IndexDescriptor.create(s).isPerIndexBuildComplete(indexContext))
+                                                          .filter(s -> !IndexDescriptor.create(s).isPerColumnIndexBuildComplete(indexContext))
                                                           .collect(Collectors.toList());
                                 }
 
                                 group.dropIndexSSTables(ss, sai);
 
-                                ss.forEach((sstable) ->
-                                           {
-                                               Set<StorageAttachedIndex> toBuild = sstables.get(sstable);
-                                               if (toBuild == null) sstables.put(sstable, (toBuild = new HashSet<>()));
-                                               toBuild.add(sai);
-                                           });
+                                ss.forEach(sstable -> sstables.computeIfAbsent(sstable, ignore -> new HashSet<>()).add(sai));
                             });
 
-            return new StorageAttachedIndexBuilder(StorageAttachedIndexGroup.getIndexGroup(cfs), sstables, isFullRebuild, false);
+            return new StorageAttachedIndexBuilder(group, sstables, isFullRebuild, false);
         }
     }
 
     // Used to build indexes on newly added SSTables:
     private static final StorageAttachedIndexBuildingSupport INDEX_BUILDER_SUPPORT = new StorageAttachedIndexBuildingSupport();
 
-    private static final Set<String> VALID_OPTIONS = ImmutableSet.of(NonTokenizingOptions.CASE_SENSITIVE,
-                                                                     NonTokenizingOptions.NORMALIZE,
-                                                                     NonTokenizingOptions.ASCII,
-                                                                     IndexContext.ENABLE_SEGMENT_COMPACTION_OPTION_NAME,
-                                                                     IndexTarget.TARGET_OPTION_NAME,
+    private static final Set<String> VALID_OPTIONS = ImmutableSet.of(IndexTarget.TARGET_OPTION_NAME,
                                                                      IndexTarget.CUSTOM_INDEX_OPTION_NAME,
-                                                                     IndexWriterConfig.POSTING_LIST_LVL_MIN_LEAVES,
-                                                                     IndexWriterConfig.POSTING_LIST_LVL_SKIP_OPTION,
-                                                                     LuceneAnalyzer.INDEX_ANALYZER,
-                                                                     LuceneAnalyzer.QUERY_ANALYZER);
+                                                                     NonTokenizingOptions.CASE_SENSITIVE,
+                                                                     NonTokenizingOptions.NORMALIZE,
+                                                                     NonTokenizingOptions.ASCII);
 
     public static final Set<CQL3Type> SUPPORTED_TYPES = ImmutableSet.of(CQL3Type.Native.ASCII, CQL3Type.Native.BIGINT, CQL3Type.Native.DATE,
                                                                         CQL3Type.Native.DOUBLE, CQL3Type.Native.FLOAT, CQL3Type.Native.INT,
@@ -168,10 +162,9 @@ public class StorageAttachedIndex implements Index
             ImmutableSet.of(OrderPreservingPartitioner.class, LocalPartitioner.class, ByteOrderedPartitioner.class, RandomPartitioner.class);
 
     private final ColumnFamilyStore baseCfs;
-    private final IndexMetadata config;
     private final IndexContext indexContext;
 
-    // Tracks whether or not we've started the index build on initialization.
+    // Tracks whether we've started the index build on initialization.
     private volatile boolean initBuildStarted = false;
 
     // Tracks whether the index has been invalidated due to removal, a table drop, etc.
@@ -180,7 +173,6 @@ public class StorageAttachedIndex implements Index
     public StorageAttachedIndex(ColumnFamilyStore baseCfs, IndexMetadata config)
     {
         this.baseCfs = baseCfs;
-        this.config = config;
         TableMetadata tableMetadata = baseCfs.metadata();
         Pair<ColumnMetadata, IndexTarget.Type> target = TargetParser.parse(tableMetadata, config);
         this.indexContext = new IndexContext(tableMetadata.keyspace,
@@ -189,8 +181,7 @@ public class StorageAttachedIndex implements Index
                                              tableMetadata.comparator,
                                              target.left,
                                              target.right,
-                                             config,
-                                             baseCfs);
+                                             config);
     }
 
     /**
@@ -238,7 +229,7 @@ public class StorageAttachedIndex implements Index
             throw new InvalidRequestException("Failed to retrieve target column for: " + targetColumn);
         }
 
-        // In order to support different index target on non-frozen map, ie. KEYS, VALUE, ENTRIES, we need to put index
+        // In order to support different index targets on non-frozen map, ie. KEYS, VALUE, ENTRIES, we need to put index
         // name as part of index file name instead of column name. We only need to check that the target is different
         // between indexes. This will only allow indexes in the same column with a different IndexTarget.Type.
         //
@@ -252,7 +243,7 @@ public class StorageAttachedIndex implements Index
 
         AbstractType<?> type = TypeUtil.cellValueType(target.left, target.right);
 
-        // If we are indexing map entries we need to validate the sub-types
+        // If we are indexing map entries we need to validate the subtypes
         if (TypeUtil.isComposite(type))
         {
             for (AbstractType<?> subType : type.subTypes())
@@ -266,8 +257,12 @@ public class StorageAttachedIndex implements Index
             throw new InvalidRequestException("Unsupported type: " + type.asCQL3Type());
         }
 
-        AbstractAnalyzer.fromOptions(type, options);
-        IndexWriterConfig.fromOptions(null, type, options);
+        Map<String, String> analysisOptions = AbstractAnalyzer.getAnalyzerOptions(options);
+        if (target.left.isPrimaryKeyColumn() && !analysisOptions.isEmpty())
+        {
+            throw new InvalidRequestException(ANALYSIS_ON_KEY_COLUMNS_MESSAGE + new CqlBuilder().append(analysisOptions));
+        }
+        AbstractAnalyzer.fromOptions(type, analysisOptions);
 
         return Collections.emptyMap();
     }
@@ -282,7 +277,7 @@ public class StorageAttachedIndex implements Index
     @Override
     public IndexMetadata getIndexMetadata()
     {
-        return config;
+        return indexContext.getIndexMetadata();
     }
 
     @Override
@@ -291,27 +286,27 @@ public class StorageAttachedIndex implements Index
         // New storage-attached indexes will be available for queries after on disk index data are built.
         // Memtable data will be indexed via flushing triggered by schema change
         // We only want to validate the index files if we are starting up
-        return () -> startInitialBuild(baseCfs, StorageService.instance.isStarting()).get();
+        IndexValidation validation = StorageService.instance.isStarting() ? IndexValidation.HEADER_FOOTER : IndexValidation.NONE;
+        return () -> startInitialBuild(baseCfs, validation).get();
     }
 
-    private Future<?> startInitialBuild(ColumnFamilyStore baseCfs, boolean validate)
+    private Future<?> startInitialBuild(ColumnFamilyStore baseCfs, IndexValidation validation)
     {
         if (baseCfs.indexManager.isIndexQueryable(this))
         {
-            logger.debug(indexContext.logMessage("Skipping validation and building in initialization task, as pre-join has already made the storage attached index queryable..."));
+            logger.debug(indexContext.logMessage("Skipping validation and building in initialization task, as pre-join has already made the storage-attached index queryable..."));
             initBuildStarted = true;
             return CompletableFuture.completedFuture(null);
         }
 
-        // stop in-progress compaction tasks to prevent compacted sstable not being index.
+        // stop in-progress compaction tasks to prevent compacted sstable not being indexed.
         logger.debug(indexContext.logMessage("Stopping active compactions to make sure all sstables are indexed after initial build."));
         CompactionManager.instance.interruptCompactionFor(Collections.singleton(baseCfs.metadata()),
-                                                          OperationType.REWRITES_SSTABLES,
-                                                          Predicates.alwaysTrue(),
+                                                          ssTableReader -> true,
                                                           true);
 
         // Force another flush to make sure on disk index is generated for memtable data before marking it queryable.
-        // In case of offline scrub, there is no live memtables.
+        // In the case of offline scrub, there are no live memtables.
         if (!baseCfs.getTracker().getView().liveMemtables.isEmpty())
         {
             baseCfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.INDEX_BUILD_STARTED);
@@ -321,7 +316,10 @@ public class StorageAttachedIndex implements Index
         initBuildStarted = true;
 
         StorageAttachedIndexGroup indexGroup = StorageAttachedIndexGroup.getIndexGroup(baseCfs);
-        List<SSTableReader> nonIndexed = findNonIndexedSSTables(baseCfs, indexGroup, validate);
+
+        assert indexGroup != null : "Index group does not exist for table " + baseCfs.keyspace + '.' + baseCfs.name;
+
+        List<SSTableReader> nonIndexed = findNonIndexedSSTables(baseCfs, indexGroup, validation);
 
         if (nonIndexed.isEmpty())
         {
@@ -334,7 +332,7 @@ public class StorageAttachedIndex implements Index
 
         for (List<SSTableReader> group : groups)
         {
-            SortedMap<SSTableReader, Set<StorageAttachedIndex>> current = new TreeMap<>(SSTableReader.idComparator);
+            SortedMap<SSTableReader, Set<StorageAttachedIndex>> current = new TreeMap<>(Comparator.comparing(s -> s.descriptor.id, SSTableIdFactory.COMPARATOR));
             group.forEach(sstable -> current.put(sstable, Collections.singleton(this)));
 
             futures.add(CompactionManager.instance.submitIndexBuild(new StorageAttachedIndexBuilder(indexGroup, current, false, true)));
@@ -405,20 +403,7 @@ public class StorageAttachedIndex implements Index
             for (SSTableIndex sstableIndex : indexContext.getView().getIndexes())
                 sstableIndex.getSSTable().unregisterComponents(toRemove, baseCfs.getTracker());
 
-            indexContext.invalidate(true);
-            return null;
-        };
-    }
-
-    @Override
-    public Callable<?> getUnloadTask()
-    {
-        return () ->
-        {
-            // mark index as invalid, in-progress SSTableIndexWriters will abort
-            valid = false;
-
-            indexContext.invalidate(false);
+            indexContext.invalidate();
             return null;
         };
     }
@@ -457,8 +442,11 @@ public class StorageAttachedIndex implements Index
                 return null;
             }
 
-            StorageAttachedIndexGroup group = StorageAttachedIndexGroup.getIndexGroup(baseCfs);
-            Collection<SSTableReader> nonIndexed = findNonIndexedSSTables(baseCfs, group, true);
+            StorageAttachedIndexGroup indexGroup = StorageAttachedIndexGroup.getIndexGroup(baseCfs);
+
+            assert indexGroup != null : "Index group does not exist for table";
+
+            Collection<SSTableReader> nonIndexed = findNonIndexedSSTables(baseCfs, indexGroup, IndexValidation.HEADER_FOOTER);
 
             if (nonIndexed.isEmpty())
             {
@@ -530,6 +518,7 @@ public class StorageAttachedIndex implements Index
     @Override
     public boolean isQueryable(Status status)
     {
+        // consider unknown status as queryable, because gossip may not be up-to-date for newly joining nodes.
         return status == Status.BUILD_SUCCEEDED || status == Status.UNKNOWN;
     }
 
@@ -543,13 +532,13 @@ public class StorageAttachedIndex implements Index
      *
      * @return a list SSTables without attached indexes
      */
-    private synchronized List<SSTableReader> findNonIndexedSSTables(ColumnFamilyStore baseCfs, StorageAttachedIndexGroup group, boolean validate)
+    private synchronized List<SSTableReader> findNonIndexedSSTables(ColumnFamilyStore baseCfs, StorageAttachedIndexGroup group, IndexValidation validation)
     {
         Set<SSTableReader> sstables = baseCfs.getLiveSSTables();
 
         // Initialize the SSTable indexes w/ valid existing components...
         assert group != null : "Missing index group on " + baseCfs.name;
-        group.onSSTableChanged(Collections.emptyList(), sstables, Collections.singleton(this), validate);
+        group.onSSTableChanged(Collections.emptyList(), sstables, Collections.singleton(this), validation);
 
         // ...then identify and rebuild the SSTable indexes that are missing.
         List<SSTableReader> nonIndexed = new ArrayList<>();
@@ -562,63 +551,13 @@ public class StorageAttachedIndex implements Index
             //   2. The SSTable is not marked compacted
             //   3. The column index does not have a completion marker
             if (!view.containsSSTable(sstable) && !sstable.isMarkedCompacted() &&
-                !IndexDescriptor.create(sstable).isPerIndexBuildComplete(indexContext))
+                !IndexDescriptor.create(sstable).isPerColumnIndexBuildComplete(indexContext))
             {
                 nonIndexed.add(sstable);
             }
         }
 
         return nonIndexed;
-    }
-
-    private class UpdateIndexer extends IndexerAdapter
-    {
-        private final DecoratedKey key;
-        private final Memtable mt;
-        private final WriteContext writeContext;
-
-        UpdateIndexer(DecoratedKey key, Memtable mt, WriteContext writeContext)
-        {
-            this.key = key;
-            this.mt = mt;
-            this.writeContext = writeContext;
-        }
-
-        @Override
-        public void insertRow(Row row)
-        {
-            indexContext.index(key, row, mt, CassandraWriteContext.fromContext(writeContext).getGroup());
-        }
-
-        @Override
-        public void updateRow(Row oldRow, Row newRow)
-        {
-            insertRow(newRow);
-        }
-    }
-
-    protected static abstract class IndexerAdapter implements Indexer
-    {
-        @Override
-        public void begin() { }
-
-        @Override
-        public void finish() { }
-
-        @Override
-        public void partitionDelete(DeletionTime dt)
-        {
-        }
-
-        @Override
-        public void rangeTombstone(RangeTombstone rt)
-        {
-        }
-
-        @Override
-        public void removeRow(Row row)
-        {
-        }
     }
 
     @Override
@@ -631,6 +570,7 @@ public class StorageAttachedIndex implements Index
     @Override
     public SSTableFlushObserver getFlushObserver(Descriptor descriptor, LifecycleNewTracker tracker)
     {
+        // flush observers should be created from the index group, this is only used by the singleton index group
         throw new UnsupportedOperationException("Storage-attached index flush observers should never be created directly.");
     }
 
@@ -638,10 +578,9 @@ public class StorageAttachedIndex implements Index
     public Set<Component> getComponents()
     {
         return Version.LATEST.onDiskFormat()
-                             .perIndexComponents(indexContext)
+                             .perColumnIndexComponents(indexContext)
                              .stream()
-                             .map(c -> new Component(Component.Type.CUSTOM,
-                                                     Version.LATEST.fileNameFormatter().format(c, indexContext)))
+                             .map(c -> Version.LATEST.makePerIndexComponent(c, indexContext))
                              .collect(Collectors.toSet());
     }
 
@@ -677,17 +616,47 @@ public class StorageAttachedIndex implements Index
     @Override
     public String toString()
     {
-        return String.format("%s.%s.%s", baseCfs.keyspace.getName(), baseCfs.name, config == null ? "?" : config.name);
+        return String.format("%s.%s.%s", baseCfs.keyspace.getName(), baseCfs.name, getIndexMetadata() == null ? "?" : getIndexMetadata());
     }
 
     /**
-     * Removes this index from the {@link SecondaryIndexManager}'s set of queryable indexes.
-     *
-     * This usually happens in response to an index writing failure from {@link StorageAttachedIndexWriter}.
+     * Removes this index from the {@code SecondaryIndexManager}'s set of queryable indexes.
      */
     public void makeIndexNonQueryable()
     {
         baseCfs.indexManager.makeIndexNonQueryable(this, Status.BUILD_FAILED);
         logger.warn(indexContext.logMessage("Storage-attached index is no longer queryable. Please restart this node to repair it."));
+    }
+
+    private class UpdateIndexer implements Indexer
+    {
+        private final DecoratedKey key;
+        private final Memtable memtable;
+        private final WriteContext writeContext;
+
+        UpdateIndexer(DecoratedKey key, Memtable memtable, WriteContext writeContext)
+        {
+            this.key = key;
+            this.memtable = memtable;
+            this.writeContext = writeContext;
+        }
+
+        @Override
+        public void insertRow(Row row)
+        {
+            adjustMemtableSize(indexContext.getMemtableIndexManager().index(key, row, memtable),
+                               CassandraWriteContext.fromContext(writeContext).getGroup());
+        }
+
+        @Override
+        public void updateRow(Row oldRow, Row newRow)
+        {
+            insertRow(newRow);
+        }
+
+        void adjustMemtableSize(long additionalSpace, OpOrder.Group opGroup)
+        {
+            memtable.markExtraOnHeapUsed(additionalSpace, opGroup);
+        }
     }
 }

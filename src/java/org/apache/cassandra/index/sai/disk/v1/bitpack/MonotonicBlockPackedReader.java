@@ -19,19 +19,19 @@ package org.apache.cassandra.index.sai.disk.v1.bitpack;
 
 import java.io.IOException;
 
+import org.apache.cassandra.index.sai.disk.io.IndexFileUtils;
 import org.apache.cassandra.index.sai.disk.io.IndexInputReader;
+import org.apache.cassandra.index.sai.disk.v1.DirectReaders;
 import org.apache.cassandra.index.sai.disk.v1.LongArray;
-import org.apache.cassandra.index.sai.utils.IndexFileUtils;
-import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.index.sai.disk.v1.SAICodecUtils;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
 
-import static org.apache.cassandra.index.sai.utils.SAICodecUtils.checkBlockSize;
-import static org.apache.cassandra.index.sai.utils.SAICodecUtils.numBlocks;
+import static org.apache.cassandra.index.sai.disk.v1.SAICodecUtils.checkBlockSize;
+import static org.apache.cassandra.index.sai.disk.v1.SAICodecUtils.numBlocks;
 
 /**
  * Provides non-blocking, random access to a stream written with {@link MonotonicBlockPackedWriter}.
@@ -47,7 +47,6 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
     private final PackedLongValues minValues;
     private final float[] averages;
 
-    @SuppressWarnings("resource")
     public MonotonicBlockPackedReader(FileHandle file, NumericValuesMeta meta) throws IOException
     {
         this.valueCount = meta.valueCount;
@@ -60,9 +59,9 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
         blockBitsPerValue = new byte[numBlocks];
         this.file = file;
 
-        try (final RandomAccessReader reader = this.file.createReader())
+        try (RandomAccessReader reader = this.file.createReader();
+             IndexInputReader in = IndexInputReader.create(reader))
         {
-            final IndexInputReader in = IndexInputReader.create(reader);
             SAICodecUtils.validate(in);
 
             in.seek(meta.blockMetaOffset);
@@ -71,10 +70,7 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
                 minValuesBuilder.add(in.readZLong());
                 averages[i] = Float.intBitsToFloat(in.readInt());
                 final int bitsPerValue = in.readVInt();
-                if (bitsPerValue > 64)
-                {
-                    throw new CorruptIndexException(String.format("Block %d is corrupted. Bits per value should be no more than 64 and is %d.", i, bitsPerValue), in);
-                }
+                DirectReaders.checkBitsPerValue(bitsPerValue, in, () -> "Postings list header");
                 blockBitsPerValue[i] = (byte) bitsPerValue;
                 // when bitsPerValue is 0, block offset won't be used
                 blockOffsetsBuilder.add(bitsPerValue == 0 ? -1 : in.readVLong());
@@ -86,11 +82,11 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
     }
 
     @Override
-    @SuppressWarnings("resource")
+    @SuppressWarnings({"resource", "RedundantSuppression"})
     public LongArray open()
     {
         final IndexInput indexInput = IndexFileUtils.instance.openInput(file);
-        return new AbstractBlockPackedReader(indexInput, blockBitsPerValue, blockShift, blockMask, 0, valueCount)
+        return new AbstractBlockPackedReader(indexInput, blockBitsPerValue, blockShift, blockMask, valueCount)
         {
             @Override
             long delta(int block, int idx)
@@ -108,12 +104,6 @@ public class MonotonicBlockPackedReader implements LongArray.Factory
             protected long blockOffsetAt(int block)
             {
                 return blockOffsets.get(block);
-            }
-
-            @Override
-            public long findTokenRowID(long targetValue)
-            {
-               throw new UnsupportedOperationException();
             }
         };
     }

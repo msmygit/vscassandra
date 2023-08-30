@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.concurrent.ThreadSafe;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,9 +34,10 @@ public final class NamedMemoryLimiter
 {
     private static final Logger logger = LoggerFactory.getLogger(NamedMemoryLimiter.class);
     
-    private final long limitBytes;
     private final AtomicLong bytesUsed = new AtomicLong(0);
     private final String scope;
+
+    private long limitBytes;
 
     public NamedMemoryLimiter(long limitBytes, String scope)
     {
@@ -57,23 +59,29 @@ public final class NamedMemoryLimiter
     {
         if (logger.isTraceEnabled())
             logger.trace("[{}]: Incrementing tracked memory usage by {} bytes from current usage of {}...", scope, bytes, currentBytesUsed());
-        return this.bytesUsed.addAndGet(bytes);
+        return bytesUsed.addAndGet(bytes);
     }
 
     public long decrement(long bytes)
     {
         if (logger.isTraceEnabled())
             logger.trace("[{}]: Decrementing tracked memory usage by {} bytes from current usage of {}...", scope, bytes, currentBytesUsed());
-        return this.bytesUsed.addAndGet(-bytes);
+        return bytesUsed.addAndGet(-bytes);
     }
 
     public long currentBytesUsed()
     {
-        return this.bytesUsed.get();
+        return bytesUsed.get();
     }
     
     public long limitBytes()
     {
-        return this.limitBytes;
+        return limitBytes;
+    }
+
+    @VisibleForTesting
+    public void setLimitBytes(long bytes)
+    {
+        limitBytes = bytes;
     }
 }

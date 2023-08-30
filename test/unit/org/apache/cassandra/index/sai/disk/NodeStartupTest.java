@@ -47,6 +47,7 @@ import org.apache.cassandra.inject.Injection;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.inject.InvokePointBuilder;
 import org.apache.cassandra.schema.Schema;
+import org.assertj.core.api.Assertions;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -114,7 +115,6 @@ public class NodeStartupTest extends SAITester
 
     private static Throwable error = null;
 
-    private String indexName = null;
     private IndexContext indexContext = null;
 
     enum Populator
@@ -155,7 +155,7 @@ public class NodeStartupTest extends SAITester
         PER_SSTABLE_INCOMPLETE,
         PER_COLUMN_INCOMPLETE,
         PER_SSTABLE_CORRUPT,
-        PER_COLUMN_CORRUPT;
+        PER_COLUMN_CORRUPT
     }
 
     enum StartupTaskRunOrder
@@ -180,8 +180,8 @@ public class NodeStartupTest extends SAITester
     @Before
     public void setup() throws Throwable
     {
-        createTable("CREATE TABLE %s (id text PRIMARY KEY, v1 int)");
-        indexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(v1) USING '%s'", StorageAttachedIndex.class.getName()));
+        createTable("CREATE TABLE %s (id text PRIMARY KEY, v1 text)");
+        String indexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(v1) USING '%s'", StorageAttachedIndex.class.getName()));
         indexContext = createIndexContext(indexName, Int32Type.instance);
         Injections.inject(ObjectArrays.concat(barriers, counters, Injection.class));
         Stream.of(barriers).forEach(Injections.Barrier::reset);
@@ -191,7 +191,7 @@ public class NodeStartupTest extends SAITester
         error = null;
     }
 
-    @Parameterized.Parameter(0)
+    @Parameterized.Parameter
     public Populator populator;
     @Parameterized.Parameter(1)
     public IndexStateOnRestart state;
@@ -242,10 +242,10 @@ public class NodeStartupTest extends SAITester
     {
         populator.populate(this);
 
-        assertTrue(isIndexQueryable());
+        Assertions.assertThat(getNotQueryableIndexes()).isEmpty();
         assertTrue(isGroupIndexComplete());
         assertTrue(isColumnIndexComplete());
-        Assert.assertEquals(expectedDocuments, execute("SELECT * FROM %s WHERE v1 >= 0").size());
+        Assert.assertEquals(expectedDocuments, execute("SELECT * FROM %s WHERE v1 = '0'").size());
 
         setState(state);
 
@@ -253,23 +253,24 @@ public class NodeStartupTest extends SAITester
 
         simulateNodeRestart();
 
-        assertTrue(isIndexQueryable());
+        Assertions.assertThat(getNotQueryableIndexes()).isEmpty();
         assertTrue(isGroupIndexComplete());
         assertTrue(isColumnIndexComplete());
-        Assert.assertEquals(expectedDocuments, execute("SELECT * FROM %s WHERE v1 >= 0").size());
+        Assert.assertEquals(expectedDocuments, execute("SELECT * FROM %s WHERE v1 = '0'").size());
 
         Assert.assertEquals(builds, buildCounter.get());
         Assert.assertEquals(deletedPerSSTable, deletedPerSStableCounter.get());
         Assert.assertEquals(deletedPerIndex, deletedPerIndexCounter.get());
     }
 
+    @SuppressWarnings("unused")
     public void populateIndexableRows()
     {
         try
         {
             for (int i = 0; i < DOCS; i++)
             {
-                execute("INSERT INTO %s (id, v1) VALUES (?, 0)", i);
+                execute("INSERT INTO %s (id, v1) VALUES (?, '0')", i);
             }
             flush();
         }
@@ -280,6 +281,7 @@ public class NodeStartupTest extends SAITester
         }
     }
 
+    @SuppressWarnings("unused")
     public void populateNonIndexableRows()
     {
         try
@@ -297,6 +299,7 @@ public class NodeStartupTest extends SAITester
         }
     }
 
+    @SuppressWarnings("unused")
     public void populateTombstones()
     {
         try
@@ -314,16 +317,16 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private boolean isGroupIndexComplete() throws Exception
+    private boolean isGroupIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable).isPerSSTableBuildComplete());
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable).isPerSSTableIndexBuildComplete());
     }
 
-    private boolean isColumnIndexComplete() throws Exception
+    private boolean isColumnIndexComplete()
     {
         ColumnFamilyStore cfs = Objects.requireNonNull(Schema.instance.getKeyspaceInstance(KEYSPACE)).getColumnFamilyStore(currentTable());
-        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable).isPerIndexBuildComplete(indexContext));
+        return cfs.getLiveSSTables().stream().allMatch(sstable -> IndexDescriptor.create(sstable).isPerColumnIndexBuildComplete(indexContext));
     }
 
     private void setState(IndexStateOnRestart state)
@@ -333,8 +336,8 @@ public class NodeStartupTest extends SAITester
             case VALID:
                 break;
             case ALL_EMPTY:
-                Version.LATEST.onDiskFormat().perSSTableComponents().forEach(this::remove);
-                Version.LATEST.onDiskFormat().perIndexComponents(indexContext).forEach(c -> remove(c, indexContext));
+                Version.LATEST.onDiskFormat().perSSTableIndexComponents(false).forEach(this::remove);
+                Version.LATEST.onDiskFormat().perColumnIndexComponents(indexContext).forEach(c -> remove(c, indexContext));
                 break;
             case PER_SSTABLE_INCOMPLETE:
                 remove(IndexComponent.GROUP_COMPLETION_MARKER);
@@ -343,10 +346,10 @@ public class NodeStartupTest extends SAITester
                 remove(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
                 break;
             case PER_SSTABLE_CORRUPT:
-                corrupt(IndexComponent.GROUP_META);
+                corrupt();
                 break;
             case PER_COLUMN_CORRUPT:
-                corrupt(IndexComponent.META, indexContext);
+                corrupt(indexContext);
                 break;
         }
     }
@@ -377,11 +380,11 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private void corrupt(IndexComponent component)
+    private void corrupt()
     {
         try
         {
-            corruptIndexComponent(component, CorruptionType.TRUNCATED_HEADER);
+            corruptIndexComponent(IndexComponent.GROUP_META, CorruptionType.TRUNCATED_HEADER);
         }
         catch (Exception e)
         {
@@ -390,11 +393,11 @@ public class NodeStartupTest extends SAITester
         }
     }
 
-    private void corrupt(IndexComponent component, IndexContext indexContext)
+    private void corrupt(IndexContext indexContext)
     {
         try
         {
-            corruptIndexComponent(component, indexContext, CorruptionType.TRUNCATED_HEADER);
+            corruptIndexComponent(IndexComponent.META, indexContext, CorruptionType.TRUNCATED_HEADER);
         }
         catch (Exception e)
         {

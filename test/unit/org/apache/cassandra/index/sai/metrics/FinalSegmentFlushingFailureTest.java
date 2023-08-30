@@ -17,7 +17,7 @@
  */
 package org.apache.cassandra.index.sai.metrics;
 
-public class FinalSegmentFlushingFailureTest extends SegmentFlushingFailureTest
+public class FinalSegmentFlushingFailureTest extends SegmentFlushingFailureTester
 {
     @Override
     protected long expectedBytesLimit()

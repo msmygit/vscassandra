@@ -18,21 +18,30 @@
 package org.apache.cassandra.index.sai.disk.io;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.base.MoreObjects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.lucene.store.IndexOutput;
 
+/**
+ * This is a wrapper over a Cassandra {@link SequentialWriter} that provides a Lucene {@link IndexOutput}
+ * interface for the Lucene index writers.
+ */
+@NotThreadSafe
 public class IndexOutputWriter extends IndexOutput
 {
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger logger = LoggerFactory.getLogger(IndexOutputWriter.class);
 
+    /**
+     * the byte order of `out`'s native writeX operations doesn't matter,
+     * because we only use `write(byte[])` and `writeByte` methods. IndexOutput calls these
+     * (via DataOutput) with methods that enforce LittleEndian-ness.
+    */
     private final SequentialWriter out;
     private boolean closed;
 
@@ -53,9 +62,9 @@ public class IndexOutputWriter extends IndexOutput
     }
 
     @Override
-    public long getChecksum()
+    public long getChecksum() throws IOException
     {
-        return ((IndexFileUtils.ChecksumWriter)out).getChecksum();
+        return ((IndexFileUtils.ChecksummingWriter)out).getChecksum();
     }
 
     @Override
@@ -77,7 +86,7 @@ public class IndexOutputWriter extends IndexOutput
     }
 
     @Override
-    public void close() throws IOException
+    public void close()
     {
         // IndexOutput#close contract allows any output to be closed multiple times,
         // and Lucene does it in few places. SequentialWriter can be closed once.
@@ -97,15 +106,21 @@ public class IndexOutputWriter extends IndexOutput
     @Override
     public String toString()
     {
+        String checksum;
+        try {
+            checksum = String.valueOf(getChecksum());
+        } catch (IOException e) {
+            checksum = "unknown due to I/O error: " + e;
+        }
         return MoreObjects.toStringHelper(this)
                           .add("path", out.getFile())
                           .add("bytesWritten", getFilePointer())
-                          .add("crc", getChecksum())
+                          .add("crc", checksum)
                           .toString();
     }
 
     /**
-     * Returns {@link SequentialWriter} associated with this writer. Convenient when interacting with DSE-DB codebase to
+     * Returns {@link SequentialWriter} associated with this writer. Convenient when interacting with Cassandra codebase to
      * write files to disk. Note that all bytes written to the returned writer will still contribute to the checksum.
      *
      * @return {@link SequentialWriter} associated with this writer

@@ -65,6 +65,11 @@ public class NonTokenizingOptions
         this.normalized = normalized;
     }
 
+    static boolean hasOption(String option)
+    {
+        return option.equals(NORMALIZE) || option.equals(CASE_SENSITIVE) || option.equals(ASCII);
+    }
+
     public static class OptionsBuilder
     {
         private boolean caseSensitive = true;
@@ -103,7 +108,7 @@ public class NonTokenizingOptions
 
     public static NonTokenizingOptions getDefaultOptions()
     {
-        return fromMap(new HashMap(1));
+        return fromMap(new HashMap<>(1));
     }
 
     public static NonTokenizingOptions fromMap(Map<String, String> options)
@@ -143,7 +148,7 @@ public class NonTokenizingOptions
     {
         if (Strings.isNullOrEmpty(value))
         {
-            throw new InvalidRequestException("Empty value for boolean option '" + option + "'");
+            throw new InvalidRequestException("Empty value for boolean option '" + option + '\'');
         }
 
         if (!value.equalsIgnoreCase(Boolean.TRUE.toString()) && !value.equalsIgnoreCase(Boolean.FALSE.toString()))

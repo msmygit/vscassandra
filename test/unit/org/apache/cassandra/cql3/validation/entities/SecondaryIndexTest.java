@@ -1186,7 +1186,7 @@ public class SecondaryIndexTest extends CQLTester
         ReadOnlyOnFailureIndex.failInit = true;
         indexName = createIndex("CREATE CUSTOM INDEX ON %s (value) USING '" + ReadOnlyOnFailureIndex.class.getName() + "'");
         index = (ReadOnlyOnFailureIndex) getCurrentColumnFamilyStore().indexManager.getIndexByName(indexName);
-        assertTrue(waitForIndexBuilds(keyspace(), indexName));
+        waitForIndexBuilds(keyspace(), indexName);
         assertInvalidThrow(IndexNotAvailableException.class, "SELECT value FROM %s WHERE value = 1");
         execute("INSERT INTO %s (pk, ck, value) VALUES (?, ?, ?)", 1, 1, 1);
         assertEquals(0, index.rowsInserted.size());
@@ -1225,7 +1225,7 @@ public class SecondaryIndexTest extends CQLTester
         WriteOnlyOnFailureIndex.failInit = true;
         indexName = createIndex("CREATE CUSTOM INDEX ON %s (value) USING '" + WriteOnlyOnFailureIndex.class.getName() + "'");
         index = (WriteOnlyOnFailureIndex) getCurrentColumnFamilyStore().indexManager.getIndexByName(indexName);
-        assertTrue(waitForIndexBuilds(keyspace(), indexName));
+        waitForIndexBuilds(keyspace(), indexName);
         execute("INSERT INTO %s (pk, ck, value) VALUES (?, ?, ?)", 1, 1, 1);
         assertEquals(1, index.rowsInserted.size());
         assertInvalidThrow(IndexNotAvailableException.class, "SELECT value FROM %s WHERE value = 1");

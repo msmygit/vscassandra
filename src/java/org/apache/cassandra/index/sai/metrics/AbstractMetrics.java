@@ -42,7 +42,7 @@ public abstract class AbstractMetrics
 
     AbstractMetrics(String keyspace, String table, String index, String scope)
     {
-        assert keyspace != null && table != null : "SAI metrics must include table metadata";
+        assert keyspace != null && table != null : "SAI metrics must include keyspace and table";
         this.keyspace = keyspace;
         this.table = table;
         this.index = index;
@@ -62,12 +62,12 @@ public abstract class AbstractMetrics
 
     protected CassandraMetricsRegistry.MetricName createMetricName(String name, String scope)
     {
-        String metricScope = keyspace + "." + table;
+        String metricScope = keyspace + '.' + table;
         if (index != null)
         {
-            metricScope += "." + index;
+            metricScope += '.' + index;
         }
-        metricScope += "." + scope + "." + name;
+        metricScope += '.' + scope + '.' + name;
 
         CassandraMetricsRegistry.MetricName metricName = new CassandraMetricsRegistry.MetricName(DefaultNameFactory.GROUP_NAME,
                                                                                                  TYPE, name, metricScope, createMBeanName(name, scope));

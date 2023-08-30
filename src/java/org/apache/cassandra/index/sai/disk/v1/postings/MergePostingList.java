@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index.sai.disk.v1.postings;
 
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,21 +24,24 @@ import java.util.List;
 import java.util.PriorityQueue;
 import javax.annotation.concurrent.NotThreadSafe;
 
-import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.postings.PeekablePostingList;
+import org.apache.cassandra.index.sai.postings.PostingList;
 import org.apache.cassandra.io.util.FileUtils;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Merges multiple {@link PostingList} which individually contain unique items into a single list.
+ * While the individual lists contain unique items, there can be duplicate items between lists so
+ * the class also checks for duplicates and only returns unique items in sorted order.
  */
 @NotThreadSafe
 public class MergePostingList implements PostingList
 {
-    final PriorityQueue<PeekablePostingList> postingLists;
-    final List<PeekablePostingList> temp;
-    final Closeable onClose;
-    final long size;
+    private final PriorityQueue<PeekablePostingList> postingLists;
+    private final List<PeekablePostingList> temp;
+    private final Closeable onClose;
+    private final long size;
     private long lastRowId = -1;
 
     private MergePostingList(PriorityQueue<PeekablePostingList> postingLists, Closeable onClose)
@@ -57,7 +59,7 @@ public class MergePostingList implements PostingList
 
     public static PostingList merge(PriorityQueue<PeekablePostingList> postings, Closeable onClose)
     {
-        checkArgument(!postings.isEmpty());
+        checkArgument(!postings.isEmpty(), "Cannot merge an empty queue of posting lists");
         return postings.size() > 1 ? new MergePostingList(postings, onClose) : postings.poll();
     }
 
@@ -66,7 +68,7 @@ public class MergePostingList implements PostingList
         return merge(postings, () -> FileUtils.close(postings));
     }
 
-    @SuppressWarnings("resource")
+    @SuppressWarnings({"resource", "RedundantSuppression"})
     @Override
     public long nextPosting() throws IOException
     {
@@ -78,8 +80,10 @@ public class MergePostingList implements PostingList
             if (next == END_OF_STREAM)
             {
                 // skip current posting list
+                continue;
             }
-            else if (next > lastRowId)
+
+            if (next > lastRowId)
             {
                 lastRowId = next;
                 postingLists.add(head);
@@ -94,7 +98,7 @@ public class MergePostingList implements PostingList
         return PostingList.END_OF_STREAM;
     }
 
-    @SuppressWarnings("resource")
+    @SuppressWarnings({"resource", "RedundantSuppression"})
     @Override
     public long advance(long targetRowID) throws IOException
     {
@@ -119,8 +123,8 @@ public class MergePostingList implements PostingList
     }
 
     @Override
-    public void close() throws IOException
+    public void close()
     {
-        onClose.close();
+        FileUtils.closeQuietly(onClose);
     }
 }

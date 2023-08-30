@@ -34,29 +34,33 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
-import org.apache.cassandra.index.sai.disk.PerIndexWriter;
+import org.apache.cassandra.index.sai.disk.PerColumnIndexWriter;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.v1.segment.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NoSpamLogger;
 
+import static org.apache.cassandra.config.CassandraRelevantProperties.SAI_MAX_FROZEN_TERM_SIZE;
+import static org.apache.cassandra.config.CassandraRelevantProperties.SAI_MAX_STRING_TERM_SIZE;
+
 /**
  * Column index writer that accumulates (on-heap) indexed data from a compacted SSTable as it's being flushed to disk.
  */
 @NotThreadSafe
-public class SSTableIndexWriter implements PerIndexWriter
+public class SSTableIndexWriter implements PerColumnIndexWriter
 {
     private static final Logger logger = LoggerFactory.getLogger(SSTableIndexWriter.class);
     private static final NoSpamLogger noSpamLogger = NoSpamLogger.getLogger(logger, 1, TimeUnit.MINUTES);
 
-    public static final int MAX_STRING_TERM_SIZE = Integer.getInteger("cassandra.sai.max_string_term_size_kb", 1) * 1024;
-    public static final int MAX_FROZEN_TERM_SIZE = Integer.getInteger("cassandra.sai.max_frozen_term_size_kb", 5) * 1024;
-    public static final String TERM_OVERSIZE_MESSAGE =
-            "Can't add term of column {} to index for key: {}, term size {} " +
-                    "max allowed size {}, use analyzed = true (if not yet set) for that column.";
+    public static final int MAX_STRING_TERM_SIZE = SAI_MAX_STRING_TERM_SIZE.getInt() * 1024;
+    public static final int MAX_FROZEN_TERM_SIZE = SAI_MAX_FROZEN_TERM_SIZE.getInt() * 1024;
+    public static final String TERM_OVERSIZE_MESSAGE = "Can't add term of column {} to index for key: {}, term size {} " +
+                                                       "max allowed size {}, use analyzed = true (if not yet set) for that column.";
 
     private final IndexDescriptor indexDescriptor;
     private final IndexContext indexContext;
@@ -65,13 +69,10 @@ public class SSTableIndexWriter implements PerIndexWriter
     private final NamedMemoryLimiter limiter;
     private final int maxTermSize;
     private final BooleanSupplier isIndexValid;
+    private final List<SegmentMetadata> segments = new ArrayList<>();
 
     private boolean aborted = false;
-
-    // segment writer
     private SegmentBuilder currentBuilder;
-    private final List<SegmentMetadata> segments = new ArrayList<>();
-    private long maxSSTableRowId;
 
     public SSTableIndexWriter(IndexDescriptor indexDescriptor, IndexContext indexContext, NamedMemoryLimiter limiter, BooleanSupplier isIndexValid)
     {
@@ -81,12 +82,6 @@ public class SSTableIndexWriter implements PerIndexWriter
         this.limiter = limiter;
         this.isIndexValid = isIndexValid;
         this.maxTermSize = indexContext.isFrozen() ? MAX_FROZEN_TERM_SIZE : MAX_STRING_TERM_SIZE;
-    }
-
-    @Override
-    public IndexContext indexContext()
-    {
-        return indexContext;
     }
 
     @Override
@@ -103,7 +98,7 @@ public class SSTableIndexWriter implements PerIndexWriter
                 while (valueIterator.hasNext())
                 {
                     ByteBuffer value = valueIterator.next();
-                    addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, sstableRowId, indexContext.getValidator());
+                    addTerm(TypeUtil.asIndexBytes(value.duplicate(), indexContext.getValidator()), key, sstableRowId, indexContext.getValidator());
                 }
             }
         }
@@ -111,9 +106,8 @@ public class SSTableIndexWriter implements PerIndexWriter
         {
             ByteBuffer value = indexContext.getValueOf(key.partitionKey(), row, nowInSec);
             if (value != null)
-                addTerm(TypeUtil.encode(value.duplicate(), indexContext.getValidator()), key, sstableRowId, indexContext.getValidator());
+                addTerm(TypeUtil.asIndexBytes(value.duplicate(), indexContext.getValidator()), key, sstableRowId, indexContext.getValidator());
         }
-        maxSSTableRowId = sstableRowId;
     }
 
     @Override
@@ -136,10 +130,9 @@ public class SSTableIndexWriter implements PerIndexWriter
                 flushSegment();
                 elapsed = stopwatch.elapsed(TimeUnit.MILLISECONDS);
                 logger.debug(indexContext.logMessage("Completed flush of final segment for SSTable {}. Duration: {} ms. Total elapsed: {} ms"),
-                             indexDescriptor.descriptor,
+                             indexDescriptor.sstableDescriptor,
                              elapsed - start,
                              elapsed);
-                start = elapsed;
             }
 
             // Even an empty segment may carry some fixed memory, so remove it:
@@ -148,17 +141,7 @@ public class SSTableIndexWriter implements PerIndexWriter
                 long bytesAllocated = currentBuilder.totalBytesAllocated();
                 long globalBytesUsed = currentBuilder.release(indexContext);
                 logger.debug(indexContext.logMessage("Flushing final segment for SSTable {} released {}. Global segment memory usage now at {}."),
-                             indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
-            }
-
-            if (this.indexContext.isSegmentCompactionEnabled())
-            {
-                compactSegments();
-                elapsed = stopwatch.elapsed(TimeUnit.MILLISECONDS);
-                logger.debug(indexContext.logMessage("Completed index compaction for SSTable {}. Duration: {} ms. Total elapsed: {} ms"),
-                             indexDescriptor.descriptor,
-                             elapsed - start,
-                             elapsed);
+                             indexDescriptor.sstableDescriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
             }
 
             writeSegmentsMetadata();
@@ -180,7 +163,7 @@ public class SSTableIndexWriter implements PerIndexWriter
     {
         aborted = true;
 
-        logger.warn(indexContext.logMessage("Aborting SSTable index flush for {}..."), indexDescriptor.descriptor, cause);
+        logger.warn(indexContext.logMessage("Aborting SSTable index flush for {}..."), indexDescriptor.sstableDescriptor, cause);
 
         // It's possible for the current builder to be unassigned after we flush a final segment.
         if (currentBuilder != null)
@@ -190,7 +173,7 @@ public class SSTableIndexWriter implements PerIndexWriter
             long allocated = currentBuilder.totalBytesAllocated();
             long globalBytesUsed = currentBuilder.release(indexContext);
             logger.debug(indexContext.logMessage("Aborting index writer for SSTable {} released {}. Global segment memory usage now at {}."),
-                         indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(allocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
+                         indexDescriptor.sstableDescriptor, FBUtilities.prettyPrintMemory(allocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
         }
 
         indexDescriptor.deleteColumnIndex(indexContext);
@@ -261,7 +244,7 @@ public class SSTableIndexWriter implements PerIndexWriter
 
     private boolean shouldFlush(long sstableRowId)
     {
-        // If we've hit the minimum flush size and we've breached the global limit, flush a new segment:
+        // If we've hit the minimum flush size and, we've breached the global limit, flush a new segment:
         boolean reachMemoryLimit = limiter.usageExceedsLimit() && currentBuilder.hasReachedMinimumFlushSize();
 
         if (reachMemoryLimit)
@@ -313,41 +296,15 @@ public class SSTableIndexWriter implements PerIndexWriter
             long globalBytesUsed = currentBuilder.release(indexContext);
             currentBuilder = null;
             logger.debug(indexContext.logMessage("Flushing index segment for SSTable {} released {}. Global segment memory usage now at {}."),
-                         indexDescriptor.descriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
+                         indexDescriptor.sstableDescriptor, FBUtilities.prettyPrintMemory(bytesAllocated), FBUtilities.prettyPrintMemory(globalBytesUsed));
 
         }
         catch (Throwable t)
         {
-            logger.error(indexContext.logMessage("Failed to build index for SSTable {}."), indexDescriptor.descriptor, t);
+            logger.error(indexContext.logMessage("Failed to build index for SSTable {}."), indexDescriptor.sstableDescriptor, t);
             indexDescriptor.deleteColumnIndex(indexContext);
-
             indexContext.getIndexMetrics().segmentFlushErrors.inc();
-
             throw t;
-        }
-    }
-
-    private void compactSegments() throws IOException
-    {
-        if (segments.isEmpty())
-            return;
-
-        PrimaryKey minKey = segments.get(0).minKey;
-        PrimaryKey maxKey = segments.get(segments.size() - 1).maxKey;
-
-        try (SegmentMerger segmentMerger = SegmentMerger.newSegmentMerger(indexContext.isLiteral());
-             PerIndexFiles perIndexFiles = new PerIndexFiles(indexDescriptor, indexContext, true))
-        {
-            for (final SegmentMetadata segment : segments)
-            {
-                segmentMerger.addSegment(indexContext, segment, perIndexFiles);
-            }
-            segments.clear();
-            segments.add(segmentMerger.merge(indexDescriptor, indexContext, minKey, maxKey, maxSSTableRowId));
-        }
-        finally
-        {
-            indexDescriptor.deletePerIndexTemporaryComponents(indexContext);
         }
     }
 
@@ -371,11 +328,11 @@ public class SSTableIndexWriter implements PerIndexWriter
     {
         SegmentBuilder builder = TypeUtil.isLiteral(indexContext.getValidator())
                                  ? new SegmentBuilder.RAMStringSegmentBuilder(indexContext.getValidator(), limiter)
-                                 : new SegmentBuilder.KDTreeSegmentBuilder(indexContext.getValidator(), limiter, indexContext.getIndexWriterConfig());
+                                 : new SegmentBuilder.BlockBalancedTreeSegmentBuilder(indexContext.getValidator(), limiter);
 
         long globalBytesUsed = limiter.increment(builder.totalBytesAllocated());
         logger.debug(indexContext.logMessage("Created new segment builder while flushing SSTable {}. Global segment memory usage now at {}."),
-                     indexDescriptor.descriptor,
+                     indexDescriptor.sstableDescriptor,
                      FBUtilities.prettyPrintMemory(globalBytesUsed));
 
         return builder;

@@ -535,9 +535,9 @@ public class SecondaryIndexManagerTest extends CQLTester
         String defaultIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", TestingIndex.class.getName()));
         String readOnlyIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", ReadOnlyOnFailureIndex.class.getName()));
         String writeOnlyIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", WriteOnlyOnFailureIndex.class.getName()));
-        assertTrue(waitForIndexBuilds(KEYSPACE, defaultIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, readOnlyIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, writeOnlyIndexName));
+        waitForIndexBuilds(KEYSPACE, defaultIndexName);
+        waitForIndexBuilds(KEYSPACE, readOnlyIndexName);
+        waitForIndexBuilds(KEYSPACE, writeOnlyIndexName);
 
         tryRebuild(defaultIndexName, true);
         tryRebuild(readOnlyIndexName, true);
@@ -563,9 +563,9 @@ public class SecondaryIndexManagerTest extends CQLTester
         String defaultIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", TestingIndex.class.getName()));
         String readOnlyIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", ReadOnlyOnFailureIndex.class.getName()));
         String writeOnlyIndexName = createIndex(String.format("CREATE CUSTOM INDEX ON %%s(c) USING '%s'", WriteOnlyOnFailureIndex.class.getName()));
-        assertTrue(waitForIndexBuilds(KEYSPACE, defaultIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, readOnlyIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, writeOnlyIndexName));
+        waitForIndexBuilds(KEYSPACE, defaultIndexName);
+        waitForIndexBuilds(KEYSPACE, readOnlyIndexName);
+        waitForIndexBuilds(KEYSPACE, writeOnlyIndexName);
         TestingIndex.shouldFailCreate = false;
 
         // the index should never be queryable, but it could be writable after the failed initialization
@@ -579,9 +579,9 @@ public class SecondaryIndexManagerTest extends CQLTester
         // a successful partial build doesn't set the index as queryable nor writable
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         cfs.indexManager.handleNotification(new SSTableAddedNotification(cfs.getLiveSSTables(), null), this);
-        assertTrue(waitForIndexBuilds(KEYSPACE, defaultIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, readOnlyIndexName));
-        assertTrue(waitForIndexBuilds(KEYSPACE, writeOnlyIndexName));
+        waitForIndexBuilds(KEYSPACE, defaultIndexName);
+        waitForIndexBuilds(KEYSPACE, readOnlyIndexName);
+        waitForIndexBuilds(KEYSPACE, writeOnlyIndexName);
         assertFalse(isQueryable(defaultIndexName));
         assertFalse(isQueryable(readOnlyIndexName));
         assertFalse(isQueryable(writeOnlyIndexName));

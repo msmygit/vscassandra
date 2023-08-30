@@ -33,7 +33,7 @@ import org.apache.cassandra.index.sai.cql.types.InetTest;
 public class InetAddressTypeEquivalencyTest extends SAITester
 {
     @Before
-    public void createTableAndIndex() throws Throwable
+    public void createTableAndIndex()
     {
         requireNetwork();
 
@@ -46,20 +46,13 @@ public class InetAddressTypeEquivalencyTest extends SAITester
     public void mixedWorkloadQueryTest() throws Throwable
     {
         createIndex("CREATE CUSTOM INDEX ON %s(ip) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
 
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 1, '127.0.0.1')");
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 2, '127.0.0.1')");
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 3, '127.0.0.2')");
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 4, '::ffff:7f00:3')");
-
-        flush();
-
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 5, '2002:4559:1fe2::4559:1fe2')");
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 6, '2002:4559:1fe2::4559:1fe2')");
-
-        flush();
-
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 7, '2002:4559:1fe2::4559:1fe2')");
         execute("INSERT INTO %s (pk, ck, ip) VALUES (1, 8, '2002:4559:1fe2::4559:1fe3')");
 

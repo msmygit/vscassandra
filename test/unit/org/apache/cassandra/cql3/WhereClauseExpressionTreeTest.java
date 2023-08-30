@@ -24,6 +24,7 @@ import com.bpodgursky.jbool_expressions.parsers.ExprParser;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.cql3.WhereClause;
 import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.index.sai.SAITester;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -213,7 +214,7 @@ public class WhereClauseExpressionTreeTest
     @Test
     public void randomTest() throws Throwable
     {
-        for (int count = 0; count < CQLTester.getRandom().nextIntBetween(100, 1000); count++)
+        for (int count = 0; count < SAITester.getRandom().nextIntBetween(100, 1000); count++)
             testExpression(randomExpression());
     }
 
@@ -228,25 +229,25 @@ public class WhereClauseExpressionTreeTest
    {
        StringBuilder builder = new StringBuilder();
 
-       boolean applyPrecedence = CQLTester.getRandom().nextBoolean();
+       boolean applyPrecedence = SAITester.getRandom().nextBoolean();
 
-       int numberOfElements = CQLTester.getRandom().nextIntBetween(1, 26);
+       int numberOfElements = SAITester.getRandom().nextIntBetween(1, 26);
        int precedenceLevel = 0;
        for (int element = 0; element < numberOfElements - 1; element++)
        {
-           if (applyPrecedence && CQLTester.getRandom().nextIntBetween(0, 2) == 0)
+           if (applyPrecedence && SAITester.getRandom().nextIntBetween(0, 2) == 0)
            {
                builder.append("(");
                precedenceLevel++;
            }
            builder.append(alphabet, element, element + 1);
            builder.append(" = 1");
-           if (applyPrecedence && CQLTester.getRandom().nextIntBetween(0, 2) == 2 && precedenceLevel > 0)
+           if (applyPrecedence && SAITester.getRandom().nextIntBetween(0, 2) == 2 && precedenceLevel > 0)
            {
                builder.append(")");
                precedenceLevel--;
            }
-           builder.append(CQLTester.getRandom().nextBoolean() ? " AND " : " OR ");
+           builder.append(SAITester.getRandom().nextBoolean() ? " AND " : " OR ");
        }
        builder.append(alphabet, numberOfElements - 1, numberOfElements);
        builder.append(" = 1");

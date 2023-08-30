@@ -18,94 +18,94 @@
 
 package org.apache.cassandra.index.sai.disk.format;
 
+import java.util.regex.Pattern;
+
+import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
+import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryWriter;
+import org.apache.cassandra.io.sstable.Component;
+
+import static org.apache.cassandra.index.sai.disk.format.Version.SAI_DESCRIPTOR;
+import static org.apache.cassandra.index.sai.disk.format.Version.SAI_SEPARATOR;
+
+
 /**
  * This is a definitive list of all the on-disk components for all versions
  */
 public enum IndexComponent
 {
     /**
-     * Stores per-index metadata.
-     *
-     * V1
+     * Metadata for per-column index components
      */
     META("Meta"),
+
     /**
-     * KDTree written by {@code BKDWriter} indexes mappings of term to one ore more segment row IDs
+     * Balanced tree written by {@code BlockBalancedTreeWriter} indexes mappings of term to one or more segment row IDs
      * (segment row ID = SSTable row ID - segment row ID offset).
-     *
-     * V1
      */
-    KD_TREE("KDTree"),
-    KD_TREE_POSTING_LISTS("KDTreePostingLists"),
+    BALANCED_TREE("BalancedTree"),
+
     /**
-     * Term dictionary written by {@code TrieTermsDictionaryWriter} stores mappings of term and
+     * Term dictionary written by {@link TrieTermsDictionaryWriter} stores mappings of term and
      * file pointer to posting block on posting file.
-     *
-     * V1
      */
     TERMS_DATA("TermsData"),
+
     /**
-     * Stores postings written by {@code PostingsWriter}
-     *
-     * V1
+     * Stores postings written by {@link PostingsWriter}
      */
     POSTING_LISTS("PostingLists"),
+
     /**
      * If present indicates that the column index build completed successfully
-     *
-     * V1
      */
     COLUMN_COMPLETION_MARKER("ColumnComplete"),
+
 
     // per-sstable components
     /**
      * Partition key token value for rows including row tombstone and static row. (access key is rowId)
-     *
-     * V1 V2
      */
     TOKEN_VALUES("TokenValues"),
+
     /**
-     * Partition key offset in sstable data file for rows including row tombstone and static row. (access key is
-     * rowId)
-     *
-     * V1
+     * An on-disk block packed index containing the starting and ending rowIds for each partition.
      */
-    OFFSETS_VALUES("OffsetsValues"),
+    PARTITION_SIZES("PartitionSizes"),
+
     /**
-     * An on-disk trie containing the primary keys used for looking up the rowId from a partition key
-     *
-     * V2
+     * Prefix-compressed blocks of partition keys used for rowId to partition key lookups
      */
-    PRIMARY_KEY_TRIE("PrimaryKeyTrie"),
+    PARTITION_KEY_BLOCKS("PartitionKeyBlocks"),
+
     /**
-     * Prefix-compressed blocks of primary keys used for rowId to partition key lookups
-     *
-     * V2
+     * Encoded sequence of offsets to partition key blocks
      */
-    PRIMARY_KEY_BLOCKS("PrimaryKeyBlocks"),
+    PARTITION_KEY_BLOCK_OFFSETS("PartitionKeyBlockOffsets"),
+
     /**
-     * Encoded sequence of offsets to primary key blocks
-     *
-     * V2
+     * Prefix-compressed blocks of clustering keys used for rowId to clustering key lookups
      */
-    PRIMARY_KEY_BLOCK_OFFSETS("PrimaryKeyBlockOffsets"),
+    CLUSTERING_KEY_BLOCKS("ClusteringKeyBlocks"),
+
     /**
-     * Stores per-sstable metadata.
-     *
-     * V1
+     * Encoded sequence of offsets to clustering key blocks
+     */
+    CLUSTERING_KEY_BLOCK_OFFSETS("ClusteringKeyBlockOffsets"),
+
+    /**
+     * Metadata for per-SSTable on-disk components.
      */
     GROUP_META("GroupMeta"),
+
     /**
      * If present indicates that the per-sstable index build completed successfully
-     *
-     * V1 V2
      */
     GROUP_COMPLETION_MARKER("GroupComplete");
 
-    public final String representation;
+    public final String name;
 
-    IndexComponent(String representation)
+    IndexComponent(String name)
     {
-        this.representation = representation;
+        this.name = name;
     }
 }

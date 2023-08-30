@@ -51,6 +51,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import javax.management.MBeanServerConnection;
 import javax.management.remote.JMXConnector;
 import javax.management.remote.JMXConnectorFactory;
@@ -101,6 +102,7 @@ import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.cql3.functions.FunctionName;
+import org.apache.cassandra.cql3.functions.types.ParseUtils;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Directories;
 import org.apache.cassandra.db.Keyspace;
@@ -132,6 +134,7 @@ import org.apache.cassandra.db.virtual.VirtualSchemaKeyspace;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileUtils;
@@ -161,6 +164,7 @@ import org.apache.cassandra.utils.JMXServerUtils;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.TimeUUID;
+import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 
 import static com.datastax.driver.core.SocketOptions.DEFAULT_CONNECT_TIMEOUT_MILLIS;
@@ -189,14 +193,13 @@ public abstract class CQLTester
     public static final String DATA_CENTER_REMOTE = ServerTestUtils.DATA_CENTER_REMOTE;
     public static final String RACK1 = ServerTestUtils.RACK1;
     private static final User SUPER_USER = new User("cassandra", "cassandra");
+    protected static final int ASSERTION_TIMEOUT_SECONDS = 15;
 
     private static org.apache.cassandra.transport.Server server;
     private static JMXConnectorServer jmxServer;
     protected static String jmxHost;
     protected static int jmxPort;
     protected static MBeanServerConnection jmxConnection;
-
-    private static Randomization random;
 
     protected static final int nativePort;
     protected static final InetAddress nativeAddr;
@@ -349,16 +352,6 @@ public abstract class CQLTester
 
         return new JMXServiceURL(String.format("service:jmx:rmi:///jndi/rmi://%s:%d/jmxrmi", jmxHost, jmxPort));
     }
-
-    public static Randomization getRandom()
-    {
-        if (random == null)
-            random = new Randomization();
-        return random;
-    }
-
-    @Rule
-    public FailureWatcher failureRule = new FailureWatcher();
 
     @BeforeClass
     public static void setUpClass()
@@ -969,51 +962,229 @@ public abstract class CQLTester
         schemaChange(formattedQuery);
     }
 
+    /**
+     * Creates a secondary index, waiting for it to become queryable.
+     *
+     * @param query the index creation query
+     * @return the name of the created index
+     */
     protected String createIndex(String query)
     {
         return createIndex(KEYSPACE, query);
     }
 
+    /**
+     * Creates a secondary index, waiting for it to become queryable.
+     *
+     * @param keyspace the keyspace the created index should belong to
+     * @param query the index creation query
+     * @return the name of the created index
+     */
     protected String createIndex(String keyspace, String query)
     {
         String formattedQuery = formatQuery(keyspace, query);
-        return createFormattedIndex(formattedQuery);
+        Pair<String, String> qualifiedIndexName = createFormattedIndex(keyspace, formattedQuery);
+        waitForIndexQueryable(qualifiedIndexName.left, qualifiedIndexName.right);
+        return qualifiedIndexName.right;
     }
 
-    protected String createFormattedIndex(String formattedQuery)
+    /**
+     * Creates a secondary index without waiting for it to become queryable.
+     *
+     * @param query the index creation query
+     * @return the name of the created index
+     */
+    protected String createIndexAsync(String query)
+    {
+        return createIndexAsync(KEYSPACE, query);
+    }
+
+    /**
+     * Creates a secondary index without waiting for it to become queryable.
+     *
+     * @param keyspace the keyspace the created index should belong to
+     * @param query the index creation query
+     * @return the name of the created index
+     */
+    protected String createIndexAsync(String keyspace, String query)
+    {
+        String formattedQuery = formatQuery(keyspace, query);
+        return createFormattedIndex(keyspace, formattedQuery).right;
+    }
+
+    protected Pair<String, String> createFormattedIndex(String keyspace, String formattedQuery)
     {
         logger.info(formattedQuery);
-        String indexName = getCreateIndexName(formattedQuery);
+        Pair<String, String> qualifiedIndexName = getCreateIndexName(keyspace, formattedQuery);
         schemaChange(formattedQuery);
-        return indexName;
+        return qualifiedIndexName;
     }
 
-    protected static String getCreateIndexName(String formattedQuery)
+    protected static Pair<String, String> getCreateIndexName(String keyspace, String formattedQuery)
     {
         Matcher matcher = CREATE_INDEX_PATTERN.matcher(formattedQuery);
         if (!matcher.find())
             throw new IllegalArgumentException("Expected valid create index query but found: " + formattedQuery);
 
+        String parsedKeyspace = matcher.group(5);
+        if (!Strings.isNullOrEmpty(parsedKeyspace))
+            keyspace = parsedKeyspace;
+
         String index = matcher.group(2);
-        if (!Strings.isNullOrEmpty(index))
-            return index;
+        if (Strings.isNullOrEmpty(index))
+        {
+            String table = matcher.group(7);
+            if (Strings.isNullOrEmpty(table))
+                throw new IllegalArgumentException("Table name should be specified: " + formattedQuery);
 
-        String keyspace = matcher.group(5);
-        if (Strings.isNullOrEmpty(keyspace))
-            throw new IllegalArgumentException("Keyspace name should be specified: " + formattedQuery);
+            String column = matcher.group(9);
 
-        String table = matcher.group(7);
-        if (Strings.isNullOrEmpty(table))
-            throw new IllegalArgumentException("Table name should be specified: " + formattedQuery);
+            String baseName = Strings.isNullOrEmpty(column)
+                              ? IndexMetadata.generateDefaultIndexName(table)
+                              : IndexMetadata.generateDefaultIndexName(table, new ColumnIdentifier(column, true));
 
-        String column = matcher.group(9);
+            KeyspaceMetadata ks = Schema.instance.getKeyspaceMetadata(keyspace);
+            assertNotNull(ks);
+            index = ks.findAvailableIndexName(baseName);
+        }
 
-        String baseName = Strings.isNullOrEmpty(column)
-                        ? IndexMetadata.generateDefaultIndexName(table)
-                        : IndexMetadata.generateDefaultIndexName(table, new ColumnIdentifier(column, true));
+        index = ParseUtils.isQuoted(index, '\"')
+                ? ParseUtils.unDoubleQuote(index)
+                : index.toLowerCase();
 
-        KeyspaceMetadata ks = Schema.instance.getKeyspaceMetadata(keyspace);
-        return ks.findAvailableIndexName(baseName);
+        return Pair.create(keyspace, index);
+    }
+
+    public void waitForTableIndexesQueryable()
+    {
+        waitForTableIndexesQueryable(currentTable());
+    }
+
+    public void waitForTableIndexesQueryable(String table)
+    {
+        waitForTableIndexesQueryable(KEYSPACE, table);
+    }
+
+    /**
+     * Index creation is asynchronous. This method waits until all the indexes in the specified table are queryable.
+     *
+     * @param keyspace the table keyspace name
+     * @param table the table name
+     */
+    public void waitForTableIndexesQueryable(String keyspace, String table)
+    {
+        waitForAssert(() -> Assertions.assertThat(getNotQueryableIndexes(keyspace, table)).isEmpty(), 60, TimeUnit.SECONDS);
+    }
+
+    public void waitForIndexQueryable(String index)
+    {
+        waitForIndexQueryable(KEYSPACE, index);
+    }
+
+    /**
+     * Index creation is asynchronous. This method waits until the specified index is queryable.
+     *
+     * @param keyspace the index keyspace name
+     * @param index the index name
+     */
+    public void waitForIndexQueryable(String keyspace, String index)
+    {
+        waitForAssert(() -> assertTrue(isIndexQueryable(keyspace, index)), 60, TimeUnit.SECONDS);
+    }
+
+    protected void waitForIndexBuilds(String index)
+    {
+        waitForIndexBuilds(KEYSPACE, index);
+    }
+
+    /**
+     * Index creation is asynchronous. This method waits until the specified index hasn't any building task running.
+     * <p>
+     * This method differs from {@link #waitForIndexQueryable(String, String)} in that it doesn't require the
+     * index to be fully nor successfully built, so it can be used to wait for failing index builds.
+     *
+     * @param keyspace the index keyspace name
+     * @param index the index name
+     */
+    protected void waitForIndexBuilds(String keyspace, String index)
+    {
+        waitForAssert(() -> assertFalse(isIndexBuilding(keyspace, index)), 60, TimeUnit.SECONDS);
+    }
+
+    /**
+     * @return the names of the indexes in the current table that are not queryable
+     */
+    protected Set<String> getNotQueryableIndexes()
+    {
+        return getNotQueryableIndexes(KEYSPACE, currentTable());
+    }
+
+    /**
+     * @param keyspace the table keyspace name
+     * @param table the table name
+     * @return the names of the indexes in the specified table that are not queryable
+     */
+    protected Set<String> getNotQueryableIndexes(String keyspace, String table)
+    {
+        SecondaryIndexManager sim = Keyspace.open(keyspace).getColumnFamilyStore(table).indexManager;
+        return sim.listIndexes()
+                  .stream()
+                  .filter(index -> !sim.isIndexQueryable(index))
+                  .map(index -> index.getIndexMetadata().name)
+                  .collect(Collectors.toSet());
+    }
+
+    protected boolean isIndexBuilding(String keyspace, String indexName)
+    {
+        SecondaryIndexManager manager = getIndexManager(keyspace, indexName);
+        assertNotNull(manager);
+
+        return manager.isIndexBuilding(indexName);
+    }
+
+    protected boolean isIndexQueryable(String keyspace, String indexName)
+    {
+        SecondaryIndexManager manager = getIndexManager(keyspace, indexName);
+        assertNotNull(manager);
+
+        Index index = manager.getIndexByName(indexName);
+        return manager.isIndexQueryable(index);
+    }
+
+    @Nullable
+    protected SecondaryIndexManager getIndexManager(String keyspace, String indexName)
+    {
+        for (ColumnFamilyStore cfs : Keyspace.open(keyspace).getColumnFamilyStores())
+        {
+            Index index = cfs.indexManager.getIndexByName(indexName);
+            if (index != null)
+                return cfs.indexManager;
+        }
+        return null;
+    }
+
+    protected void waitForAssert(Runnable runnableAssert, long timeout, TimeUnit unit)
+    {
+        Awaitility.await().dontCatchUncaughtExceptions().atMost(timeout, unit).untilAsserted(runnableAssert::run);
+    }
+
+    protected void waitForAssert(Runnable assertion)
+    {
+        waitForAssert(assertion, ASSERTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    protected void createIndexMayThrow(String query) throws Throwable
+    {
+        String fullQuery = formatQuery(query);
+        logger.info(fullQuery);
+        QueryProcessor.executeOnceInternal(fullQuery);
+    }
+
+    protected void dropIndex(String query) throws Throwable
+    {
+        String fullQuery = String.format(query, KEYSPACE);
+        logger.info(fullQuery);
+        schemaChange(fullQuery);
     }
 
     /**
@@ -1044,52 +1215,6 @@ public abstract class CQLTester
         }
 
         return indexCreated;
-    }
-
-    /**
-     * Index creation is asynchronous, this method waits until the specified index hasn't any building task running.
-     * <p>
-     * This method differs from {@link #waitForIndex(String, String, String)} in that it doesn't require the index to be
-     * fully nor successfully built, so it can be used to wait for failing index builds.
-     *
-     * @param keyspace the index keyspace name
-     * @param indexName the index name
-     * @return {@code true} if the index build tasks have finished in 5 seconds, {@code false} otherwise
-     */
-    protected boolean waitForIndexBuilds(String keyspace, String indexName) throws InterruptedException
-    {
-        long start = System.currentTimeMillis();
-        SecondaryIndexManager indexManager = getCurrentColumnFamilyStore(keyspace).indexManager;
-
-        while (true)
-        {
-            if (!indexManager.isIndexBuilding(indexName))
-            {
-                return true;
-            }
-            else if (System.currentTimeMillis() - start > 5000)
-            {
-                return false;
-            }
-            else
-            {
-                Thread.sleep(10);
-            }
-        }
-    }
-
-    protected void createIndexMayThrow(String query) throws Throwable
-    {
-        String fullQuery = formatQuery(query);
-        logger.info(fullQuery);
-        QueryProcessor.executeOnceInternal(fullQuery);
-    }
-
-    protected void dropIndex(String query) throws Throwable
-    {
-        String fullQuery = String.format(query, KEYSPACE);
-        logger.info(fullQuery);
-        schemaChange(fullQuery);
     }
 
     /**
@@ -1174,7 +1299,7 @@ public abstract class CQLTester
         return sessionNet(protocolVersion).execute(formatQuery(query), values);
     }
 
-    protected com.datastax.driver.core.ResultSet executeNet(String query, Object... values) throws Throwable
+    protected com.datastax.driver.core.ResultSet executeNet(String query, Object... values)
     {
         return sessionNet().execute(formatQuery(query), values);
     }
@@ -1351,7 +1476,7 @@ public abstract class CQLTester
         return executeFormattedQuery(formatQuery(query), values);
     }
 
-    public UntypedResultSet executeFormattedQuery(String query, Object... values) throws Throwable
+    public UntypedResultSet executeFormattedQuery(String query, Object... values)
     {
         UntypedResultSet rs;
         if (usePrepared)
@@ -2336,102 +2461,6 @@ public abstract class CQLTester
         public String toString()
         {
             return "UserTypeValue" + toCQLString();
-        }
-    }
-
-    public static class Randomization
-    {
-        private long seed;
-        private Random random;
-
-        Randomization()
-        {
-            if (random == null)
-            {
-                seed = Long.getLong("cassandra.test.random.seed", System.nanoTime());
-                random = new Random(seed);
-            }
-        }
-
-        public void printSeedOnFailure()
-        {
-            System.err.println("Randomized test failed. To rerun test use -Dcassandra.test.random.seed=" + seed);
-        }
-
-        public int nextInt()
-        {
-            return random.nextInt();
-        }
-
-        public int nextIntBetween(int minValue, int maxValue)
-        {
-            return RandomInts.randomIntBetween(random, minValue, maxValue);
-        }
-
-        public long nextLong()
-        {
-            return random.nextLong();
-        }
-
-        public short nextShort()
-        {
-            return (short)random.nextInt(Short.MAX_VALUE + 1);
-        }
-
-        public byte nextByte()
-        {
-            return (byte)random.nextInt(Byte.MAX_VALUE + 1);
-        }
-
-        public BigInteger nextBigInteger(int minNumBits, int maxNumBits)
-        {
-            return new BigInteger(RandomInts.randomIntBetween(random, minNumBits, maxNumBits), random);
-        }
-
-        public BigDecimal nextBigDecimal(int minUnscaledValue, int maxUnscaledValue, int minScale, int maxScale)
-        {
-            return BigDecimal.valueOf(RandomInts.randomIntBetween(random, minUnscaledValue, maxUnscaledValue),
-                                      RandomInts.randomIntBetween(random, minScale, maxScale));
-        }
-
-        public float nextFloat()
-        {
-            return random.nextFloat();
-        }
-
-        public double nextDouble()
-        {
-            return random.nextDouble();
-        }
-
-        public String nextAsciiString(int minLength, int maxLength)
-        {
-            return RandomStrings.randomAsciiOfLengthBetween(random, minLength, maxLength);
-        }
-
-        public String nextTextString(int minLength, int maxLength)
-        {
-            return RandomStrings.randomRealisticUnicodeOfLengthBetween(random, minLength, maxLength);
-        }
-
-        public boolean nextBoolean()
-        {
-            return random.nextBoolean();
-        }
-
-        public void nextBytes(byte[] bytes)
-        {
-            random.nextBytes(bytes);
-        }
-    }
-
-    public static class FailureWatcher extends TestWatcher
-    {
-        @Override
-        protected void failed(Throwable e, Description description)
-        {
-            if (random != null)
-                random.printSeedOnFailure();
         }
     }
 

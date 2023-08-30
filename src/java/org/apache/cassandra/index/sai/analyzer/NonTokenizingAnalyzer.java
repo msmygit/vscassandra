@@ -26,25 +26,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.index.sai.analyzer.filter.BasicResultFilters;
-import org.apache.cassandra.index.sai.analyzer.filter.FilterPipelineBuilder;
+import org.apache.cassandra.db.marshal.AsciiType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.index.sai.analyzer.filter.BasicFilters;
+import org.apache.cassandra.index.sai.analyzer.filter.FilterPipeline;
 import org.apache.cassandra.index.sai.analyzer.filter.FilterPipelineExecutor;
-import org.apache.cassandra.index.sai.analyzer.filter.FilterPipelineTask;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.utils.ByteBufferUtil;
 
 /**
  * Analyzer that does *not* tokenize the input. Optionally will
- * apply filters for the input output as defined in analyzers options
+ * apply filters for the input based on {@link NonTokenizingOptions}.
  */
 public class NonTokenizingAnalyzer extends AbstractAnalyzer
 {
     private static final Logger logger = LoggerFactory.getLogger(NonTokenizingAnalyzer.class);
 
-    private AbstractType<?> type;
-    private NonTokenizingOptions options;
-    private FilterPipelineTask filterPipeline;
+    private final AbstractType<?> type;
+    private final NonTokenizingOptions options;
+    private final FilterPipeline filterPipeline;
 
     private ByteBuffer input;
     private boolean hasNext = false;
@@ -65,7 +65,7 @@ public class NonTokenizingAnalyzer extends AbstractAnalyzer
     public boolean hasNext()
     {
         // check that we know how to handle the input, otherwise bail
-        if (!TypeUtil.isIn(type, ANALYZABLE_TYPES)) return false;
+        if (!(type instanceof UTF8Type || type instanceof AsciiType)) return false;
 
         if (hasNext)
         {
@@ -120,26 +120,20 @@ public class NonTokenizingAnalyzer extends AbstractAnalyzer
         this.hasNext = true;
     }
 
-    private FilterPipelineTask getFilterPipeline()
+    private FilterPipeline getFilterPipeline()
     {
-        FilterPipelineBuilder builder = new FilterPipelineBuilder(new BasicResultFilters.NoOperation());
+        FilterPipeline builder = new FilterPipeline(new BasicFilters.NoOperation());
         
         if (!options.isCaseSensitive())
-        {
-            builder = builder.add("to_lower", new BasicResultFilters.LowerCase());
-        }
+            builder = builder.add("to_lower", new BasicFilters.LowerCase());
         
         if (options.isNormalized())
-        {
-            builder = builder.add("normalize", new BasicResultFilters.Normalize());
-        }
+            builder = builder.add("normalize", new BasicFilters.Normalize());
 
         if (options.isAscii())
-        {
-            builder = builder.add("ascii", new BasicResultFilters.Ascii());
-        }
+            builder = builder.add("ascii", new BasicFilters.Ascii());
         
-        return builder.build();
+        return builder;
     }
 
     @Override

@@ -23,23 +23,22 @@ import com.google.common.collect.ImmutableList;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.googlecode.concurrenttrees.common.Iterables;
+import org.apache.cassandra.Util;
 import org.apache.cassandra.cql3.CQLTester;
 import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.lifecycle.SSTableSet;
 import org.apache.cassandra.db.virtual.VirtualKeyspace;
 import org.apache.cassandra.db.virtual.VirtualKeyspaceRegistry;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.SAITester;
-import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.io.CryptoUtils;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.SSTableIdFactory;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.schema.SchemaConstants;
-
-import static org.apache.cassandra.Util.assertSSTableIds;
 
 /**
  * Tests the virtual table exposing SSTable index metadata.
@@ -48,27 +47,27 @@ public class SSTablesSystemViewTest extends SAITester
 {
     private static final String SELECT = String.format("SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s " +
                                                        "FROM %s.%s WHERE %s = '%s'",
-                                                       SSTablesSystemView.INDEX_NAME,
-                                                       SSTablesSystemView.SSTABLE_NAME,
-                                                       SSTablesSystemView.TABLE_NAME,
-                                                       SSTablesSystemView.COLUMN_NAME,
-                                                       SSTablesSystemView.FORMAT_VERSION,
-                                                       SSTablesSystemView.CELL_COUNT,
-                                                       SSTablesSystemView.MIN_ROW_ID,
-                                                       SSTablesSystemView.MAX_ROW_ID,
-                                                       SSTablesSystemView.START_TOKEN,
-                                                       SSTablesSystemView.END_TOKEN,
-                                                       SSTablesSystemView.PER_TABLE_DISK_SIZE,
-                                                       SSTablesSystemView.PER_COLUMN_DISK_SIZE,
+                                                       SSTableIndexesSystemView.INDEX_NAME,
+                                                       SSTableIndexesSystemView.SSTABLE_NAME,
+                                                       SSTableIndexesSystemView.TABLE_NAME,
+                                                       SSTableIndexesSystemView.COLUMN_NAME,
+                                                       SSTableIndexesSystemView.FORMAT_VERSION,
+                                                       SSTableIndexesSystemView.CELL_COUNT,
+                                                       SSTableIndexesSystemView.MIN_ROW_ID,
+                                                       SSTableIndexesSystemView.MAX_ROW_ID,
+                                                       SSTableIndexesSystemView.START_TOKEN,
+                                                       SSTableIndexesSystemView.END_TOKEN,
+                                                       SSTableIndexesSystemView.PER_TABLE_DISK_SIZE,
+                                                       SSTableIndexesSystemView.PER_COLUMN_DISK_SIZE,
                                                        SchemaConstants.VIRTUAL_VIEWS,
-                                                       SSTablesSystemView.NAME,
-                                                       SSTablesSystemView.KEYSPACE_NAME,
+                                                       SSTableIndexesSystemView.NAME,
+                                                       SSTableIndexesSystemView.KEYSPACE_NAME,
                                                        KEYSPACE);
 
     @BeforeClass
-    public static void setup() throws Exception
+    public static void setup()
     {
-        VirtualKeyspaceRegistry.instance.register(new VirtualKeyspace(SchemaConstants.VIRTUAL_VIEWS, ImmutableList.of(new SSTablesSystemView(SchemaConstants.VIRTUAL_VIEWS))));
+        VirtualKeyspaceRegistry.instance.register(new VirtualKeyspace(SchemaConstants.VIRTUAL_VIEWS, ImmutableList.of(new SSTableIndexesSystemView(SchemaConstants.VIRTUAL_VIEWS))));
 
         CQLTester.setUpClass();
     }
@@ -76,9 +75,9 @@ public class SSTablesSystemViewTest extends SAITester
     @Test
     public void testVirtualTableThroughIndexLifeCycle() throws Throwable
     {
-        createTable("CREATE TABLE %s (k int, c int, v1 int, v2 int, PRIMARY KEY (k, c))");
-        String v1IndexName = createIndex("CREATE CUSTOM INDEX ON %s(v1) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
+        createTable("CREATE TABLE %s (k text, c text, v1 text, v2 text, PRIMARY KEY (k, c))");
+        disableCompaction();
+        String v1IndexName = createIndex("CREATE INDEX ON %s(v1) USING 'sai'");
 
         String insert = "INSERT INTO %s(k, c, v1, v2) VALUES (?, ?, ?, ?)";
 
@@ -86,64 +85,61 @@ public class SSTablesSystemViewTest extends SAITester
         assertEmpty(execute(SELECT));
 
         // insert a row and verify that the virtual table is empty before flushing
-        execute(insert, 1, 10, 100, 1000);
+        execute(insert, "1", "10", "100", "1000");
         assertEmpty(execute(SELECT));
 
         // flush the memtable and verify the new record in the virtual table
         flush();
         SSTableId id1 = currentIdsSorted()[0];
         Object[] row1 = readRow(v1IndexName, id1, "v1", 1L, 0L, 0L);
-        assertRows(execute(SELECT), row1);
+        assertRowsIgnoringOrder(execute(SELECT), row1);
 
         // flush a second memtable and verify both the old and the new record in the virtual table
-        execute(insert, 2, 20, 200, 2000);
-        execute(insert, 3, 30, 300, 3000);
+        execute(insert, "2", "20", "200", "2000");
+        execute(insert, "3", "30", "300", "3000");
         flush();
         SSTableId id2 = currentIdsSorted()[1];
-        assertSSTableIds(id2, id1, r -> r > 0);
         Object[] row2 = readRow(v1IndexName, id2, "v1", 2L, 0L, 1L);
-        assertRows(execute(SELECT), row1, row2);
+        assertRowsIgnoringOrder(execute(SELECT), row1, row2);
 
         // create a second index, this should create a new additional entry in the table for each sstable
-        String v2IndexName = createIndex("CREATE CUSTOM INDEX ON %s(v2) USING 'StorageAttachedIndex'");
-        waitForIndexQueryable();
+        String v2IndexName = createIndex("CREATE INDEX ON %s(v2) USING 'sai'");
         Object[] row3 = readRow(v2IndexName, id1, "v2", 1L, 0L, 0L);
         Object[] row4 = readRow(v2IndexName, id2, "v2", 2L, 0L, 1L);
-        assertRows(execute(SELECT), row1, row2, row3, row4);
+        assertRowsIgnoringOrder(execute(SELECT), row1, row2, row3, row4);
 
         // create a new sstable that only contains data for the second index, this should add only one new entry
-        execute(insert, 4, 40, null, 4000);
+        execute(insert, "4", "40", null, "4000");
         flush();
         SSTableId id3 = currentIdsSorted()[2];
-        assertSSTableIds(id3, id2, r -> r > 0);
         Object[] row5 = readRow(v2IndexName, id3, "v2", 1L, 0L, 0L);
-        assertRows(execute(SELECT), row1, row2, row3, row4, row5);
+        assertRowsIgnoringOrder(execute(SELECT), row1, row2, row3, row4, row5);
 
         // create a new sstable with rows with contents for either one of the indexes or the other
-        execute(insert, 5, 50, 500, null);
-        execute(insert, 6, 60, null, 6000);
+        execute(insert, "5", "50", "500", null);
+        execute(insert, "6", "60", null, "6000");
         flush();
         SSTableId id4 = currentIdsSorted()[3];
-        assertSSTableIds(id4, id3, r -> r > 0);
-        Object[] row6 = readRow(v1IndexName, id4, "v1", 1L, 0L, 0L);
-        Object[] row7 = readRow(v2IndexName, id4, "v2", 1L, 1L, 1L);
-        assertRows(execute(SELECT), row1, row2, row6, row3, row4, row5, row7);
+        Object[] row6 = readRow(v1IndexName, id4, "v1", 1L, 1L, 1L);
+        Object[] row7 = readRow(v2IndexName, id4, "v2", 1L, 0L, 0L);
+        assertRowsIgnoringOrder(execute(SELECT), row1, row2, row6, row3, row4, row5, row7);
 
         // compact the table and verify that the virtual table has a single entry per index
-        compact();
+        ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
+        Util.compact(cfs, Iterables.toList(cfs.getSSTables(SSTableSet.LIVE)));
         waitForCompactions();
+
         SSTableId[] ids5 = currentIdsSorted();
-        assertSSTableIds(ids5[0], id4, r -> r > 0);
         // Compaction may result in sstables with generation 5 or 6. Try both.
         // key 4, key 6 are not indexable on v1
-        Object[] row8 = readRow(v1IndexName, ids5, "v1", 4L, 0L, 5L);
+        Object[] row8 = readRow(v1IndexName, ids5, "v1", 4L, 2L, 5L);
         // key 5 is not indexable on v2
-        Object[] row9 = readRow(v2IndexName, ids5, "v2", 5L, 1L, 5L);
-        assertRows(execute(SELECT), row8, row9);
+        Object[] row9 = readRow(v2IndexName, ids5, "v2", 5L, 0L, 5L);
+        assertRowsIgnoringOrder(execute(SELECT), row8, row9);
 
         // drop the first index and verify that there are not entries for it in the table
         dropIndex("DROP INDEX %s." + v1IndexName);
-        assertRows(execute(SELECT), row9);
+        assertRowsIgnoringOrder(execute(SELECT), row9);
 
         // drop the base table and verify that the virtual table is empty
         dropTable("DROP TABLE %s");
@@ -160,7 +156,7 @@ public class SSTablesSystemViewTest extends SAITester
                              String columnName,
                              long cellCount,
                              long minSSTableRowId,
-                             long maxSSTableRowId) throws Exception
+                             long maxSSTableRowId)
     {
         for (SSTableId generation : generations)
         {
@@ -176,7 +172,7 @@ public class SSTablesSystemViewTest extends SAITester
                              String columnName,
                              long cellCount,
                              long minSSTableRowId,
-                             long maxSSTableRowId) throws Exception
+                             long maxSSTableRowId)
     {
         ColumnFamilyStore cfs = getCurrentColumnFamilyStore();
         StorageAttachedIndex sai = (StorageAttachedIndex) cfs.indexManager.getIndexByName(indexName);
@@ -189,8 +185,6 @@ public class SSTablesSystemViewTest extends SAITester
             {
                 Token.TokenFactory tokenFactory = cfs.metadata().partitioner.getTokenFactory();
                 AbstractBounds<Token> bounds = sstable.getBounds();
-
-                CompressionParams params = CryptoUtils.getCompressionParams(sstable);
 
                 return row(indexName,
                            sstable.getFilename(),

@@ -17,8 +17,6 @@
  */
 package org.apache.cassandra.index.sai.plan;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +30,6 @@ import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.schema.TableMetadata;
 
@@ -41,23 +38,20 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
     private final ColumnFamilyStore cfs;
     private final TableQueryMetrics queryMetrics;
     private final RowFilter postIndexFilter;
-    private final RowFilter.FilterElement filterOperation;
+    private final RowFilter filterOperation;
     private final Set<Index> indexes;
-    private final IndexFeatureSet indexFeatureSet;
 
     private StorageAttachedIndexQueryPlan(ColumnFamilyStore cfs,
                                           TableQueryMetrics queryMetrics,
                                           RowFilter postIndexFilter,
-                                          RowFilter.FilterElement filterOperation,
-                                          ImmutableSet<Index> indexes,
-                                          IndexFeatureSet indexFeatureSet)
+                                          RowFilter filterOperation,
+                                          ImmutableSet<Index> indexes)
     {
         this.cfs = cfs;
         this.queryMetrics = queryMetrics;
         this.postIndexFilter = postIndexFilter;
         this.filterOperation = filterOperation;
         this.indexes = indexes;
-        this.indexFeatureSet = indexFeatureSet;
     }
 
     @Nullable
@@ -67,8 +61,6 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
                                                        RowFilter rowFilter)
     {
         ImmutableSet.Builder<Index> selectedIndexesBuilder = ImmutableSet.builder();
-        List<RowFilter.Expression> acceptedExpressions = new ArrayList<>();
-        IndexFeatureSet.Accumulator accumulator = new IndexFeatureSet.Accumulator();
 
         for (RowFilter.Expression expression : rowFilter)
         {
@@ -77,12 +69,10 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
             if (expression.isUserDefined())
                 continue;
 
-            acceptedExpressions.add(expression);
             for (StorageAttachedIndex index : indexes)
             {
                 if (index.supportsExpression(expression.column(), expression.operator()))
                 {
-                    accumulator.accumulate(index.getIndexContext().indexFeatureSet());
                     selectedIndexesBuilder.add(index);
                 }
             }
@@ -94,11 +84,11 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
 
         /*
          * postIndexFilter comprised by those expressions in the read command row filter that can't be handled by
-         * {@link FilterTree#satisfiedBy(Unfiltered, Row, boolean)}. That includes expressions targeted
-         * at {@link RowFilter.UserExpression}s like those used by RLAC.
+         * {@link FilterTree#satisfiedBy(Unfiltered, Row, boolean)}. This includes expressions targeted
+         * at {@link RowFilter.UserExpression}s.
          */
-        RowFilter postIndexFilter = rowFilter.restrict(e -> e.isUserDefined());
-        return new StorageAttachedIndexQueryPlan(cfs, queryMetrics, postIndexFilter, rowFilter.root(), selectedIndexes, accumulator.complete());
+        RowFilter postIndexFilter = rowFilter.restrict(RowFilter.Expression::isUserDefined);
+        return new StorageAttachedIndexQueryPlan(cfs, queryMetrics, postIndexFilter, rowFilter, selectedIndexes);
     }
 
     @Override
@@ -129,7 +119,6 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
                                                 queryMetrics,
                                                 command,
                                                 filterOperation,
-                                                indexFeatureSet,
                                                 DatabaseDescriptor.getRangeRpcTimeout(TimeUnit.MILLISECONDS));
     }
 
@@ -142,11 +131,5 @@ public class StorageAttachedIndexQueryPlan implements Index.QueryPlan
     public RowFilter postIndexQueryFilter()
     {
         return postIndexFilter;
-    }
-
-    @Override
-    public boolean supportsMultiRangeReadCommand()
-    {
-        return true;
     }
 }

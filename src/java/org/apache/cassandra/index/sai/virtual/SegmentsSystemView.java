@@ -17,7 +17,6 @@
  */
 package org.apache.cassandra.index.sai.virtual;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -29,15 +28,12 @@ import org.apache.cassandra.db.virtual.AbstractVirtualTable;
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.db.virtual.VirtualTable;
 import org.apache.cassandra.dht.LocalPartitioner;
-import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.IndexContext;
-import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndexGroup;
-import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.io.sstable.format.SSTableReader;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
+import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
 
@@ -46,7 +42,7 @@ import org.apache.cassandra.schema.TableMetadata;
  */
 public class SegmentsSystemView extends AbstractVirtualTable
 {
-    public static final String NAME = "sstable_index_segments";
+    public static final String NAME = "sai_sstable_index_segments";
 
     public static final String KEYSPACE_NAME = "keyspace_name";
     public static final String INDEX_NAME = "index_name";
@@ -106,11 +102,11 @@ public class SegmentsSystemView extends AbstractVirtualTable
 
     private void forEachIndex(Consumer<IndexContext> process)
     {
-        for (String ks : Schema.instance.getUserKeyspaces().names())
+        for (KeyspaceMetadata ks : Schema.instance.getUserKeyspaces())
         {
-            Keyspace keyspace = Schema.instance.getKeyspaceInstance(ks);
+            Keyspace keyspace = Schema.instance.getKeyspaceInstance(ks.name);
             if (keyspace == null)
-                throw new IllegalArgumentException("Unknown keyspace " + ks);
+                throw new IllegalStateException("Unknown keyspace " + ks.name + ". This can occur if the keyspace is being dropped.");
 
             for (ColumnFamilyStore cfs : keyspace.getColumnFamilyStores())
             {

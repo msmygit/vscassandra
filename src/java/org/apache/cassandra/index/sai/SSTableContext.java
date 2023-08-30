@@ -17,23 +17,26 @@
  */
 package org.apache.cassandra.index.sai;
 
+import java.util.Collections;
+
 import com.google.common.base.Objects;
 
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
+import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.concurrent.Ref;
 import org.apache.cassandra.utils.concurrent.RefCounted;
 import org.apache.cassandra.utils.concurrent.SharedCloseableImpl;
 
 /**
- * SSTableContext is created for individual sstable shared across indexes to track per-sstable index files.
- *
- * SSTableContext itself will be released when receiving sstable removed notification, but its shared copies in individual
- * SSTableIndex will be released when in-flight read requests complete.
+ * An {@link SSTableContext} is created for an individual sstable and is shared across column indexes to track per-sstable
+ * index files.
+ * <p>
+ * The {@link SSTableContext} will be released when receiving a sstable removed notification, but its shared copies in
+ * individual {@link SSTableIndex}es will be released when in-flight read requests complete.
  */
 public class SSTableContext extends SharedCloseableImpl
 {
@@ -60,7 +63,7 @@ public class SSTableContext extends SharedCloseableImpl
         this.primaryKeyMapFactory = copy.primaryKeyMapFactory;
     }
 
-    @SuppressWarnings("resource")
+    @SuppressWarnings({"resource", "RedundantSuppression"})
     public static SSTableContext create(SSTableReader sstable)
     {
         Ref<? extends SSTableReader> sstableRef = null;
@@ -78,7 +81,7 @@ public class SSTableContext extends SharedCloseableImpl
 
             primaryKeyMapFactory = indexDescriptor.newPrimaryKeyMapFactory(sstable);
 
-            Cleanup cleanup = new Cleanup(primaryKeyMapFactory, sstableRef);
+            Cleanup cleanup = new Cleanup(primaryKeyMapFactory, indexDescriptor, sstableRef);
 
             return new SSTableContext(sstable, indexDescriptor, primaryKeyMapFactory, cleanup);
         }
@@ -89,7 +92,7 @@ public class SSTableContext extends SharedCloseableImpl
                 sstableRef.release();
             }
 
-            throw Throwables.unchecked(Throwables.close(t, primaryKeyMapFactory));
+            throw Throwables.unchecked(Throwables.close(t, Collections.singleton(primaryKeyMapFactory)));
         }
     }
 
@@ -100,6 +103,14 @@ public class SSTableContext extends SharedCloseableImpl
     }
 
     /**
+     * Returns a new {@link SSTableIndex} for a per-column index
+     */
+    public SSTableIndex newSSTableIndex(IndexContext indexContext)
+    {
+        return indexDescriptor.newSSTableIndex(this, indexContext);
+    }
+
+    /**
      * @return descriptor of attached sstable
      */
     public Descriptor descriptor()
@@ -107,23 +118,12 @@ public class SSTableContext extends SharedCloseableImpl
         return sstable.descriptor;
     }
 
-    public SSTableReader sstable()
-    {
-        return sstable;
-    }
-
     /**
-     * @return disk usage of per-sstable index files
+     * @return disk usage (in bytes) of per-sstable index files
      */
     public long diskUsage()
     {
-        return indexDescriptor.version.onDiskFormat()
-                                      .perSSTableComponents()
-                                      .stream()
-                                      .map(indexDescriptor::fileFor)
-                                      .filter(File::exists)
-                                      .mapToLong(File::length)
-                                      .sum();
+        return indexDescriptor.sizeOnDiskOfPerSSTableComponents();
     }
 
     /**
@@ -131,7 +131,7 @@ public class SSTableContext extends SharedCloseableImpl
      */
     public int openFilesPerSSTable()
     {
-        return indexDescriptor.version.onDiskFormat().openFilesPerSSTable();
+        return indexDescriptor.version.onDiskFormat().openFilesPerSSTableIndex(indexDescriptor.hasClustering());
     }
 
     @Override
@@ -160,11 +160,15 @@ public class SSTableContext extends SharedCloseableImpl
     private static class Cleanup implements RefCounted.Tidy
     {
         private final PrimaryKeyMap.Factory primaryKeyMapFactory;
+        private final IndexDescriptor indexDescriptor;
         private final Ref<? extends SSTableReader> sstableRef;
 
-        private Cleanup(PrimaryKeyMap.Factory primaryKeyMapFactory, Ref<? extends SSTableReader> sstableRef)
+        private Cleanup(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                        IndexDescriptor indexDescriptor,
+                        Ref<? extends SSTableReader> sstableRef)
         {
             this.primaryKeyMapFactory = primaryKeyMapFactory;
+            this.indexDescriptor = indexDescriptor;
             this.sstableRef = sstableRef;
         }
 
@@ -172,7 +176,7 @@ public class SSTableContext extends SharedCloseableImpl
         public void tidy()
         {
             Throwable t = sstableRef.ensureReleased(null);
-            t = Throwables.close(t, primaryKeyMapFactory);
+            t = Throwables.close(t, Collections.singleton(primaryKeyMapFactory));
 
             Throwables.maybeFail(t);
         }
@@ -180,7 +184,7 @@ public class SSTableContext extends SharedCloseableImpl
         @Override
         public String name()
         {
-            return null;
+            return indexDescriptor.toString();
         }
     }
 }

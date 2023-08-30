@@ -25,22 +25,12 @@ import java.util.concurrent.TimeUnit;
 public interface QueryEventListener
 {
     /**
-     * Returns listener for bkd index events.
+     * Collector for balanced tree file related metrics.
      */
-    BKDIndexEventListener bkdIndexEventListener();
-
-    /**
-     * Returns listener for trie index events.
-     */
-    TrieIndexEventListener trieIndexEventListener();
-
-    /**
-     * Collector for kd-tree index file related metrics.
-     */
-    interface BKDIndexEventListener
+    interface BalancedTreeEventListener
     {
         /**
-         * Per-segment kd-tree index intersection time in given units. Recorded when intersection completes.
+         * Per-segment balanced tree index intersection time in given units. Recorded when intersection completes.
          */
         void onIntersectionComplete(long intersectionTotalTime, TimeUnit unit);
 
@@ -50,17 +40,17 @@ public interface QueryEventListener
         void onIntersectionEarlyExit();
 
         /**
-         * How many bkd posting list were matched during the intersection.
+         * How many balanced tree posting list were matched during the intersection.
          */
         void postingListsHit(int count);
 
         /**
-         * When query potentially matches value range within a segment and we need to do a traversal.
+         * When query potentially matches value range within a segment, and we need to do a traversal.
          */
         void onSegmentHit();
 
         /**
-         * Returns events listener for bkd postings.
+         * Returns events listener for balanced tree postings.
          */
         PostingListEventListener postingListEventListener();
     }
@@ -68,7 +58,7 @@ public interface QueryEventListener
     interface TrieIndexEventListener
     {
         /**
-         * When query potentially matches value range within a segment and we need to do a traversal.
+         * When query potentially matches value range within a segment, and we need to do a traversal.
          */
         void onSegmentHit();
 
@@ -103,13 +93,11 @@ public interface QueryEventListener
             @Override
             public void onAdvance()
             {
-
             }
 
             @Override
             public void postingDecoded(long postingsDecoded)
             {
-
             }
         };
     }

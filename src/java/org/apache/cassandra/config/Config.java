@@ -37,6 +37,7 @@ import org.apache.cassandra.audit.AuditLogOptions;
 import org.apache.cassandra.fql.FullQueryLoggerOptions;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.guardrails.GuardrailsConfig;
+import org.apache.cassandra.index.internal.CassandraIndex;
 
 /**
  * A class that contains configuration properties for the cassandra node it runs within.
