@@ -18,14 +18,8 @@
 
 package org.apache.cassandra.index.sai.disk.format;
 
-import java.util.regex.Pattern;
-
-import org.apache.cassandra.index.sai.disk.v1.postings.PostingsWriter;
-import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryWriter;
-import org.apache.cassandra.io.sstable.Component;
-
-import static org.apache.cassandra.index.sai.disk.format.Version.SAI_DESCRIPTOR;
-import static org.apache.cassandra.index.sai.disk.format.Version.SAI_SEPARATOR;
+import org.apache.cassandra.index.sai.disk.v3.postings.PostingsWriter;
+import org.apache.cassandra.index.sai.disk.v3.trie.TrieTermsDictionaryWriter;
 
 
 /**
@@ -37,7 +31,14 @@ public enum IndexComponent
      * Metadata for per-column index components
      */
     META("Meta"),
-
+    /**
+     * KDTree written by {@code BKDWriter} indexes mappings of term to one ore more segment row IDs
+     * (segment row ID = SSTable row ID - segment row ID offset).
+     *
+     * V1
+     */
+    KD_TREE("KDTree"),
+    KD_TREE_POSTING_LISTS("KDTreePostingLists"),
     /**
      * Balanced tree written by {@code BlockBalancedTreeWriter} indexes mappings of term to one or more segment row IDs
      * (segment row ID = SSTable row ID - segment row ID offset).
@@ -66,7 +67,31 @@ public enum IndexComponent
      * Partition key token value for rows including row tombstone and static row. (access key is rowId)
      */
     TOKEN_VALUES("TokenValues"),
-
+    /**
+     * Partition key offset in sstable data file for rows including row tombstone and static row. (access key is
+     * rowId)
+     *
+     * V1
+     */
+    OFFSETS_VALUES("OffsetsValues"),
+    /**
+     * An on-disk trie containing the primary keys used for looking up the rowId from a partition key
+     *
+     * V2
+     */
+    PRIMARY_KEY_TRIE("PrimaryKeyTrie"),
+    /**
+     * Prefix-compressed blocks of primary keys used for rowId to partition key lookups
+     *
+     * V2
+     */
+    PRIMARY_KEY_BLOCKS("PrimaryKeyBlocks"),
+    /**
+     * Encoded sequence of offsets to primary key blocks
+     *
+     * V2
+     */
+    PRIMARY_KEY_BLOCK_OFFSETS("PrimaryKeyBlockOffsets"),
     /**
      * An on-disk block packed index containing the starting and ending rowIds for each partition.
      */

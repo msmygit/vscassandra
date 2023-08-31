@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,28 +28,30 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.MetadataWriter;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.IndexInput;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.IndexOutput;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
-import org.apache.lucene.store.DataInput;
-import org.apache.lucene.store.IndexOutput;
 
 /**
  * Multiple {@link SegmentMetadata} are stored in {@link IndexComponent#META} file, each corresponds to an on-disk
  * index segment.
  */
-public class SegmentMetadata
+public class SegmentMetadata implements Comparable<SegmentMetadata>
 {
     private static final String NAME = "SegmentMetadata";
 
     /**
      * Used to retrieve sstableRowId which equals to offset plus segmentRowId.
      */
-    public final long rowIdOffset;
+    public final long segmentRowIdOffset;
 
     /**
      * Min and max sstable rowId in current segment.
@@ -62,7 +63,7 @@ public class SegmentMetadata
     public final long maxSSTableRowId;
 
     /**
-     * number of indexed rows (aka. a pair of term and segmentRowId) in the current segment
+     * number of indexed rows (aka. pair of term and segmentRowId) in current segment
      */
     public final long numRows;
 
@@ -85,7 +86,7 @@ public class SegmentMetadata
      */
     public final ComponentMetadataMap componentMetadatas;
 
-    public SegmentMetadata(long rowIdOffset,
+    public SegmentMetadata(long segmentRowIdOffset,
                            long numRows,
                            long minSSTableRowId,
                            long maxSSTableRowId,
@@ -101,7 +102,7 @@ public class SegmentMetadata
         Objects.requireNonNull(minTerm);
         Objects.requireNonNull(maxTerm);
 
-        this.rowIdOffset = rowIdOffset;
+        this.segmentRowIdOffset = segmentRowIdOffset;
         this.minSSTableRowId = minSSTableRowId;
         this.maxSSTableRowId = maxSSTableRowId;
         this.numRows = numRows;
@@ -112,9 +113,12 @@ public class SegmentMetadata
         this.componentMetadatas = componentMetadatas;
     }
 
-    private SegmentMetadata(DataInput input, PrimaryKey.Factory primaryKeyFactory) throws IOException
+    private static final Logger logger = LoggerFactory.getLogger(SegmentMetadata.class);
+
+    @SuppressWarnings("resource")
+    private SegmentMetadata(IndexInput input, PrimaryKey.Factory primaryKeyFactory) throws IOException
     {
-        this.rowIdOffset = input.readLong();
+        this.segmentRowIdOffset = input.readLong();
         this.numRows = input.readLong();
         this.minSSTableRowId = input.readLong();
         this.maxSSTableRowId = input.readLong();
@@ -125,10 +129,10 @@ public class SegmentMetadata
         this.componentMetadatas = new ComponentMetadataMap(input);
     }
 
-    @SuppressWarnings({"resource", "RedundantSuppression"})
+    @SuppressWarnings("resource")
     public static List<SegmentMetadata> load(MetadataSource source, PrimaryKey.Factory primaryKeyFactory) throws IOException
     {
-        DataInput input = source.get(NAME);
+        IndexInput input = source.get(NAME);
 
         int segmentCount = input.readVInt();
 
@@ -145,6 +149,7 @@ public class SegmentMetadata
     /**
      * Writes disk metadata for the given segment list.
      */
+    @SuppressWarnings("resource")
     public static void write(MetadataWriter writer, List<SegmentMetadata> segments) throws IOException
     {
         try (IndexOutput output = writer.builder(NAME))
@@ -153,7 +158,7 @@ public class SegmentMetadata
 
             for (SegmentMetadata metadata : segments)
             {
-                output.writeLong(metadata.rowIdOffset);
+                output.writeLong(metadata.segmentRowIdOffset);
                 output.writeLong(metadata.numRows);
                 output.writeLong(metadata.minSSTableRowId);
                 output.writeLong(metadata.maxSSTableRowId);
@@ -168,10 +173,16 @@ public class SegmentMetadata
     }
 
     @Override
+    public int compareTo(SegmentMetadata other)
+    {
+        return Long.compare(this.segmentRowIdOffset, other.segmentRowIdOffset);
+    }
+
+    @Override
     public String toString()
     {
         return "SegmentMetadata{" +
-               "rowIdOffset=" + rowIdOffset +
+               "segmentRowIdOffset=" + segmentRowIdOffset +
                ", minSSTableRowId=" + minSSTableRowId +
                ", maxSSTableRowId=" + maxSSTableRowId +
                ", numRows=" + numRows +
@@ -179,9 +190,9 @@ public class SegmentMetadata
                '}';
     }
 
-    private static ByteBuffer readBytes(DataInput input) throws IOException
+    private static ByteBuffer readBytes(IndexInput input) throws IOException
     {
-        int len = input.readInt();
+        int len = input.readVInt();
         byte[] bytes = new byte[len];
         input.readBytes(bytes, 0, len);
         return ByteBuffer.wrap(bytes);
@@ -192,7 +203,7 @@ public class SegmentMetadata
         try
         {
             byte[] bytes = ByteBufferUtil.getArray(buf);
-            out.writeInt(bytes.length);
+            out.writeVInt(bytes.length);
             out.writeBytes(bytes, 0, bytes.length);
         }
         catch (IOException ioe)
@@ -206,11 +217,21 @@ public class SegmentMetadata
         return componentMetadatas.get(indexComponent).root;
     }
 
+    public long getIndexOffset(IndexComponent indexComponent)
+    {
+        return componentMetadatas.get(indexComponent).offset;
+    }
+
+    public long getIndexLength(IndexComponent indexComponent)
+    {
+        return componentMetadatas.get(indexComponent).length;
+    }
+
     public static class ComponentMetadataMap
     {
-        private final Map<IndexComponent, ComponentMetadata> metas = new EnumMap<>(IndexComponent.class);
+        private final Map<IndexComponent, ComponentMetadata> metas = new HashMap<>();
 
-        ComponentMetadataMap(DataInput input) throws IOException
+        ComponentMetadataMap(IndexInput input) throws IOException
         {
             int size = input.readInt();
 
@@ -312,7 +333,7 @@ public class SegmentMetadata
             this.attributes = attributes;
         }
 
-        ComponentMetadata(DataInput input) throws IOException
+        ComponentMetadata(IndexInput input) throws IOException
         {
             this.root = input.readLong();
             this.offset = input.readLong();

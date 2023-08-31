@@ -56,6 +56,13 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
 public interface OnDiskFormat
 {
     /**
+     * Returns the {@link IndexFeatureSet} for the on-disk format
+     *
+     * @return the index feature set
+     */
+    public IndexFeatureSet indexFeatureSet();
+
+    /**
      * Returns a {@link PrimaryKeyMap.Factory} for the SSTable
      *
      * @param indexDescriptor The {@link IndexDescriptor} for the SSTable

@@ -20,12 +20,12 @@ package org.apache.cassandra.index.sai.disk.format;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
-import com.google.common.io.Files;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +40,6 @@ import org.apache.cassandra.index.sai.disk.PerSSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.RowMapping;
 import org.apache.cassandra.index.sai.disk.SSTableIndex;
-import org.apache.cassandra.index.sai.disk.io.IndexFileUtils;
-import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -50,8 +48,6 @@ import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Throwables;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.IOUtils;
 
 /**
  * The {@link IndexDescriptor} is an analog of the SSTable {@link Descriptor} and provides version
@@ -179,82 +175,12 @@ public class IndexDescriptor
 
     public void createComponentOnDisk(IndexComponent component) throws IOException
     {
-        Files.touch(fileFor(component).toJavaIOFile());
+        Files.createFile(fileFor(component).toPath());
     }
 
     public void createComponentOnDisk(IndexComponent component, IndexContext indexContext) throws IOException
     {
-        Files.touch(fileFor(component, indexContext).toJavaIOFile());
-    }
-
-    public IndexInput openPerSSTableInput(IndexComponent indexComponent)
-    {
-        File file = fileFor(indexComponent);
-        if (logger.isTraceEnabled())
-            logger.trace(logMessage("Opening blocking index input for file {} ({})"),
-                         file,
-                         FBUtilities.prettyPrintMemory(file.length()));
-
-        return IndexFileUtils.instance.openBlockingInput(file);
-    }
-
-    public IndexInput openPerIndexInput(IndexComponent indexComponent, IndexContext indexContext)
-    {
-        final File file = fileFor(indexComponent, indexContext);
-        if (logger.isTraceEnabled())
-            logger.trace(logMessage("Opening blocking index input for file {} ({})"),
-                         file,
-                         FBUtilities.prettyPrintMemory(file.length()));
-
-        return IndexFileUtils.instance.openBlockingInput(file);
-    }
-
-    public IndexOutputWriter openPerSSTableOutput(IndexComponent component) throws IOException
-    {
-        return openPerSSTableOutput(component, false);
-    }
-
-    public IndexOutputWriter openPerSSTableOutput(IndexComponent component, boolean append) throws IOException
-    {
-        final File file = fileFor(component);
-
-        if (logger.isTraceEnabled())
-            logger.trace(logMessage("Creating SSTable attached index output for component {} on file {}..."),
-                         component,
-                         file);
-
-        IndexOutputWriter writer = IndexFileUtils.instance.openOutput(file);
-
-        if (append)
-        {
-            writer.skipBytes(file.length());
-        }
-
-        return writer;
-    }
-
-    public IndexOutputWriter openPerIndexOutput(IndexComponent indexComponent, IndexContext indexContext) throws IOException
-    {
-        return openPerIndexOutput(indexComponent, indexContext, false);
-    }
-
-    public IndexOutputWriter openPerIndexOutput(IndexComponent component, IndexContext indexContext, boolean append) throws IOException
-    {
-        final File file = fileFor(component, indexContext);
-
-        if (logger.isTraceEnabled())
-            logger.trace(indexContext.logMessage("Creating sstable attached index output for component {} on file {}..."),
-                         component,
-                         file);
-
-        IndexOutputWriter writer = IndexFileUtils.instance.openOutput(file);
-
-        if (append)
-        {
-            writer.skipBytes(file.length());
-        }
-
-        return writer;
+        Files.createFile(fileFor(component, indexContext).toPath());
     }
 
     public FileHandle createPerSSTableFileHandle(IndexComponent indexComponent, Throwables.DiscreteAction<?> cleanup)
@@ -491,7 +417,10 @@ public class IndexDescriptor
         logger.debug(logMessage("Deleting storage-attached index component file {}"), file);
         try
         {
-            IOUtils.deleteFilesIfExist(file.toPath());
+            if (file != null)
+            {
+                Files.deleteIfExists(file.toPath());
+            }
         }
         catch (IOException e)
         {

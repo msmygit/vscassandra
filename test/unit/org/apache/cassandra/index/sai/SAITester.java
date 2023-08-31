@@ -77,8 +77,8 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
-import org.apache.cassandra.index.sai.disk.v1.segment.SegmentBuilder;
+import org.apache.cassandra.index.sai.disk.v3.V3OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v3.segment.SegmentBuilder;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.ResourceLeakDetector;
 import org.apache.cassandra.inject.Injection;
@@ -161,7 +161,7 @@ public abstract class SAITester extends CQLTester
         Injections.deleteAll();
         CassandraRelevantProperties.SAI_MINIMUM_POSTINGS_LEAVES.setInt(64);
         CassandraRelevantProperties.SAI_POSTINGS_SKIP.setInt(3);
-        V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMIT);
+        V3OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(V3OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMIT);
     }
 
     public static Randomization getRandom()
@@ -411,12 +411,12 @@ public abstract class SAITester extends CQLTester
 
     protected long getSegmentBufferSpaceLimit()
     {
-        return V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.limitBytes();
+        return V3OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.limitBytes();
     }
 
     protected long getSegmentBufferUsedBytes()
     {
-        return V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.currentBytesUsed();
+        return V3OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.currentBytesUsed();
     }
 
     protected int getColumnIndexBuildsInProgress()
@@ -756,7 +756,7 @@ public abstract class SAITester extends CQLTester
 
     protected static void setSegmentWriteBufferSpace(final int segmentSize)
     {
-        V1OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(segmentSize);
+        V3OnDiskFormat.SEGMENT_BUILD_MEMORY_LIMITER.setLimitBytes(segmentSize);
     }
 
     protected String getSingleTraceStatement(Session session, String query, String contains)

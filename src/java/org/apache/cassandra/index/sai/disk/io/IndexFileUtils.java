@@ -24,17 +24,26 @@ import java.util.zip.CRC32;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.cassandra.io.util.SequentialWriterOption;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.lucene.store.IndexInput;
 
 public class IndexFileUtils
 {
+    private static final Logger logger = LoggerFactory.getLogger(IndexFileUtils.class);
+
     @VisibleForTesting
     public static final SequentialWriterOption DEFAULT_WRITER_OPTION = SequentialWriterOption.newBuilder()
                                                                                              .trickleFsync(DatabaseDescriptor.getTrickleFsync())
@@ -75,6 +84,72 @@ public class IndexFileUtils
             RandomAccessReader randomReader = fileHandle.createReader();
             return IndexInputReader.create(randomReader, fileHandle::close);
         }
+    }
+
+    public IndexInput openPerSSTableInput(IndexComponent indexComponent, IndexDescriptor indexDescriptor)
+    {
+        File file = indexDescriptor.fileFor(indexComponent);
+        if (logger.isTraceEnabled())
+            logger.trace("Opening blocking index input for file {} ({})",
+                         file,
+                         FBUtilities.prettyPrintMemory(file.length()));
+
+        return openBlockingInput(file);
+    }
+
+    public IndexInput openPerIndexInput(IndexComponent indexComponent, IndexDescriptor indexDescriptor, IndexContext indexContext)
+    {
+        final File file = indexDescriptor.fileFor(indexComponent, indexContext);
+        if (logger.isTraceEnabled())
+            logger.trace("Opening blocking index input for file {} ({})", file, FBUtilities.prettyPrintMemory(file.length()));
+
+        return openBlockingInput(file);
+    }
+
+    public IndexOutputWriter openPerSSTableOutput(IndexComponent component, IndexDescriptor indexDescriptor) throws IOException
+    {
+        return openPerSSTableOutput(component, indexDescriptor, false);
+    }
+
+    public IndexOutputWriter openPerSSTableOutput(IndexComponent component, IndexDescriptor indexDescriptor, boolean append) throws IOException
+    {
+        final File file = indexDescriptor.fileFor(component);
+
+        if (logger.isTraceEnabled())
+            logger.trace("Creating SSTable attached index output for component {} on file {}...", component, file);
+
+        IndexOutputWriter writer = openOutput(file);
+
+        if (append)
+        {
+            writer.skipBytes(file.length());
+        }
+
+        return writer;
+    }
+
+    public IndexOutputWriter openPerIndexOutput(IndexComponent indexComponent, IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
+    {
+        return openPerIndexOutput(indexComponent, indexDescriptor, indexContext, false);
+    }
+
+    public IndexOutputWriter openPerIndexOutput(IndexComponent component, IndexDescriptor indexDescriptor, IndexContext indexContext, boolean append) throws IOException
+    {
+        final File file = indexDescriptor.fileFor(component, indexContext);
+
+        if (logger.isTraceEnabled())
+            logger.trace(indexContext.logMessage("Creating sstable attached index output for component {} on file {}..."),
+                         component,
+                         file);
+
+        IndexOutputWriter writer = openOutput(file);
+
+        if (append)
+        {
+            writer.skipBytes(file.length());
+        }
+
+        return writer;
     }
 
     static class ChecksummingWriter extends SequentialWriter

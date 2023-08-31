@@ -26,14 +26,15 @@ import org.apache.commons.lang3.mutable.MutableLong;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.io.IndexOutputWriter;
 import org.apache.cassandra.index.sai.disk.v1.SAICodecUtils;
+import org.apache.cassandra.index.sai.disk.v1.io.IndexFileUtils;
+import org.apache.cassandra.index.sai.disk.v1.io.IndexOutputWriter;
 import org.apache.cassandra.io.tries.IncrementalDeepTrieWriterPageAware;
 import org.apache.cassandra.io.tries.IncrementalTrieWriter;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 
 /**
- * Writes terms dictionary to disk in a trie format (see {@link IncrementalTrieWriter}).
+ * Writes terms dictionary to disk in a trie format (see {@link IncrementalTrieWriter}.
  *
  * Allows for variable-length keys. Trie values are 64-bit offsets to the posting file, pointing to the beginning of
  * summary block for that postings list.
@@ -47,7 +48,7 @@ public class TrieTermsDictionaryWriter implements Closeable
 
     TrieTermsDictionaryWriter(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
     {
-        termDictionaryOutput = indexDescriptor.openPerIndexOutput(IndexComponent.TERMS_DATA, indexContext, true);
+        termDictionaryOutput = IndexFileUtils.instance.openPerIndexOutput(IndexComponent.TERMS_DATA, indexDescriptor, indexContext, true);
         startOffset = termDictionaryOutput.getFilePointer();
 
         SAICodecUtils.writeHeader(termDictionaryOutput);
@@ -61,7 +62,7 @@ public class TrieTermsDictionaryWriter implements Closeable
     }
 
     @Override
-    public void close()
+    public void close() throws IOException
     {
         termsDictionaryWriter.close();
         termDictionaryOutput.close();

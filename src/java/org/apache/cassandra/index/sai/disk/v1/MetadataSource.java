@@ -25,39 +25,43 @@ import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.lucene.store.BufferedChecksumIndexInput;
-import org.apache.lucene.store.ByteArrayDataInput;
-import org.apache.lucene.store.DataInput;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.util.BytesRef;
+import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.io.IndexFileUtils;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.BufferedChecksumIndexInput;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.ByteArrayIndexInput;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.IndexInput;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.util.BytesRef;
 
 @NotThreadSafe
 public class MetadataSource
 {
+    private final Version version;
     private final Map<String, BytesRef> components;
 
-    private MetadataSource(Map<String, BytesRef> components)
+    private MetadataSource(Version version, Map<String, BytesRef> components)
     {
+        this.version = version;
         this.components = components;
     }
 
     public static MetadataSource loadGroupMetadata(IndexDescriptor indexDescriptor) throws IOException
     {
-        return MetadataSource.load(indexDescriptor.openPerSSTableInput(IndexComponent.GROUP_META));
+        return MetadataSource.load(IndexFileUtils.instance.openPerSSTableInput(IndexComponent.GROUP_META, indexDescriptor));
     }
 
     public static MetadataSource loadColumnMetadata(IndexDescriptor indexDescriptor, IndexContext indexContext) throws IOException
     {
-        return MetadataSource.load(indexDescriptor.openPerIndexInput(IndexComponent.META, indexContext));
+        return MetadataSource.load(IndexFileUtils.instance.openPerIndexInput(IndexComponent.META, indexDescriptor, indexContext));
     }
 
     private static MetadataSource load(IndexInput indexInput) throws IOException
     {
         Map<String, BytesRef> components = new HashMap<>();
+        Version version;
 
         try (BufferedChecksumIndexInput input = new BufferedChecksumIndexInput(indexInput))
         {
-            SAICodecUtils.checkHeader(input);
+            version = SAICodecUtils.checkHeader(input);
             final int num = input.readInt();
 
             for (int x = 0; x < num; x++)
@@ -79,10 +83,10 @@ public class MetadataSource
             SAICodecUtils.checkFooter(input);
         }
 
-        return new MetadataSource(components);
+        return new MetadataSource(version, components);
     }
 
-    public DataInput get(String name)
+    public IndexInput get(String name)
     {
         BytesRef bytes = components.get(name);
 
@@ -92,6 +96,11 @@ public class MetadataSource
                                                              name, components.keySet()));
         }
 
-        return new ByteArrayDataInput(bytes.bytes);
+        return new ByteArrayIndexInput(name, bytes.bytes);
+    }
+
+    public Version getVersion()
+    {
+        return version;
     }
 }

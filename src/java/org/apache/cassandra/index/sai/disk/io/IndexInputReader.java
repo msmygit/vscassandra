@@ -22,13 +22,12 @@ import java.io.IOException;
 
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.IndexInput;
 
 /**
  * This is a wrapper over a Cassandra {@link RandomAccessReader} that provides an {@link IndexInput}
  * interface for Lucene classes that need {@link IndexInput}. This is an optimisation because the
- * Lucene {@link DataInput} reads bytes one at a time whereas the {@link RandomAccessReader} is
+ * Lucene {@code DataInput} reads bytes one at a time whereas the {@link RandomAccessReader} is
  * optimised to read multibyte objects faster.
  */
 public class IndexInputReader extends IndexInput

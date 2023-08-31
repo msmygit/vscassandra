@@ -28,17 +28,16 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.exceptions.QueryCancelledException;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.io.IndexFileUtils;
+import org.apache.cassandra.index.sai.disk.v1.io.IndexFileUtils;
+import org.apache.cassandra.index.sai.disk.v1.lucene75.store.IndexInput;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryReader;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.postings.PostingList;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Throwables;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
-import org.apache.lucene.store.IndexInput;
 
 import static org.apache.cassandra.index.sai.disk.v1.SAICodecUtils.validate;
 

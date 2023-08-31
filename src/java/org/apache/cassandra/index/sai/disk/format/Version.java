@@ -27,6 +27,8 @@ import com.google.common.base.Objects;
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v2.V2OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.v3.V3OnDiskFormat;
 import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 
@@ -39,13 +41,19 @@ public class Version implements Comparable<Version>
     public static final String SAI_DESCRIPTOR = "SAI";
     public static final String SAI_SEPARATOR = "+";
 
+    // 6.8 formats
+    public static final Version AA = new Version("aa", V1OnDiskFormat.instance, Version::aaFileNameFormat);
+    // Stargazer
+    public static final Version BA = new Version("ba", V2OnDiskFormat.instance, (c, i) -> defaultFileNameFormat(c, i, "ba"));
     // Current version
-    public static final Version AA = new Version("aa", V1OnDiskFormat.instance, (c, i) -> defaultFileNameFormat(c, i, "aa"));
+    public static final Version BB = new Version("bb", V3OnDiskFormat.instance, (c, i) -> defaultFileNameFormat(c, i, "bb"));
 
     // These should be added in reverse order so that the latest version is used first. Version matching tests
     // are more likely to match the latest version, so we want to test that one first.
     public static final SortedSet<Version> ALL = new TreeSet<Version>(Comparator.reverseOrder()) {{
         add(AA);
+        add(BA);
+        add(BB);
     }};
 
     public static final Version EARLIEST = AA;
@@ -147,6 +155,24 @@ public class Version implements Comparable<Version>
             stringBuilder.append(SAI_SEPARATOR).append(indexContext.getIndexName());
         stringBuilder.append(SAI_SEPARATOR).append(indexComponent.name);
         stringBuilder.append(Descriptor.EXTENSION);
+
+        return stringBuilder.toString();
+    }
+
+    //
+    // Version.AA filename formatter. This is the old DSE 6.8 SAI on-disk filename format
+    //
+    // Format: <sstable descriptor>-SAI(_<index name>)_<component name>.db
+    //
+    private static final String VERSION_AA_PER_SSTABLE_FORMAT = "SAI_%s.db";
+    private static final String VERSION_AA_PER_INDEX_FORMAT = "SAI_%s_%s.db";
+
+    private static String aaFileNameFormat(IndexComponent indexComponent, IndexContext indexContext)
+    {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append(indexContext == null ? String.format(VERSION_AA_PER_SSTABLE_FORMAT, indexComponent.name)
+                                                  : String.format(VERSION_AA_PER_INDEX_FORMAT, indexContext.getIndexName(), indexComponent.name));
 
         return stringBuilder.toString();
     }

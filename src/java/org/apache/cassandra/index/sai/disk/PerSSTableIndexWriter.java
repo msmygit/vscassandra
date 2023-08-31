@@ -29,7 +29,7 @@ public interface PerSSTableIndexWriter
 {
     PerSSTableIndexWriter NONE = (key) -> {};
 
-    default void startPartition(DecoratedKey decoratedKey) throws IOException
+    default void startPartition(DecoratedKey decoratedKey, long keyPosition) throws IOException
     {}
 
     void nextRow(PrimaryKey primaryKey) throws IOException;

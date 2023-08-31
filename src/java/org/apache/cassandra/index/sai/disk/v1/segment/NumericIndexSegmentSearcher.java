@@ -29,7 +29,7 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerColumnIndexFiles;
-import org.apache.cassandra.index.sai.disk.v1.bbtree.BlockBalancedTreeReader;
+import org.apache.cassandra.index.sai.disk.v1.kdtree.BKDReader;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.metrics.MulticastQueryEventListeners;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
@@ -37,7 +37,8 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.postings.PostingList;
 import org.apache.lucene.index.CorruptIndexException;
 
-import static org.apache.cassandra.index.sai.disk.v1.bbtree.BlockBalancedTreeQueries.balancedTreeQueryFrom;
+import static org.apache.cassandra.index.sai.disk.v1.kdtree.BKDQueries.bkdQueryFrom;
+import static org.apache.cassandra.index.sai.disk.v3.bbtree.BlockBalancedTreeQueries.balancedTreeQueryFrom;
 
 /**
  * Executes {@link Expression}s against the balanced tree for an individual index segment.
@@ -46,7 +47,7 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private final BlockBalancedTreeReader treeReader;
+    private final BKDReader bkdReader;
     private final QueryEventListener.BalancedTreeEventListener perColumnEventListener;
 
     NumericIndexSegmentSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
@@ -56,25 +57,25 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexContext);
 
-        final long treePosition = metadata.getIndexRoot(IndexComponent.BALANCED_TREE);
-        if (treePosition < 0)
+        final long bkdPosition = metadata.getIndexRoot(IndexComponent.KD_TREE);
+        if (bkdPosition < 0)
             throw new CorruptIndexException(indexContext.logMessage("The tree position is less than zero."), IndexComponent.BALANCED_TREE.name);
         final long postingsPosition = metadata.getIndexRoot(IndexComponent.POSTING_LISTS);
         if (postingsPosition < 0)
             throw new CorruptIndexException(indexContext.logMessage("The postings position is less than zero."), IndexComponent.BALANCED_TREE.name);
 
-        treeReader = new BlockBalancedTreeReader(indexContext,
-                                                 indexFiles.balancedTree(),
-                                                 treePosition,
-                                                 indexFiles.postingLists(),
-                                                 postingsPosition);
+        bkdReader = new BKDReader(indexContext,
+                                  indexFiles.kdtree().sharedCopy(),
+                                  bkdPosition,
+                                  indexFiles.kdtreePostingLists().sharedCopy(),
+                                  postingsPosition);
         perColumnEventListener = (QueryEventListener.BalancedTreeEventListener)indexContext.getColumnQueryMetrics();
     }
 
     @Override
     public long indexFileCacheSize()
     {
-        return treeReader.memoryUsage();
+        return bkdReader.memoryUsage();
     }
 
     @Override
@@ -86,9 +87,9 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
 
         if (exp.getOp().isEqualityOrRange())
         {
-            final BlockBalancedTreeReader.IntersectVisitor query = balancedTreeQueryFrom(exp, treeReader.getBytesPerValue());
+            final BKDReader.IntersectVisitor query = bkdQueryFrom(exp, bkdReader.getNumDimensions(), bkdReader.getBytesPerDimension());
             QueryEventListener.BalancedTreeEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
-            PostingList postingList = treeReader.intersect(query, listener, context);
+            PostingList postingList = bkdReader.intersect(query, listener, context);
             return toIterator(postingList, context);
         }
         else
@@ -102,14 +103,14 @@ public class NumericIndexSegmentSearcher extends IndexSegmentSearcher
     {
         return MoreObjects.toStringHelper(this)
                           .add("indexContext", indexContext)
-                          .add("count", treeReader.getPointCount())
-                          .add("bytesPerValue", treeReader.getBytesPerValue())
+                          .add("count", bkdReader.getPointCount())
+                          .add("bytesPerValue", bkdReader.getBytesPerDimension())
                           .toString();
     }
 
     @Override
     public void close()
     {
-        treeReader.close();
+        bkdReader.close();
     }
 }

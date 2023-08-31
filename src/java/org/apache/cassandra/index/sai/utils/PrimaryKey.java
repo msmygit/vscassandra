@@ -39,7 +39,7 @@ public interface PrimaryKey extends Comparable<PrimaryKey>, ByteComparable
 {
     class Factory
     {
-        private final ClusteringComparator clusteringComparator;
+        protected final ClusteringComparator clusteringComparator;
 
         public Factory(ClusteringComparator clusteringComparator)
         {

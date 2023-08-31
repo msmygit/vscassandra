@@ -47,6 +47,7 @@ import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.SSTableIndex;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndexManager;
 import org.apache.cassandra.index.sai.metrics.ColumnQueryMetrics;
 import org.apache.cassandra.index.sai.metrics.IndexMetrics;
@@ -90,6 +91,7 @@ public class IndexContext
     private final IndexViewManager viewManager;
     private final IndexMetrics indexMetrics;
     private final ColumnQueryMetrics columnQueryMetrics;
+    private final IndexWriterConfig indexWriterConfig;
     private final AbstractAnalyzer.AnalyzerFactory analyzerFactory;
     private final PrimaryKey.Factory primaryKeyFactory;
 
@@ -117,7 +119,13 @@ public class IndexContext
         this.viewManager = new IndexViewManager(this);
         this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(this)
                                               : new ColumnQueryMetrics.BalancedTreeIndexMetrics(this);
-
+        this.indexWriterConfig = indexMetadata == null ? IndexWriterConfig.emptyConfig()
+                                                       : IndexWriterConfig.fromOptions(String.format("%s.%s.%s",
+                                                                                                     this.keyspace,
+                                                                                                     this.table,
+                                                                                                     this.indexMetadata.name),
+                                                                                       validator,
+                                                                                       indexMetadata.options);
         this.analyzerFactory = indexMetadata == null ? AbstractAnalyzer.fromOptions(getValidator(), Collections.emptyMap())
                                                      : AbstractAnalyzer.fromOptions(getValidator(), indexMetadata.options);
     }
@@ -145,6 +153,11 @@ public class IndexContext
     public ColumnQueryMetrics getColumnQueryMetrics()
     {
         return columnQueryMetrics;
+    }
+
+    public IndexWriterConfig getIndexWriterConfig()
+    {
+        return indexWriterConfig;
     }
 
     public String getTable()
