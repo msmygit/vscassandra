@@ -85,6 +85,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
     /**
      * Search on-disk index synchronously
      *
+     * @param segment      the segment being searched
      * @param expression   to filter on disk index
      * @param keyRange     key range specific in read command, used by ANN index
      * @param queryContext to track per sstable cache and per query metrics
@@ -92,7 +93,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
      * @param limit        the num of rows to returned, used by ANN index
      * @return {@link RangeIterator} of sstable row ids that matches given expression
      */
-    public abstract RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
+    public abstract RangeIterator<Long> search(Segment segment, Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
 
     RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {

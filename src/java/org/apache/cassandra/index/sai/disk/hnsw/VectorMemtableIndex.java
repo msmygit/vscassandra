@@ -188,7 +188,7 @@ public class VectorMemtableIndex implements MemtableIndex
             bits = queryContext.bitsetForShadowedPrimaryKeys(graph);
         }
 
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
         queryContext.recordScores(keyQueue);

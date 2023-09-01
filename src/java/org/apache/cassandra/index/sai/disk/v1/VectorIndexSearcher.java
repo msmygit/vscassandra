@@ -46,6 +46,7 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
+import org.apache.cassandra.index.sai.utils.SegmentRowIdToPrimaryKeyConverter;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.SparseFixedBitSet;
@@ -89,13 +90,13 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     }
 
     @Override
-    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Segment segment, Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
-        PostingList results = searchPosting(context, exp, keyRange, limit);
+        PostingList results = searchPosting(segment, context, exp, keyRange, limit);
         return toSSTableRowIdsIterator(results, context);
     }
 
-    private PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    private PostingList searchPosting(Segment segment, QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -108,7 +109,8 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             return bitsOrPostingList.postingList();
 
         float[] queryVector = exp.lower.value.vector;
-        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context);
+        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context,
+                            new SegmentRowIdToPrimaryKeyConverter(primaryKeyMap, segment));
     }
 
     /**
@@ -225,16 +227,24 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             }
         }
 
+        // where is the computation in here
+
         // if we have a small number of results then let TopK processor do exact NN computation
         if (n < bruteForceRows.length)
         {
+            // what am I doing here? looks like we're skipping the topk processor, but is this the first
+            // time we compute scores or the second?
+
+            // are we only here when we haven't actually computed scores yet?
             var results = new ReorderingPostingList(Arrays.stream(bruteForceRows, 0, n).iterator(), n);
             return toPrimaryKeyIterator(results, context);
         }
 
         // else ask hnsw to perform a search limited to the bits we created
         float[] queryVector = exp.lower.value.vector;
-        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context);
+        // TODO what are we searching here? We don't have a segment in scope.
+        // TODO Is this the coalesced version of the vectors?
+        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context, null);
         return toPrimaryKeyIterator(results, context);
     }
 

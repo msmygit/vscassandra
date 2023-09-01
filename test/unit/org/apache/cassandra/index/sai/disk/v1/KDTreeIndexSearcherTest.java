@@ -146,7 +146,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
         final IndexSearcher indexSearcher = KDTreeIndexBuilder.buildShortSearcher(newIndexDescriptor(), (short) 0, (short) 3);
         try
         {
-            indexSearcher.search(new Expression(SAITester.createIndexContext("meh", ShortType.instance))
+            indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", ShortType.instance))
             {{
                 operation = Op.NOT_EQ;
                 lower = upper = new Bound(ShortType.instance.decompose((short) 0), Int32Type.instance, true);
@@ -164,7 +164,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
                                                   final NumberType<T> rawType, final NumberType<?> encodedType,
                                                   final Function<Short, T> rawValueProducer) throws Exception
     {
-        try (RangeIterator<Long> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator<Long> results = indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.EQ;
             lower = upper = new Bound(rawType.decompose(rawValueProducer.apply(EQ_TEST_LOWER_BOUND_INCLUSIVE)), encodedType, true);
@@ -176,7 +176,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
             assertEquals(Long.valueOf(0), results.next());
         }
 
-        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.EQ;
             lower = upper = new Bound(rawType.decompose(rawValueProducer.apply(EQ_TEST_UPPER_BOUND_EXCLUSIVE)), encodedType, true);
@@ -200,7 +200,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
                                                      final NumberType<T> rawType, final NumberType<?> encodedType,
                                                      final Function<Short, T> rawValueProducer, List<Long> expectedTokenList) throws Exception
     {
-        try (RangeIterator<Long> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator<Long> results = indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
 
@@ -215,7 +215,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
             assertEquals(expectedTokenList, actualTokenList);
         }
 
-        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
             lower = new Bound(rawType.decompose(rawValueProducer.apply(RANGE_TEST_UPPER_BOUND_EXCLUSIVE)), encodedType, true);
@@ -224,7 +224,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
             assertFalse(results.hasNext());
         }
 
-        try (RangeIterator results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator results = indexSearcher.search(null, new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
             upper = new Bound(rawType.decompose(rawValueProducer.apply(RANGE_TEST_LOWER_BOUND_INCLUSIVE)), encodedType, false);
