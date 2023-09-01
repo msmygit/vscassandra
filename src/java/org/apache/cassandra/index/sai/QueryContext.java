@@ -31,8 +31,8 @@ import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.hnsw.CassandraOnDiskHnsw;
-import org.apache.cassandra.index.sai.disk.hnsw.CassandraOnHeapHnsw;
+import org.apache.cassandra.index.sai.disk.vector.CassandraOnDiskHnsw;
+import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapHnsw;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;

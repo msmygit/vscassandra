@@ -16,61 +16,76 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector.hnsw;
 
 import java.io.IOException;
+import java.util.Arrays;
 
-import org.apache.lucene.util.hnsw.OnHeapHnswGraph;
+import org.apache.lucene.util.hnsw.ConcurrentOnHeapHnswGraph;
+import org.apache.lucene.util.hnsw.HnswGraph;
 
-public class ExtendedSerialHnswGraph extends ExtendedHnswGraph
+public class ExtendedConcurrentHnswGraph extends ExtendedHnswGraph
 {
-    private final OnHeapHnswGraph hnsw;
+    private final ConcurrentOnHeapHnswGraph graph;
+    private final HnswGraph view;
 
-    public ExtendedSerialHnswGraph(OnHeapHnswGraph hnsw)
+    public ExtendedConcurrentHnswGraph(ConcurrentOnHeapHnswGraph graph)
     {
         super();
-        this.hnsw = hnsw;
+        this.graph = graph;
+        this.view = graph.getView();
     }
 
+    // this is not guaranteed to be consistent with the view, but it's only used
+    // when we're writing to disk and there aren't other concurrent operations
     @Override
     public int getNeighborCount(int level, int node)
     {
-        return hnsw.getNeighbors(level, node).size();
+        var neighbors = graph.getNeighbors(level, node);
+        assert neighbors != null : String.format("Node %d not found on on level %d among %s",
+                                                 node, level, Arrays.toString(getSortedNodes(view, level)));
+        return neighbors.size();
     }
 
     @Override
     public void seek(int level, int node) throws IOException
     {
-        hnsw.seek(level, node);
+        view.seek(level, node);
     }
 
     @Override
     public int size()
     {
-        return hnsw.size();
+        return view.size();
     }
 
     @Override
     public int nextNeighbor() throws IOException
     {
-        return hnsw.nextNeighbor();
+        return view.nextNeighbor();
     }
 
     @Override
     public int numLevels() throws IOException
     {
-        return hnsw.numLevels();
+        return view.numLevels();
     }
 
     @Override
     public int entryNode() throws IOException
     {
-        return hnsw.entryNode();
+        return view.entryNode();
     }
 
     @Override
     public NodesIterator getNodesOnLevel(int i) throws IOException
     {
-        return hnsw.getNodesOnLevel(i);
+        return view.getNodesOnLevel(i);
+    }
+
+    @Override
+    public long ramBytesUsed()
+    {
+        return graph.ramBytesUsed();
     }
 }

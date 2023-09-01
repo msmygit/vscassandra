@@ -16,26 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
+import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
-import org.jctools.maps.NonBlockingHashMapLong;
 
-public class ConcurrentVectorValues implements RamAwareVectorValues
+@NotThreadSafe
+public class CompactionVectorValues implements RamAwareVectorValues
 {
-    private final int dimensions;
-    private final NonBlockingHashMapLong<float[]> values = new NonBlockingHashMapLong<>();
+    private final int dimension;
+    private final ArrayList<ByteBuffer> values = new ArrayList<>();
+    private final VectorType<Float> type;
 
-    public ConcurrentVectorValues(int dimensions)
+    public CompactionVectorValues(VectorType<Float> type)
     {
-        this.dimensions = dimensions;
+        this.dimension = type.dimension;
+        this.type = type;
     }
 
     @Override
@@ -47,26 +51,28 @@ public class ConcurrentVectorValues implements RamAwareVectorValues
     @Override
     public int dimension()
     {
-        return dimensions;
+        return dimension;
     }
 
     @Override
     public float[] vectorValue(int i)
     {
-        return values.get(i);
+        return type.getSerializer().deserializeFloatArray(values.get(i));
     }
 
     /** return approximate bytes used by the new vector */
-    public long add(int ordinal, float[] vector)
+    public long add(int ordinal, ByteBuffer value)
     {
-        values.put(ordinal, vector);
+        if (ordinal != values.size())
+            throw new IllegalArgumentException(String.format("CVV requires vectors to be added in ordinal order (%d given, expected %d)",
+                                                             ordinal, values.size()));
+        values.add(value);
         return RamEstimation.concurrentHashMapRamUsed(1) + oneVectorBytesUsed();
     }
 
     @Override
     public RandomAccessVectorValues<float[]> copy()
     {
-        // no actual copy required because we always return distinct float[] for distinct vector ordinals
         return this;
     }
 
@@ -75,15 +81,10 @@ public class ConcurrentVectorValues implements RamAwareVectorValues
         writer.writeInt(size());
         writer.writeInt(dimension());
 
-        // we will re-use this buffer
-        var byteBuffer = ByteBuffer.allocate(dimension() * Float.BYTES);
-        var floatBuffer = byteBuffer.asFloatBuffer();
-
         for (var i = 0; i < size(); i++) {
-            floatBuffer.put(vectorValue(i));
-            // bytebuffer and floatBuffer track their positions separately, and we never changed BB's, so don't need to rewind it
-            floatBuffer.rewind();
-            writer.write(byteBuffer);
+            var bb = values.get(i);
+            assert bb != null : "null vector at index " + i + " of " + size();
+            writer.write(bb);
         }
 
         return writer.position();
@@ -99,6 +100,6 @@ public class ConcurrentVectorValues implements RamAwareVectorValues
 
     private long oneVectorBytesUsed()
     {
-        return Integer.BYTES + Integer.BYTES + (long) dimension() * Float.BYTES;
+        return RamUsageEstimator.NUM_BYTES_OBJECT_REF;
     }
 }

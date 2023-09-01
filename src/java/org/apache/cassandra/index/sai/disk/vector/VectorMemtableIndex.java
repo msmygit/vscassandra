@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -50,13 +49,10 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.lucene.util.Bits;
-
-import static org.apache.cassandra.index.sai.disk.hnsw.CassandraOnHeapHnsw.InvalidVectorBehavior.FAIL;
 
 public class VectorMemtableIndex implements MemtableIndex
 {
@@ -97,7 +93,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
         writeCount.increment();
         primaryKeys.add(primaryKey);
-        return graph.add(value, primaryKey, FAIL);
+        return graph.add(value, primaryKey, CassandraOnHeapHnsw.InvalidVectorBehavior.FAIL);
     }
 
     @Override
@@ -128,7 +124,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
             // make the changes in this order so we don't have a window where the row is not in the index at all
             if (newRemaining > 0)
-                graph.add(newValue, primaryKey, FAIL);
+                graph.add(newValue, primaryKey, CassandraOnHeapHnsw.InvalidVectorBehavior.FAIL);
             if (oldRemaining > 0)
                 graph.remove(oldValue, primaryKey);
 

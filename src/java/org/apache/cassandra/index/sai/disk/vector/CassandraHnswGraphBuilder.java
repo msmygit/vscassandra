@@ -16,11 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.apache.cassandra.index.sai.disk.vector.hnsw.ExtendedConcurrentHnswGraph;
+import org.apache.cassandra.index.sai.disk.vector.hnsw.ExtendedHnswGraph;
+import org.apache.cassandra.index.sai.disk.vector.hnsw.ExtendedSerialHnswGraph;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.util.hnsw.ConcurrentHnswGraphBuilder;
