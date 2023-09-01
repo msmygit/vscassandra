@@ -139,7 +139,7 @@ public class CassandraOnDiskHnsw implements AutoCloseable
                         for (int rowId : rowIds)
                         {
                             PrimaryKey pk = converter.getPrimaryKey(rowId);
-                            context.recordScore(pk, score);
+                            context.recordScore(pk.loadDeferred(), score);
                         }
                     }
                     segmentRowIdIterator = Arrays.stream(rowIds).iterator();
