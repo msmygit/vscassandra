@@ -247,12 +247,12 @@ public class CompactionControllerTest extends SchemaLoader
         long timestamp1 = FBUtilities.timestampMicros();
         long timestamp2 = timestamp1 - 5;
         applyMutation(cfs.metadata(), key, timestamp1);
-        cfs.forceBlockingFlush();
+        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
         assertEquals(cfs.getLiveSSTables().size(), 1);
         Set<SSTableReader> sstables = cfs.getLiveSSTables();
 
         applyMutation(cfs.metadata(), key, timestamp2);
-        cfs.forceBlockingFlush();
+        cfs.forceBlockingFlush(ColumnFamilyStore.FlushReason.UNIT_TESTS);
         assertEquals(cfs.getLiveSSTables().size(), 2);
         String sstable2 = cfs.getLiveSSTables().iterator().next().getFilename();
 
