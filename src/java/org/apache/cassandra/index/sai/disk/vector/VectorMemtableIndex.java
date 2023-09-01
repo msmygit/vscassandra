@@ -52,14 +52,14 @@ import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
-import org.apache.lucene.util.Bits;
+import com.github.jbellis.jvector.util.Bits;
 
 public class VectorMemtableIndex implements MemtableIndex
 {
     private final Logger logger = LoggerFactory.getLogger(VectorMemtableIndex.class);
 
     private final IndexContext indexContext;
-    private final CassandraOnHeapHnsw<PrimaryKey> graph;
+    private final CassandraOnHeapGraph<PrimaryKey> graph;
     private final LongAdder writeCount = new LongAdder();
 
     private PrimaryKey minimumKey;
@@ -70,7 +70,7 @@ public class VectorMemtableIndex implements MemtableIndex
     public VectorMemtableIndex(IndexContext indexContext)
     {
         this.indexContext = indexContext;
-        this.graph = new CassandraOnHeapHnsw<>(indexContext.getValidator(), indexContext.getIndexWriterConfig());
+        this.graph = new CassandraOnHeapGraph<>(indexContext.getValidator(), indexContext.getIndexWriterConfig());
     }
 
     @Override
@@ -93,7 +93,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
         writeCount.increment();
         primaryKeys.add(primaryKey);
-        return graph.add(value, primaryKey, CassandraOnHeapHnsw.InvalidVectorBehavior.FAIL);
+        return graph.add(value, primaryKey, CassandraOnHeapGraph.InvalidVectorBehavior.FAIL);
     }
 
     @Override
@@ -124,7 +124,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
             // make the changes in this order so we don't have a window where the row is not in the index at all
             if (newRemaining > 0)
-                graph.add(newValue, primaryKey, CassandraOnHeapHnsw.InvalidVectorBehavior.FAIL);
+                graph.add(newValue, primaryKey, CassandraOnHeapGraph.InvalidVectorBehavior.FAIL);
             if (oldRemaining > 0)
                 graph.remove(oldValue, primaryKey);
 

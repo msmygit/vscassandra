@@ -35,6 +35,13 @@ import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
+import com.github.jbellis.jvector.graph.GraphIndexBuilder;
+import com.github.jbellis.jvector.graph.GraphSearcher;
+import com.github.jbellis.jvector.graph.NodeScore;
+import com.github.jbellis.jvector.vector.VectorEncoding;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import com.github.jbellis.jvector.util.Bits;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -43,23 +50,17 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.vector.hnsw.HnswGraphWriter;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
-import org.apache.lucene.index.VectorEncoding;
-import org.apache.lucene.index.VectorSimilarityFunction;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.StringHelper;
-import org.apache.lucene.util.hnsw.HnswGraphSearcher;
-import org.apache.lucene.util.hnsw.NeighborQueue;
 
-public class CassandraOnHeapHnsw<T>
+public class CassandraOnHeapGraph<T>
 {
-    private static final Logger logger = LoggerFactory.getLogger(CassandraOnHeapHnsw.class);
+    private static final Logger logger = LoggerFactory.getLogger(CassandraOnHeapGraph.class);
 
     private final RamAwareVectorValues vectorValues;
-    private final CassandraHnswGraphBuilder<float[]> builder;
+    private final GraphIndexBuilder<float[]> builder;
     private final VectorType.VectorSerializer serializer;
     private final VectorSimilarityFunction similarityFunction;
     private final Map<float[], VectorPostings<T>> postingsMap;
@@ -73,7 +74,7 @@ public class CassandraOnHeapHnsw<T>
      *
      * Will create a concurrent object.
      */
-    public CassandraOnHeapHnsw(AbstractType<?> termComparator, IndexWriterConfig indexWriterConfig)
+    public CassandraOnHeapGraph(AbstractType<?> termComparator, IndexWriterConfig indexWriterConfig)
     {
         this(termComparator, indexWriterConfig, true);
     }
@@ -84,7 +85,7 @@ public class CassandraOnHeapHnsw<T>
      * @param concurrent should be true for memtables, false for compaction.  Concurrent allows us to search
      *                   while building the graph; non-concurrent allows us to avoid synchronization costs.
      */
-    public CassandraOnHeapHnsw(AbstractType<?> termComparator, IndexWriterConfig indexWriterConfig, boolean concurrent)
+    public CassandraOnHeapGraph(AbstractType<?> termComparator, IndexWriterConfig indexWriterConfig, boolean concurrent)
     {
         serializer = (VectorType.VectorSerializer)termComparator.getSerializer();
         vectorValues = concurrent
@@ -98,17 +99,13 @@ public class CassandraOnHeapHnsw<T>
         postingsMap = new ConcurrentSkipListMap<>(Arrays::compare);
         postingsByOrdinal = new NonBlockingHashMapLong<>();
 
-        builder = concurrent
-                  ? new CassandraHnswGraphBuilder.ConcurrentBuilder<>(vectorValues,
-                                                                      VectorEncoding.FLOAT32,
-                                                                      similarityFunction,
-                                                                      indexWriterConfig.getMaximumNodeConnections(),
-                                                                      indexWriterConfig.getConstructionBeamWidth())
-                  : new CassandraHnswGraphBuilder.SerialBuilder<>(vectorValues,
-                                                                  VectorEncoding.FLOAT32,
-                                                                  similarityFunction,
-                                                                  indexWriterConfig.getMaximumNodeConnections(),
-                                                                  indexWriterConfig.getConstructionBeamWidth());
+        builder = new GraphIndexBuilder<>(vectorValues,
+                                          VectorEncoding.FLOAT32,
+                                          similarityFunction,
+                                          indexWriterConfig.getMaximumNodeConnections(),
+                                          indexWriterConfig.getConstructionBeamWidth(),
+                                          1.2f,
+                                          1.4f);
     }
 
     public int size()
@@ -173,14 +170,7 @@ public class CassandraOnHeapHnsw<T>
         {
             bytesUsed.addAndGet(VectorPostings.bytesPerPosting());
             if (newVector.get()) {
-                try
-                {
-                    bytesUsed.addAndGet(builder.addGraphNode(postings.getOrdinal(), vectorValues));
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                bytesUsed.addAndGet(builder.addGraphNode(postings.getOrdinal(), vectorValues));
             }
         }
         return bytesUsed.get();
@@ -201,7 +191,7 @@ public class CassandraOnHeapHnsw<T>
         return v;
     }
 
-    static void validateIndexable(float[] vector, VectorSimilarityFunction similarityFunction)
+    public static void validateIndexable(float[] vector, VectorSimilarityFunction similarityFunction)
     {
         try
         {
@@ -251,34 +241,24 @@ public class CassandraOnHeapHnsw<T>
      */
     public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
-        assert builder.isConcurrent();
         validateIndexable(queryVector, similarityFunction);
 
         // search() errors out when an empty graph is passed to it
         if (vectorValues.size() == 0)
             return new PriorityQueue<>();
 
-        NeighborQueue queue;
-        try
-        {
-            queue = HnswGraphSearcher.searchConcurrent(queryVector,
-                                                       limit,
-                                                       vectorValues,
-                                                       VectorEncoding.FLOAT32,
-                                                       similarityFunction,
-                                                       builder.getGraph(),
-                                                       hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept,
-                                                       visitedLimit);
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        Bits bits = hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept;
+        // VSTODO re-use searcher objects
+        NodeScore[] results = GraphSearcher.search(queryVector,
+                                                   limit,
+                                                   vectorValues,
+                                                   VectorEncoding.FLOAT32,
+                                                   similarityFunction,
+                                                   builder.getGraph(),
+                                                   bits);
         PriorityQueue<T> keyQueue = new PriorityQueue<>();
-        while (queue.size() > 0)
-        {
-            keyQueue.addAll(keysFromOrdinal(queue.pop()));
-        }
+        for (int i = 0; i < results.length; i++)
+            keyQueue.addAll(keysFromOrdinal(results[i].node));
         return keyQueue;
     }
 
@@ -319,8 +299,8 @@ public class CassandraOnHeapHnsw<T>
 
             // write the graph
             long termsOffset = indexOutputWriter.getFilePointer();
-            long termsPosition = new HnswGraphWriter(builder.getGraph()).write(indexOutputWriter);
-            long termsLength = termsPosition - termsOffset;
+            long termsSize = OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutputWriter.asSequentialWriter());
+            long termsLength = termsSize - termsOffset;
 
             // add components to the metadata map
             SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();

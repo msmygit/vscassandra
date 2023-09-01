@@ -22,7 +22,7 @@ import java.util.Set;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
-import org.apache.lucene.util.Bits;
+import com.github.jbellis.jvector.util.Bits;
 
 public class BitsUtil
 {
@@ -38,7 +38,7 @@ public class BitsUtil
         return toAccept == null ? new NoDeletedPostings(postings) : new NoDeletedIntersectingPostings(toAccept, postings);
     }
 
-    private static abstract class BitsWithoutLength implements Bits
+    private static abstract class BitsWithoutLength implements Bits, org.apache.lucene.util.Bits
     {
         @Override
         public int length()

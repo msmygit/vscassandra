@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.index.sai.disk.vector.hnsw.DiskBinarySearch;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.lucene.util.Bits;
+import com.github.jbellis.jvector.util.Bits;
 
 public class OnDiskOrdinalsMap
 {

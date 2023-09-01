@@ -103,7 +103,7 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.Pair;
-import org.apache.lucene.index.VectorSimilarityFunction;
+import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import static org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig.MAX_TOP_K;
 

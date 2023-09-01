@@ -21,13 +21,11 @@ package org.apache.cassandra.index.sai.disk.vector;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
+import com.github.jbellis.jvector.util.RamUsageEstimator;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.io.util.SequentialWriter;
-import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 @NotThreadSafe
 public class CompactionVectorValues implements RamAwareVectorValues
@@ -71,7 +69,7 @@ public class CompactionVectorValues implements RamAwareVectorValues
     }
 
     @Override
-    public RandomAccessVectorValues<float[]> copy()
+    public CompactionVectorValues copy()
     {
         return this;
     }

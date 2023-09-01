@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 public class ConcurrentVectorValues implements RamAwareVectorValues
@@ -62,7 +61,7 @@ public class ConcurrentVectorValues implements RamAwareVectorValues
     }
 
     @Override
-    public RandomAccessVectorValues<float[]> copy()
+    public ConcurrentVectorValues copy()
     {
         // no actual copy required because we always return distinct float[] for distinct vector ordinals
         return this;

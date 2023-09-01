@@ -30,7 +30,7 @@ import org.apache.cassandra.io.compress.BufferType;
 import org.apache.cassandra.io.util.Rebufferer.BufferHolder;
 
 @NotThreadSafe
-public class RandomAccessReader extends RebufferingInputStream implements FileDataInput
+public class RandomAccessReader extends RebufferingInputStream implements FileDataInput, com.github.jbellis.jvector.disk.RandomAccessReader
 {
     // The default buffer size when the client doesn't specify it
     public static final int DEFAULT_BUFFER_SIZE = 4096;
