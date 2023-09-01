@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.util.ArrayList;

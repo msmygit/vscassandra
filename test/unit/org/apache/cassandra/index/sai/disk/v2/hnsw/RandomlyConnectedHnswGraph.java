@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,7 +35,8 @@ import org.apache.cassandra.utils.Pair;
 
 import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
-public class RandomlyConnectedHnswGraph extends ExtendedHnswGraph {
+public class RandomlyConnectedHnswGraph extends ExtendedHnswGraph
+{
 
     private final int entryNode;
     private final Map<Integer, Map<Integer, List<Integer>>> nodes;

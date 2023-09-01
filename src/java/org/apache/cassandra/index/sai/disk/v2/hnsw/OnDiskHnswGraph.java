@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -150,7 +150,7 @@ public class OnDiskHnswGraph extends HnswGraph implements AutoCloseable
         return cacheSizeInBytes;
     }
 
-    int getCacheSizeInBytes() {
+    public int getCacheSizeInBytes() {
         return cacheSizeInBytes;
     }
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -26,9 +26,10 @@ import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.index.sai.disk.v2.hnsw.DiskBinarySearch;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.RandomAccessReader;
-import org.apache.lucene.util.Bits;
+import io.github.jbellis.jvector.util.Bits;
 
 public class OnDiskOrdinalsMap
 {

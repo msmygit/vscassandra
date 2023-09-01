@@ -53,6 +53,10 @@ import org.apache.cassandra.io.sstable.format.SSTableReader;
  *     <li>Methods taking an {@link IndexComponent}. These methods only interact with a single component or
  *     set of components</li>
  *
+ * To add a new version,
+ * (1) Create a new class, e.g. VXOnDiskFormat, that extends the previous version and overrides
+ *     methods relating to the new format and functionality
+ * (2) Wire it up in Version to its version string
  * </ul>
  */
 public interface OnDiskFormat
@@ -148,13 +152,23 @@ public interface OnDiskFormat
     /**
      * Validate all the per-index on-disk components and throw if a component is not valid
      *
-     * @param indexDescriptor The {@link IndexDescriptor} for the SSTable
-     * @param indexContext The {@link IndexContext} holding the per-index information for the index
+     * @param descriptor The {@link IndexDescriptor} for the SSTable
+     * @param context The {@link IndexContext} holding the per-index information for the index
      * @param checksum {@code true} if the checksum should be tested as part of the validation
      *
      * @return true if all the per-index components are valid
      */
-    public boolean validatePerIndexComponents(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean checksum);
+    default boolean validatePerIndexComponents(IndexDescriptor descriptor, IndexContext context, boolean checksum)
+    {
+        for (IndexComponent component : perIndexComponents(context))
+        {
+            if (!validateOneIndexComponent(component, descriptor, context, checksum))
+                return false;
+        }
+        return true;
+    }
+
+    boolean validateOneIndexComponent(IndexComponent component, IndexDescriptor descriptor, IndexContext context, boolean checksum);
 
     /**
      * Returns the set of {@link IndexComponent} for the per-SSTable part of an index.

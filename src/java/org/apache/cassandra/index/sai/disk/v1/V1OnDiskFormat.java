@@ -64,11 +64,6 @@ public class V1OnDiskFormat implements OnDiskFormat
                                                                                  IndexComponent.TOKEN_VALUES,
                                                                                  IndexComponent.OFFSETS_VALUES);
 
-    private static final Set<IndexComponent> VECTOR_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
-                                                                            IndexComponent.META,
-                                                                            IndexComponent.VECTOR,
-                                                                            IndexComponent.TERMS_DATA,
-                                                                            IndexComponent.POSTING_LISTS);
     private static final Set<IndexComponent> LITERAL_COMPONENTS = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
                                                                              IndexComponent.META,
                                                                              IndexComponent.TERMS_DATA,
@@ -137,6 +132,9 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public boolean isPerSSTableBuildComplete(IndexDescriptor indexDescriptor)
     {
+        // TODO this is fragile, it can return true for any descriptor version as long as the
+        // completion marker is there.  Ideally we would check to see if the expected
+        // perIndexComponents are there as well.
         return indexDescriptor.hasComponent(IndexComponent.GROUP_COMPLETION_MARKER);
     }
 
@@ -218,32 +216,28 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
-    public boolean validatePerIndexComponents(IndexDescriptor indexDescriptor, IndexContext indexContext, boolean checksum)
+    public boolean validateOneIndexComponent(IndexComponent component, IndexDescriptor descriptor, IndexContext context, boolean checksum)
     {
-        for (IndexComponent indexComponent : perIndexComponents(indexContext))
+        if (isBuildCompletionMarker(component))
+            return true;
+
+        try (IndexInput input = descriptor.openPerIndexInput(component, context))
         {
-            // VSTODO: lucene doesn't follow SAI naming patterns and manage its own validation
-            if (!isBuildCompletionMarker(indexComponent) && !(indexContext.isVector()))
+            if (checksum)
+                SAICodecUtils.validateChecksum(input);
+            else
+                SAICodecUtils.validate(input);
+        }
+        catch (Throwable e)
+        {
+            if (logger.isDebugEnabled())
             {
-                try (IndexInput input = indexDescriptor.openPerIndexInput(indexComponent, indexContext))
-                {
-                    if (checksum)
-                        SAICodecUtils.validateChecksum(input);
-                    else
-                        SAICodecUtils.validate(input);
-                }
-                catch (Throwable e)
-                {
-                    if (logger.isDebugEnabled())
-                    {
-                        logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
-                                     (checksum ? "Checksum validation" : "Validation"),
-                                     indexComponent,
-                                     indexDescriptor.descriptor);
-                    }
-                    return false;
-                }
+                logger.debug(descriptor.logMessage("{} failed for index component {} on SSTable {}"),
+                             (checksum ? "Checksum validation" : "Validation"),
+                             component,
+                             descriptor.descriptor);
             }
+            return false;
         }
         return true;
     }
@@ -257,9 +251,7 @@ public class V1OnDiskFormat implements OnDiskFormat
     @Override
     public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
     {
-        if (indexContext.isVector())
-            return VECTOR_COMPONENTS;
-        else if (TypeUtil.isLiteral(indexContext.getValidator()))
+        if (TypeUtil.isLiteral(indexContext.getValidator()))
             return LITERAL_COMPONENTS;
         return NUMERIC_COMPONENTS;
     }

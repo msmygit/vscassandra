@@ -18,10 +18,8 @@
 
 package org.apache.cassandra.index.sai.cql;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,20 +31,14 @@ import com.google.common.collect.Multimap;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.marshal.FloatType;
 import org.apache.cassandra.db.marshal.Int32Type;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.index.sai.disk.hnsw.ConcurrentVectorValues;
 import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.index.sai.utils.Glove;
-import org.apache.lucene.index.VectorEncoding;
-import org.apache.lucene.index.VectorSimilarityFunction;
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.hnsw.ConcurrentHnswGraphBuilder;
-import org.apache.lucene.util.hnsw.HnswGraphSearcher;
-import org.apache.lucene.util.hnsw.NeighborQueue;
 import org.assertj.core.data.Percentage;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,7 +145,7 @@ public class VectorLocalTest extends VectorTester
         List<float[]> resultVectors = getVectorsFromResult(resultSet);
         assertDescendingScore(queryVector, resultVectors);
 
-        double recall = indexedRecall(allVectors, queryVector, resultVectors, limit);
+        double recall = rawIndexedRecall(allVectors, queryVector, resultVectors, limit);
         assertThat(recall).isGreaterThanOrEqualTo(0.8);
     }
 
@@ -431,7 +423,7 @@ public class VectorLocalTest extends VectorTester
             List<float[]> resultVectors = getVectorsFromResult(resultSet);
             assertDescendingScore(queryVector, resultVectors);
 
-            double recall = indexedRecall(vectorsByStringValue.get(stringValue), queryVector, resultVectors, limit);
+            double recall = rawIndexedRecall(vectorsByStringValue.get(stringValue), queryVector, resultVectors, limit);
             assertThat(recall).isGreaterThanOrEqualTo(0.8);
         }
     }
@@ -500,60 +492,6 @@ public class VectorLocalTest extends VectorTester
 
             prevScore = score;
         }
-    }
-
-    private double indexedRecall(Collection<float[]> vectors, float[] query, List<float[]> result, int topK) throws IOException
-    {
-        ConcurrentVectorValues vectorValues = new ConcurrentVectorValues(query.length);
-        int ordinal = 0;
-
-        ConcurrentHnswGraphBuilder<float[]> graphBuilder = ConcurrentHnswGraphBuilder.create(vectorValues,
-                                                                                             VectorEncoding.FLOAT32,
-                                                                                             VectorSimilarityFunction.COSINE,
-                                                                                             16,
-                                                                                             100);
-
-        for (float[] vector : vectors)
-        {
-            vectorValues.add(ordinal, vector);
-            graphBuilder.addGraphNode(ordinal++, vectorValues);
-        }
-
-        NeighborQueue queue = HnswGraphSearcher.search(query,
-                                                       topK,
-                                                       vectorValues,
-                                                       VectorEncoding.FLOAT32,
-                                                       VectorSimilarityFunction.COSINE,
-                                                       graphBuilder.getGraph().getView(),
-                                                       new Bits.MatchAllBits(vectors.size()),
-                                                       Integer.MAX_VALUE);
-
-        List<float[]> nearestNeighbors = new ArrayList<>();
-        while (queue.size() > 0)
-            nearestNeighbors.add(vectorValues.vectorValue(queue.pop()));
-
-        return recallMatch(nearestNeighbors, result, topK);
-    }
-
-    private double recallMatch(List<float[]> expected, List<float[]> actual, int topK)
-    {
-        if (expected.size() == 0 && actual.size() == 0)
-            return 1.0;
-
-        int matches = 0;
-        for (float[] in : expected)
-        {
-            for (float[] out : actual)
-            {
-                if (Arrays.compare(in, out) ==0)
-                {
-                    matches++;
-                    break;
-                }
-            }
-        }
-
-        return (double) matches / topK;
     }
 
     private List<float[]> getVectorsFromResult(UntypedResultSet result)

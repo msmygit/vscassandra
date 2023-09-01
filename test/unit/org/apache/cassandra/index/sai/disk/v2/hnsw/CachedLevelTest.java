@@ -16,12 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import org.junit.Test;
 import org.junit.Before;
 
-import org.apache.cassandra.index.sai.disk.hnsw.OnDiskHnswGraph.CachedLevel;
+import org.apache.cassandra.index.sai.disk.v2.hnsw.OnDiskHnswGraph.CachedLevel;
 
 import static org.assertj.core.api.Assertions.*;
 

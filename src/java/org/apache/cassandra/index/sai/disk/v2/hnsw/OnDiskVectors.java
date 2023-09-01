@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 
@@ -74,7 +74,8 @@ public class OnDiskVectors implements RandomAccessVectorValues<float[]>, AutoClo
 
     void readVector(int i, float[] v) throws IOException
     {
-        reader.readFloatsAt(segmentOffset + 8L + i * dimension * 4L, v);
+        reader.seek(segmentOffset + 8L + i * dimension * 4L);
+        reader.readFully(v);
     }
 
     @Override

@@ -16,18 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 
-import org.apache.cassandra.io.util.SequentialWriter;
-import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
+import io.github.jbellis.jvector.util.Bits;
+import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.disk.PostingList;
 
-public interface RamAwareVectorValues extends RandomAccessVectorValues<float[]>
+/**
+ * A common interface between Lucene and JVector graph indexes
+ */
+public interface JVectorLuceneOnDiskGraph extends AutoCloseable
 {
-    public long write(SequentialWriter writer) throws IOException;
+    long ramBytesUsed();
 
-    float[] vectorValue(int i);
+    int size();
 
-    public long ramBytesUsed();
+    OnDiskOrdinalsMap.OrdinalsView getOrdinalsView() throws IOException;
+
+    PostingList search(float[] queryVector, int limit, Bits bits, QueryContext context);
+
+    void close();
 }

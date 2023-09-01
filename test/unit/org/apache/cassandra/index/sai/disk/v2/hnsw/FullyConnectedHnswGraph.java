@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -24,12 +24,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.List;
 
-import org.apache.cassandra.index.sai.disk.hnsw.OnDiskHnswGraph.AbstractNodesIterator;
+import org.apache.cassandra.index.sai.disk.v2.hnsw.OnDiskHnswGraph.AbstractNodesIterator;
 import org.apache.cassandra.utils.Pair;
 
 import static org.apache.lucene.search.DocIdSetIterator.NO_MORE_DOCS;
 
-public class FullyConnectedHnswGraph extends ExtendedHnswGraph {
+public class FullyConnectedHnswGraph extends ExtendedHnswGraph
+{
 
     private final int entryNode;
     private final Map<Integer, List<Integer>> nodes;

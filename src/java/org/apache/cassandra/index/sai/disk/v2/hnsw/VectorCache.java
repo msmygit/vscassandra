@@ -16,13 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.cassandra.index.sai.disk.vector.RamEstimation;
 import org.apache.lucene.util.hnsw.HnswGraph;
 import org.jctools.maps.NonBlockingHashMapLong;
 

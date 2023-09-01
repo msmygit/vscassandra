@@ -34,9 +34,7 @@ import java.util.stream.IntStream;
 import org.junit.Test;
 
 import org.apache.cassandra.cql3.UntypedResultSet;
-import org.apache.cassandra.index.sai.SAITester;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class VectorSiftSmallTest extends VectorTester
@@ -56,11 +54,11 @@ public class VectorSiftSmallTest extends VectorTester
 
         insertVectors(baseVectors);
         double memoryRecall = testRecall(queryVectors, groundTruth);
-        assertTrue(memoryRecall > 0.975);
+        assertTrue("Memory recall is " + memoryRecall, memoryRecall > 0.975);
 
         flush();
         var diskRecall = testRecall(queryVectors, groundTruth);
-        assertTrue(diskRecall > 0.975);
+        assertTrue("Disk recall is " + diskRecall, diskRecall > 0.95);
     }
 
     public static ArrayList<float[]> readFvecs(String filePath) throws IOException

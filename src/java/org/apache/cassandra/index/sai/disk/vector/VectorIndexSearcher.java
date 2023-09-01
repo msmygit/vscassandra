@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -27,6 +27,8 @@ import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.util.SparseFixedBitSet;
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.marshal.VectorType;
@@ -36,40 +38,46 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.hnsw.CassandraOnDiskHnsw;
+import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
+import org.apache.cassandra.index.sai.disk.v3.CassandraDiskAnn;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.SparseFixedBitSet;
 
 /**
- * Executes ann search against the HNSW graph for an individual index segment.
+ * Executes ann search against the graph for an individual index segment.
  */
 public class VectorIndexSearcher extends IndexSearcher implements SegmentOrdering
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private final CassandraOnDiskHnsw graph;
+    private final JVectorLuceneOnDiskGraph graph;
     private final PrimaryKey.Factory keyFactory;
-    private final VectorType<float[]> type;
     private int maxBruteForceRows; // not final so test can inject its own setting
     private final ThreadLocal<SparseFixedBitSet> cachedBitSets;
 
-    VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                        PerIndexFiles perIndexFiles,
-                        SegmentMetadata segmentMetadata,
-                        IndexDescriptor indexDescriptor,
-                        IndexContext indexContext) throws IOException
+    public VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                               PerIndexFiles perIndexFiles,
+                               SegmentMetadata segmentMetadata,
+                               IndexDescriptor indexDescriptor,
+                               IndexContext indexContext) throws IOException
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
-        graph = new CassandraOnDiskHnsw(segmentMetadata.componentMetadatas, perIndexFiles, indexContext);
+        if (indexDescriptor.version == Version.BA)
+            graph = new CassandraOnDiskHnsw(segmentMetadata.componentMetadatas, perIndexFiles, indexContext);
+        else if (indexDescriptor.version == Version.CA) // FIXME how to check for forwards-compatible versions?
+            graph = new CassandraDiskAnn(segmentMetadata.componentMetadatas, perIndexFiles, indexContext);
+        else
+            throw new IllegalArgumentException("Unsupported index version: " + indexDescriptor.version);
         this.keyFactory = PrimaryKey.factory(indexContext.comparator(), indexContext.indexFeatureSet());
-        type = (VectorType<float[]>) indexContext.getValidator();
         cachedBitSets = ThreadLocal.withInitial(() -> new SparseFixedBitSet(graph.size()));
 
         // estimate the number of comparisons that a search would require; use brute force if we have
@@ -103,7 +111,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             return bitsOrPostingList.postingList();
 
         float[] queryVector = exp.lower.value.vector;
-        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context);
+        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), context);
     }
 
     /**
@@ -231,9 +239,9 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
                 return toPrimaryKeyIterator(results, context);
             }
 
-            // else ask hnsw to perform a search limited to the bits we created
+            // else ask the index to perform a search limited to the bits we created
             float[] queryVector = exp.lower.value.vector;
-            var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context);
+            var results = graph.search(queryVector, limit, bits, context);
             return toPrimaryKeyIterator(results, context);
         }
     }

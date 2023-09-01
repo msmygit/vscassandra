@@ -31,6 +31,7 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SSTableRowIdPostingList;
 import org.apache.cassandra.index.sai.disk.SSTableRowIdsRangeIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.vector.VectorIndexSearcher;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -45,17 +46,17 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
  */
 public abstract class IndexSearcher implements Closeable, SegmentOrdering
 {
-    final PrimaryKeyMap.Factory primaryKeyMapFactory;
+    protected final PrimaryKeyMap.Factory primaryKeyMapFactory;
     final PerIndexFiles indexFiles;
-    final SegmentMetadata metadata;
+    protected final SegmentMetadata metadata;
     final IndexDescriptor indexDescriptor;
-    final IndexContext indexContext;
+    protected final IndexContext indexContext;
 
-    IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                  PerIndexFiles perIndexFiles,
-                  SegmentMetadata segmentMetadata,
-                  IndexDescriptor indexDescriptor,
-                  IndexContext indexContext)
+    protected IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                            PerIndexFiles perIndexFiles,
+                            SegmentMetadata segmentMetadata,
+                            IndexDescriptor indexDescriptor,
+                            IndexContext indexContext)
     {
         this.primaryKeyMapFactory = primaryKeyMapFactory;
         this.indexFiles = perIndexFiles;
@@ -94,7 +95,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
      */
     public abstract RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
 
-    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    protected RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyKeys();
@@ -110,7 +111,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
     }
 
-    RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    protected RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyLongs();

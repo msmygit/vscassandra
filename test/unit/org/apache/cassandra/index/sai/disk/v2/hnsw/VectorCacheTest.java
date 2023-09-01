@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,9 +33,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.FloatType;
 import org.apache.cassandra.db.marshal.VectorType;
-import org.apache.cassandra.index.sai.disk.hnsw.CompactionVectorValues;
-import org.apache.cassandra.index.sai.disk.hnsw.OnDiskVectors;
-import org.apache.cassandra.index.sai.disk.hnsw.VectorCache;
+import org.apache.cassandra.index.sai.disk.vector.CompactionVectorValues;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.io.util.SequentialWriter;

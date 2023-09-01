@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -27,6 +27,8 @@ import java.util.stream.IntStream;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import io.github.jbellis.jvector.util.Bits;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
@@ -34,14 +36,15 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
+import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
+import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
 import org.apache.lucene.index.VectorEncoding;
-import org.apache.lucene.index.VectorSimilarityFunction;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
 import org.apache.lucene.util.hnsw.NeighborQueue;
 import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
-public class CassandraOnDiskHnsw implements AutoCloseable
+public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoCloseable
 {
     private final Function<QueryContext, VectorsWithCache> vectorsSupplier;
     private final OnDiskOrdinalsMap ordinalsMap;
@@ -70,11 +73,13 @@ public class CassandraOnDiskHnsw implements AutoCloseable
         }
     }
 
+    @Override
     public long ramBytesUsed()
     {
         return hnsw.getCacheSizeInBytes() + vectorCache.ramBytesUsed();
     }
 
+    @Override
     public int size()
     {
         return hnsw.size();
@@ -84,9 +89,10 @@ public class CassandraOnDiskHnsw implements AutoCloseable
      * @return Row IDs associated with the topK vectors near the query
      */
     // VSTODO make this return something with a size
-    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, int vistLimit, QueryContext context)
+    @Override
+    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context)
     {
-        CassandraOnHeapHnsw.validateIndexable(queryVector, similarityFunction);
+        CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
         NeighborQueue queue;
         try (var vectors = vectorsSupplier.apply(context); var view = hnsw.getView(context))
@@ -95,10 +101,10 @@ public class CassandraOnDiskHnsw implements AutoCloseable
                                              topK,
                                              vectors,
                                              VectorEncoding.FLOAT32,
-                                             similarityFunction,
+                                             LuceneCompat.vsf(similarityFunction),
                                              view,
-                                             ordinalsMap.ignoringDeleted(acceptBits),
-                                             vistLimit);
+                                             LuceneCompat.bits(ordinalsMap.ignoringDeleted(acceptBits)),
+                                             Integer.MAX_VALUE);
             return annRowIdsToPostings(queue);
         }
         catch (IOException e)
@@ -158,12 +164,14 @@ public class CassandraOnDiskHnsw implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         ordinalsMap.close();
         hnsw.close();
     }
 
+    @Override
     public OnDiskOrdinalsMap.OrdinalsView getOrdinalsView() throws IOException
     {
         return ordinalsMap.getOrdinalsView();

@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.ClusteringComparator;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
@@ -48,6 +49,12 @@ public class V2OnDiskFormat extends V1OnDiskFormat
                                                                                  IndexComponent.PRIMARY_KEY_TRIE,
                                                                                  IndexComponent.PRIMARY_KEY_BLOCKS,
                                                                                  IndexComponent.PRIMARY_KEY_BLOCK_OFFSETS);
+
+    private static final Set<IndexComponent> VECTOR_COMPONENTS_V2 = EnumSet.of(IndexComponent.COLUMN_COMPLETION_MARKER,
+                                                                               IndexComponent.META,
+                                                                               IndexComponent.VECTOR,
+                                                                               IndexComponent.TERMS_DATA,
+                                                                               IndexComponent.POSTING_LISTS);
 
     public static final V2OnDiskFormat instance = new V2OnDiskFormat();
 
@@ -114,6 +121,22 @@ public class V2OnDiskFormat extends V1OnDiskFormat
             }
         }
         return true;
+    }
+
+    @Override
+    public Set<IndexComponent> perIndexComponents(IndexContext indexContext)
+    {
+        if (indexContext.isVector())
+            return VECTOR_COMPONENTS_V2;
+        return super.perIndexComponents(indexContext);
+    }
+
+    @Override
+    public boolean validateOneIndexComponent(IndexComponent component, IndexDescriptor descriptor, IndexContext context, boolean checksum)
+    {
+        if (context.isVector())
+            return true;
+        return super.validateOneIndexComponent(component, descriptor, context, checksum);
     }
 
     @Override

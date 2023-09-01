@@ -27,7 +27,7 @@ import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.db.marshal.FloatType;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
-import org.apache.lucene.index.VectorSimilarityFunction;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
