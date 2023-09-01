@@ -88,7 +88,6 @@ import static org.apache.cassandra.cql3.statements.RequestValidations.checkNotNu
 import static org.apache.cassandra.cql3.statements.RequestValidations.checkNull;
 import static org.apache.cassandra.cql3.statements.RequestValidations.checkTrue;
 import static org.apache.cassandra.db.filter.DataLimits.NO_LIMIT;
-import static org.apache.cassandra.db.filter.DataLimits.serializer;
 import static org.apache.cassandra.utils.ByteBufferUtil.UNSET_BYTE_BUFFER;
 
 /**
@@ -1338,7 +1337,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
                 if (e.getValue().expression.hasNonClusteredOrdering())
                 {
                     Preconditions.checkState(orderingColumns.size() == 1);
-                    return new IndexColumnComparator<>(e.getValue().expression.toRestriction(), selection);
+                    return new IndexColumnComparator<>(e.getValue().expression.toRestriction(), selection.getOrderingIndex(e.getKey()));
                 }
             }
 
@@ -1524,7 +1523,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
     /**
      * Used in orderResults(...) method when single 'ORDER BY' condition where given
      */
-    public static class SingleColumnComparator extends ColumnComparator<List<ByteBuffer>>
+    private static class SingleColumnComparator extends ColumnComparator<List<ByteBuffer>>
     {
         private final int index;
         private final Comparator<ByteBuffer> comparator;
@@ -1544,13 +1543,13 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
     private static class IndexColumnComparator<T> extends ColumnComparator<List<ByteBuffer>>
     {
         private final SingleRestriction restriction;
-        private final Selection selection;
+        private final int columnIndex;
 
         // VSTODO maybe cache in prepared statement
-        public IndexColumnComparator(SingleRestriction restriction, Selection selection)
+        public IndexColumnComparator(SingleRestriction restriction, int columnIndex)
         {
             this.restriction = restriction;
-            this.selection = selection;
+            this.columnIndex = columnIndex;
         }
 
         @Override
@@ -1564,7 +1563,7 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
         {
             Index index = restriction.findSupportingIndex(IndexRegistry.obtain(table));
             assert index != null;
-            return index.getPostQueryOrdering(restriction, selection, options);
+            return index.getPostQueryOrdering(restriction, columnIndex, options);
         }
 
         @Override

@@ -423,11 +423,11 @@ public interface Index
      * Return a comparator that reorders query result before sending to client
      *
      * @param restriction restriction that requires current index
-     * @param selection   query selection
-     * @param options     query options
+     * @param columnIndex idx of the indexed column in returned row
+     * @param options query options
      * @return comparator that for post-query ordering; or null if not supported
      */
-    default Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, Selection selection, QueryOptions options)
+    default Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options)
     {
         return null;
     }

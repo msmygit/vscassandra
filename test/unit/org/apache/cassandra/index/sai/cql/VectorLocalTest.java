@@ -66,7 +66,7 @@ public class VectorLocalTest extends VectorTester
     @Test
     public void randomizedTest() throws Throwable
     {
-        createTable(String.format("CREATE TABLE %%s (pk int, str_val text, val vector<float, %d>, score float, PRIMARY KEY(pk))", word2vec.dimension()));
+        createTable(String.format("CREATE TABLE %%s (pk int, str_val text, val vector<float, %d>, PRIMARY KEY(pk))", word2vec.dimension()));
         createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
         waitForIndexQueryable();
 

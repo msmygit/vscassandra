@@ -89,9 +89,6 @@ public class VectorTopKProcessor
     @Nullable
     private final QueryContext context;
 
-    @Nullable
-    private final ColumnMetadata scoredColumn;
-
     public VectorTopKProcessor(ReadCommand command, QueryContext queryContext)
     {
         this.command = command;
@@ -103,8 +100,6 @@ public class VectorTopKProcessor
         this.indexContext = annIndexAndExpression.left;
         this.queryVector = annIndexAndExpression.right;
         this.limit = command.limits().count();
-
-        this.scoredColumn = command.metadata().getColumn(ColumnIdentifier.getInterned("score", true));
     }
 
     /**
@@ -126,7 +121,7 @@ public class VectorTopKProcessor
                 Row staticRow = partition.staticRow();
                 PartitionInfo partitionInfo = PartitionInfo.create(partition);
                 // compute key and static row score once per partition
-                float keyAndStaticScore = getScoreForRow(key, staticRow, null, true);
+                float keyAndStaticScore = getScoreForRow(key, staticRow, true);
 
                 while (partition.hasNext())
                 {
@@ -142,16 +137,7 @@ public class VectorTopKProcessor
 
                     Row row = (Row) unfiltered;
 
-                    Cell<?> scoreCell = scoredColumn != null ? row.getCell(scoredColumn) : null;
-                    float rowScore = getScoreForRow(key, row, scoreCell, false) + keyAndStaticScore;
-                    // FIXME refactor
-                    if (scoredColumn != null && scoreCell == null)
-                    {
-                        Row.Builder withScoreBuilder = BTreeRow.unsortedBuilder();
-                        withScoreBuilder.newRow(row.clustering());
-                        withScoreBuilder.addCell(BufferCell.live(scoredColumn, 0, FloatType.instance.decompose(rowScore)));
-                        row = Rows.merge(row, withScoreBuilder.build());
-                    }
+                    float rowScore = getScoreForRow(key, row, false) + keyAndStaticScore;
 
                     topK.add(Triple.of(partitionInfo, row, rowScore));
 
@@ -186,7 +172,7 @@ public class VectorTopKProcessor
     /**
      * Sum the scores from different vector indexes for the row
      */
-    private float getScoreForRow(DecoratedKey key, Row row, Cell<?> scoreCell, boolean partitionLevel)
+    private float getScoreForRow(DecoratedKey key, Row row, boolean partitionLevel)
     {
         ColumnMetadata column = indexContext.getDefinition();
 
@@ -207,10 +193,6 @@ public class VectorTopKProcessor
             if (score >= 0)
                 return score;
         }
-
-        // if the row already included score, e.g. at coordinator
-        if (scoreCell != null)
-            return FloatType.instance.compose(scoreCell.buffer().duplicate());
 
         ByteBuffer value = indexContext.getValueOf(partitionLevel ? key : null, row, FBUtilities.nowInSeconds());
         if (value != null)

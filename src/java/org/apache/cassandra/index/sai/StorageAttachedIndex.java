@@ -546,23 +546,16 @@ public class StorageAttachedIndex implements Index
     }
 
     @Override
-    public Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, Selection selection, QueryOptions options)
+    public Comparator<List<ByteBuffer>> getPostQueryOrdering(Restriction restriction, int columnIndex, QueryOptions options)
     {
         // For now, only support ANN
         assert restriction instanceof SingleColumnRestriction.AnnRestriction;
-        Preconditions.checkState(indexContext.isVector());
 
-        ColumnMetadata scoreColumn = baseCfs.metadata().getColumn(ColumnIdentifier.getInterned("score", true));
-        if (scoreColumn != null)
-        {
-            int columnIndex = selection.getOrderingIndex(scoreColumn);
-            return new SelectStatement.SingleColumnComparator(columnIndex, FloatType.instance).reverse();
-        }
+        Preconditions.checkState(indexContext.isVector());
 
         SingleColumnRestriction.AnnRestriction annRestriction = (SingleColumnRestriction.AnnRestriction) restriction;
         VectorSimilarityFunction function = indexContext.getIndexWriterConfig().getSimilarityFunction();
 
-        int columnIndex = selection.getOrderingIndex(annRestriction.getFirstColumn());
         float[] target = TypeUtil.decomposeVector(indexContext, annRestriction.value(options).duplicate());
 
         return (leftBuf, rightBuf) -> {
