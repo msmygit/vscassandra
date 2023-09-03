@@ -302,10 +302,11 @@ public class CassandraOnHeapGraph<T>
             long postingsPosition = new VectorPostingsWriter<T>().writePostings(postingsOutput.asSequentialWriter(), vectorValues, postingsMap, deletedOrdinals);
             long postingsLength = postingsPosition - postingsOffset;
 
-            // write the graph
+            // complete (internal clean up) and write the graph
+            builder.complete();
             long termsOffset = indexOutput.getFilePointer();
-            long termsSize = OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutput.asSequentialWriter());
-            long termsLength = termsSize - termsOffset;
+            OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutput.asSequentialWriter());
+            long termsLength = indexOutput.getFilePointer() - termsOffset;
 
             // add components to the metadata map
             SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();
@@ -321,7 +322,7 @@ public class CassandraOnHeapGraph<T>
     {
         // don't bother with PQ if there are fewer than 1K vectors
         int M = vectorValues.dimension() / 2;
-        writer.write(vectorValues.size() >= 1024 ? 1 : 0);
+        writer.writeBoolean(vectorValues.size() >= 1024);
         if (vectorValues.size() < 1024)
         {
             logger.debug("Skipping PQ for only {} vectors", vectorValues.size());
