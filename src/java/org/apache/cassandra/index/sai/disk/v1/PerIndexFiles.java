@@ -39,22 +39,11 @@ public class PerIndexFiles implements Closeable
     {
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
-        if (indexContext.isVector())
+        for (IndexComponent component : indexDescriptor.version.onDiskFormat().perIndexComponents(indexContext))
         {
-            files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
-            files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
-            files.put(IndexComponent.VECTOR, indexDescriptor.createPerIndexFileHandle(IndexComponent.VECTOR, indexContext, temporary));
-            files.put(IndexComponent.PQ, indexDescriptor.createPerIndexFileHandle(IndexComponent.PQ, indexContext, temporary));
-        }
-        else if (TypeUtil.isLiteral(indexContext.getValidator()))
-        {
-            files.put(IndexComponent.POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.POSTING_LISTS, indexContext, temporary));
-            files.put(IndexComponent.TERMS_DATA, indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext, temporary));
-        }
-        else
-        {
-            files.put(IndexComponent.KD_TREE, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE, indexContext, temporary));
-            files.put(IndexComponent.KD_TREE_POSTING_LISTS, indexDescriptor.createPerIndexFileHandle(IndexComponent.KD_TREE_POSTING_LISTS, indexContext, temporary));
+            if (component == IndexComponent.META || component == IndexComponent.COLUMN_COMPLETION_MARKER)
+                continue;
+            files.put(component, indexDescriptor.createPerIndexFileHandle(component, indexContext, temporary));
         }
     }
 
