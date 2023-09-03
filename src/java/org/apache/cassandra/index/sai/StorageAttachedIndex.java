@@ -188,6 +188,9 @@ public class StorageAttachedIndex implements Index
     // Tracks whether the index has been invalidated due to removal, a table drop, etc.
     private volatile boolean valid = true;
 
+    /**
+     * Called via reflection from SecondaryIndexManager
+     */
     public StorageAttachedIndex(ColumnFamilyStore baseCfs, IndexMetadata config)
     {
         this.baseCfs = baseCfs;
