@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.vector;
+package org.apache.cassandra.index.sai.disk.v3;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -43,6 +43,9 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
+import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
+import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
 
 public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
 {

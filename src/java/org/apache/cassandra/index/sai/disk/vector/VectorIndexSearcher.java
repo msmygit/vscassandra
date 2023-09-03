@@ -15,12 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.v1;
+package org.apache.cassandra.index.sai.disk.vector;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.Arrays;
-
 import javax.annotation.Nullable;
 
 import com.google.common.base.MoreObjects;
@@ -28,6 +27,7 @@ import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.util.SparseFixedBitSet;
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.PartitionPosition;
@@ -39,20 +39,21 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.Version;
-import org.apache.cassandra.index.sai.disk.vector.CassandraDiskAnn;
-import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
-import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
+import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
+import org.apache.cassandra.index.sai.disk.v3.CassandraDiskAnn;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import com.github.jbellis.jvector.util.Bits;
 
 /**
- * Executes ann search against the HNSW graph for an individual index segment.
+ * Executes ann search against the graph for an individual index segment.
  */
 public class VectorIndexSearcher extends IndexSearcher implements SegmentOrdering
 {
@@ -65,11 +66,11 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     private int maxBruteForceRows; // not final so test can inject its own setting
     private final ThreadLocal<SparseFixedBitSet> cachedBitSets;
 
-    VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                        PerIndexFiles perIndexFiles,
-                        SegmentMetadata segmentMetadata,
-                        IndexDescriptor indexDescriptor,
-                        IndexContext indexContext) throws IOException
+    public VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                               PerIndexFiles perIndexFiles,
+                               SegmentMetadata segmentMetadata,
+                               IndexDescriptor indexDescriptor,
+                               IndexContext indexContext) throws IOException
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
         if (indexDescriptor.version == Version.BA)
