@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.vector.hnsw;
+package org.apache.cassandra.index.sai.disk.v2.hnsw;
 
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
