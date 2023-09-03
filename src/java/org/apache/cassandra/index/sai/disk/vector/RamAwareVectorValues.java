@@ -18,16 +18,11 @@
 
 package org.apache.cassandra.index.sai.disk.vector;
 
-import java.io.IOException;
-
 import com.github.jbellis.jvector.graph.RandomAccessVectorValues;
-import org.apache.cassandra.io.util.SequentialWriter;
 
 public interface RamAwareVectorValues extends RandomAccessVectorValues<float[]>
 {
-    public long write(SequentialWriter writer) throws IOException;
-
     float[] vectorValue(int i);
 
-    public long ramBytesUsed();
+    long ramBytesUsed();
 }

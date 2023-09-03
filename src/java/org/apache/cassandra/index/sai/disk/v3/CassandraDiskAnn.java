@@ -69,15 +69,17 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         long pqSegmentOffset = componentMetadatas.get(IndexComponent.PQ).offset;
         try (var reader = indexFiles.pq().createReader())
         {
-            compressedVectors = CompressedVectors.load(reader, pqSegmentOffset);
-            if (compressedVectors == null)
-            {
-                var vectors = cacheOriginalVectors(graph);
-                uncompressedVectors = new ListRandomAccessVectorValues(vectors, vectors.get(0).length);
+            reader.seek(pqSegmentOffset);
+            var containsCompressedVectors = reader.readBoolean();
+            if (containsCompressedVectors) {
+                compressedVectors = CompressedVectors.load(reader, reader.getFilePointer());
+                uncompressedVectors = null;
             }
             else
             {
-                uncompressedVectors = null;
+                compressedVectors = null;
+                var vectors = cacheOriginalVectors(graph);
+                uncompressedVectors = new ListRandomAccessVectorValues(vectors, vectors.get(0).length);
             }
         }
 

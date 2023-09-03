@@ -30,15 +30,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.graph.GraphIndexBuilder;
 import com.github.jbellis.jvector.graph.GraphSearcher;
 import com.github.jbellis.jvector.graph.NodeScore;
+import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import com.github.jbellis.jvector.util.Bits;
@@ -51,6 +55,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
+import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.lucene.util.StringHelper;
@@ -274,14 +279,14 @@ public class CassandraOnHeapGraph<T>
                                                                                   postingsMap.keySet().size(), vectorValues.size());
         logger.debug("Writing graph with {} rows and {} distinct vectors", postingsMap.values().stream().mapToInt(VectorPostings::size).sum(), vectorValues.size());
 
-        try (var vectorsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.VECTOR, indexContext), true);
+        try (var pqOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.PQ, indexContext), true);
              var postingsOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.POSTING_LISTS, indexContext), true);
-             var indexOutputWriter = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.TERMS_DATA, indexContext), true))
+             var indexOutput = IndexFileUtils.instance.openOutput(indexDescriptor.fileFor(IndexComponent.TERMS_DATA, indexContext), true))
         {
-            // write vectors
-            long vectorOffset = vectorsOutput.getFilePointer();
-            long vectorPosition = vectorValues.write(vectorsOutput.asSequentialWriter());
-            long vectorLength = vectorPosition - vectorOffset;
+            // compute and write PQ
+            long pqOffset = pqOutput.getFilePointer();
+            long pqPosition = writePQ(pqOutput.asSequentialWriter());
+            long pqLength = pqPosition - pqOffset;
 
             var deletedOrdinals = new HashSet<Integer>();
             postingsMap.values().stream().filter(VectorPostings::isEmpty).forEach(vectorPostings -> deletedOrdinals.add(vectorPostings.getOrdinal()));
@@ -298,8 +303,8 @@ public class CassandraOnHeapGraph<T>
             long postingsLength = postingsPosition - postingsOffset;
 
             // write the graph
-            long termsOffset = indexOutputWriter.getFilePointer();
-            long termsSize = OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutputWriter.asSequentialWriter());
+            long termsOffset = indexOutput.getFilePointer();
+            long termsSize = OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutput.asSequentialWriter());
             long termsLength = termsSize - termsOffset;
 
             // add components to the metadata map
@@ -307,8 +312,37 @@ public class CassandraOnHeapGraph<T>
             metadataMap.put(IndexComponent.TERMS_DATA, -1, termsOffset, termsLength, Map.of());
             metadataMap.put(IndexComponent.POSTING_LISTS, -1, postingsOffset, postingsLength, Map.of());
             Map<String, String> vectorConfigs = Map.of("SEGMENT_ID", ByteBufferUtil.bytesToHex(ByteBuffer.wrap(StringHelper.randomId())));
-            metadataMap.put(IndexComponent.VECTOR, -1, vectorOffset, vectorLength, vectorConfigs);
+            metadataMap.put(IndexComponent.PQ, -1, pqOffset, pqLength, vectorConfigs);
             return metadataMap;
+        }
+    }
+
+    private long writePQ(SequentialWriter writer) throws IOException
+    {
+        // don't bother with PQ if there are fewer than 1K vectors
+        int M = vectorValues.dimension() / 2;
+        writer.write(vectorValues.size() >= 1024 ? 1 : 0);
+        if (vectorValues.size() < 1024)
+        {
+            logger.debug("Skipping PQ for only {} vectors", vectorValues.size());
+            return writer.position();
+        }
+
+        logger.debug("Computing PQ for {} vectors", vectorValues.size());
+        // hack to only do this one at a time during compaction since we're reading a ton of vectors into memory
+        var synchronizeOn = vectorValues instanceof ConcurrentVectorValues ? this : CassandraOnHeapGraph.class;
+        synchronized (synchronizeOn)
+        {
+            // collect vectors into a list
+            var vectors = IntStream.range(0, vectorValues.size()).mapToObj(vectorValues::vectorValue).collect(Collectors.toList());
+            // train PQ and encode
+            var pq = new ProductQuantization(vectors, M, false);
+            var encoded = vectors.stream().parallel().map(pq::encode).collect(Collectors.toList());
+            var cv = new CompressedVectors(pq, encoded);
+
+            // save
+            cv.write(writer);
+            return writer.position();
         }
     }
 
