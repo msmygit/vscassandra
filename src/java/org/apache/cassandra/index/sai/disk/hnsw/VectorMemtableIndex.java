@@ -216,7 +216,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
         float[] qv = exp.lower.value.vector;
         var bits = new KeyFilteringBits(results);
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
         context.recordScores(keyQueue);
