@@ -185,7 +185,7 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
         @Override
         public int hashCode()
         {
-            return Objects.hash(token);
+            return Objects.hash(token(), partitionKey(), clustering());
         }
 
         @Override
