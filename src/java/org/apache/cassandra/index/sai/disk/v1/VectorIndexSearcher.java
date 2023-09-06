@@ -227,15 +227,9 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             }
         }
 
-        // where is the computation in here
-
         // if we have a small number of results then let TopK processor do exact NN computation
         if (n < bruteForceRows.length)
         {
-            // what am I doing here? looks like we're skipping the topk processor, but is this the first
-            // time we compute scores or the second?
-
-            // are we only here when we haven't actually computed scores yet?
             var results = new ReorderingPostingList(Arrays.stream(bruteForceRows, 0, n).iterator(), n);
             return toPrimaryKeyIterator(results, context);
         }

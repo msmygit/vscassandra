@@ -76,6 +76,5 @@ public class QueryContextTest extends AbstractPrimaryKeyTest
             PrimaryKey key = SAITester.TEST_FACTORY.create(Util.dk("key" + i), Clustering.EMPTY);
             assertEquals(0.01f * i, context.getScoreForKey(key), 0.001f);
         }
-
     }
 }
