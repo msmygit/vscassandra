@@ -159,9 +159,10 @@ public class CassandraOnDiskHnsw implements AutoCloseable
         }
 
         @Override
-        public void close()
+        public void close() throws IOException
         {
             rowIdsView.close();
+            mapper.close();
         }
     }
 

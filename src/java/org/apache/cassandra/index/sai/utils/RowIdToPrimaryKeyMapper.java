@@ -18,25 +18,27 @@
 
 package org.apache.cassandra.index.sai.utils;
 
+import java.io.IOException;
+
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 
 /**
  * Essentially a Function<Long, PrimaryKey>, but avoids the boxing of the long.
  */
-public class RowIdToPrimaryKeyMapper
+public class RowIdToPrimaryKeyMapper implements AutoCloseable
 {
     private final PrimaryKeyMap primaryKeyMap;
     private final long segmentRowIdOffset;
 
     /**
      *
-     * @param primaryKeyMap - primary key generator
+     * @param factory - primary key map factory
      * @param segmentRowIdOffset - the offset to add to the rowId to get the SS Table row id
      */
-    public RowIdToPrimaryKeyMapper(PrimaryKeyMap primaryKeyMap, long segmentRowIdOffset)
+    public RowIdToPrimaryKeyMapper(PrimaryKeyMap.Factory factory, long segmentRowIdOffset)
     {
-        this.primaryKeyMap = primaryKeyMap;
+        this.primaryKeyMap = factory.newPerSSTablePrimaryKeyMap();
         this.segmentRowIdOffset = segmentRowIdOffset;
     }
 
@@ -47,6 +49,13 @@ public class RowIdToPrimaryKeyMapper
         if (ssTableRowId == PostingList.END_OF_STREAM)
             return null;
 
-        return primaryKeyMap.primaryKeyFromRowId(ssTableRowId);
+        // Need to load eagerly to ensure we can close the primaryKeyMap safely
+        return primaryKeyMap.primaryKeyFromRowId(ssTableRowId).loadDeferred();
+    }
+
+    @Override
+    public void close() throws IOException
+    {
+        primaryKeyMap.close();
     }
 }

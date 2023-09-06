@@ -105,7 +105,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         float[] queryVector = exp.lower.value.vector;
         return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context,
-                            new RowIdToPrimaryKeyMapper(primaryKeyMap, segment.metadata.segmentRowIdOffset));
+                            new RowIdToPrimaryKeyMapper(primaryKeyMapFactory, segment.metadata.segmentRowIdOffset));
     }
 
     /**
@@ -237,7 +237,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
             float[] queryVector = exp.lower.value.vector;
             // We have ss table row ids, so we set the RowIdToPrimaryKeyMapper to use a 0 offset
             var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context,
-                                       new RowIdToPrimaryKeyMapper(primaryKeyMap, 0));
+                                       new RowIdToPrimaryKeyMapper(primaryKeyMapFactory, 0));
             return toPrimaryKeyIterator(results, context);
         }
     }
