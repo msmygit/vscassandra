@@ -253,6 +253,7 @@ public class CassandraOnHeapHnsw<T>
      */
     public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
+        validateIndexable(queryVector, similarityFunction);
         // search() errors out when an empty graph is passed to it
         if (vectorValues.size() == 0)
             return new PriorityQueue<>();
@@ -267,6 +268,7 @@ public class CassandraOnHeapHnsw<T>
 
     public PriorityQueue<PrimaryKey> searchScoredKeys(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
+        validateIndexable(queryVector, similarityFunction);
         // search() errors out when an empty graph is passed to it
         if (vectorValues.size() == 0)
             return new PriorityQueue<>();
@@ -290,7 +292,6 @@ public class CassandraOnHeapHnsw<T>
     private NeighborQueue searchConcurrent(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
         assert builder.isConcurrent();
-        validateIndexable(queryVector, similarityFunction);
 
         try
         {
