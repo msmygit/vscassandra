@@ -169,8 +169,6 @@ public class CassandraOnDiskHnsw implements AutoCloseable
                                                       RowIdToPrimaryKeyMapper rowIdToPrimaryKeyMapper) throws IOException
     {
         int originalSize = queue.size();
-        // FIXME why close early?
-        // it's early becuase we exhaust the iterator early
         try (var iterator = new RowIdIteratorAndCacher(queue, context, rowIdToPrimaryKeyMapper))
         {
             return new ReorderingPostingList(iterator, originalSize);

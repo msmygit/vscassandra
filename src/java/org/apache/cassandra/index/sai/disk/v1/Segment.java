@@ -164,10 +164,6 @@ public class Segment implements Closeable, SegmentOrdering
         return index.limitToTopResults(context, iterator, exp, limit);
     }
 
-    public long getSSTableRowId(long segmentRowId) {
-        return segmentRowId == PostingList.END_OF_STREAM ? segmentRowId : segmentRowId + metadata.segmentRowIdOffset;
-    }
-
     @Override
     public void close()
     {
