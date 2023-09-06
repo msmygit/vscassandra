@@ -35,7 +35,7 @@ import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.SegmentRowIdToPrimaryKeyConverter;
+import org.apache.cassandra.index.sai.utils.RowIdToPrimaryKeyMapper;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.util.Bits;
@@ -87,7 +87,7 @@ public class CassandraOnDiskHnsw implements AutoCloseable
      */
     // VSTODO make this return something with a size
     public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, int vistLimit, QueryContext context,
-                                        SegmentRowIdToPrimaryKeyConverter rowIdToPrimaryKeyConverter)
+                                        RowIdToPrimaryKeyMapper rowIdToPrimaryKeyMapper)
     {
         CassandraOnHeapHnsw.validateIndexable(queryVector, similarityFunction);
 
@@ -102,7 +102,7 @@ public class CassandraOnDiskHnsw implements AutoCloseable
                                              view,
                                              ordinalsMap.ignoringDeleted(acceptBits),
                                              vistLimit);
-            return annRowIdsToPostings(queue, context, rowIdToPrimaryKeyConverter);
+            return annRowIdsToPostings(queue, context, rowIdToPrimaryKeyMapper);
         }
         catch (IOException e)
         {
@@ -114,16 +114,17 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     {
         private final NeighborQueue queue;
         private final QueryContext context;
-        private final SegmentRowIdToPrimaryKeyConverter converter;
+        private final RowIdToPrimaryKeyMapper mapper;
         private final OnDiskOrdinalsMap.RowIdsView rowIdsView = ordinalsMap.getRowIdsView();
 
         private PrimitiveIterator.OfInt segmentRowIdIterator = IntStream.empty().iterator();
 
-        public RowIdIteratorAndCacher(NeighborQueue queue, QueryContext context, SegmentRowIdToPrimaryKeyConverter converter)
+        public RowIdIteratorAndCacher(NeighborQueue queue, QueryContext context, RowIdToPrimaryKeyMapper mapper)
         {
+            assert mapper != null;
             this.queue = queue;
             this.context = context;
-            this.converter = converter;
+            this.mapper = mapper;
         }
 
         @Override
@@ -134,13 +135,11 @@ public class CassandraOnDiskHnsw implements AutoCloseable
                     var score = queue.topScore();
                     var ordinal = queue.pop();
                     int[] rowIds = rowIdsView.getSegmentRowIdsMatching(ordinal);
-                    if (converter != null)
+                    for (int rowId : rowIds)
                     {
-                        for (int rowId : rowIds)
-                        {
-                            PrimaryKey pk = converter.getPrimaryKey(rowId);
+                        PrimaryKey pk = mapper.getPrimaryKeyForRowId(rowId);
+                        if (pk != null)
                             context.recordScore(pk, score);
-                        }
                     }
                     segmentRowIdIterator = Arrays.stream(rowIds).iterator();
                 }
@@ -167,12 +166,12 @@ public class CassandraOnDiskHnsw implements AutoCloseable
     }
 
     private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue, QueryContext context,
-                                                      SegmentRowIdToPrimaryKeyConverter rowIdToPrimaryKeyConverter) throws IOException
+                                                      RowIdToPrimaryKeyMapper rowIdToPrimaryKeyMapper) throws IOException
     {
         int originalSize = queue.size();
         // FIXME why close early?
         // it's early becuase we exhaust the iterator early
-        try (var iterator = new RowIdIteratorAndCacher(queue, context, rowIdToPrimaryKeyConverter))
+        try (var iterator = new RowIdIteratorAndCacher(queue, context, rowIdToPrimaryKeyMapper))
         {
             return new ReorderingPostingList(iterator, originalSize);
         }

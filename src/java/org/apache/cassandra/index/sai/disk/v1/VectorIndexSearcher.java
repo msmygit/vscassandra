@@ -46,7 +46,7 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import org.apache.cassandra.index.sai.utils.SegmentRowIdToPrimaryKeyConverter;
+import org.apache.cassandra.index.sai.utils.RowIdToPrimaryKeyMapper;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.SparseFixedBitSet;
@@ -110,7 +110,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         float[] queryVector = exp.lower.value.vector;
         return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context,
-                            new SegmentRowIdToPrimaryKeyConverter(primaryKeyMap, segment));
+                            new RowIdToPrimaryKeyMapper(primaryKeyMap, segment.metadata.segmentRowIdOffset));
     }
 
     /**
@@ -242,9 +242,9 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         // else ask hnsw to perform a search limited to the bits we created
         float[] queryVector = exp.lower.value.vector;
-        // TODO what are we searching here? We don't have a segment in scope.
-        // TODO Is this the coalesced version of the vectors?
-        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context, null);
+        // We have ss table row ids, so we set the RowIdToPrimaryKeyMapper to use a 0 offset
+        var results = graph.search(queryVector, limit, bits, Integer.MAX_VALUE, context,
+                                   new RowIdToPrimaryKeyMapper(primaryKeyMap, 0));
         return toPrimaryKeyIterator(results, context);
     }
 

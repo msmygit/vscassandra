@@ -20,28 +20,33 @@ package org.apache.cassandra.index.sai.utils;
 
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.v1.Segment;
 
 /**
- * Essentially a Function<Int, PrimaryKey>
+ * Essentially a Function<Long, PrimaryKey>, but avoids the boxing of the long.
  */
-public class SegmentRowIdToPrimaryKeyConverter
+public class RowIdToPrimaryKeyMapper
 {
     private final PrimaryKeyMap primaryKeyMap;
-    private final Segment segment;
+    private final long segmentRowIdOffset;
 
-    public SegmentRowIdToPrimaryKeyConverter(PrimaryKeyMap primaryKeyMap, Segment segment)
+    /**
+     *
+     * @param primaryKeyMap - primary key generator
+     * @param segmentRowIdOffset - the offset to add to the rowId to get the SS Table row id
+     */
+    public RowIdToPrimaryKeyMapper(PrimaryKeyMap primaryKeyMap, long segmentRowIdOffset)
     {
         this.primaryKeyMap = primaryKeyMap;
-        this.segment = segment;
+        this.segmentRowIdOffset = segmentRowIdOffset;
     }
 
-    public PrimaryKey getPrimaryKey(long segmentRowId)
+    public PrimaryKey getPrimaryKeyForRowId(long rowId)
     {
+        long ssTableRowId = rowId + segmentRowIdOffset;
         // Special case where we wouldn't want to attempt to retreive a PK
-        if (segmentRowId == PostingList.END_OF_STREAM)
+        if (ssTableRowId == PostingList.END_OF_STREAM)
             return null;
 
-        return primaryKeyMap.primaryKeyFromRowId(segment.getSSTableRowId(segmentRowId));
+        return primaryKeyMap.primaryKeyFromRowId(ssTableRowId);
     }
 }
