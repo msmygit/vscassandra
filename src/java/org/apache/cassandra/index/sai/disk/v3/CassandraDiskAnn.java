@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.github.jbellis.jvector.disk.CachingGraphIndex;
 import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.graph.GraphIndex;
@@ -52,7 +53,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
     private static final Logger logger = Logger.getLogger(CassandraDiskAnn.class.getName());
 
     private final OnDiskOrdinalsMap ordinalsMap;
-    private final OnDiskGraphIndex<float[]> graph;
+    private final CachingGraphIndex graph;
     private final VectorSimilarityFunction similarityFunction;
 
     // only one of these will be not null
@@ -64,7 +65,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         similarityFunction = context.getIndexWriterConfig().getSimilarityFunction();
 
         SegmentMetadata.ComponentMetadata termsMetadata = componentMetadatas.get(IndexComponent.TERMS_DATA);
-        graph = new OnDiskGraphIndex<>(() -> indexFiles.termsData().createReader(), termsMetadata.offset);
+        graph = new CachingGraphIndex(new OnDiskGraphIndex<>(() -> indexFiles.termsData().createReader(), termsMetadata.offset));
 
         long pqSegmentOffset = componentMetadatas.get(IndexComponent.PQ).offset;
         try (var reader = indexFiles.pq().createReader())
