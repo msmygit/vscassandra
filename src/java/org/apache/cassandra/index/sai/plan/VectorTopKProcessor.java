@@ -56,6 +56,7 @@ import org.apache.cassandra.index.sai.utils.InMemoryPartitionIterator;
 import org.apache.cassandra.index.sai.utils.InMemoryUnfilteredPartitionIterator;
 import org.apache.cassandra.index.sai.utils.PartitionInfo;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.index.sai.utils.ToFloatFunction;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.utils.FBUtilities;
@@ -85,14 +86,15 @@ public class VectorTopKProcessor
 
     private int rowCount = 0;
 
-    // FIXME make it a score function
+    // Nullable because it is an optimization to know there is no chance of cache hits.
+    // Currently, the coordinator doesn't support this optimization, so it is always null there.
     @Nullable
-    private final QueryContext context;
+    private final ToFloatFunction<PrimaryKey> scoreCache;
 
-    public VectorTopKProcessor(ReadCommand command, QueryContext queryContext)
+    public VectorTopKProcessor(ReadCommand command, ToFloatFunction<PrimaryKey> scoreCache)
     {
         this.command = command;
-        this.context = queryContext;
+        this.scoreCache = scoreCache;
 
         Pair<IndexContext, float[]> annIndexAndExpression = findTopKIndexContext();
         Preconditions.checkNotNull(annIndexAndExpression);
@@ -186,10 +188,10 @@ public class VectorTopKProcessor
             return 0;
 
         // if the query context has score, e.g. at replica side
-        if (context != null && key != null && row != null)
+        if (scoreCache != null && key != null && row != null)
         {
             PrimaryKey primaryKey = indexContext.keyFactory().create(key, row.clustering());
-            float score = context.getScoreForKey(primaryKey);
+            float score = scoreCache.applyAsFloat(primaryKey);
             if (score >= 0)
                 return score;
         }
