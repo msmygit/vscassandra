@@ -139,7 +139,6 @@ public class Segment implements Closeable, SegmentOrdering
      */
     public RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
-        // is it a break in the abstraction to pass the segment in?
         return index.search(this, expression, keyRange, context, defer, limit);
     }
 

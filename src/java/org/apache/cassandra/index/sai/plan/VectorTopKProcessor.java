@@ -151,8 +151,6 @@ public class VectorTopKProcessor
 
         // reorder rows in partition/clustering order
         for (Triple<PartitionInfo, Row, Float> triple : topK)
-            // VSTODO we have scores here. Find a way to make accessible to the SelectStatement#orderResults method
-            // while still scoped to this query.
             unfilteredByPartition.computeIfAbsent(triple.getLeft(), k -> new TreeSet<>(command.metadata().comparator))
                                  .add(triple.getMiddle());
 
