@@ -249,30 +249,32 @@ public class CassandraOnHeapHnsw<T>
     }
 
     /**
-     * @return keys (PrimaryKey or segment row id) associated with the topK vectors near the query
+     * @return keys associated with the topK vectors near the query
      */
-    public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
-    {
-        validateIndexable(queryVector, similarityFunction);
-        // search() errors out when an empty graph is passed to it
-        if (vectorValues.size() == 0)
-            return new PriorityQueue<>();
-        NeighborQueue queue = searchConcurrent(queryVector, limit, toAccept, visitedLimit);
-        PriorityQueue<T> keyQueue = new PriorityQueue<>();
-        while (queue.size() > 0)
-        {
-            keyQueue.addAll(keysFromOrdinal(queue.pop()));
-        }
-        return keyQueue;
-    }
-
     public PriorityQueue<PrimaryKey> searchScoredKeys(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
+        assert builder.isConcurrent();
         validateIndexable(queryVector, similarityFunction);
-        // search() errors out when an empty graph is passed to it
+        // VSTODO remove this block after migrating to jvector
         if (vectorValues.size() == 0)
             return new PriorityQueue<>();
-        NeighborQueue queue = searchConcurrent(queryVector, limit, toAccept, visitedLimit);
+
+        NeighborQueue queue;
+        try
+        {
+            queue = HnswGraphSearcher.searchConcurrent(queryVector,
+                                                      limit,
+                                                      vectorValues,
+                                                      VectorEncoding.FLOAT32,
+                                                      similarityFunction,
+                                                      builder.getGraph(),
+                                                      hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept,
+                                                      visitedLimit);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
         PriorityQueue<PrimaryKey> keyQueue = new PriorityQueue<>();
         while (queue.size() > 0)
         {
@@ -287,27 +289,6 @@ public class CassandraOnHeapHnsw<T>
             }
         }
         return keyQueue;
-    }
-
-    private NeighborQueue searchConcurrent(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
-    {
-        assert builder.isConcurrent();
-
-        try
-        {
-            return HnswGraphSearcher.searchConcurrent(queryVector,
-                                                      limit,
-                                                      vectorValues,
-                                                      VectorEncoding.FLOAT32,
-                                                      similarityFunction,
-                                                      builder.getGraph(),
-                                                      hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept,
-                                                      visitedLimit);
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
     }
 
     public SegmentMetadata.ComponentMetadataMap writeData(IndexDescriptor indexDescriptor, IndexContext indexContext, Function<T, Integer> postingTransformer) throws IOException
