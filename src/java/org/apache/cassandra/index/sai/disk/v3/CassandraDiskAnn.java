@@ -35,7 +35,7 @@ import com.github.jbellis.jvector.graph.GraphIndex;
 import com.github.jbellis.jvector.graph.GraphSearcher;
 import com.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import com.github.jbellis.jvector.graph.NeighborSimilarity;
-import com.github.jbellis.jvector.graph.NodeScore;
+import com.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import com.github.jbellis.jvector.util.Bits;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -131,11 +131,11 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
                             i -> compressedVectors.decodedSimilarity(i, queryVector, similarityFunction);
             reRanker = (i, map) -> similarityFunction.compare(queryVector, map.get(i));
         }
-        var results = searcher.search(scoreFunction,
-                                      reRanker,
-                                      topK,
-                                      ordinalsMap.ignoringDeleted(acceptBits));
-        return annRowIdsToPostings(results);
+        var result = searcher.search(scoreFunction,
+                                     reRanker,
+                                     topK,
+                                     ordinalsMap.ignoringDeleted(acceptBits));
+        return annRowIdsToPostings(result.getNodes());
     }
 
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable

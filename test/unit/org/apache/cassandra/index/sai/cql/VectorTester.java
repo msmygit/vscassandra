@@ -86,7 +86,7 @@ public class VectorTester extends SAITester
                                            null);
 
         List<float[]> nearestNeighbors = new ArrayList<>();
-        for (var ns : results)
+        for (var ns : results.getNodes())
             nearestNeighbors.add(vectorValues.vectorValue(ns.node));
 
         return recallMatch(nearestNeighbors, result, topK);

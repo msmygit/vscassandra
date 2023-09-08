@@ -41,7 +41,6 @@ import com.github.jbellis.jvector.disk.CompressedVectors;
 import com.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import com.github.jbellis.jvector.graph.GraphIndexBuilder;
 import com.github.jbellis.jvector.graph.GraphSearcher;
-import com.github.jbellis.jvector.graph.NodeScore;
 import com.github.jbellis.jvector.pq.ProductQuantization;
 import com.github.jbellis.jvector.vector.VectorEncoding;
 import com.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -254,16 +253,17 @@ public class CassandraOnHeapGraph<T>
 
         Bits bits = hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept;
         // VSTODO re-use searcher objects
-        NodeScore[] results = GraphSearcher.search(queryVector,
-                                                   limit,
-                                                   vectorValues,
-                                                   VectorEncoding.FLOAT32,
-                                                   similarityFunction,
-                                                   builder.getGraph(),
-                                                   bits);
+        var result = GraphSearcher.search(queryVector,
+                                          limit,
+                                          vectorValues,
+                                          VectorEncoding.FLOAT32,
+                                          similarityFunction,
+                                          builder.getGraph(),
+                                          bits);
+        var a = result.getNodes();
         PriorityQueue<T> keyQueue = new PriorityQueue<>();
-        for (int i = 0; i < results.length; i++)
-            keyQueue.addAll(keysFromOrdinal(results[i].node));
+        for (int i = 0; i < a.length; i++)
+            keyQueue.addAll(keysFromOrdinal(a[i].node));
         return keyQueue;
     }
 
