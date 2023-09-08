@@ -85,13 +85,13 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     }
 
     @Override
-    public RangeIterator<Long> search(Segment segment, Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<Long> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
-        PostingList results = searchPosting(segment, context, exp, keyRange, limit);
+        PostingList results = searchPosting(context, exp, keyRange, limit);
         return toSSTableRowIdsIterator(results, context);
     }
 
-    private PostingList searchPosting(Segment segment, QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
+    private PostingList searchPosting(QueryContext context, Expression exp, AbstractBounds<PartitionPosition> keyRange, int limit) throws IOException
     {
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
@@ -105,7 +105,7 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
 
         float[] queryVector = exp.lower.value.vector;
         return graph.search(queryVector, limit, bitsOrPostingList.getBits(), Integer.MAX_VALUE, context,
-                            new RowIdToPrimaryKeyMapper(primaryKeyMapFactory, segment.metadata.segmentRowIdOffset));
+                            new RowIdToPrimaryKeyMapper(primaryKeyMapFactory, metadata.segmentRowIdOffset));
     }
 
     /**

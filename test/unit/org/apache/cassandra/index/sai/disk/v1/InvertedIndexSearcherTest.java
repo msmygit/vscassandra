@@ -73,7 +73,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
         {
             for (int t = 0; t < numTerms; ++t)
             {
-                try (RangeIterator<Long> results = searcher.search(null, new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                try (RangeIterator<Long> results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), null, new QueryContext(), false, LIMIT))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
@@ -89,7 +89,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
                     assertFalse(results.hasNext());
                 }
 
-                try (RangeIterator<Long> results = searcher.search(null, new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                try (RangeIterator<Long> results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), null, new QueryContext(), false, LIMIT))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
@@ -112,12 +112,12 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
 
             // try searching for terms that weren't indexed
             final String tooLongTerm = randomSimpleString(10, 12);
-            RangeIterator results = searcher.search(null, new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+            RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                                                                 .add(Operator.EQ, UTF8Type.instance.decompose(tooLongTerm)), null, new QueryContext(), false, LIMIT);
             assertFalse(results.hasNext());
 
             final String tooShortTerm = randomSimpleString(1, 2);
-            results = searcher.search(null, new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+            results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                                                       .add(Operator.EQ, UTF8Type.instance.decompose(tooShortTerm)), null, new QueryContext(), false, LIMIT);
             assertFalse(results.hasNext());
         }
@@ -131,7 +131,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
 
         try (IndexSearcher searcher = buildIndexAndOpenSearcher(numTerms, numPostings, termsEnum))
         {
-            searcher.search(null, new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+            searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                             .add(Operator.GT, UTF8Type.instance.decompose("a")), null, new QueryContext(), false, LIMIT);
 
             fail("Expect IllegalArgumentException thrown, but didn't");
