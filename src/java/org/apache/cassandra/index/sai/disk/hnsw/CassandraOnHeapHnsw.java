@@ -263,13 +263,13 @@ public class CassandraOnHeapHnsw<T>
         try
         {
             queue = HnswGraphSearcher.searchConcurrent(queryVector,
-                                                      limit,
-                                                      vectorValues,
-                                                      VectorEncoding.FLOAT32,
-                                                      similarityFunction,
-                                                      builder.getGraph(),
-                                                      hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept,
-                                                      visitedLimit);
+                                                       limit,
+                                                       vectorValues,
+                                                       VectorEncoding.FLOAT32,
+                                                       similarityFunction,
+                                                       builder.getGraph(),
+                                                       hasDeletions ? BitsUtil.bitsIgnoringDeleted(toAccept, postingsByOrdinal) : toAccept,
+                                                       visitedLimit);
         }
         catch (IOException e)
         {
