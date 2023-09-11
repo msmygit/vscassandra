@@ -42,6 +42,7 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
@@ -112,6 +113,13 @@ public class V1OnDiskFormat implements OnDiskFormat
         {
             return false;
         }
+
+        @Override
+        public boolean hasVectorIndexChecksum()
+        {
+            return false;
+        }
+
     };
 
     protected V1OnDiskFormat()
@@ -190,26 +198,28 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         for (IndexComponent indexComponent : perSSTableComponents())
         {
-            if (!isBuildCompletionMarker(indexComponent))
+            if (isBuildCompletionMarker(indexComponent))
+                continue;
+            if (!Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum() && isVectorComponent(indexComponent))
+                continue;
+
+            try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
             {
-                try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
+                if (checksum)
+                    SAICodecUtils.validateChecksum(input);
+                else
+                    SAICodecUtils.validate(input);
+            }
+            catch (Throwable e)
+            {
+                if (logger.isDebugEnabled())
                 {
-                    if (checksum)
-                        SAICodecUtils.validateChecksum(input);
-                    else
-                        SAICodecUtils.validate(input);
+                    logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
+                                 (checksum ? "Checksum validation" : "Validation"),
+                                 indexComponent,
+                                 indexDescriptor.descriptor);
                 }
-                catch (Throwable e)
-                {
-                    if (logger.isDebugEnabled())
-                    {
-                        logger.debug(indexDescriptor.logMessage("{} failed for index component {} on SSTable {}"),
-                                     (checksum ? "Checksum validation" : "Validation"),
-                                     indexComponent,
-                                     indexDescriptor.descriptor);
-                    }
-                    return false;
-                }
+                return false;
             }
         }
         return true;
@@ -219,6 +229,8 @@ public class V1OnDiskFormat implements OnDiskFormat
     public boolean validateOneIndexComponent(IndexComponent component, IndexDescriptor descriptor, IndexContext context, boolean checksum)
     {
         if (isBuildCompletionMarker(component))
+            return true;
+        if (!Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum() && context.isVector())
             return true;
 
         try (IndexInput input = descriptor.openPerIndexInput(component, context))
@@ -273,5 +285,12 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         return indexComponent == IndexComponent.GROUP_COMPLETION_MARKER ||
                indexComponent == IndexComponent.COLUMN_COMPLETION_MARKER;
+    }
+
+    protected boolean isVectorComponent(IndexComponent indexComponent)
+    {
+        return indexComponent == IndexComponent.VECTOR ||
+               indexComponent == IndexComponent.PQ ||
+               indexComponent == IndexComponent.POSTING_LISTS;
     }
 }

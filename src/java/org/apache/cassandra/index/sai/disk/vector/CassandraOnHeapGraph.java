@@ -51,9 +51,11 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
+import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
@@ -307,6 +309,15 @@ public class CassandraOnHeapGraph<T>
             long termsOffset = indexOutput.getFilePointer();
             OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutput.asSequentialWriter());
             long termsLength = indexOutput.getFilePointer() - termsOffset;
+
+
+            if (Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum())
+            {
+                // write footers/checksums
+                SAICodecUtils.writeFooter(pqOutput);
+                SAICodecUtils.writeFooter(postingsOutput);
+                SAICodecUtils.writeFooter(indexOutput);
+            }
 
             // add components to the metadata map
             SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();
