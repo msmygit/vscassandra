@@ -44,6 +44,7 @@ public class RowIdToPrimaryKeyMapper implements AutoCloseable
 
     public PrimaryKey getPrimaryKeyForRowId(long rowId)
     {
+        System.out.println("### getPrimaryKeyForRowId " + rowId + " - " + segmentRowIdOffset);
         long ssTableRowId = rowId + segmentRowIdOffset;
         // Special case where we wouldn't want to attempt to retreive a PK
         if (ssTableRowId == PostingList.END_OF_STREAM)

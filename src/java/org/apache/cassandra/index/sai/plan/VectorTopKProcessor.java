@@ -190,6 +190,7 @@ public class VectorTopKProcessor
         {
             PrimaryKey primaryKey = indexContext.keyFactory().create(key, row.clustering());
             float score = scoreCache.applyAsFloat(primaryKey);
+            System.out.println("## score " + score);
             if (score >= 0)
                 return score;
         }

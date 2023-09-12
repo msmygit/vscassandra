@@ -35,6 +35,8 @@ import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.index.sai.disk.v1.Segment;
+import org.apache.cassandra.index.sai.disk.v1.SegmentBuilder;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.tracing.TracingTestImpl;
@@ -696,5 +698,58 @@ public class VectorTypeTest extends VectorTester
                              "SELECT similarity_cosine([1, 2, 3], value) FROM %s WHERE pk=0");
         assertInvalidMessage("Required 2 elements, but saw 3",
                              "SELECT similarity_cosine([1, 2], [3, 4, 5]) FROM %s WHERE pk=0");
+    }
+
+    @Test
+    public void testCachedScoresWithSegments() throws Throwable
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, ck int, value vector<float, 2>, primary key(pk, ck))");
+        createIndex("CREATE CUSTOM INDEX ON %s(value) USING 'StorageAttachedIndex'");
+
+        // populate 3 sstables with 1 row each
+        Vector<Float> q = vector(1f, 2f);
+        execute("INSERT INTO %s (pk, ck, value) VALUES (0, 1, ?)", vector(1f, 1f));
+        flush();
+
+        execute("INSERT INTO %s (pk, ck, value) VALUES (0, 2, ?)", vector(1f, 2f));
+        flush();
+
+        execute("INSERT INTO %s (pk, ck, value) VALUES (0, 3, ?)", vector(1f, 3f));
+        flush();
+
+        // 1 row per segment
+        SegmentBuilder.updateLastValidSegmentRowId(0);
+        // one sstable with 3 segments, each has one row
+        compact(KEYSPACE);
+
+        var result = execute("SELECT pk, ck FROM %s ORDER BY value ANN OF ? LIMIT 100", q);
+        assertRowsIgnoringOrder(result, row(0, 1), row(0, 2), row(0, 3));
+    }
+
+    @Test
+    public void testHybridSearchCachedScoresWithSegments() throws Throwable
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, ck int, val int, vec vector<float, 2>, primary key(pk, ck))");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex'");
+
+        // populate 3 sstables with 1 row each
+        Vector<Float> q = vector(1f, 2f);
+        execute("INSERT INTO %s (pk, ck, val, vec) VALUES (0, 1, 0, ?)", vector(1f, 1f));
+        flush();
+
+        execute("INSERT INTO %s (pk, ck, val, vec) VALUES (0, 2, 0, ?)", vector(1f, 2f));
+        flush();
+
+        execute("INSERT INTO %s (pk, ck, val, vec) VALUES (0, 3, 0, ?)", vector(1f, 3f));
+        flush();
+
+        // 1 row per segment
+        SegmentBuilder.updateLastValidSegmentRowId(0);
+        // one sstable with 3 segments, each has one row
+        compact(KEYSPACE);
+
+        var result = execute("SELECT pk, ck FROM %s WHERE val = 0 ORDER BY vec ANN OF ? LIMIT 100", q);
+        assertRowsIgnoringOrder(result, row(0, 1), row(0, 2), row(0, 3));
     }
 }
