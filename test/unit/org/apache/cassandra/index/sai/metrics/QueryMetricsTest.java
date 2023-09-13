@@ -347,6 +347,43 @@ public class QueryMetricsTest extends AbstractMetricsTest
         waitForEquals(objectName("KDTreeIntersectionEarlyExits", keyspace, table, index, GLOBAL_METRIC_TYPE), 2L);
     }
 
+    @Test
+    public void testDepth2QueryUsesIndex() throws Throwable
+    {
+        String table = "test_rows_filtered_large_partition";
+        String index = "test_rows_filtered_large_partition_index";
+
+        String keyspace = createKeyspace(CREATE_KEYSPACE_TEMPLATE);
+
+        createTable(String.format("CREATE TABLE %s.%s (pk int, ck int, l0 int, l1 int, l2 int, PRIMARY KEY (pk, ck)) " +
+                                  "WITH compaction = {'class' : 'SizeTieredCompactionStrategy', 'enabled' : false }", keyspace,  table));
+
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, index + "_l0", keyspace, table, "l0"));
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, index + "_l1", keyspace, table, "l1"));
+        createIndex(String.format(CREATE_INDEX_TEMPLATE, index + "_l2", keyspace, table, "l2"));
+        waitForIndexQueryable(keyspace, table);
+
+        for (int l1 = 0; l1 < 1000; l1++)
+        {
+            for (int l2 = 0; l2 < 1000; l2++)
+            {
+                execute("INSERT INTO " + keyspace + "." + table + "(pk, ck, l0, l1, l2) VALUES (?, ?, ?, ?, ?)", l1, l2, l1, l1, l2);
+            }
+        }
+
+        flush(keyspace, table);
+
+        ResultSet rows = executeNet("SELECT * FROM " + keyspace + "." + table + " WHERE (l0 >= 0) AND ((l1 >= 0 AND l1 <= 1000) OR (l1 >= 0 AND (l2 < 1 OR l2 >= 999)))");
+
+        int actualRows = rows.all().size();
+//        assertEquals(3, actualRows);
+//
+//        //TODO This needs revisiting with STAR-903 because we are now reading rows one at a time
+//        waitForEquals(objectNameNoIndex("TotalPartitionReads", keyspace, table, TABLE_QUERY_METRIC_TYPE), Version.LATEST == Version.AA ? 2 : 3);
+//        waitForVerifyHistogram(objectNameNoIndex("RowsFiltered", keyspace, table, PER_QUERY_METRIC_TYPE), 1);
+//        waitForEquals(objectNameNoIndex("TotalRowsFiltered", keyspace, table, TABLE_QUERY_METRIC_TYPE), 3);
+    }
+
     private long getPerQueryMetrics(String keyspace, String table, String metricsName) throws Exception
     {
         return (long) getMetricValue(objectNameNoIndex(metricsName, keyspace, table, PER_QUERY_METRIC_TYPE));

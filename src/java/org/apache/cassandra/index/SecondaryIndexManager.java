@@ -1169,6 +1169,8 @@ public class SecondaryIndexManager implements IndexRegistry, INotificationConsum
         if (indexes.isEmpty() || rowFilter.isEmpty())
             return null;
 
+        logger.info("ZUPA getting Best Index Query Plan for \n{}", rowFilter);
+
         for (RowFilter.Expression expression : rowFilter)
         {
             if (expression.isCustom())
@@ -1191,6 +1193,7 @@ public class SecondaryIndexManager implements IndexRegistry, INotificationConsum
 
         if (queryPlans.isEmpty())
         {
+            logger.info("ZUPA No applicable indexes found");
             logger.trace("No applicable indexes found");
             Tracing.trace("No applicable indexes found");
             return null;
@@ -1212,6 +1215,7 @@ public class SecondaryIndexManager implements IndexRegistry, INotificationConsum
                                     .collect(Collectors.joining(",")),
                           commaSeparated(selected.getIndexes()));
         }
+        logger.info("ZUPA found query plan {}", selected);
         return selected;
     }
 

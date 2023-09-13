@@ -228,6 +228,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
     public String toString()
     {
         return root.toString();
+        //return root().toString() + "\npretty:" + root.toString(0);
     }
 
     public static Builder builder()
@@ -427,6 +428,35 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                     sb.append(isDisjunction ? " OR " : " AND ");
                 sb.append("(");
                 sb.append(children.get(i));
+                sb.append(")");
+            }
+            return sb.toString();
+        }
+
+        public String toString(int indent)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < expressions.size(); i++)
+            {
+                if (sb.length() > 0)
+                    sb.append(isDisjunction ? " OR " : " AND ");
+                else
+                {
+                    sb.append("\n");
+                    sb.append(" ".repeat(indent * 4));
+                }
+                sb.append(expressions.get(i));
+            }
+            for (int i = 0; i < children.size(); i++)
+            {
+                if (sb.length() > 0)
+                    sb.append(isDisjunction ? " OR " : " AND ");
+                sb.append("\n");
+                sb.append(" ".repeat(indent * 4));
+                sb.append("(");
+                sb.append(children.get(i).toString(indent + 1));
+                sb.append("\n");
+                sb.append(" ".repeat(indent * 4));
                 sb.append(")");
             }
             return sb.toString();

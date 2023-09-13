@@ -463,7 +463,9 @@ public class StatementRestrictions
                 if (partitionKeyRestrictions.needFiltering(table) || (!partitionKeyRestrictions.isEmpty() && element.isDisjunction()))
                 {
                     if (!allowFiltering && !forView && !hasQueriableIndex)
+                    {
                         throw new InvalidRequestException(StatementRestrictions.REQUIRES_ALLOW_FILTERING_MESSAGE);
+                    }
 
                     isKeyRange = true;
                     usesSecondaryIndexing = hasQueriableIndex;
