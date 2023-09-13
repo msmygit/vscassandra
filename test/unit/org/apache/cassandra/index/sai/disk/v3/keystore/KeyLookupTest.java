@@ -76,7 +76,7 @@ public class KeyLookupTest extends SAIRandomizedTester
         {
             ByteBuffer buffer = UTF8Type.instance.decompose(Integer.toString(x));
             DecoratedKey partitionKey = Murmur3Partitioner.instance.decorateKey(buffer);
-            PrimaryKey primaryKey = SAITester.TEST_FACTORY.create(partitionKey, Clustering.EMPTY);
+            PrimaryKey primaryKey = SAITester.TEST_FACTORY.create(partitionKey);
             primaryKeys.add(primaryKey);
         }
 
@@ -318,11 +318,7 @@ public class KeyLookupTest extends SAIRandomizedTester
         withKeyLookupCursor(cursor -> {
             for (int x = 0; x < keys.size(); x++)
             {
-                ByteComparable key = cursor.seekToPointId(x);
-
-                byte[] bytes = ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41));
-
-                assertArrayEquals(keys.get(x), bytes);
+                assertArrayEquals(keys.get(x), ByteSourceInverse.readBytes(cursor.seekToPointId(x)));
             }
         });
 
@@ -330,22 +326,13 @@ public class KeyLookupTest extends SAIRandomizedTester
         withKeyLookupCursor(cursor -> {
             for (int x = 0; x < keys.size(); x += 17)
             {
-                ByteComparable key = cursor.seekToPointId(x);
-
-                byte[] bytes = ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41));
-
-                assertArrayEquals(keys.get(x), bytes);
+                assertArrayEquals(keys.get(x), ByteSourceInverse.readBytes(cursor.seekToPointId(x)));
             }
         });
 
         withKeyLookupCursor(cursor -> {
-            ByteComparable key = cursor.seekToPointId(7);
-            byte[] bytes = ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41));
-            assertArrayEquals(keys.get(7), bytes);
-
-            key = cursor.seekToPointId(7);
-            bytes = ByteSourceInverse.readBytes(key.asComparableBytes(ByteComparable.Version.OSS41));
-            assertArrayEquals(keys.get(7), bytes);
+            assertArrayEquals(keys.get(7), ByteSourceInverse.readBytes(cursor.seekToPointId(7)));
+            assertArrayEquals(keys.get(7), ByteSourceInverse.readBytes(cursor.seekToPointId(7)));
         });
     }
 

@@ -24,6 +24,7 @@ import java.util.function.Supplier;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
@@ -34,43 +35,40 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  */
 public class PartitionAwarePrimaryKeyFactory extends PrimaryKey.Factory
 {
-    public PartitionAwarePrimaryKeyFactory(ClusteringComparator clusteringComparator)
+    public PartitionAwarePrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator clusteringComparator)
     {
-        super(clusteringComparator);
+        super(partitioner, clusteringComparator);
     }
 
     @Override
-    public PrimaryKey createTokenOnly(Token token)
-    {
-        assert token != null;
-        return new PartitionAwarePrimaryKey(token, null, null);
-    }
-
-    @Override
-    public PrimaryKey createDeferred(Token token, Supplier<PrimaryKey> primaryKeySupplier)
+    public PrimaryKey create(Token token)
     {
         assert token != null;
-        return new PartitionAwarePrimaryKey(token, null, primaryKeySupplier);
+        return new PartitionAwarePrimaryKey(token, null);
     }
 
     @Override
-    public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering)
+    public PrimaryKey create(DecoratedKey partitionKey)
     {
         assert partitionKey != null;
-        return new PartitionAwarePrimaryKey(partitionKey.getToken(), partitionKey, null);
+        return new PartitionAwarePrimaryKey(partitionKey.getToken(), partitionKey);
     }
 
     private class PartitionAwarePrimaryKey implements PrimaryKey
     {
         private final Token token;
-        private DecoratedKey partitionKey;
-        private Supplier<PrimaryKey> primaryKeySupplier;
+        private final DecoratedKey partitionKey;
 
-        private PartitionAwarePrimaryKey(Token token, DecoratedKey partitionKey, Supplier<PrimaryKey> primaryKeySupplier)
+        private PartitionAwarePrimaryKey(Token token, DecoratedKey partitionKey)
         {
             this.token = token;
             this.partitionKey = partitionKey;
-            this.primaryKeySupplier = primaryKeySupplier;
+        }
+
+        @Override
+        public Kind kind()
+        {
+            return partitionKey == null ? Kind.TOKEN : Kind.SKINNY;
         }
 
         @Override
@@ -82,7 +80,6 @@ public class PartitionAwarePrimaryKeyFactory extends PrimaryKey.Factory
         @Override
         public DecoratedKey partitionKey()
         {
-            loadDeferred();
             return partitionKey;
         }
 
@@ -135,16 +132,6 @@ public class PartitionAwarePrimaryKeyFactory extends PrimaryKey.Factory
         public String toString()
         {
             return String.format("TokenAwarePrimaryKey: { token: %s, partition: %s } ", token, partitionKey == null ? null : partitionKey);
-        }
-
-        private PrimaryKey loadDeferred()
-        {
-            if (primaryKeySupplier != null && partitionKey == null)
-            {
-                this.partitionKey = primaryKeySupplier.get().partitionKey();
-                primaryKeySupplier = null;
-            }
-            return this;
         }
     }
 }

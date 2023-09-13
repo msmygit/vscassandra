@@ -29,8 +29,10 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Gauge;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -48,6 +50,7 @@ import org.apache.cassandra.index.sai.disk.v1.lucene75.store.IndexInput;
 import org.apache.cassandra.index.sai.disk.v1.segment.SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
@@ -105,7 +108,20 @@ public class V1OnDiskFormat implements OnDiskFormat
 
     public static final V1OnDiskFormat instance = new V1OnDiskFormat();
 
-    private static final IndexFeatureSet v1IndexFeatureSet = () -> false;
+    private static final IndexFeatureSet v1IndexFeatureSet = new IndexFeatureSet()
+    {
+        @Override
+        public boolean isRowAware()
+        {
+            return false;
+        }
+
+        @Override
+        public boolean isOsCompatible()
+        {
+            return false;
+        }
+    };
 
     protected V1OnDiskFormat()
     {}
@@ -114,6 +130,12 @@ public class V1OnDiskFormat implements OnDiskFormat
     public IndexFeatureSet indexFeatureSet()
     {
         return v1IndexFeatureSet;
+    }
+
+    @Override
+    public PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator)
+    {
+        return new PartitionAwarePrimaryKeyFactory(partitioner, comparator);
     }
 
     @Override

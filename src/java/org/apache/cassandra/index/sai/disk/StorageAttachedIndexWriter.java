@@ -254,7 +254,8 @@ public class StorageAttachedIndexWriter implements SSTableFlushObserver
 
     private void addRow(Row row) throws IOException, MemtableTrie.SpaceExhaustedException
     {
-        PrimaryKey primaryKey = indexDescriptor.primaryKeyFactory.create(currentKey, row.clustering());
+        PrimaryKey primaryKey = indexDescriptor.hasClustering() ? indexDescriptor.primaryKeyFactory.create(currentKey, row.clustering())
+                                                                : indexDescriptor.primaryKeyFactory.create(currentKey);
         perSSTableWriter.nextRow(primaryKey);
         rowMapping.add(primaryKey, sstableRowId);
 

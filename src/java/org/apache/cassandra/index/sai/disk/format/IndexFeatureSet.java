@@ -37,6 +37,8 @@ public interface IndexFeatureSet
      */
     boolean isRowAware();
 
+    boolean isOsCompatible();
+
     /**
      * The {@code Accumulator} is used to accumulate the {@code IndexFeatureSet} responses from
      * multiple sources. This will include all the SSTables included in a query and all the indexes
@@ -47,9 +49,10 @@ public interface IndexFeatureSet
      * on-disk format on any SSTable doesn't support a feature then that feature isn't supported
      * by the query.
      */
-    public static class Accumulator
+    class Accumulator
     {
         boolean isRowAware = true;
+        boolean isOsCompatible = true;
         boolean complete = false;
 
         /**
@@ -62,6 +65,8 @@ public interface IndexFeatureSet
             assert !complete : "Cannot accumulate after complete has been called";
             if (!indexFeatureSet.isRowAware())
                 isRowAware = false;
+            if (!indexFeatureSet.isOsCompatible())
+                isOsCompatible = false;
         }
 
         /**
@@ -79,6 +84,12 @@ public interface IndexFeatureSet
                 public boolean isRowAware()
                 {
                     return isRowAware;
+                }
+
+                @Override
+                public boolean isOsCompatible()
+                {
+                    return isOsCompatible;
                 }
             };
         }

@@ -29,8 +29,10 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Gauge;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.compaction.OperationType;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -43,10 +45,12 @@ import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.OnDiskFormat;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.io.IndexFileUtils;
 import org.apache.cassandra.index.sai.disk.v3.segment.SegmentBuilder;
 import org.apache.cassandra.index.sai.metrics.AbstractMetrics;
 import org.apache.cassandra.index.sai.utils.NamedMemoryLimiter;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.metrics.DefaultNameFactory;
@@ -119,15 +123,34 @@ public class V3OnDiskFormat implements OnDiskFormat
 
     public static final V3OnDiskFormat instance = new V3OnDiskFormat();
 
-    private static final IndexFeatureSet v1IndexFeatureSet = () -> false;
+    private static final IndexFeatureSet v3IndexFeatureSet = new IndexFeatureSet()
+    {
+        @Override
+        public boolean isRowAware()
+        {
+            return true;
+        }
+
+        @Override
+        public boolean isOsCompatible()
+        {
+            return true;
+        }
+    };
 
     protected V3OnDiskFormat()
     {}
 
     @Override
+    public PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator)
+    {
+        return Version.LATEST.onDiskFormat().primaryKeyFactory(partitioner, comparator);
+    }
+
+    @Override
     public IndexFeatureSet indexFeatureSet()
     {
-        return v1IndexFeatureSet;
+        return v3IndexFeatureSet;
     }
 
     @Override

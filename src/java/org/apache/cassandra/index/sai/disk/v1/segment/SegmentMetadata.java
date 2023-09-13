@@ -122,8 +122,8 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         this.numRows = input.readLong();
         this.minSSTableRowId = input.readLong();
         this.maxSSTableRowId = input.readLong();
-        this.minKey = primaryKeyFactory.createPartitionKeyOnly(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
-        this.maxKey = primaryKeyFactory.createPartitionKeyOnly(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
+        this.minKey = primaryKeyFactory.create(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
+        this.maxKey = primaryKeyFactory.create(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
         this.minTerm = readBytes(input);
         this.maxTerm = readBytes(input);
         this.componentMetadatas = new ComponentMetadataMap(input);

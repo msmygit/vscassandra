@@ -20,12 +20,12 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -37,27 +37,27 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  */
 public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
 {
-    public RowAwarePrimaryKeyFactory(ClusteringComparator clusteringComparator)
+    public RowAwarePrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator clusteringComparator)
     {
-        super(clusteringComparator);
+        super(partitioner, clusteringComparator);
     }
 
     @Override
-    public PrimaryKey createTokenOnly(Token token)
+    public PrimaryKey create(Token token)
     {
-        return new RowAwarePrimaryKey(token, null, null, null);
+        return new RowAwarePrimaryKey(token, null, null);
     }
 
     @Override
-    public PrimaryKey createDeferred(Token token, Supplier<PrimaryKey> primaryKeySupplier)
+    public PrimaryKey create(DecoratedKey partitionKey)
     {
-        return new RowAwarePrimaryKey(token, null, null, primaryKeySupplier);
+        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, null);
     }
 
     @Override
     public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering)
     {
-        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering, null);
+        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering);
     }
 
     private class RowAwarePrimaryKey implements PrimaryKey
@@ -65,14 +65,21 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
         private Token token;
         private DecoratedKey partitionKey;
         private Clustering clustering;
-        private Supplier<PrimaryKey> primaryKeySupplier;
 
-        private RowAwarePrimaryKey(Token token, DecoratedKey partitionKey, Clustering clustering, Supplier<PrimaryKey> primaryKeySupplier)
+        private RowAwarePrimaryKey(Token token, DecoratedKey partitionKey, Clustering clustering)
         {
             this.token = token;
             this.partitionKey = partitionKey;
             this.clustering = clustering;
-            this.primaryKeySupplier = primaryKeySupplier;
+        }
+
+        @Override
+        public Kind kind()
+        {
+            return partitionKey == null ? Kind.TOKEN
+                                        : clustering == null | clustering.isEmpty() ? Kind.SKINNY
+                                                                                    : clustering == Clustering.STATIC_CLUSTERING ? Kind.STATIC
+                                                                                                                                 : Kind.WIDE;
         }
 
         @Override
@@ -84,14 +91,12 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
         @Override
         public DecoratedKey partitionKey()
         {
-            loadDeferred();
             return partitionKey;
         }
 
         @Override
         public Clustering clustering()
         {
-            loadDeferred();
             return clustering;
         }
 
@@ -103,8 +108,6 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
             // byte comparable representation. If we don't we won't get a correct
             // comparison because we potentially won't be using the partition key
             // and clustering for the lookup
-            loadDeferred();
-
             ByteSource tokenComparable = token.asComparableBytes(version);
             ByteSource keyComparable = partitionKey == null ? null
                                                             : ByteSource.of(partitionKey.getKey(), version);
@@ -132,7 +135,7 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
             // Otherwise if this key has no deferred loader and it's partition key is null
             // or the other partition key is null then one or both of the keys
             // are token only so we can only compare tokens
-            if ((cmp != 0) || (primaryKeySupplier == null && partitionKey == null) || o.partitionKey() == null)
+            if ((cmp != 0) || partitionKey == null || o.partitionKey() == null)
                 return cmp;
 
             // Next compare the partition keys. If they are not equal or
@@ -140,7 +143,7 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
             // clusterings then we can return the result of this without
             // needing to compare the clusterings
             cmp = partitionKey().compareTo(o.partitionKey());
-            if (cmp != 0 || hasEmptyClustering() || o.hasEmptyClustering())
+            if (cmp != 0 || !kind().hasClustering || !o.kind().hasClustering)
                 return cmp;
             return clusteringComparator.compare(clustering(), o.clustering());
         }
@@ -169,18 +172,6 @@ public class RowAwarePrimaryKeyFactory extends PrimaryKey.Factory
                                  clustering == null ? null :String.join(",", Arrays.stream(clustering.getBufferArray())
                                                                                    .map(ByteBufferUtil::bytesToHex)
                                                                                    .collect(Collectors.toList())));
-        }
-
-        private PrimaryKey loadDeferred()
-        {
-            if (primaryKeySupplier != null && partitionKey == null)
-            {
-                PrimaryKey deferredPrimaryKey = primaryKeySupplier.get();
-                this.partitionKey = deferredPrimaryKey.partitionKey();
-                this.clustering = deferredPrimaryKey.clustering();
-                primaryKeySupplier = null;
-            }
-            return this;
         }
     }
 }

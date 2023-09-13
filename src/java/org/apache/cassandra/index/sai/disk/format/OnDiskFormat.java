@@ -22,7 +22,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Set;
 
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -31,6 +33,7 @@ import org.apache.cassandra.index.sai.disk.PerSSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.RowMapping;
 import org.apache.cassandra.index.sai.disk.SSTableIndex;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 /**
@@ -60,7 +63,16 @@ public interface OnDiskFormat
      *
      * @return the index feature set
      */
-    public IndexFeatureSet indexFeatureSet();
+    IndexFeatureSet indexFeatureSet();
+
+    /**
+     * Returns the {@link PrimaryKey.Factory} for the on-disk format
+     *
+     * @param partitioner
+     * @param comparator
+     * @return the primary key factory
+     */
+    PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator);
 
     /**
      * Returns a {@link PrimaryKeyMap.Factory} for the SSTable

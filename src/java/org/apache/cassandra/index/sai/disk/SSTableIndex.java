@@ -36,6 +36,7 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableContext;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.plan.Expression;
@@ -167,6 +168,11 @@ public abstract class SSTableIndex
     public Version getVersion()
     {
         return sstableContext.indexDescriptor.version;
+    }
+
+    public IndexFeatureSet indexFeatureSet()
+    {
+        return sstableContext.indexDescriptor.version.onDiskFormat().indexFeatureSet();
     }
 
     public SSTableReader getSSTable()

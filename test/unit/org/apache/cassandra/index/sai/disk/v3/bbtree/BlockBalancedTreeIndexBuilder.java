@@ -43,6 +43,7 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v3.PerColumnIndexFiles;
 import org.apache.cassandra.index.sai.disk.v3.segment.IndexSegmentSearcher;
 import org.apache.cassandra.index.sai.disk.v3.segment.NumericIndexSegmentSearcher;
@@ -65,12 +66,12 @@ public class BlockBalancedTreeIndexBuilder
 {
     public static final PrimaryKeyMap TEST_PRIMARY_KEY_MAP = new PrimaryKeyMap()
     {
-        private final PrimaryKey.Factory primaryKeyFactory = new PrimaryKey.Factory(null);
+        private final PrimaryKey.Factory primaryKeyFactory = Version.BB.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance, null);
 
         @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId)
         {
-            return primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(sstableRowId));
+            return primaryKeyFactory.create(new Murmur3Partitioner.LongToken(sstableRowId));
         }
 
         @Override
@@ -122,8 +123,8 @@ public class BlockBalancedTreeIndexBuilder
                                        minSegmentRowId,
                                        maxSegmentRowId,
                                        // min/max is unused for now
-                                       SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("a")).getToken()),
-                                       SAITester.TEST_FACTORY.createTokenOnly(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("b")).getToken()),
+                                       SAITester.TEST_FACTORY.create(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("a")).getToken()),
+                                       SAITester.TEST_FACTORY.create(Murmur3Partitioner.instance.decorateKey(UTF8Type.instance.fromString("b")).getToken()),
                                        UTF8Type.instance.fromString("c"),
                                        UTF8Type.instance.fromString("d"),
                                        indexMetas);

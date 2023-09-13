@@ -53,6 +53,13 @@ public class AbstractPrimaryKeyTester extends SAIRandomizedTester
                                                                                  .addClusteringColumn("ck1", UTF8Type.instance)
                                                                                  .build();
 
+    protected static final TableMetadata simplePartitionStaticAndSingleClusteringAsc = TableMetadata.builder("test", "test")
+                                                                                                    .partitioner(Murmur3Partitioner.instance)
+                                                                                                    .addPartitionKeyColumn("pk1", Int32Type.instance)
+                                                                                                    .addStaticColumn("sk1", Int32Type.instance)
+                                                                                                    .addClusteringColumn("ck1", UTF8Type.instance)
+                                                                                                    .build();
+
     protected static final TableMetadata simplePartitionMultipleClusteringAsc = TableMetadata.builder("test", "test")
                                                                                    .partitioner(Murmur3Partitioner.instance)
                                                                                    .addPartitionKeyColumn("pk1", Int32Type.instance)
@@ -117,13 +124,6 @@ public class AbstractPrimaryKeyTester extends SAIRandomizedTester
                                                                                         .addClusteringColumn("ck1", UTF8Type.instance)
                                                                                         .addClusteringColumn("ck2", ReversedType.getInstance(UTF8Type.instance))
                                                                                         .build();
-
-    protected void assertByteComparison(PrimaryKey a, PrimaryKey b, int expected)
-    {
-        assertEquals(expected, ByteComparable.compare(a::asComparableBytes,
-                                                      b::asComparableBytes,
-                                                      ByteComparable.Version.OSS41));
-    }
 
     protected void assertCompareToAndEquals(PrimaryKey a, PrimaryKey b, int expected)
     {

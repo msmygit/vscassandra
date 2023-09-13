@@ -179,8 +179,8 @@ public class MemtableIndexWriter implements PerColumnIndexWriter
                                                        numRows,
                                                        terms.getMinSSTableRowId(),
                                                        terms.getMaxSSTableRowId(),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(minKey),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(maxKey),
+                                                       indexDescriptor.primaryKeyFactory.create(minKey),
+                                                       indexDescriptor.primaryKeyFactory.create(maxKey),
                                                        terms.getMinTerm(),
                                                        terms.getMaxTerm(),
                                                        indexMetas);

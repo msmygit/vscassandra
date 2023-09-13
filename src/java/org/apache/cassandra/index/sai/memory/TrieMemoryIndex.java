@@ -53,8 +53,6 @@ import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
  * This is an in-memory index using the {@link MemtableTrie} to store a {@link ByteComparable}
  * representation of the indexed values. Data is stored on-heap or off-heap and follows the
  * settings of the {@link TrieMemtable} to determine where.
- *
- *
  */
 public class TrieMemoryIndex
 {
@@ -97,7 +95,8 @@ public class TrieMemoryIndex
         {
             value = TypeUtil.asIndexBytes(value, validator);
             analyzer.reset(value);
-            final PrimaryKey primaryKey = indexContext.keyFactory().create(key, clustering);
+            final PrimaryKey primaryKey = indexContext.hasClustering() ? indexContext.keyFactory().create(key, clustering)
+                                                                       : indexContext.keyFactory().create(key);
             final long initialSizeOnHeap = data.sizeOnHeap();
             final long initialSizeOffHeap = data.sizeOffHeap();
             final long reducerHeapSize = primaryKeysReducer.heapAllocations();

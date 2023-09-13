@@ -23,6 +23,7 @@ import java.util.stream.IntStream;
 import org.junit.Test;
 
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
 import static org.apache.cassandra.index.sai.iterators.LongIterator.convert;
@@ -35,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KeyRangeConcatIteratorTest extends AbstractKeyRangeIteratorTester
 {
-    PrimaryKey.Factory primaryKeyFactory = new PrimaryKey.Factory(null);
+    PrimaryKey.Factory primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance, null);
     @Test
     public void testValidation()
     {
@@ -427,7 +428,7 @@ public class KeyRangeConcatIteratorTest extends AbstractKeyRangeIteratorTester
     private String createErrorMessage(int max, int min)
     {
         return String.format(KeyRangeConcatIterator.MUST_BE_SORTED_ERROR,
-                             primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(max)),
-                             primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(min)));
+                             primaryKeyFactory.create(new Murmur3Partitioner.LongToken(max)),
+                             primaryKeyFactory.create(new Murmur3Partitioner.LongToken(min)));
     }
 }

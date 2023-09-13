@@ -106,14 +106,11 @@ public class MemtableIndexWriter implements PerColumnIndexWriter
                 return;
             }
 
-            final DecoratedKey minKey = rowMapping.minKey.partitionKey();
-            final DecoratedKey maxKey = rowMapping.maxKey.partitionKey();
-
             final Iterator<Pair<ByteComparable, LongArrayList>> iterator = rowMapping.merge(memtable);
 
             try (MemtableTermsIterator terms = new MemtableTermsIterator(memtable.getMinTerm(), memtable.getMaxTerm(), iterator))
             {
-                long cellCount = flush(minKey, maxKey, indexContext.getValidator(), terms, rowMapping.maxSSTableRowId);
+                long cellCount = flush(rowMapping.minKey, rowMapping.maxKey, indexContext.getValidator(), terms, rowMapping.maxSSTableRowId);
 
                 indexDescriptor.createComponentOnDisk(IndexComponent.COLUMN_COMPLETION_MARKER, indexContext);
 
@@ -136,8 +133,8 @@ public class MemtableIndexWriter implements PerColumnIndexWriter
         }
     }
 
-    private long flush(DecoratedKey minKey,
-                       DecoratedKey maxKey,
+    private long flush(PrimaryKey minKey,
+                       PrimaryKey maxKey,
                        AbstractType<?> termComparator,
                        MemtableTermsIterator terms,
                        long maxSSTableRowId) throws IOException
@@ -176,8 +173,8 @@ public class MemtableIndexWriter implements PerColumnIndexWriter
                                                        numRows,
                                                        terms.getMinSSTableRowId(),
                                                        terms.getMaxSSTableRowId(),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(minKey),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(maxKey),
+                                                       minKey,
+                                                       maxKey,
                                                        terms.getMinTerm(),
                                                        terms.getMaxTerm(),
                                                        indexMetas);

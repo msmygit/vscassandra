@@ -22,6 +22,7 @@ import org.junit.Test;
 
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 
@@ -35,7 +36,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     @Before
     public void setup()
     {
-        primaryKeyFactory = new PrimaryKey.Factory(SAITester.EMPTY_COMPARATOR);
+        primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance, SAITester.EMPTY_COMPARATOR);
     }
 
     @Test
@@ -99,7 +100,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 2, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(0)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(0)));
 
         assertIterator(iterator, 1, 2, 3);
     }
@@ -109,7 +110,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 2, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(1)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(1)));
 
         assertIterator(iterator, 1, 2, 3);
     }
@@ -119,7 +120,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 2, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(2)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(2)));
 
         assertIterator(iterator, 2, 3);
     }
@@ -129,7 +130,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 2, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(3)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(3)));
 
         assertIterator(iterator, 3);
     }
@@ -139,7 +140,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 2, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(4)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(4)));
 
         assertIterator(iterator);
     }
@@ -149,7 +150,7 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
     {
         KeyRangeIterator iterator = makeIterator(1, 3, 1, 1, 2, 2, 3, 3);
 
-        iterator.skipTo(primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(2)));
+        iterator.skipTo(primaryKeyFactory.create(new Murmur3Partitioner.LongToken(2)));
 
         assertIterator(iterator, 2, 3);
     }
@@ -168,6 +169,6 @@ public abstract class AbstractInMemoryKeyRangeIteratorTester
 
     protected PrimaryKey keyForToken(long token)
     {
-        return primaryKeyFactory.createTokenOnly(new Murmur3Partitioner.LongToken(token));
+        return primaryKeyFactory.create(new Murmur3Partitioner.LongToken(token));
     }
 }

@@ -38,7 +38,6 @@ import org.apache.cassandra.index.sai.postings.PostingList;
 import org.apache.lucene.index.CorruptIndexException;
 
 import static org.apache.cassandra.index.sai.disk.v1.kdtree.BKDQueries.bkdQueryFrom;
-import static org.apache.cassandra.index.sai.disk.v3.bbtree.BlockBalancedTreeQueries.balancedTreeQueryFrom;
 
 /**
  * Executes {@link Expression}s against the balanced tree for an individual index segment.

@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import com.google.common.base.MoreObjects;
@@ -44,8 +45,10 @@ import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UUIDType;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.SSTableIndex;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.memory.MemtableIndexManager;
@@ -98,9 +101,10 @@ public class IndexContext
     public IndexContext(String keyspace,
                         String table,
                         AbstractType<?> partitionKeyType,
+                        IPartitioner partitioner,
                         ClusteringComparator clusteringComparator,
                         ColumnMetadata columnMetadata,
-                        IndexTarget.Type indexType,
+                        @Nonnull IndexTarget.Type indexType,
                         @Nullable IndexMetadata indexMetadata)
     {
         this.keyspace = Objects.requireNonNull(keyspace);
@@ -110,7 +114,7 @@ public class IndexContext
         this.columnMetadata = Objects.requireNonNull(columnMetadata);
         this.indexType = Objects.requireNonNull(indexType);
         this.validator = TypeUtil.cellValueType(columnMetadata, indexType);
-        this.primaryKeyFactory = new PrimaryKey.Factory(clusteringComparator);
+        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(partitioner, clusteringComparator);
 
         this.indexMetadata = indexMetadata;
         this.memtableIndexManager = indexMetadata == null ? null : new MemtableIndexManager(this);
@@ -128,6 +132,11 @@ public class IndexContext
                                                                                        indexMetadata.options);
         this.analyzerFactory = indexMetadata == null ? AbstractAnalyzer.fromOptions(getValidator(), Collections.emptyMap())
                                                      : AbstractAnalyzer.fromOptions(getValidator(), indexMetadata.options);
+    }
+
+    public boolean hasClustering()
+    {
+        return clusteringComparator.size() > 0;
     }
 
     public AbstractType<?> keyValidator()
@@ -492,5 +501,12 @@ public class IndexContext
                         .stream()
                         .mapToLong(SSTableIndex::indexFileCacheSize)
                         .sum();
+    }
+
+    public IndexFeatureSet indexFeatureSet()
+    {
+        IndexFeatureSet.Accumulator accumulator = new IndexFeatureSet.Accumulator();
+        getView().getIndexes().stream().map(SSTableIndex::indexFeatureSet).forEach(set -> accumulator.accumulate(set));
+        return accumulator.complete();
     }
 }

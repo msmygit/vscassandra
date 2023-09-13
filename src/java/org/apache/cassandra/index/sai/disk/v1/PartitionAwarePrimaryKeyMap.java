@@ -18,7 +18,6 @@
 
 package org.apache.cassandra.index.sai.disk.v1;
 
-import java.nio.ByteBuffer;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -95,7 +94,7 @@ public class PartitionAwarePrimaryKeyMap implements PrimaryKeyMap
             final LongArray rowIdToToken = new LongArray.DeferredLongArray(() -> tokenReaderFactory.open());
             final LongArray rowIdToOffset = new LongArray.DeferredLongArray(() -> offsetReaderFactory.open());
 
-            return new PartitionAwarePrimaryKeyMap(rowIdToToken, rowIdToOffset, partitioner, keyFetcher, primaryKeyFactory);
+            return new PartitionAwarePrimaryKeyMap(rowIdToToken, rowIdToOffset, keyFetcher, primaryKeyFactory);
         }
 
         @Override
@@ -107,21 +106,17 @@ public class PartitionAwarePrimaryKeyMap implements PrimaryKeyMap
 
     private final LongArray rowIdToToken;
     private final LongArray rowIdToOffset;
-    private final IPartitioner partitioner;
     private final KeyFetcher keyFetcher;
     private final RandomAccessReader reader;
     private final PrimaryKey.Factory primaryKeyFactory;
-    private final ByteBuffer tokenBuffer = ByteBuffer.allocate(Long.BYTES);
 
     private PartitionAwarePrimaryKeyMap(LongArray rowIdToToken,
                                         LongArray rowIdToOffset,
-                                        IPartitioner partitioner,
                                         KeyFetcher keyFetcher,
                                         PrimaryKey.Factory primaryKeyFactory)
     {
         this.rowIdToToken = rowIdToToken;
         this.rowIdToOffset = rowIdToOffset;
-        this.partitioner = partitioner;
         this.keyFetcher = keyFetcher;
         this.reader = keyFetcher.createReader();
         this.primaryKeyFactory = primaryKeyFactory;
@@ -130,9 +125,7 @@ public class PartitionAwarePrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId)
     {
-        tokenBuffer.putLong(rowIdToToken.get(sstableRowId));
-        tokenBuffer.rewind();
-        return primaryKeyFactory.createDeferred(partitioner.getTokenFactory().fromByteArray(tokenBuffer), () -> supplier(sstableRowId));
+        return primaryKeyFactory.create(keyFetcher.apply(reader, rowIdToOffset.get(sstableRowId)));
     }
 
     @Override
@@ -145,10 +138,5 @@ public class PartitionAwarePrimaryKeyMap implements PrimaryKeyMap
     public void close()
     {
         FileUtils.closeQuietly(rowIdToToken, rowIdToOffset, reader);
-    }
-
-    private PrimaryKey supplier(long sstableRowId)
-    {
-        return primaryKeyFactory.createPartitionKeyOnly(keyFetcher.apply(reader, rowIdToOffset.get(sstableRowId)));
     }
 }

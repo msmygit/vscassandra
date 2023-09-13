@@ -49,6 +49,7 @@ import org.apache.cassandra.exceptions.RequestTimeoutException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -67,12 +68,13 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                                         TableQueryMetrics tableQueryMetrics,
                                         ReadCommand command,
                                         RowFilter filterOperation,
+                                        IndexFeatureSet indexFeatureSet,
                                         long executionQuotaMs)
     {
         this.command = command;
         this.queryContext = new QueryContext(command, executionQuotaMs);
         this.queryController = new QueryController(cfs, command, filterOperation, queryContext, tableQueryMetrics);
-        this.keyFactory = new PrimaryKey.Factory(cfs.metadata().comparator);
+        this.keyFactory = PrimaryKey.factory(cfs.getPartitioner(), cfs.getComparator(), indexFeatureSet);
     }
 
     @Override
@@ -138,8 +140,8 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             this.queryContext = queryContext;
             this.keyFactory = keyFactory;
 
-            this.firstPrimaryKey = keyFactory.createTokenOnly(queryController.mergeRange().left.getToken());
-            this.lastPrimaryKey = keyFactory.createTokenOnly(queryController.mergeRange().right.getToken());
+            this.firstPrimaryKey = keyFactory.create(queryController.mergeRange().left.getToken());
+            this.lastPrimaryKey = keyFactory.create(queryController.mergeRange().right.getToken());
         }
 
         @Override
@@ -298,7 +300,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
          */
         private void skipTo(@Nonnull Token token)
         {
-            resultKeyIterator.skipTo(keyFactory.createTokenOnly(token));
+            resultKeyIterator.skipTo(keyFactory.create(token));
         }
 
         /**
@@ -380,6 +382,13 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         private static UnfilteredRowIterator applyIndexFilter(UnfilteredRowIterator partition, FilterTree tree, QueryContext queryContext)
         {
             Row staticRow = partition.staticRow();
+
+            // We want to short-circuit the filtering of the whole partition if the static row
+            // satisfies the filter. If that is the case we just need to return the whole partition.
+            queryContext.rowsFiltered++;
+            if (tree.isSatisfiedBy(partition.partitionKey(), staticRow, staticRow))
+                return partition;
+
             List<Unfiltered> clusters = new ArrayList<>();
 
             while (partition.hasNext())
@@ -390,15 +399,6 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                 if (tree.isSatisfiedBy(partition.partitionKey(), row, staticRow))
                 {
                     clusters.add(row);
-                }
-            }
-
-            if (clusters.isEmpty())
-            {
-                queryContext.rowsFiltered++;
-                if (tree.isSatisfiedBy(partition.partitionKey(), staticRow, staticRow))
-                {
-                    clusters.add(staticRow);
                 }
             }
 

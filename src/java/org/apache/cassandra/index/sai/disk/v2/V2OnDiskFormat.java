@@ -26,12 +26,15 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.ClusteringComparator;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.disk.PerSSTableIndexWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 
 public class V2OnDiskFormat extends V1OnDiskFormat
@@ -54,6 +57,12 @@ public class V2OnDiskFormat extends V1OnDiskFormat
         {
             return true;
         }
+
+        @Override
+        public boolean isOsCompatible()
+        {
+            return false;
+        }
     };
 
     protected V2OnDiskFormat()
@@ -63,6 +72,12 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     public IndexFeatureSet indexFeatureSet()
     {
         return v2IndexFeatureSet;
+    }
+
+    @Override
+    public PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator)
+    {
+        return new RowAwarePrimaryKeyFactory(partitioner, comparator);
     }
 
     @Override

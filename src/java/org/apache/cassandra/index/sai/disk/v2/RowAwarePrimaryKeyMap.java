@@ -129,7 +129,6 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
     private final IPartitioner partitioner;
     private final PrimaryKey.Factory primaryKeyFactory;
     private final ClusteringComparator clusteringComparator;
-    private final ByteBuffer tokenBuffer = ByteBuffer.allocate(Long.BYTES);
 
     private RowAwarePrimaryKeyMap(LongArray rowIdToToken,
                                   SortedTermsReader sortedTermsReader,
@@ -149,15 +148,13 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
     @Override
     public PrimaryKey primaryKeyFromRowId(long sstableRowId)
     {
-        tokenBuffer.putLong(rowIdToToken.get(sstableRowId));
-        tokenBuffer.rewind();
-        return primaryKeyFactory.createDeferred(partitioner.getTokenFactory().fromByteArray(tokenBuffer), () -> supplier(sstableRowId));
+        return loadPrimaryKey(sstableRowId);
     }
 
     @Override
     public long rowIdFromPrimaryKey(PrimaryKey key)
     {
-        return sortedTermsReader.getPointId(v -> key.asComparableBytes(v));
+        return sortedTermsReader.getPointId(key);
     }
 
     @Override
@@ -166,7 +163,7 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
         FileUtils.closeQuietly(cursor, rowIdToToken);
     }
 
-    private PrimaryKey supplier(long sstableRowId)
+    private PrimaryKey loadPrimaryKey(long sstableRowId)
     {
         try
         {
@@ -178,16 +175,16 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
             byte[] keyBytes = ByteSourceInverse.getUnescapedBytes(ByteSourceInverse.nextComponentSource(peekable));
 
             if (keyBytes == null)
-                return primaryKeyFactory.createTokenOnly(token);
+                return primaryKeyFactory.create(token);
 
             DecoratedKey partitionKey = new BufferDecoratedKey(token, ByteBuffer.wrap(keyBytes));
 
-            Clustering clustering = clusteringComparator.size() == 0
-                                    ? Clustering.EMPTY
-                                    : clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance,
-                                                                                        v -> ByteSourceInverse.nextComponentSource(peekable));
-
-            return primaryKeyFactory.create(partitionKey, clustering);
+            if (clusteringComparator.size() == 0)
+                return primaryKeyFactory.create(partitionKey);
+            else
+                return primaryKeyFactory.create(partitionKey,
+                                                clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance,
+                                                                                                  v -> ByteSourceInverse.nextComponentSource(peekable)));
         }
         catch (IOException e)
         {
