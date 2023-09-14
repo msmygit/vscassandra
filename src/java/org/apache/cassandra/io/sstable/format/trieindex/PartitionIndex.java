@@ -78,6 +78,8 @@ public class PartitionIndex implements Closeable
     public static final long NOT_FOUND = Long.MIN_VALUE;
     public static final int FOOTER_LENGTH = 3 * 8;
 
+    private final ThreadLocal<Reader> cachedReaders = ThreadLocal.withInitial(() -> new Reader(this));
+
     public PartitionIndex(FileHandle fh, long trieRoot, long keyCount, DecoratedKey first, DecoratedKey last, DecoratedKey filterFirst, DecoratedKey filterLast)
     {
         this.keyCount = keyCount;
@@ -209,7 +211,7 @@ public class PartitionIndex implements Closeable
 
     public Reader openReader()
     {
-        return new Reader(this);
+        return cachedReaders.get();
     }
 
     protected IndexPosIterator allKeysIterator()
@@ -359,6 +361,11 @@ public class PartitionIndex implements Closeable
         {
             int bytes = payloadFlags();
             return bytes > 7 ? bytes - 6 : bytes;
+        }
+
+        @Override
+        public void close() {
+            // leave it open for the next thread
         }
     }
 
