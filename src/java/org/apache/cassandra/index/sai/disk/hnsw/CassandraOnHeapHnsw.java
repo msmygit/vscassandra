@@ -86,9 +86,7 @@ public class CassandraOnHeapHnsw<T>
     public CassandraOnHeapHnsw(AbstractType<?> termComparator, IndexWriterConfig indexWriterConfig, boolean concurrent)
     {
         serializer = (VectorType.VectorSerializer)termComparator.getSerializer();
-        vectorValues = concurrent
-                       ? new ConcurrentVectorValues(((VectorType) termComparator).dimension)
-                       : new CompactionVectorValues(((VectorType<Float>) termComparator));
+        vectorValues = new ConcurrentVectorValues(((VectorType) termComparator).dimension);
         similarityFunction = indexWriterConfig.getSimilarityFunction();
         // We need to be able to inexpensively distinguish different vectors, with a slower path
         // that identifies vectors that are equal but not the same reference.  A comparison-
