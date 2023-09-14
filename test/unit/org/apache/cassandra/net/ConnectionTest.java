@@ -123,7 +123,11 @@ public class ConnectionTest
     @BeforeClass
     public static void startup()
     {
-        DatabaseDescriptor.daemonInitialization();
+        DatabaseDescriptor.daemonInitialization(() -> {
+            Config config = DatabaseDescriptor.loadConfig();
+            config.request_timeout_in_ms = 1000;
+            return config;
+        });
         CommitLog.instance.start();
     }
 
