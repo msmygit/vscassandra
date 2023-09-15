@@ -19,6 +19,7 @@ package org.apache.cassandra.cql3.statements;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -73,6 +74,7 @@ import org.apache.cassandra.service.pager.QueryPager;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.transport.messages.ResultMessage;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.NoSpamLogger;
 import org.apache.cassandra.utils.FBUtilities;
 
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -97,6 +99,7 @@ import static org.apache.cassandra.utils.ByteBufferUtil.UNSET_BYTE_BUFFER;
 public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
 {
     private static final Logger logger = LoggerFactory.getLogger(SelectStatement.class);
+    private static final NoSpamLogger noSpamLogger = NoSpamLogger.getLogger(SelectStatement.logger, 1, TimeUnit.MINUTES);
 
     private final String rawCQLStatement;
     public final VariableSpecifications bindVariables;
@@ -470,10 +473,14 @@ public class SelectStatement implements CQLStatement.SingleKeyspaceCqlStatement
             if (!restrictions.hasPartitionKeyRestrictions())
             {
                 warn("Aggregation query used without partition key");
+                noSpamLogger.warn(String.format("Aggregation query used without partition key on table %s.%s, aggregation type: %s",
+                                                 keyspace(), columnFamily(), aggregationSpec.kind()));
             }
             else if (restrictions.keyIsInRelation())
             {
                 warn("Aggregation query used on multiple partition keys (IN restriction)");
+                noSpamLogger.warn(String.format("Aggregation query used on multiple partition keys (IN restriction) on table %s.%s, aggregation type: %s",
+                                                 keyspace(), columnFamily(), aggregationSpec.kind()));
             }
         }
 

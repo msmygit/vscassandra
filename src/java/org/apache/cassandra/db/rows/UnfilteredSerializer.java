@@ -29,6 +29,7 @@ import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputBuffer;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.io.util.FileDataInput;
+import org.apache.cassandra.io.util.TrackedDataInputPlus;
 import org.apache.cassandra.utils.SearchIterator;
 import org.apache.cassandra.utils.WrappedException;
 
@@ -599,17 +600,17 @@ public class UnfilteredSerializer
             Columns columns = hasAllColumns ? headerColumns : Columns.serializer.deserializeSubset(headerColumns, in);
 
             final LivenessInfo livenessInfo = rowLiveness;
-            final DataInputPlus fin = in;
 
             try
             {
+                DataInputPlus finalIn = in;
                 columns.apply(column -> {
                     try
                     {
                         if (column.isSimple())
-                            readSimpleColumn(column, fin, header, helper, builder, livenessInfo);
+                            readSimpleColumn(column, finalIn, header, helper, builder, livenessInfo);
                         else
-                            readComplexColumn(column, fin, header, helper, hasComplexDeletion, builder, livenessInfo);
+                            readComplexColumn(column, finalIn, header, helper, hasComplexDeletion, builder, livenessInfo);
                     }
                     catch (IOException e)
                     {

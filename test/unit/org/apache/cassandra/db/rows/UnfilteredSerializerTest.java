@@ -21,6 +21,7 @@ package org.apache.cassandra.db.rows;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -30,10 +31,12 @@ import org.junit.Test;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.SerializationHeader;
+import org.apache.cassandra.db.filter.ColumnFilter;
 import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.db.marshal.IntegerType;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataOutputBuffer;
+import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 
@@ -50,10 +53,10 @@ public class UnfilteredSerializerTest
         DatabaseDescriptor.daemonInitialization();
 
         md = TableMetadata.builder("ks", "cf")
-                .addPartitionKeyColumn("pk", IntegerType.instance)
-                .addRegularColumn("v1", BytesType.instance)
-                .addRegularColumn("v2", BytesType.instance)
-                .build();
+                          .addPartitionKeyColumn("pk", IntegerType.instance)
+                          .addRegularColumn("v1", BytesType.instance)
+                          .addRegularColumn("v2", BytesType.instance)
+                          .build();
     }
 
     @Test

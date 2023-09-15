@@ -324,6 +324,26 @@ public class CompactionManager implements CompactionManagerMBean
         return false;
     }
 
+    @VisibleForTesting
+    public boolean hasOngoingOrPendingTasks()
+    {
+        if (!active.getTableOperations().isEmpty())
+            return true;
+
+        int pendingTasks = executor.getPendingTaskCount() +
+                           validationExecutor.getPendingTaskCount() +
+                           viewBuildExecutor.getPendingTaskCount() +
+                           cacheCleanupExecutor.getPendingTaskCount();
+        if (pendingTasks > 0)
+            return true;
+
+        int activeTasks = executor.getActiveTaskCount() +
+                          validationExecutor.getActiveTaskCount() +
+                          viewBuildExecutor.getActiveTaskCount() +
+                          cacheCleanupExecutor.getActiveTaskCount();
+
+        return activeTasks > 0;
+    }
     /**
      * Shutdowns both compaction and validation executors, cancels running compaction / validation,
      * and waits for tasks to complete if tasks were not cancelable.
@@ -545,11 +565,7 @@ public class CompactionManager implements CompactionManagerMBean
     {
         assert !cfStore.isIndex();
         Keyspace keyspace = cfStore.keyspace;
-        if (!StorageService.instance.isJoined())
-        {
-            logger.info("Cleanup cannot run before a node has joined the ring");
-            return AllSSTableOpStatus.ABORTED;
-        }
+
         // if local ranges is empty, it means no data should remain
         final RangesAtEndpoint replicas = StorageService.instance.getLocalReplicas(keyspace.getName());
         final Set<Range<Token>> allRanges = replicas.ranges();
