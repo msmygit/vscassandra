@@ -24,6 +24,8 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -213,7 +215,13 @@ public class Expression
 
         if (!TypeUtil.isValid(columnValue, validator))
         {
-            logger.error(context.logMessage("Value is not valid for indexed column {} with {}"), context.getColumnName(), validator);
+            StringWriter sw = new StringWriter();
+            new Exception().printStackTrace(new PrintWriter(sw));
+            logger.error(context.logMessage("Value 0x{} is not valid for indexed column {} with {}.  Stacktrace: {}"),
+                         ByteBufferUtil.bytesToHex(columnValue),
+                         context.getColumnName(),
+                         validator,
+                         sw.toString());
             return false;
         }
 
