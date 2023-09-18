@@ -330,9 +330,9 @@ public class CassandraOnHeapGraph<T>
         }
 
         logger.debug("Computing PQ for {} vectors", vectorValues.size());
-        // hack to only do this one at a time during compaction since we're reading a ton of vectors into memory
-        var synchronizeOn = vectorValues instanceof ConcurrentVectorValues ? this : CassandraOnHeapGraph.class;
-        synchronized (synchronizeOn)
+        // limit the PQ computation and encoding to one index at a time -- goal during flush is to
+        // evict from memory ASAP so better to do the PQ build (in parallel) one at a time
+        synchronized (CassandraOnHeapGraph.class)
         {
             // train PQ and encode
             var pq = ProductQuantization.compute(vectorValues, M, false);
