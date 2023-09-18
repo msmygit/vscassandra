@@ -42,9 +42,9 @@ import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.pq.ProductQuantization;
+import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
-import io.github.jbellis.jvector.util.Bits;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
@@ -334,11 +334,12 @@ public class CassandraOnHeapGraph<T>
         var synchronizeOn = vectorValues instanceof ConcurrentVectorValues ? this : CassandraOnHeapGraph.class;
         synchronized (synchronizeOn)
         {
-            // collect vectors into a list
-            var vectors = IntStream.range(0, vectorValues.size()).mapToObj(vectorValues::vectorValue).collect(Collectors.toList());
             // train PQ and encode
-            var pq = ProductQuantization.compute(vectors, M, false);
-            var encoded = pq.encodeAll(vectors);
+            var pq = ProductQuantization.compute(vectorValues, M, false);
+            // VSTODO assert !vectorValues.isValueShared();
+            var encoded = IntStream.range(0, vectorValues.size()).parallel()
+                          .mapToObj(i -> pq.encode(vectorValues.vectorValue(i)))
+                          .collect(Collectors.toList());
             var cv = new CompressedVectors(pq, encoded);
             // save
             cv.write(writer);

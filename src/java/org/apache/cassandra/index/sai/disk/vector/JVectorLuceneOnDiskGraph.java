@@ -37,5 +37,5 @@ public interface JVectorLuceneOnDiskGraph extends AutoCloseable
 
     PostingList search(float[] queryVector, int limit, Bits bits, QueryContext context);
 
-    void close();
+    void close() throws IOException;
 }

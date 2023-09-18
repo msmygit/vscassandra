@@ -127,8 +127,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         }
         else
         {
-            scoreFunction = (NeighborSimilarity.ApproximateScoreFunction)
-                            i -> compressedVectors.decodedSimilarity(i, queryVector, similarityFunction);
+            scoreFunction = compressedVectors.approximateScoreFunctionFor(queryVector, similarityFunction);
             reRanker = (i, map) -> similarityFunction.compare(queryVector, map.get(i));
         }
         var result = searcher.search(scoreFunction,
@@ -189,7 +188,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
     }
 
     @Override
-    public void close()
+    public void close() throws IOException
     {
         ordinalsMap.close();
         graph.close();
