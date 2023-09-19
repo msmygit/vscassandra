@@ -31,12 +31,10 @@ import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SSTableRowIdPostingList;
 import org.apache.cassandra.index.sai.disk.SSTableRowIdsRangeIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.vector.VectorIndexSearcher;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 
 /**
  * Abstract reader for individual segments of an on-disk index.
@@ -63,19 +61,6 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
         this.metadata = segmentMetadata;
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
-    }
-
-    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                                     PerIndexFiles indexFiles,
-                                     SegmentMetadata segmentMetadata,
-                                     IndexDescriptor indexDescriptor,
-                                     IndexContext indexContext) throws IOException
-    {
-        if (indexContext.isVector())
-            return new VectorIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
-        if (TypeUtil.isLiteral(indexContext.getValidator()))
-            return new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
-        return new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
 
     /**

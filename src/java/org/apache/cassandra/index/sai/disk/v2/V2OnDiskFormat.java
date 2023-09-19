@@ -28,11 +28,15 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
+import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
@@ -92,6 +96,17 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     public PrimaryKeyMap.Factory newPrimaryKeyMapFactory(IndexDescriptor indexDescriptor, SSTableReader sstable) throws IOException
     {
         return new RowAwarePrimaryKeyMap.RowAwarePrimaryKeyMapFactory(indexDescriptor, sstable);
+    }
+
+    @Override
+    public IndexSearcher newIndexSearcher(SSTableContext sstableContext,
+                                          IndexContext indexContext,
+                                          PerIndexFiles indexFiles,
+                                          SegmentMetadata segmentMetadata) throws IOException
+    {
+        if (indexContext.isVector())
+            return new V2VectorIndexSearcher(sstableContext.primaryKeyMapFactory, indexFiles, segmentMetadata, sstableContext.indexDescriptor, indexContext);
+        return super.newIndexSearcher(sstableContext, indexContext, indexFiles, segmentMetadata);
     }
 
     @Override
