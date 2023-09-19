@@ -25,7 +25,6 @@ import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.logging.Logger;
 import java.util.stream.IntStream;
-
 import javax.annotation.Nullable;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
@@ -68,13 +67,10 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         {
             reader.seek(pqSegmentOffset);
             var containsCompressedVectors = reader.readBoolean();
-            if (containsCompressedVectors) {
+            if (containsCompressedVectors)
                 compressedVectors = CompressedVectors.load(reader, reader.getFilePointer());
-            }
             else
-            {
                 compressedVectors = null;
-            }
         }
 
         SegmentMetadata.ComponentMetadata postingListsMetadata = componentMetadatas.get(IndexComponent.POSTING_LISTS);
