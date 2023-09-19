@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.index.sai.disk.vector;
+package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -31,7 +31,6 @@ import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.util.SparseFixedBitSet;
 import org.agrona.collections.IntArrayList;
 import org.apache.cassandra.db.PartitionPosition;
-import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
@@ -45,6 +44,7 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
 import org.apache.cassandra.index.sai.disk.v3.CassandraDiskAnn;
+import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -55,7 +55,7 @@ import org.apache.cassandra.index.sai.utils.SegmentOrdering;
 /**
  * Executes ann search against the graph for an individual index segment.
  */
-public class VectorIndexSearcher extends IndexSearcher implements SegmentOrdering
+public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrdering
 {
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -64,19 +64,24 @@ public class VectorIndexSearcher extends IndexSearcher implements SegmentOrderin
     private int maxBruteForceRows; // not final so test can inject its own setting
     private final ThreadLocal<SparseFixedBitSet> cachedBitSets;
 
-    public VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                               PerIndexFiles perIndexFiles,
-                               SegmentMetadata segmentMetadata,
-                               IndexDescriptor indexDescriptor,
-                               IndexContext indexContext) throws IOException
+    public V2VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                                 PerIndexFiles perIndexFiles,
+                                 SegmentMetadata segmentMetadata,
+                                 IndexDescriptor indexDescriptor,
+                                 IndexContext indexContext) throws IOException
+    {
+        this(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext, new CassandraOnDiskHnsw(segmentMetadata.componentMetadatas, perIndexFiles, indexContext));
+    }
+
+    protected V2VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                                    PerIndexFiles perIndexFiles,
+                                    SegmentMetadata segmentMetadata,
+                                    IndexDescriptor indexDescriptor,
+                                    IndexContext indexContext,
+                                    JVectorLuceneOnDiskGraph graph) throws IOException
     {
         super(primaryKeyMapFactory, perIndexFiles, segmentMetadata, indexDescriptor, indexContext);
-        if (indexDescriptor.version == Version.BA)
-            graph = new CassandraOnDiskHnsw(segmentMetadata.componentMetadatas, perIndexFiles, indexContext);
-        else if (indexDescriptor.version == Version.CA) // FIXME how to check for forwards-compatible versions?
-            graph = new CassandraDiskAnn(segmentMetadata.componentMetadatas, perIndexFiles, indexContext);
-        else
-            throw new IllegalArgumentException("Unsupported index version: " + indexDescriptor.version);
+        this.graph = graph;
         this.keyFactory = PrimaryKey.factory(indexContext.comparator(), indexContext.indexFeatureSet());
         cachedBitSets = ThreadLocal.withInitial(() -> new SparseFixedBitSet(graph.size()));
 

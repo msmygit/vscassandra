@@ -30,6 +30,9 @@ import org.apache.cassandra.index.sai.disk.PerIndexWriter;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
+import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
+import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
+import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.memory.RowMapping;
 import org.apache.cassandra.index.sai.memory.TrieMemtableIndex;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -112,6 +115,11 @@ public interface OnDiskFormat
      * @return
      */
     public SearchableIndex newSearchableIndex(SSTableContext sstableContext, IndexContext indexContext);
+
+    IndexSearcher newIndexSearcher(SSTableContext sstableContext,
+                                   IndexContext indexContext,
+                                   PerIndexFiles indexFiles,
+                                   SegmentMetadata segmentMetadata) throws IOException;
 
     /**
      * Create a new writer for the per-SSTable on-disk components of an index.

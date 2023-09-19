@@ -158,6 +158,17 @@ public class V1OnDiskFormat implements OnDiskFormat
     }
 
     @Override
+    public IndexSearcher newIndexSearcher(SSTableContext sstableContext,
+                                          IndexContext indexContext,
+                                          PerIndexFiles indexFiles,
+                                          SegmentMetadata segmentMetadata) throws IOException
+    {
+        if (indexContext.isLiteral())
+            return new InvertedIndexSearcher(sstableContext.primaryKeyMapFactory, indexFiles, segmentMetadata, sstableContext.indexDescriptor, indexContext);
+        return new KDTreeIndexSearcher(sstableContext.primaryKeyMapFactory, indexFiles, segmentMetadata, sstableContext.indexDescriptor, indexContext);
+    }
+
+    @Override
     public PerSSTableWriter newPerSSTableWriter(IndexDescriptor indexDescriptor) throws IOException
     {
         return new SSTableComponentsWriter(indexDescriptor);
