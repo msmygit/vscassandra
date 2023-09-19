@@ -37,14 +37,13 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
-import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
-import org.apache.cassandra.index.sai.disk.v3.CassandraDiskAnn;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
+import org.apache.cassandra.index.sai.disk.vector.VectorMemtableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -61,7 +60,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
     private final JVectorLuceneOnDiskGraph graph;
     private final PrimaryKey.Factory keyFactory;
-    private int maxBruteForceRows; // not final so test can inject its own setting
+    private int globalBruteForceRows; // not final so test can inject its own setting
     private final ThreadLocal<SparseFixedBitSet> cachedBitSets;
 
     public V2VectorIndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
@@ -85,9 +84,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
         this.keyFactory = PrimaryKey.factory(indexContext.comparator(), indexContext.indexFeatureSet());
         cachedBitSets = ThreadLocal.withInitial(() -> new SparseFixedBitSet(graph.size()));
 
-        // estimate the number of comparisons that a search would require; use brute force if we have
-        // fewer rows involved than that
-        maxBruteForceRows = (int)(indexContext.getIndexWriterConfig().getMaximumNodeConnections() * Math.log(graph.size()));
+        globalBruteForceRows = Integer.MAX_VALUE;
     }
 
     @Override
@@ -149,7 +146,9 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
             // if num of matches are not bigger than limit, skip ANN
             var nRows = maxSSTableRowId - minSSTableRowId + 1;
-            if (nRows <= Math.max(maxBruteForceRows, limit))
+            int mbfr = getMaxBruteForceRows(limit);
+            int maxBruteForceRows = Math.min(globalBruteForceRows, mbfr);
+            if (nRows <= maxBruteForceRows)
             {
                 IntArrayList postings = new IntArrayList(Math.toIntExact(nRows), -1);
                 for (long sstableRowId = minSSTableRowId; sstableRowId <= maxSSTableRowId; sstableRowId++)
@@ -191,6 +190,14 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
         }
     }
 
+    private int getMaxBruteForceRows(int limit)
+    {
+        // VSTODO the memtable calculation assumes that doing a graph comparison is equally as expensive
+        // as a brute force comparison.  This is not correct but I'm not sure by how much.  2x seems like
+        // a reasonable minimum factor to increase it by.  (This will change for DiskANN.)
+        return 2 * VectorMemtableIndex.getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
+    }
+
     private SparseFixedBitSet bitSetForSearch()
     {
         var bits = cachedBitSets.get();
@@ -207,7 +214,8 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             // are from our own token range so we can use row ids to order the results by vector similarity.
             var maxSegmentRowId = metadata.toSegmentRowId(metadata.maxSSTableRowId);
             SparseFixedBitSet bits = bitSetForSearch();
-            int[] bruteForceRows = new int[Math.max(limit, this.maxBruteForceRows)];
+            int mbfr = getMaxBruteForceRows(limit);
+            int[] bruteForceRows = new int[Math.min(globalBruteForceRows, mbfr)];
             int n = 0;
             try (var ordinalsView = graph.getOrdinalsView())
             {

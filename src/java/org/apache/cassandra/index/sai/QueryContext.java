@@ -29,14 +29,14 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import io.github.jbellis.jvector.util.Bits;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
+import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import io.github.jbellis.jvector.util.Bits;
 
 /**
  * Tracks state relevant to the execution of a single query, including metrics and timeout monitoring.
@@ -181,18 +181,18 @@ public class QueryContext
         if (ignoredOrdinals == null)
             return null;
 
-        return new IgnoringBits(ignoredOrdinals, metadata);
+        return new IgnoringBits(ignoredOrdinals, graph.size());
     }
 
     private static class IgnoringBits implements Bits
     {
         private final Set<Integer> ignoredOrdinals;
-        private final int length;
+        private final int maxOrdinal;
 
-        public IgnoringBits(Set<Integer> ignoredOrdinals, SegmentMetadata metadata)
+        public IgnoringBits(Set<Integer> ignoredOrdinals, int maxOrdinal)
         {
             this.ignoredOrdinals = ignoredOrdinals;
-            this.length = 1 + metadata.toSegmentRowId(metadata.maxSSTableRowId);
+            this.maxOrdinal = maxOrdinal;
         }
 
         @Override
@@ -204,7 +204,7 @@ public class QueryContext
         @Override
         public int length()
         {
-            return length;
+            return maxOrdinal;
         }
     }
 
