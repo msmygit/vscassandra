@@ -37,10 +37,10 @@ public interface IndexFeatureSet
      */
     boolean isRowAware();
 
-    default boolean hasVectorIndexChecksum()
-    {
-        return true;
-    }
+    /**
+     * @return true if vector index files include a checksum at the end
+     */
+    boolean hasVectorIndexChecksum();
 
     /**
      * The {@code Accumulator} is used to accumulate the {@code IndexFeatureSet} responses from

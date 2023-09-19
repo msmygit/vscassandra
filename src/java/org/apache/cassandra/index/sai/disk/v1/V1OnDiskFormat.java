@@ -119,7 +119,6 @@ public class V1OnDiskFormat implements OnDiskFormat
         {
             return false;
         }
-
     };
 
     protected V1OnDiskFormat()

@@ -310,14 +310,10 @@ public class CassandraOnHeapGraph<T>
             OnDiskGraphIndex.write(builder.getGraph(), vectorValues, indexOutput.asSequentialWriter());
             long termsLength = indexOutput.getFilePointer() - termsOffset;
 
-
-            if (Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum())
-            {
-                // write footers/checksums
-                SAICodecUtils.writeFooter(pqOutput);
-                SAICodecUtils.writeFooter(postingsOutput);
-                SAICodecUtils.writeFooter(indexOutput);
-            }
+            // write footers/checksums
+            SAICodecUtils.writeFooter(pqOutput);
+            SAICodecUtils.writeFooter(postingsOutput);
+            SAICodecUtils.writeFooter(indexOutput);
 
             // add components to the metadata map
             SegmentMetadata.ComponentMetadataMap metadataMap = new SegmentMetadata.ComponentMetadataMap();
