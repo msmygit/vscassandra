@@ -24,8 +24,8 @@ import java.util.function.Function;
 
 import com.google.common.base.Preconditions;
 
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.agrona.collections.IntArrayList;
-import org.apache.lucene.util.RamUsageEstimator;
 
 public class VectorPostings<T>
 {

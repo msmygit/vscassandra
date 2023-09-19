@@ -23,6 +23,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import javax.annotation.concurrent.NotThreadSafe;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.io.util.SequentialWriter;
@@ -74,6 +76,7 @@ public class CompactionVectorValues implements RamAwareVectorValues
         return this;
     }
 
+    @VisibleForTesting
     public long write(SequentialWriter writer) throws IOException
     {
         writer.writeInt(size());

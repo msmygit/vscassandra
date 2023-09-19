@@ -18,11 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.vector;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
-import org.apache.cassandra.io.util.SequentialWriter;
-import org.apache.lucene.util.RamUsageEstimator;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 import org.jctools.maps.NonBlockingHashMapLong;
 
 public class ConcurrentVectorValues implements RamAwareVectorValues

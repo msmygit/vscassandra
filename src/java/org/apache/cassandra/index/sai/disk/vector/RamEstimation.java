@@ -18,7 +18,7 @@
 
 package org.apache.cassandra.index.sai.disk.vector;
 
-import org.apache.lucene.util.RamUsageEstimator;
+import io.github.jbellis.jvector.util.RamUsageEstimator;
 
 public class RamEstimation
 {
