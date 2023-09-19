@@ -21,19 +21,15 @@ package org.apache.cassandra.index.sai.disk.v3;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
-import io.github.jbellis.jvector.graph.GraphIndex;
 import io.github.jbellis.jvector.graph.GraphSearcher;
-import io.github.jbellis.jvector.graph.ListRandomAccessVectorValues;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import io.github.jbellis.jvector.util.Bits;
@@ -58,7 +54,6 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
 
     // only one of these will be not null
     private final CompressedVectors compressedVectors;
-    private final ListRandomAccessVectorValues uncompressedVectors;
 
     public CassandraDiskAnn(SegmentMetadata.ComponentMetadataMap componentMetadatas, PerIndexFiles indexFiles, IndexContext context) throws IOException
     {
@@ -74,24 +69,15 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
             var containsCompressedVectors = reader.readBoolean();
             if (containsCompressedVectors) {
                 compressedVectors = CompressedVectors.load(reader, reader.getFilePointer());
-                uncompressedVectors = null;
             }
             else
             {
                 compressedVectors = null;
-                var vectors = cacheOriginalVectors(graph);
-                uncompressedVectors = new ListRandomAccessVectorValues(vectors, vectors.get(0).length);
             }
         }
 
         SegmentMetadata.ComponentMetadata postingListsMetadata = componentMetadatas.get(IndexComponent.POSTING_LISTS);
         ordinalsMap = new OnDiskOrdinalsMap(indexFiles.postingLists(), postingListsMetadata.offset, postingListsMetadata.length);
-    }
-
-    private static List<float[]> cacheOriginalVectors(GraphIndex<float[]> graph)
-    {
-        var view = graph.getView();
-        return IntStream.range(0, graph.size()).mapToObj(view::getVector).collect(Collectors.toList());
     }
 
     @Override
@@ -115,14 +101,14 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
-        var searcher = new GraphSearcher.Builder<>(graph.getView()).build();
+        var view = graph.getView();
+        var searcher = new GraphSearcher.Builder<>(view).build();
         NeighborSimilarity.ScoreFunction scoreFunction;
         NeighborSimilarity.ReRanker<float[]> reRanker;
         if (compressedVectors == null)
         {
-            assert uncompressedVectors != null;
             scoreFunction = (NeighborSimilarity.ExactScoreFunction)
-                            i -> similarityFunction.compare(queryVector, uncompressedVectors.vectorValue(i));
+                            i -> similarityFunction.compare(queryVector, view.getVector(i));
             reRanker = null;
         }
         else
