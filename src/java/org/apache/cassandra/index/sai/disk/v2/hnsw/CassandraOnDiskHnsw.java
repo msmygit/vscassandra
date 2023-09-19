@@ -39,6 +39,7 @@ import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
+import org.apache.cassandra.io.util.FileHandle;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
 import org.apache.lucene.util.hnsw.NeighborQueue;
@@ -53,13 +54,15 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     private final VectorCache vectorCache;
 
     private static final int OFFSET_CACHE_MIN_BYTES = 100_000;
+    private FileHandle vectorsFile;
 
     public CassandraOnDiskHnsw(SegmentMetadata.ComponentMetadataMap componentMetadatas, PerIndexFiles indexFiles, IndexContext context) throws IOException
     {
         similarityFunction = context.getIndexWriterConfig().getSimilarityFunction();
 
+        vectorsFile = indexFiles.vectors();
         long vectorsSegmentOffset = componentMetadatas.get(IndexComponent.VECTOR).offset;
-        vectorsSupplier = (qc) -> new VectorsWithCache(new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset), qc);
+        vectorsSupplier = (qc) -> new VectorsWithCache(new OnDiskVectors(vectorsFile, vectorsSegmentOffset), qc);
 
         SegmentMetadata.ComponentMetadata postingListsMetadata = componentMetadatas.get(IndexComponent.POSTING_LISTS);
         ordinalsMap = new OnDiskOrdinalsMap(indexFiles.postingLists(), postingListsMetadata.offset, postingListsMetadata.length);
@@ -67,7 +70,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
         SegmentMetadata.ComponentMetadata termsMetadata = componentMetadatas.get(IndexComponent.TERMS_DATA);
         hnsw = new OnDiskHnswGraph(indexFiles.termsData(), termsMetadata.offset, termsMetadata.length, OFFSET_CACHE_MIN_BYTES);
         var mockContext = new QueryContext();
-        try (var vectors = new OnDiskVectors(indexFiles.vectors(), vectorsSegmentOffset))
+        try (var vectors = new OnDiskVectors(vectorsFile, vectorsSegmentOffset))
         {
             vectorCache = VectorCache.load(hnsw.getView(mockContext), vectors, CassandraRelevantProperties.SAI_HNSW_VECTOR_CACHE_BYTES.getInt());
         }
@@ -167,6 +170,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     @Override
     public void close()
     {
+        vectorsFile.close();
         ordinalsMap.close();
         hnsw.close();
     }

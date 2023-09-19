@@ -47,34 +47,40 @@ public class PerIndexFiles implements Closeable
         }
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle termsData()
     {
-        return getFile(IndexComponent.TERMS_DATA);
+        return getFile(IndexComponent.TERMS_DATA).sharedCopy();
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle postingLists()
     {
-        return getFile(IndexComponent.POSTING_LISTS);
+        return getFile(IndexComponent.POSTING_LISTS).sharedCopy();
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle kdtree()
     {
-        return getFile(IndexComponent.KD_TREE);
+        return getFile(IndexComponent.KD_TREE).sharedCopy();
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle kdtreePostingLists()
     {
-        return getFile(IndexComponent.KD_TREE_POSTING_LISTS);
+        return getFile(IndexComponent.KD_TREE_POSTING_LISTS).sharedCopy();
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle vectors()
     {
-        return getFile(IndexComponent.VECTOR);
+        return getFile(IndexComponent.VECTOR).sharedCopy();
     }
 
+    /** It is the caller's responsibility to close the returned file handle. */
     public FileHandle pq()
     {
-        return getFile(IndexComponent.PQ);
+        return getFile(IndexComponent.PQ).sharedCopy();
     }
 
     private FileHandle getFile(IndexComponent indexComponent)

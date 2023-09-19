@@ -44,11 +44,13 @@ import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
+import org.apache.cassandra.io.util.FileHandle;
 
 public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
 {
     private static final Logger logger = Logger.getLogger(CassandraDiskAnn.class.getName());
 
+    private final FileHandle graphHandle;
     private final OnDiskOrdinalsMap ordinalsMap;
     private final CachingGraphIndex graph;
     private final VectorSimilarityFunction similarityFunction;
@@ -60,10 +62,12 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         similarityFunction = context.getIndexWriterConfig().getSimilarityFunction();
 
         SegmentMetadata.ComponentMetadata termsMetadata = componentMetadatas.get(IndexComponent.TERMS_DATA);
-        graph = new CachingGraphIndex(new OnDiskGraphIndex<>(() -> indexFiles.termsData().createReader(), termsMetadata.offset));
+        graphHandle = indexFiles.termsData();
+        graph = new CachingGraphIndex(new OnDiskGraphIndex<>(graphHandle::createReader, termsMetadata.offset));
 
         long pqSegmentOffset = componentMetadatas.get(IndexComponent.PQ).offset;
-        try (var reader = indexFiles.pq().createReader())
+        try (var pqFile = indexFiles.pq();
+             var reader = pqFile.createReader())
         {
             reader.seek(pqSegmentOffset);
             var containsCompressedVectors = reader.readBoolean();
@@ -175,6 +179,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
     {
         ordinalsMap.close();
         graph.close();
+        graphHandle.close();
     }
 
     @Override
