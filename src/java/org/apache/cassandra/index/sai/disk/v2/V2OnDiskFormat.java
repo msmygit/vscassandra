@@ -132,11 +132,9 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     }
 
     @Override
-    public boolean validateOneIndexComponent(IndexComponent component, IndexDescriptor descriptor, IndexContext context, boolean checksum)
+    protected boolean isVectorComponent(IndexComponent indexComponent)
     {
-        if (context.isVector())
-            return true;
-        return super.validateOneIndexComponent(component, descriptor, context, checksum);
+        return VECTOR_COMPONENTS_V2.contains(indexComponent);
     }
 
     @Override
