@@ -90,9 +90,9 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
      * @param queryContext to track per sstable cache and per query metrics
      * @param defer        create the iterator in a deferred state
      * @param limit        the num of rows to returned, used by ANN index
-     * @return {@link RangeIterator} of sstable row ids that matches given expression
+     * @return {@link RangeIterator} of {@link PrimaryKey} that matches given expression
      */
-    public abstract RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
+    public abstract RangeIterator<PrimaryKey> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
 
     RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
@@ -110,6 +110,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
     }
 
+    // TODO can I remove this method? It is not used now.
     RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)

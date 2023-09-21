@@ -335,6 +335,7 @@ public class QueryController
                                     {
                                         try
                                         {
+                                            // FIXME the return type here is now PK
                                             List<RangeIterator<Long>> iterators = ie.index.searchSSTableRowIds(ie.expression, mergeRange, queryContext, defer, getLimit());
                                             // concat the result from multiple segments for the same index
                                             return RangeConcatIterator.build(iterators);

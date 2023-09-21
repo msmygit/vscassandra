@@ -134,9 +134,9 @@ public class Segment implements Closeable, SegmentOrdering
      * @param context    to track per sstable cache and per query metrics
      * @param defer      create the iterator in a deferred state
      * @param limit      the num of rows to returned, used by ANN index
-     * @return range iterator of sstable row ids that matches given expression
+     * @return range iterator of {@link PrimaryKey} that matches given expression
      */
-    public RangeIterator<Long> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator<PrimaryKey> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         return index.search(expression, keyRange, context, defer, limit);
     }

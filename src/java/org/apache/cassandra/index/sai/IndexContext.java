@@ -66,6 +66,7 @@ import org.apache.cassandra.index.sai.metrics.IndexMetrics;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
+import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
 import org.apache.cassandra.index.sai.view.IndexViewManager;
 import org.apache.cassandra.index.sai.view.View;
@@ -277,10 +278,24 @@ public class IndexContext
                             .orElse(null);
     }
 
-    public List<Pair<Memtable, RangeIterator<PrimaryKey>>> iteratorsForSearch(QueryContext queryContext, Expression expression, AbstractBounds<PartitionPosition> keyRange, int limit) {
-        return liveMemtables.entrySet()
-                                   .stream()
-                                   .map(e -> Pair.create(e.getKey(), e.getValue().search(queryContext, expression, keyRange, limit))).collect(Collectors.toList());
+
+    public RangeIterator<PrimaryKey> searchMemtable(QueryContext context, Expression e, AbstractBounds<PartitionPosition> keyRange, int limit)
+    {
+        Collection<MemtableIndex> memtables = liveMemtables.values();
+
+        if (memtables.isEmpty())
+        {
+            return RangeIterator.empty();
+        }
+
+        RangeUnionIterator.Builder<PrimaryKey> builder = RangeUnionIterator.builder();
+
+        for (MemtableIndex index : memtables)
+        {
+            builder.add(index.search(context, e, keyRange, limit));
+        }
+
+        return builder.build();
     }
 
     public RangeIterator<PrimaryKey> reorderMemtable(Memtable memtable, QueryContext context, RangeIterator<PrimaryKey> iterator, Expression exp, int limit)

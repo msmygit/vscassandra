@@ -138,7 +138,7 @@ public class SSTableIndex implements SegmentOrdering
         return searchableIndex.maxKey();
     }
 
-    public List<RangeIterator<Long>> searchSSTableRowIds(Expression expression,
+    public List<RangeIterator<PrimaryKey>> searchSSTableRowIds(Expression expression,
                                       AbstractBounds<PartitionPosition> keyRange,
                                       QueryContext context,
                                       boolean defer,

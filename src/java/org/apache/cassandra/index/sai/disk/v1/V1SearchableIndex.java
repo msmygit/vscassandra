@@ -160,13 +160,13 @@ public class V1SearchableIndex implements SearchableIndex
     }
 
     @Override
-    public List<RangeIterator<Long>> search(Expression expression,
+    public List<RangeIterator<PrimaryKey>> search(Expression expression,
                                             AbstractBounds<PartitionPosition> keyRange,
                                             QueryContext context,
                                             boolean defer,
                                             int limit) throws IOException
     {
-        List<RangeIterator<Long>> iterators = new ArrayList<>();
+        List<RangeIterator<PrimaryKey>> iterators = new ArrayList<>();
 
         for (Segment segment : segments)
         {
