@@ -19,14 +19,21 @@
 package org.apache.cassandra.index.sai.plan;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,9 +70,13 @@ import org.apache.cassandra.index.sai.utils.RangeConcatIterator;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
+import org.apache.cassandra.index.sai.utils.TermIterator;
+import org.apache.cassandra.index.sai.view.View;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.Throwables;
 
 import static org.apache.cassandra.index.sai.utils.RangeIntersectionIterator.INTERSECTION_CLAUSE_LIMIT;
@@ -416,12 +427,151 @@ public class QueryController
                                                   clusteringIndexFilter.isReversed());
     }
 
+    private static void releaseQuietly(SSTableIndex index)
+    {
+        try
+        {
+            index.release();
+        }
+        catch (Throwable e)
+        {
+            logger.error(index.getIndexContext().logMessage("Failed to release index on SSTable {}"), index.getSSTable().descriptor, e);
+        }
+    }
+
     /**
      * Used to release all resources and record metrics when query finishes.
      */
     public void finish()
     {
         if (tableQueryMetrics != null) tableQueryMetrics.record(queryContext);
+    }
+
+    /**
+     * Try to reference all SSTableIndexes before querying on disk indexes.
+     *
+     * If we attempt to proceed into {@link TermIterator#build(Expression, Set, AbstractBounds, QueryContext, boolean, int)}
+     * without first referencing all indexes, a concurrent compaction may decrement one or more of their backing
+     * SSTable {@link Ref} instances. This will allow the {@link SSTableIndex} itself to be released and will fail the query.
+     */
+    private Map<Expression, NavigableSet<SSTableIndex>> referenceAndGetView(Operation.OperationType op, Collection<Expression> expressions)
+    {
+        SortedSet<String> indexNames = new TreeSet<>();
+        try
+        {
+            while (true)
+            {
+                List<SSTableIndex> referencedIndexes = new ArrayList<>();
+                boolean failed = false;
+
+                Map<Expression, NavigableSet<SSTableIndex>> view = getView(op, expressions);
+
+                for (SSTableIndex index : view.values().stream().flatMap(Collection::stream).collect(Collectors.toList()))
+                {
+                    indexNames.add(index.getIndexContext().getIndexName());
+
+                    if (index.reference())
+                    {
+                        referencedIndexes.add(index);
+                    }
+                    else
+                    {
+                        failed = true;
+                        break;
+                    }
+                }
+
+                if (failed)
+                {
+                    // TODO: This might be a good candidate for a table/index group metric in the future...
+                    referencedIndexes.forEach(QueryController::releaseQuietly);
+                }
+                else
+                {
+                    return view;
+                }
+            }
+        }
+        finally
+        {
+            Tracing.trace("Querying storage-attached indexes {}", indexNames);
+        }
+    }
+
+    private Map<Expression, NavigableSet<SSTableIndex>> getView(Operation.OperationType op, Collection<Expression> expressions)
+    {
+        // first let's determine the primary expression if op is AND
+        Pair<Expression, NavigableSet<SSTableIndex>> primary = (op == Operation.OperationType.AND) ? calculatePrimary(expressions) : null;
+
+        Map<Expression, NavigableSet<SSTableIndex>> indexes = new HashMap<>();
+        for (Expression e : expressions)
+        {
+            // NO_EQ and non-index column query should only act as FILTER BY for satisfiedBy(Row) method
+            // because otherwise it likely to go through the whole index.
+            if (!e.context.isIndexed() || e.getOp() == Expression.Op.NOT_EQ)
+            {
+                continue;
+            }
+
+            // primary expression, we'll have to add as is
+            if (primary != null && e.equals(primary.left))
+            {
+                indexes.put(primary.left, primary.right);
+
+                continue;
+            }
+
+            View view = e.context.getView();
+
+            NavigableSet<SSTableIndex> readers = new TreeSet<>(SSTableIndex.COMPARATOR);
+            if (primary != null && primary.right.size() > 0)
+            {
+                for (SSTableIndex index : primary.right)
+                    readers.addAll(view.match(index.minKey(), index.maxKey()));
+            }
+            else
+            {
+                readers.addAll(applyScope(view.match(e)));
+            }
+
+            indexes.put(e, readers);
+        }
+
+        return indexes;
+    }
+
+    private Pair<Expression, NavigableSet<SSTableIndex>> calculatePrimary(Collection<Expression> expressions)
+    {
+        Expression expression = null;
+        NavigableSet<SSTableIndex> primaryIndexes = null;
+
+        for (Expression e : expressions)
+        {
+            if (!e.context.isIndexed())
+                continue;
+
+            View view = e.context.getView();
+
+            NavigableSet<SSTableIndex> indexes = new TreeSet<>(SSTableIndex.COMPARATOR);
+            indexes.addAll(applyScope(view.match(e)));
+
+            if (expression == null || primaryIndexes.size() > indexes.size())
+            {
+                primaryIndexes = indexes;
+                expression = e;
+            }
+        }
+
+        return expression == null ? null : Pair.create(expression, primaryIndexes);
+    }
+
+    private Set<SSTableIndex> applyScope(Set<SSTableIndex> indexes)
+    {
+        return Sets.filter(indexes, index -> {
+            SSTableReader sstable = index.getSSTable();
+
+            return mergeRange.left.compareTo(sstable.last) <= 0 && (mergeRange.right.isMinimum() || sstable.first.compareTo(mergeRange.right) <= 0);
+        });
     }
 
     /**
