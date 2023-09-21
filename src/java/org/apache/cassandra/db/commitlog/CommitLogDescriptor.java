@@ -216,7 +216,7 @@ public class CommitLogDescriptor
                 return MessagingService.VERSION_30;
             case VERSION_40:
             case VERSION_DSE_68:
-                return MessagingService.VERSION_40;
+                return MessagingService.VERSION_DSE_68;
             case VERSION_SG_10:
                 return MessagingService.VERSION_SG_10;
             default:
