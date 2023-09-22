@@ -45,7 +45,7 @@ public class VectorTester extends SAITester
         // the non-brute-force path gets called during tests (which mostly involve small numbers of rows)
         var n = getRandom().nextIntBetween(0, 4);
         var ipb = InvokePointBuilder.newInvokePoint()
-                                    .onClass("org.apache.cassandra.index.sai.disk.v2.VectorIndexSearcher")
+                                    .onClass("org.apache.cassandra.index.sai.disk.v2.V2VectorIndexSearcher")
                                     .onMethod("limitToTopResults")
                                     .atEntry();
         var ab = ActionBuilder.newActionBuilder()
