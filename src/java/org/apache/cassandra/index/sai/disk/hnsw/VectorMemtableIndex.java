@@ -51,6 +51,7 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.concurrent.OpOrder;
@@ -183,8 +184,10 @@ public class VectorMemtableIndex implements MemtableIndex
                 return RangeIterator.emptyKeys();
 
             int bruteForceRows = getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
-            logger.debug("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
+            logger.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
                          resultKeys.size(), bruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+            Tracing.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
+                          resultKeys.size(), bruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             if (resultKeys.size() < max(limit, bruteForceRows))
                 return new ReorderingRangeIterator(new PriorityQueue<>(resultKeys));
             else
@@ -196,9 +199,10 @@ public class VectorMemtableIndex implements MemtableIndex
             bits = queryContext.bitsetForShadowedPrimaryKeys(graph);
         }
 
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        queryContext.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -214,6 +218,10 @@ public class VectorMemtableIndex implements MemtableIndex
         }
 
         int maxBruteForceRows = getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
+        logger.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
+                     results.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+        Tracing.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
+                      results.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
         if (results.size() <= maxBruteForceRows)
         {
             if (results.isEmpty())
@@ -223,9 +231,10 @@ public class VectorMemtableIndex implements MemtableIndex
 
         float[] qv = exp.lower.value.vector;
         var bits = new KeyFilteringBits(results);
-        var keyQueue = graph.search(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
+        context.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -245,6 +254,7 @@ public class VectorMemtableIndex implements MemtableIndex
     {
         // This method is only used when merging an in-memory index with a RowMapping. This is done a different
         // way with the graph using the writeData method below.
+        // only used by non-vector index
         throw new UnsupportedOperationException();
     }
 
