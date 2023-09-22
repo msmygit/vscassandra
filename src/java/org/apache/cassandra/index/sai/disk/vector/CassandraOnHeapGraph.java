@@ -55,7 +55,9 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
+import org.apache.cassandra.index.sai.utils.ScoredPrimaryKey;
 import org.apache.cassandra.io.util.SequentialWriter;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
@@ -243,13 +245,12 @@ public class CassandraOnHeapGraph<T>
     }
 
     /**
-     * @return keys (PrimaryKey or segment row id) associated with the topK vectors near the query
+     * @return keys associated with the topK vectors near the query
      */
-    public PriorityQueue<T> search(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
+    public PriorityQueue<PrimaryKey> searchScoredKeys(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
     {
         validateIndexable(queryVector, similarityFunction);
-
-        // search() errors out when an empty graph is passed to it
+        // VSTODO remove this block after migrating to jvector
         if (vectorValues.size() == 0)
             return new PriorityQueue<>();
 
@@ -263,10 +264,18 @@ public class CassandraOnHeapGraph<T>
                                           builder.getGraph(),
                                           bits);
         var a = result.getNodes();
-        PriorityQueue<T> keyQueue = new PriorityQueue<>();
+        PriorityQueue<PrimaryKey> keyQueue = new PriorityQueue<>();
         for (int i = 0; i < a.length; i++)
-            keyQueue.addAll(keysFromOrdinal(a[i].node));
-        return keyQueue;
+        {
+            int node = a[i].node;
+            float score = a[i].score;
+            Collection<T> keys = keysFromOrdinal(node);
+            for (T key : keys)
+            {
+                assert key instanceof PrimaryKey;
+                keyQueue.add(ScoredPrimaryKey.create((PrimaryKey) key, score));
+            }
+        }        return keyQueue;
     }
 
     public SegmentMetadata.ComponentMetadataMap writeData(IndexDescriptor indexDescriptor, IndexContext indexContext, Function<T, Integer> postingTransformer) throws IOException

@@ -16,27 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.disk.vector;
-
-import java.io.IOException;
-
-import io.github.jbellis.jvector.util.Bits;
-import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.PostingList;
-import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
+package org.apache.cassandra.index.sai.utils;
 
 /**
- * A common interface between Lucene and JVector graph indexes
+ * A custom implementation of {@link java.util.function.Function} that avoids boxing. Similar to
+ * {@link java.util.function.ToDoubleFunction}, but for float values.
+ * @param <T> the input value type
  */
-public interface JVectorLuceneOnDiskGraph extends AutoCloseable
+public interface ToFloatFunction<T>
 {
-    long ramBytesUsed();
-
-    int size();
-
-    OnDiskOrdinalsMap.OrdinalsView getOrdinalsView() throws IOException;
-
-    PostingList search(float[] queryVector, int limit, Bits bits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder);
-
-    void close() throws IOException;
+    float applyAsFloat(T value);
 }

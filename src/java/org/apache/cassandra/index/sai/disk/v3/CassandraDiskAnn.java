@@ -44,6 +44,7 @@ import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
+import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
 import org.apache.cassandra.io.util.FileHandle;
 
 public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
@@ -98,7 +99,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
      */
     // VSTODO make this return something with a size
     @Override
-    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context)
+    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
@@ -121,19 +122,21 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
                                      reRanker,
                                      topK,
                                      ordinalsMap.ignoringDeleted(acceptBits));
-        return annRowIdsToPostings(result.getNodes());
+        return annRowIdsToPostings(result.getNodes(), sstableRowIdScoreRecorder);
     }
 
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable
     {
         private final Iterator<NodeScore> it;
         private final OnDiskOrdinalsMap.RowIdsView rowIdsView = ordinalsMap.getRowIdsView();
+        private final RowIdScoreRecorder rowIdScoreRecorder;
 
         private OfInt segmentRowIdIterator = IntStream.empty().iterator();
 
-        public RowIdIterator(NodeScore[] results)
+        public RowIdIterator(NodeScore[] results, RowIdScoreRecorder rowIdScoreRecorder)
         {
             this.it = Arrays.stream(results).iterator();
+            this.rowIdScoreRecorder = rowIdScoreRecorder;
         }
 
         @Override
@@ -141,8 +144,12 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
             while (!segmentRowIdIterator.hasNext() && it.hasNext()) {
                 try
                 {
-                    var ordinal = it.next().node;
-                    segmentRowIdIterator = Arrays.stream(rowIdsView.getSegmentRowIdsMatching(ordinal)).iterator();
+                    NodeScore result = it.next();
+                    var ordinal = result.node;
+                    int[] rowIds = rowIdsView.getSegmentRowIdsMatching(ordinal);
+                    for (int rowId : rowIds)
+                        rowIdScoreRecorder.record(rowId, result.score);
+                    segmentRowIdIterator = Arrays.stream(rowIds).iterator();
                 }
                 catch (IOException e)
                 {
@@ -166,9 +173,9 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         }
     }
 
-    private ReorderingPostingList annRowIdsToPostings(NodeScore[] results)
+    private ReorderingPostingList annRowIdsToPostings(NodeScore[] results, RowIdScoreRecorder rowIdScoreRecorder)
     {
-        try (var iterator = new RowIdIterator(results))
+        try (var iterator = new RowIdIterator(results, rowIdScoreRecorder))
         {
             return new ReorderingPostingList(iterator, results.length);
         }

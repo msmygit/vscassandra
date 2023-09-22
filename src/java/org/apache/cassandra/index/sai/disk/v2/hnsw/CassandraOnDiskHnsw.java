@@ -24,8 +24,10 @@ import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.function.Function;
 import java.util.stream.IntStream;
-
 import javax.annotation.concurrent.NotThreadSafe;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
@@ -39,7 +41,9 @@ import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
+import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.lucene.index.VectorEncoding;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
 import org.apache.lucene.util.hnsw.NeighborQueue;
@@ -47,6 +51,8 @@ import org.apache.lucene.util.hnsw.RandomAccessVectorValues;
 
 public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoCloseable
 {
+    private static final Logger logger = LoggerFactory.getLogger(CassandraOnDiskHnsw.class);
+
     private final Function<QueryContext, VectorsWithCache> vectorsSupplier;
     private final OnDiskOrdinalsMap ordinalsMap;
     private final OnDiskHnswGraph hnsw;
@@ -93,7 +99,8 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
      */
     // VSTODO make this return something with a size
     @Override
-    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context)
+    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context,
+                                        RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
@@ -108,7 +115,9 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
                                              view,
                                              LuceneCompat.bits(ordinalsMap.ignoringDeleted(acceptBits)),
                                              Integer.MAX_VALUE);
-            return annRowIdsToPostings(queue);
+            logger.trace("Visited {} nodes in graph", queue.visitedCount());
+            Tracing.trace("Visited {} nodes in graph", queue.visitedCount());
+            return annRowIdsToPostings(queue, sstableRowIdScoreRecorder);
         }
         catch (IOException e)
         {
@@ -119,13 +128,15 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable
     {
         private final NeighborQueue queue;
+        private final RowIdScoreRecorder rowIdScoreRecorder;
         private final OnDiskOrdinalsMap.RowIdsView rowIdsView = ordinalsMap.getRowIdsView();
 
         private PrimitiveIterator.OfInt segmentRowIdIterator = IntStream.empty().iterator();
 
-        public RowIdIterator(NeighborQueue queue)
+        public RowIdIterator(NeighborQueue queue, RowIdScoreRecorder rowIdScoreRecorder)
         {
             this.queue = queue;
+            this.rowIdScoreRecorder = rowIdScoreRecorder;
         }
 
         @Override
@@ -133,8 +144,12 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
             while (!segmentRowIdIterator.hasNext() && queue.size() > 0) {
                 try
                 {
+                    var score = queue.topScore();
                     var ordinal = queue.pop();
-                    segmentRowIdIterator = Arrays.stream(rowIdsView.getSegmentRowIdsMatching(ordinal)).iterator();
+                    int[] rowIds = rowIdsView.getSegmentRowIdsMatching(ordinal);
+                    for (int rowId : rowIds)
+                        rowIdScoreRecorder.record(rowId, score);
+                    segmentRowIdIterator = Arrays.stream(rowIds).iterator();
                 }
                 catch (IOException e)
                 {
@@ -158,10 +173,11 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
         }
     }
 
-    private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue) throws IOException
+    private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue,
+                                                      RowIdScoreRecorder sstableRowIdScoreRecorder) throws IOException
     {
         int originalSize = queue.size();
-        try (var iterator = new RowIdIterator(queue))
+        try (var iterator = new RowIdIterator(queue, sstableRowIdScoreRecorder))
         {
             return new ReorderingPostingList(iterator, originalSize);
         }
@@ -176,7 +192,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     }
 
     @Override
-    public OnDiskOrdinalsMap.OrdinalsView getOrdinalsView() throws IOException
+    public OnDiskOrdinalsMap.OrdinalsView getOrdinalsView()
     {
         return ordinalsMap.getOrdinalsView();
     }

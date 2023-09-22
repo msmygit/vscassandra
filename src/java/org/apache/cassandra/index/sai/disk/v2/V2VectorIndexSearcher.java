@@ -34,7 +34,9 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
+import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
@@ -50,6 +52,9 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
+import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
+import org.apache.cassandra.io.sstable.SSTableId;
+import org.apache.cassandra.tracing.Tracing;
 
 /**
  * Executes ann search against the graph for an individual index segment.
@@ -60,6 +65,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
     private final JVectorLuceneOnDiskGraph graph;
     private final PrimaryKey.Factory keyFactory;
+    private final SSTableId<?> sstableId;
     private int globalBruteForceRows; // not final so test can inject its own setting
     private final ThreadLocal<SparseFixedBitSet> cachedBitSets;
 
@@ -83,6 +89,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
         this.graph = graph;
         this.keyFactory = PrimaryKey.factory(indexContext.comparator(), indexContext.indexFeatureSet());
         cachedBitSets = ThreadLocal.withInitial(() -> new SparseFixedBitSet(graph.size()));
+        this.sstableId = primaryKeyMapFactory.getSSTableId();
 
         globalBruteForceRows = Integer.MAX_VALUE;
     }
@@ -113,7 +120,8 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             return bitsOrPostingList.postingList();
 
         float[] queryVector = exp.lower.value.vector;
-        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), context);
+        return graph.search(queryVector, limit, bitsOrPostingList.getBits(), context,
+                            context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
     }
 
     /**
@@ -146,8 +154,11 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
             // if num of matches are not bigger than limit, skip ANN
             var nRows = maxSSTableRowId - minSSTableRowId + 1;
-            int mbfr = getMaxBruteForceRows(limit);
-            int maxBruteForceRows = Math.min(globalBruteForceRows, mbfr);
+            int maxBruteForceRows = Math.min(globalBruteForceRows, getMaxBruteForceRows(limit));
+            logger.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
+                         nRows, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+            Tracing.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
+                          nRows, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             if (nRows <= maxBruteForceRows)
             {
                 IntArrayList postings = new IntArrayList(Math.toIntExact(nRows), -1);
@@ -214,8 +225,8 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             // are from our own token range so we can use row ids to order the results by vector similarity.
             var maxSegmentRowId = metadata.toSegmentRowId(metadata.maxSSTableRowId);
             SparseFixedBitSet bits = bitSetForSearch();
-            int mbfr = getMaxBruteForceRows(limit);
-            int[] bruteForceRows = new int[Math.min(globalBruteForceRows, mbfr)];
+            int maxBruteForceRows = Math.min(globalBruteForceRows, getMaxBruteForceRows(limit));
+            int[] bruteForceRows = new int[maxBruteForceRows];
             int n = 0;
             try (var ordinalsView = graph.getOrdinalsView())
             {
@@ -244,6 +255,10 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                     }
                 }
             }
+            logger.trace("SAI materialized {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
+                         n, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+            Tracing.trace("SAI materialized {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
+                          n, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
 
             // if we have a small number of results then let TopK processor do exact NN computation
             if (n < bruteForceRows.length)
@@ -254,9 +269,27 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
             // else ask the index to perform a search limited to the bits we created
             float[] queryVector = exp.lower.value.vector;
-            var results = graph.search(queryVector, limit, bits, context);
+            var results = graph.search(queryVector, limit, bits, context,
+                                       context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
             return toPrimaryKeyIterator(results, context);
         }
+    }
+
+
+    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    {
+        if (postingList == null || postingList.size() == 0)
+            return RangeIterator.emptyKeys();
+
+        IndexSearcherContext searcherContext = new IndexSearcherContext(metadata.minKey,
+                                                                        metadata.maxKey,
+                                                                        metadata.minSSTableRowId,
+                                                                        metadata.maxSSTableRowId,
+                                                                        metadata.segmentRowIdOffset,
+                                                                        queryContext,
+                                                                        postingList.peekable());
+
+        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
     }
 
     @Override
