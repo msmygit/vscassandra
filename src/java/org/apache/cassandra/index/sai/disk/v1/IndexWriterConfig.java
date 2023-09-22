@@ -151,6 +151,12 @@ public class IndexWriterConfig
         return similarityFunction;
     }
 
+    public OptimizeFor getOptimizeFor()
+    {
+        return optimizeFor;
+    }
+
+
     public static IndexWriterConfig fromOptions(String indexName, AbstractType<?> type, Map<String, String> options)
     {
         int minLeaves = DEFAULT_POSTING_LIST_MIN_LEAVES;
@@ -289,11 +295,12 @@ public class IndexWriterConfig
     @Override
     public String toString()
     {
-        return String.format("IndexWriterConfig{%s=%d, %s=%d, %s=%d, %s=%d, %s=%s}",
+        return String.format("IndexWriterConfig{%s=%d, %s=%d, %s=%d, %s=%d, %s=%s, %s=%s}",
                              POSTING_LIST_LVL_SKIP_OPTION, bkdPostingsSkip,
                              POSTING_LIST_LVL_MIN_LEAVES, bkdPostingsMinLeaves,
                              MAXIMUM_NODE_CONNECTIONS, maximumNodeConnections,
                              CONSTRUCTION_BEAM_WIDTH, constructionBeamWidth,
-                             SIMILARITY_FUNCTION, similarityFunction);
+                             SIMILARITY_FUNCTION, similarityFunction,
+                             OPTIMIZE_FOR, optimizeFor);
     }
 }
