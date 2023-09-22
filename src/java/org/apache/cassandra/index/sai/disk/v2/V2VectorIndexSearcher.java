@@ -203,10 +203,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
     private int getMaxBruteForceRows(int limit)
     {
-        // VSTODO the memtable calculation assumes that doing a graph comparison is equally as expensive
-        // as a brute force comparison.  This is not correct but I'm not sure by how much.  2x seems like
-        // a reasonable minimum factor to increase it by.  (This will change for DiskANN.)
-        return 2 * VectorMemtableIndex.getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
+        return (int) (0.25 * VectorMemtableIndex.getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size()));
     }
 
     private SparseFixedBitSet bitSetForSearch()
