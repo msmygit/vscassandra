@@ -37,10 +37,10 @@ import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphIndexBuilder;
 import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.pq.ProductQuantization;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorEncoding;
@@ -357,7 +357,7 @@ public class CassandraOnHeapGraph<T>
         {
             // train PQ and encode
             var pq = ProductQuantization.compute(vectorValues, M, false);
-            // VSTODO assert !vectorValues.isValueShared();
+            assert !vectorValues.isValueShared();
             var encoded = IntStream.range(0, vectorValues.size()).parallel()
                           .mapToObj(i -> pq.encode(vectorValues.vectorValue(i)))
                           .collect(Collectors.toList());

@@ -28,11 +28,11 @@ import java.util.stream.IntStream;
 import javax.annotation.Nullable;
 
 import io.github.jbellis.jvector.disk.CachingGraphIndex;
-import io.github.jbellis.jvector.disk.CompressedVectors;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
 import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
+import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.util.Bits;
 import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
 import org.apache.cassandra.index.sai.IndexContext;

@@ -91,6 +91,12 @@ public class CompactionVectorValues implements RamAwareVectorValues
         return writer.position();
     }
 
+    @Override
+    public boolean isValueShared()
+    {
+        return false;
+    }
+
     public long ramBytesUsed()
     {
         long REF_BYTES = RamUsageEstimator.NUM_BYTES_OBJECT_REF;
