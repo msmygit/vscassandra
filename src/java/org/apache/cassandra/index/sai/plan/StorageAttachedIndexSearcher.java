@@ -111,8 +111,8 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         if (!command.isTopK())
             return queryIndexes.get();
 
-        // VSTODO performance: if there is shadowed primary keys, we have to at least query twice.
-        //  First time to find out there are shawdow keys, second time to find out there are no more shadow keys.
+        // If there are shadowed primary keys, we have to at least query twice.
+        // First time to find out there are shadowed keys, second time to find out there are no more shadow keys.
         while (true)
         {
             long lastShadowedKeysCount = queryContext.getShadowedPrimaryKeys().size();
