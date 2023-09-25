@@ -154,12 +154,12 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             maxSSTableRowId = Math.min(maxSSTableRowId, metadata.maxSSTableRowId);
 
             // if num of matches are not bigger than limit, skip ANN
-            var nRows = maxSSTableRowId - minSSTableRowId + 1;
-            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit));
-            logger.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
-                         nRows, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
-            Tracing.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
-                          nRows, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+            var nRows = Math.toIntExact(maxSSTableRowId - minSSTableRowId + 1);
+            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit, nRows, graph.size()));
+            logger.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes, LIMIT {}",
+                         nRows, maxBruteForceRows, graph.size(), limit);
+            Tracing.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes, LIMIT {}",
+                          nRows, maxBruteForceRows, graph.size(), limit);
             if (nRows <= maxBruteForceRows)
             {
                 IntArrayList postings = new IntArrayList(Math.toIntExact(nRows), -1);
@@ -229,7 +229,11 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             // are from our own token range so we can use row ids to order the results by vector similarity.
             var maxSegmentRowId = metadata.toSegmentRowId(metadata.maxSSTableRowId);
             SparseFixedBitSet bits = bitSetForSearch();
-            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit));
+            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit, maxSegmentRowId, graph.size()));
+            logger.trace("SStable contains {} rows; max brute force rows is {} for sstable index with {} nodes, LIMIT {}",
+                         maxSegmentRowId, maxBruteForceRows, graph.size(), limit);
+            Tracing.trace("SStable contains {} rows; max brute force rows is {} for sstable index with {} nodes, LIMIT {}",
+                          maxSegmentRowId, maxBruteForceRows, graph.size(), limit);
             int[] bruteForceRows = new int[maxBruteForceRows];
             int n = 0;
             try (var ordinalsView = graph.getOrdinalsView())
