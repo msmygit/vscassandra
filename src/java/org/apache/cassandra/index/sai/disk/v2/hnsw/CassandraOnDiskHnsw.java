@@ -115,8 +115,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
                                              view,
                                              LuceneCompat.bits(ordinalsMap.ignoringDeleted(acceptBits)),
                                              Integer.MAX_VALUE);
-            logger.trace("Visited {} nodes in graph", queue.visitedCount());
-            Tracing.trace("Visited {} nodes in graph", queue.visitedCount());
+            Tracing.trace("HNSW search visited {} nodes to return {} results", queue.visitedCount(), queue.size());
             return annRowIdsToPostings(queue, sstableRowIdScoreRecorder);
         }
         catch (IOException e)

@@ -52,9 +52,10 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUtil;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
 import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.tracing.Tracing;
+
+import static java.lang.Math.max;
 
 /**
  * Executes ann search against the graph for an individual index segment.
@@ -154,7 +155,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
             // if num of matches are not bigger than limit, skip ANN
             var nRows = maxSSTableRowId - minSSTableRowId + 1;
-            int maxBruteForceRows = Math.min(globalBruteForceRows, getMaxBruteForceRows(limit));
+            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit));
             logger.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
                          nRows, maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             Tracing.trace("Search range covers {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
@@ -201,9 +202,15 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
         }
     }
 
-    private int getMaxBruteForceRows(int limit)
+    private int maxBruteForceRows(int limit, int nPermittedOrdinals, int graphSize)
     {
-        return (int) (0.25 * VectorMemtableIndex.getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size()));
+        int expectedNodesVisited = VectorMemtableIndex.expectedNodesVisited(limit, nPermittedOrdinals, graphSize);
+        // ANN index will do a bunch of extra work besides the full comparisons (performing PQ similarity for each edge);
+        // brute force from sstable will also do a bunch of extra work (going through trie index to look up row).
+        // VSTODO I'm not sure which one is more expensive (and it depends on things like sstable chunk cache hit ratio)
+        // so I'm leaving it as a 1:1 ratio for now.
+        int expectedComparisons = indexContext.getIndexWriterConfig().getMaximumNodeConnections() * expectedNodesVisited;
+        return max(limit, expectedComparisons);
     }
 
     private SparseFixedBitSet bitSetForSearch()
@@ -222,7 +229,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             // are from our own token range so we can use row ids to order the results by vector similarity.
             var maxSegmentRowId = metadata.toSegmentRowId(metadata.maxSSTableRowId);
             SparseFixedBitSet bits = bitSetForSearch();
-            int maxBruteForceRows = Math.min(globalBruteForceRows, getMaxBruteForceRows(limit));
+            int maxBruteForceRows = Math.min(globalBruteForceRows, maxBruteForceRows(limit));
             int[] bruteForceRows = new int[maxBruteForceRows];
             int n = 0;
             try (var ordinalsView = graph.getOrdinalsView())

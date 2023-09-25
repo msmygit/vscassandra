@@ -58,6 +58,7 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.SAICodecUtils;
 import org.apache.cassandra.index.sai.utils.ScoredPrimaryKey;
 import org.apache.cassandra.io.util.SequentialWriter;
+import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.lucene.util.StringHelper;
@@ -246,7 +247,7 @@ public class CassandraOnHeapGraph<T>
     /**
      * @return keys associated with the topK vectors near the query
      */
-    public PriorityQueue<PrimaryKey> searchScoredKeys(float[] queryVector, int limit, Bits toAccept, int visitedLimit)
+    public PriorityQueue<PrimaryKey> searchScoredKeys(float[] queryVector, int limit, Bits toAccept)
     {
         validateIndexable(queryVector, similarityFunction);
         // VSTODO remove this block after migrating to jvector
@@ -262,6 +263,7 @@ public class CassandraOnHeapGraph<T>
                                           similarityFunction,
                                           builder.getGraph(),
                                           bits);
+        Tracing.trace("ANN search visited {} in-memory nodes to return {} results", result.getVisitedCount(), result.getNodes().length);
         var a = result.getNodes();
         PriorityQueue<PrimaryKey> keyQueue = new PriorityQueue<>();
         for (int i = 0; i < a.length; i++)
@@ -274,7 +276,8 @@ public class CassandraOnHeapGraph<T>
                 assert key instanceof PrimaryKey;
                 keyQueue.add(ScoredPrimaryKey.create((PrimaryKey) key, score));
             }
-        }        return keyQueue;
+        }
+        return keyQueue;
     }
 
     public SegmentMetadata.ComponentMetadataMap writeData(IndexDescriptor indexDescriptor, IndexContext indexContext, Function<T, Integer> postingTransformer) throws IOException

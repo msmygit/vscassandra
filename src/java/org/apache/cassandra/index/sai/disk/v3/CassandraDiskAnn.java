@@ -46,6 +46,7 @@ import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
 import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
 import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.tracing.Tracing;
 
 public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
 {
@@ -122,6 +123,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
                                      reRanker,
                                      topK,
                                      ordinalsMap.ignoringDeleted(acceptBits));
+        Tracing.trace("DiakANN search visited {} nodes to return {} results", result.getVisitedCount(), result.getNodes().length);
         return annRowIdsToPostings(result.getNodes(), sstableRowIdScoreRecorder);
     }
 

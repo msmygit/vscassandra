@@ -178,12 +178,12 @@ public class VectorMemtableIndex implements MemtableIndex
             if (resultKeys.isEmpty())
                 return RangeIterator.emptyKeys();
 
-            int bruteForceRows = getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
-            logger.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
-                         resultKeys.size(), bruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
-            Tracing.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
-                          resultKeys.size(), bruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
-            if (resultKeys.size() < max(limit, bruteForceRows))
+            int bruteForceRows = maxBruteForceRows(limit, resultKeys.size(), graph.size());
+            logger.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
+                         resultKeys.size(), bruteForceRows, graph.size(), limit);
+            Tracing.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
+                          resultKeys.size(), bruteForceRows, graph.size(), limit);
+            if (resultKeys.size() <= bruteForceRows)
                 return new ReorderingRangeIterator(new PriorityQueue<>(resultKeys));
             else
                 bits = new KeyRangeFilteringBits(keyRange, queryContext.bitsetForShadowedPrimaryKeys(graph));
@@ -194,7 +194,7 @@ public class VectorMemtableIndex implements MemtableIndex
             bits = queryContext.bitsetForShadowedPrimaryKeys(graph);
         }
 
-        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
         queryContext.recordScores(keyQueue);
@@ -212,11 +212,11 @@ public class VectorMemtableIndex implements MemtableIndex
                 results.add(key);
         }
 
-        int maxBruteForceRows = getMaxBruteForceRows(limit, indexContext.getIndexWriterConfig().getMaximumNodeConnections(), graph.size());
-        logger.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
-                     results.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
-        Tracing.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes of degree {}, LIMIT {}",
-                      results.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
+        int maxBruteForceRows = maxBruteForceRows(limit, results.size(), graph.size());
+        logger.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
+                     results.size(), maxBruteForceRows, graph.size(), limit);
+        Tracing.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
+                      results.size(), maxBruteForceRows, graph.size(), limit);
         if (results.size() <= maxBruteForceRows)
         {
             if (results.isEmpty())
@@ -226,22 +226,33 @@ public class VectorMemtableIndex implements MemtableIndex
 
         float[] qv = exp.lower.value.vector;
         var bits = new KeyFilteringBits(results);
-        var keyQueue = graph.searchScoredKeys(qv, limit, bits, Integer.MAX_VALUE);
+        var keyQueue = graph.searchScoredKeys(qv, limit, bits);
         if (keyQueue.isEmpty())
             return RangeIterator.emptyKeys();
         context.recordScores(keyQueue);
         return new ReorderingRangeIterator(keyQueue);
     }
 
-    public static int getMaxBruteForceRows(int limit, int M, int graphSize)
+    private int maxBruteForceRows(int limit, int nPermittedOrdinals, int graphSize)
+    {
+        int expectedNodesVisited = expectedNodesVisited(limit, nPermittedOrdinals, graphSize);
+        int expectedComparisons = indexContext.getIndexWriterConfig().getMaximumNodeConnections() * expectedNodesVisited;
+        // in-memory comparisons are cheaper than pulling a row off disk and then comparing
+        // VSTODO this is dramatically oversimplified
+        // larger dimension should increase this, because comparisons are more expensive
+        // lower chunk cache hit ratio should decrease this, because loading rows is more expensive
+        double memoryToDiskFactor = 0.25;
+        return (int) max(limit, memoryToDiskFactor * expectedComparisons);
+    }
+
+    public static int expectedNodesVisited(int limit, int nPermittedOrdinals, int graphSize)
     {
         // constants are computed by Code Interpreter based on observed comparison counts in tests
-        // https://chat.openai.com/share/29a25377-786f-4690-b146-12acb6acb75b
-        int expectedNodesVisited = min(graphSize, (int) (0.26 * log(graphSize) * M * pow(limit, 0.7933)));
-        int expectedComparisons = M * expectedNodesVisited;
-        // 0.8 because that's approximately our stdev -- we'd rather underestimate, since
-        // that results in doing more actual searches
-        return (int) max(limit, 0.8 * expectedComparisons);
+        // https://chat.openai.com/share/2b1d7195-b4cf-4a45-8dce-1b9b2f893c75
+        var K = limit;
+        var B = nPermittedOrdinals;
+        var N = graphSize;
+        return (int) (0.7 * pow(log(N), 2) * pow(N, 0.33) * pow(log(K), 2) * pow(log((double) N / B), 2) / pow(B, 0.13));
     }
 
     @Override
