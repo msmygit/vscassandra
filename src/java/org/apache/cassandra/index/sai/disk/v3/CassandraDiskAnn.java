@@ -31,6 +31,7 @@ import io.github.jbellis.jvector.disk.CachingGraphIndex;
 import io.github.jbellis.jvector.disk.OnDiskGraphIndex;
 import io.github.jbellis.jvector.graph.GraphSearcher;
 import io.github.jbellis.jvector.graph.NeighborSimilarity;
+import io.github.jbellis.jvector.graph.SearchResult;
 import io.github.jbellis.jvector.graph.SearchResult.NodeScore;
 import io.github.jbellis.jvector.pq.CompressedVectors;
 import io.github.jbellis.jvector.util.Bits;
@@ -40,7 +41,7 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.v1.postings.VectorPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
@@ -100,7 +101,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
      */
     // VSTODO make this return something with a size
     @Override
-    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder)
+    public VectorPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
@@ -124,7 +125,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
                                      topK,
                                      ordinalsMap.ignoringDeleted(acceptBits));
         Tracing.trace("DiakANN search visited {} nodes to return {} results", result.getVisitedCount(), result.getNodes().length);
-        return annRowIdsToPostings(result.getNodes(), sstableRowIdScoreRecorder);
+        return annRowIdsToPostings(result, sstableRowIdScoreRecorder);
     }
 
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable
@@ -175,11 +176,11 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         }
     }
 
-    private ReorderingPostingList annRowIdsToPostings(NodeScore[] results, RowIdScoreRecorder rowIdScoreRecorder)
+    private VectorPostingList annRowIdsToPostings(SearchResult results, RowIdScoreRecorder rowIdScoreRecorder)
     {
-        try (var iterator = new RowIdIterator(results, rowIdScoreRecorder))
+        try (var iterator = new RowIdIterator(results.getNodes(), rowIdScoreRecorder))
         {
-            return new ReorderingPostingList(iterator, results.length);
+            return new VectorPostingList(iterator, results.getNodes().length, results.getVisitedCount());
         }
     }
 

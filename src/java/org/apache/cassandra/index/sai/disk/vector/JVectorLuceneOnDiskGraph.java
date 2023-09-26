@@ -22,7 +22,7 @@ import java.io.IOException;
 
 import io.github.jbellis.jvector.util.Bits;
 import org.apache.cassandra.index.sai.QueryContext;
-import org.apache.cassandra.index.sai.disk.PostingList;
+import org.apache.cassandra.index.sai.disk.v1.postings.VectorPostingList;
 import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
 
 /**
@@ -36,7 +36,7 @@ public interface JVectorLuceneOnDiskGraph extends AutoCloseable
 
     OnDiskOrdinalsMap.OrdinalsView getOrdinalsView() throws IOException;
 
-    PostingList search(float[] queryVector, int limit, Bits bits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder);
+    VectorPostingList search(float[] queryVector, int limit, Bits bits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder);
 
     void close() throws IOException;
 }

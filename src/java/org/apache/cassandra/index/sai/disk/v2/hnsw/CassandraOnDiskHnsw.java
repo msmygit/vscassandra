@@ -37,7 +37,7 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
-import org.apache.cassandra.index.sai.disk.v1.postings.ReorderingPostingList;
+import org.apache.cassandra.index.sai.disk.v1.postings.VectorPostingList;
 import org.apache.cassandra.index.sai.disk.vector.CassandraOnHeapGraph;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.disk.vector.OnDiskOrdinalsMap;
@@ -97,10 +97,9 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     /**
      * @return Row IDs associated with the topK vectors near the query
      */
-    // VSTODO make this return something with a size
     @Override
-    public ReorderingPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context,
-                                        RowIdScoreRecorder sstableRowIdScoreRecorder)
+    public VectorPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context,
+                                    RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
@@ -172,13 +171,13 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
         }
     }
 
-    private ReorderingPostingList annRowIdsToPostings(NeighborQueue queue,
-                                                      RowIdScoreRecorder sstableRowIdScoreRecorder) throws IOException
+    private VectorPostingList annRowIdsToPostings(NeighborQueue queue,
+                                                  RowIdScoreRecorder sstableRowIdScoreRecorder) throws IOException
     {
         int originalSize = queue.size();
         try (var iterator = new RowIdIterator(queue, sstableRowIdScoreRecorder))
         {
-            return new ReorderingPostingList(iterator, originalSize);
+            return new VectorPostingList(iterator, originalSize, queue.visitedCount());
         }
     }
 

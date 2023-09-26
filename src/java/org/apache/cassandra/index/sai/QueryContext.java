@@ -24,18 +24,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.NavigableSet;
-import java.util.Set;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import io.github.jbellis.jvector.util.Bits;
 import com.carrotsearch.hppc.LongFloatHashMap;
 import com.carrotsearch.hppc.ObjectFloatHashMap;
 import com.carrotsearch.hppc.ObjectFloatMap;
+import io.github.jbellis.jvector.util.Bits;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
@@ -44,8 +44,8 @@ import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RowIdScoreRecorder;
-import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.index.sai.utils.ScoredPrimaryKey;
+import org.apache.cassandra.io.sstable.SSTableId;
 
 /**
  * Tracks state relevant to the execution of a single query, including metrics and timeout monitoring.
