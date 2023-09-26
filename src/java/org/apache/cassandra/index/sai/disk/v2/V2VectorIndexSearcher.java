@@ -286,7 +286,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             if (rowIds.size() <= maxBruteForceRows)
             {
                 var results = new VectorPostingList(rowIds.intStream().iterator(), rowIds.size(), 0);
-                return toPrimaryKeyIterator(results, context);
+                return toPrimaryKeyIterator(results, context, true);
             }
 
             // else ask the index to perform a search limited to the bits we created
@@ -294,11 +294,11 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             var results = graph.search(queryVector, limit, bits, context,
                                        context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
             updateExpectedNodes(results.getVisitedCount(), VectorMemtableIndex.expectedNodesVisited(limit, maxSegmentRowId, graph.size()));
-            return toPrimaryKeyIterator(results, context);
+            return toPrimaryKeyIterator(results, context, false);
         }
     }
 
-    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext, boolean isBruteForce) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyKeys();
@@ -311,7 +311,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                                                                         queryContext,
                                                                         postingList.peekable());
 
-        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
+        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext, isBruteForce);
     }
 
     @Override
