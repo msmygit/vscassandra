@@ -44,6 +44,7 @@ import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
 import org.apache.cassandra.index.sai.disk.v1.postings.VectorPostingList;
 import org.apache.cassandra.index.sai.disk.v2.hnsw.CassandraOnDiskHnsw;
 import org.apache.cassandra.index.sai.disk.vector.JVectorLuceneOnDiskGraph;
+import org.apache.cassandra.index.sai.disk.vector.OptimizeFor;
 import org.apache.cassandra.index.sai.disk.vector.VectorMemtableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.ArrayPostingList;
@@ -57,6 +58,7 @@ import org.apache.cassandra.tracing.Tracing;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
+import static java.lang.Math.pow;
 
 /**
  * Executes ann search against the graph for an individual index segment.
@@ -118,16 +120,30 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
         if (exp.getOp() != Expression.Op.ANN)
             throw new IllegalArgumentException(indexContext.logMessage("Unsupported expression during ANN index query: " + exp));
 
-        BitsOrPostingList bitsOrPostingList = bitsOrPostingListForKeyRange(context, keyRange, limit);
+        int topK = topKFor(limit);
+        BitsOrPostingList bitsOrPostingList = bitsOrPostingListForKeyRange(context, keyRange, topK);
         if (bitsOrPostingList.skipANN())
             return bitsOrPostingList.postingList();
 
         float[] queryVector = exp.lower.value.vector;
-        var vectorPostings = graph.search(queryVector, limit, bitsOrPostingList.getBits(), context,
+        var vectorPostings = graph.search(queryVector, topK, limit, bitsOrPostingList.getBits(), context,
                                           context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
         if (bitsOrPostingList.expectedNodesVisited >= 0)
             updateExpectedNodes(vectorPostings.getVisitedCount(), bitsOrPostingList.expectedNodesVisited);
         return vectorPostings;
+    }
+
+    /**
+     * If we are optimizing for recall, ask the index to search for more than `limit` results,
+     * which (since it will search deeper in the graph) will tend to surface slightly better
+     * candidates in the process.
+     */
+    private int topKFor(int limit)
+    {
+        var n = indexContext.getIndexWriterConfig().getOptimizeFor() == OptimizeFor.LATENCY
+                ? 1
+                : 0.271 + 9.729 * pow(limit, -0.375); // scales smoothly from n=10 at limit=1 to n=2 at limit=100 to n=1 at limit=1000
+        return (int) (n * limit);
     }
 
     /**
@@ -278,20 +294,18 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             }
 
             // if we have a small number of results then let TopK processor do exact NN computation
-            var maxBruteForceRows = min(globalBruteForceRows, maxBruteForceRows(limit, rowIds.size(), graph.size()));
+            int topK = topKFor(limit);
+            var maxBruteForceRows = min(globalBruteForceRows, maxBruteForceRows(topK, rowIds.size(), graph.size()));
             logger.trace("SAI materialized {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
                          rowIds.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             Tracing.trace("SAI materialized {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
                           rowIds.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             if (rowIds.size() <= maxBruteForceRows)
-            {
-                var results = new VectorPostingList(rowIds.intStream().iterator(), rowIds.size(), 0);
-                return toPrimaryKeyIterator(results, context);
-            }
+                return toPrimaryKeyIterator(new ArrayPostingList(rowIds.toIntArray()), context);
 
             // else ask the index to perform a search limited to the bits we created
             float[] queryVector = exp.lower.value.vector;
-            var results = graph.search(queryVector, limit, bits, context,
+            var results = graph.search(queryVector, topK, limit, bits, context,
                                        context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
             updateExpectedNodes(results.getVisitedCount(), VectorMemtableIndex.expectedNodesVisited(limit, maxSegmentRowId, graph.size()));
             return toPrimaryKeyIterator(results, context);

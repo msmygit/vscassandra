@@ -98,7 +98,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
      * @return Row IDs associated with the topK vectors near the query
      */
     @Override
-    public VectorPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context,
+    public VectorPostingList search(float[] queryVector, int topK, int limit, Bits acceptBits, QueryContext context,
                                     RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
@@ -115,7 +115,7 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
                                              LuceneCompat.bits(ordinalsMap.ignoringDeleted(acceptBits)),
                                              Integer.MAX_VALUE);
             Tracing.trace("HNSW search visited {} nodes to return {} results", queue.visitedCount(), queue.size());
-            return annRowIdsToPostings(queue, sstableRowIdScoreRecorder);
+            return annRowIdsToPostings(queue, limit, sstableRowIdScoreRecorder);
         }
         catch (IOException e)
         {
@@ -172,12 +172,12 @@ public class CassandraOnDiskHnsw implements JVectorLuceneOnDiskGraph, AutoClosea
     }
 
     private VectorPostingList annRowIdsToPostings(NeighborQueue queue,
+                                                  int limit,
                                                   RowIdScoreRecorder sstableRowIdScoreRecorder) throws IOException
     {
-        int originalSize = queue.size();
         try (var iterator = new RowIdIterator(queue, sstableRowIdScoreRecorder))
         {
-            return new VectorPostingList(iterator, originalSize, queue.visitedCount());
+            return new VectorPostingList(iterator, limit, queue.visitedCount());
         }
     }
 

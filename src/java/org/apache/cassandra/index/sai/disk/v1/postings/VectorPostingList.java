@@ -33,16 +33,13 @@ public class VectorPostingList implements PostingList
     private final int size;
     private final int visitedCount;
 
-    public VectorPostingList(PrimitiveIterator.OfInt source, int estimatedSize, int visitedCount)
+    public VectorPostingList(PrimitiveIterator.OfInt source, int limit, int visitedCount)
     {
         this.visitedCount = visitedCount;
-        segmentRowIds = new LongHeap(Math.max(estimatedSize, 1));
+        segmentRowIds = new LongHeap(Math.max(limit, 1));
         int n = 0;
-        while (source.hasNext())
-        {
+        while (source.hasNext() && n++ < limit)
             segmentRowIds.push(source.nextInt());
-            n++;
-        }
         this.size = n;
     }
 

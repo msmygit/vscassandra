@@ -98,10 +98,16 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
 
     /**
      * @return Row IDs associated with the topK vectors near the query
+     *
+     * @param queryVector the query vector
+     * @param topK the number of results to look for in the index (>= limit)
+     * @param limit the maximum number of results to return
+     * @param acceptBits a Bits indicating which row IDs are acceptable, or null if no constraints
+     * @param context unused (vestige from HNSW, retained in signature to allow calling both easily)
+     * @param sstableRowIdScoreRecorder for caching similarity scores
      */
-    // VSTODO make this return something with a size
     @Override
-    public VectorPostingList search(float[] queryVector, int topK, Bits acceptBits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder)
+    public VectorPostingList search(float[] queryVector, int topK, int limit, Bits acceptBits, QueryContext context, RowIdScoreRecorder sstableRowIdScoreRecorder)
     {
         CassandraOnHeapGraph.validateIndexable(queryVector, similarityFunction);
 
@@ -125,7 +131,7 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
                                      topK,
                                      ordinalsMap.ignoringDeleted(acceptBits));
         Tracing.trace("DiakANN search visited {} nodes to return {} results", result.getVisitedCount(), result.getNodes().length);
-        return annRowIdsToPostings(result, sstableRowIdScoreRecorder);
+        return annRowIdsToPostings(result, limit, sstableRowIdScoreRecorder);
     }
 
     private class RowIdIterator implements PrimitiveIterator.OfInt, AutoCloseable
@@ -176,11 +182,11 @@ public class CassandraDiskAnn implements JVectorLuceneOnDiskGraph, AutoCloseable
         }
     }
 
-    private VectorPostingList annRowIdsToPostings(SearchResult results, RowIdScoreRecorder rowIdScoreRecorder)
+    private VectorPostingList annRowIdsToPostings(SearchResult results, int limit, RowIdScoreRecorder rowIdScoreRecorder)
     {
         try (var iterator = new RowIdIterator(results.getNodes(), rowIdScoreRecorder))
         {
-            return new VectorPostingList(iterator, results.getNodes().length, results.getVisitedCount());
+            return new VectorPostingList(iterator, limit, results.getVisitedCount());
         }
     }
 

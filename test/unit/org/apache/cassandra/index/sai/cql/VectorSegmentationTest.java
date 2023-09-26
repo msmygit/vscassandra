@@ -109,15 +109,6 @@ public class VectorSegmentationTest extends VectorTester
         assertThat(recall).isGreaterThanOrEqualTo(0.99);
     }
 
-    protected Vector<Float> vector(float[] values)
-    {
-        Float[] floats = new Float[values.length];
-        for (int i = 0; i < values.length; i++)
-            floats[i] = values[i];
-
-        return new Vector<>(floats);
-    }
-
     private float[] nextVector()
     {
         float[] rawVector = new float[dimension];
