@@ -245,12 +245,15 @@ public class VectorMemtableIndex implements MemtableIndex
         return (int) max(limit, memoryToDiskFactor * expectedComparisons);
     }
 
+    /**
+     * All parameters must be greater than zero.  nPermittedOrdinals may be larger than graphSize.
+     */
     public static int expectedNodesVisited(int limit, int nPermittedOrdinals, int graphSize)
     {
         // constants are computed by Code Interpreter based on observed comparison counts in tests
         // https://chat.openai.com/share/2b1d7195-b4cf-4a45-8dce-1b9b2f893c75
         var K = limit;
-        var B = nPermittedOrdinals;
+        var B = min(nPermittedOrdinals, graphSize);
         var N = graphSize;
         return (int) (0.7 * pow(log(N), 2) * pow(N, 0.33) * pow(log(K), 2) * pow(log((double) N / B), 2) / pow(B, 0.13));
     }
