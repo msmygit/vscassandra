@@ -301,18 +301,18 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             Tracing.trace("SAI materialized {} rows; max brute force rows is {} for sstable index with {} nodes of degree {}, LIMIT {}",
                           rowIds.size(), maxBruteForceRows, graph.size(), indexContext.getIndexWriterConfig().getMaximumNodeConnections(), limit);
             if (rowIds.size() <= maxBruteForceRows)
-                return toPrimaryKeyIterator(new ArrayPostingList(rowIds.toIntArray()), context);
+                return toPrimaryKeyIterator(new ArrayPostingList(rowIds.toIntArray()), context, true);
 
             // else ask the index to perform a search limited to the bits we created
             float[] queryVector = exp.lower.value.vector;
             var results = graph.search(queryVector, topK, limit, bits, context,
                                        context.getScoreRecorder(sstableId, metadata.segmentRowIdOffset));
             updateExpectedNodes(results.getVisitedCount(), VectorMemtableIndex.expectedNodesVisited(limit, maxSegmentRowId, graph.size()));
-            return toPrimaryKeyIterator(results, context);
+            return toPrimaryKeyIterator(results, context, false);
         }
     }
 
-    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext, boolean isBruteForce) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyKeys();
@@ -325,7 +325,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                                                                         queryContext,
                                                                         postingList.peekable());
 
-        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
+        return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext, isBruteForce);
     }
 
     @Override
