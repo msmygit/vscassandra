@@ -210,8 +210,6 @@ public class V1OnDiskFormat implements OnDiskFormat
         {
             if (isBuildCompletionMarker(indexComponent))
                 continue;
-            if (!Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum() && isVectorComponent(indexComponent))
-                continue;
 
             try (IndexInput input = indexDescriptor.openPerSSTableInput(indexComponent))
             {
@@ -240,7 +238,8 @@ public class V1OnDiskFormat implements OnDiskFormat
     {
         if (isBuildCompletionMarker(component))
             return true;
-        if (!Version.LATEST.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum() && context.isVector())
+        // starting with v3, vector components include proper headers and checksum; skip for earlier versions
+        if (!descriptor.version.onDiskFormat().indexFeatureSet().hasVectorIndexChecksum() && isVectorComponent(component))
             return true;
 
         try (IndexInput input = descriptor.openPerIndexInput(component, context))
