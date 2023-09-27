@@ -63,7 +63,7 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.ObjectSizes;
 import org.apache.lucene.util.StringHelper;
 
-import static java.lang.Math.min;
+import static java.lang.Math.max;
 
 public class CassandraOnHeapGraph<T>
 {
@@ -349,7 +349,7 @@ public class CassandraOnHeapGraph<T>
     {
         // VSTODO ideally we should make this dynamic based on observed performance
         // currently this is hardcoded so that ada002 1536-dimension vectors get quantized harder
-        int M = vectorValues.dimension() <= 1024 ? min(1, vectorValues.dimension() / 4) : vectorValues.dimension() / 8;
+        int M = vectorValues.dimension() <= 1024 ? max(1, vectorValues.dimension() / 4) : vectorValues.dimension() / 8;
         // don't bother with PQ if there are fewer than 1K vectors
         writer.writeBoolean(vectorValues.size() >= 1024);
         if (vectorValues.size() < 1024)
