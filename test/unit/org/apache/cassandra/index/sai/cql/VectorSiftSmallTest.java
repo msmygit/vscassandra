@@ -49,7 +49,7 @@ public class VectorSiftSmallTest extends VectorTester
 
         // Create table and index
         createTable("CREATE TABLE %s (pk int, val vector<float, 128>, PRIMARY KEY(pk))");
-        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex' WITH OPTIONS = {'optimize_for': 'recall'}");
         waitForIndexQueryable();
 
         insertVectors(baseVectors);
@@ -58,7 +58,7 @@ public class VectorSiftSmallTest extends VectorTester
 
         flush();
         var diskRecall = testRecall(queryVectors, groundTruth);
-        assertTrue("Disk recall is " + diskRecall, diskRecall > 0.95);
+        assertTrue("Disk recall is " + diskRecall, diskRecall > 0.975);
     }
 
     public static ArrayList<float[]> readFvecs(String filePath) throws IOException
