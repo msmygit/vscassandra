@@ -81,19 +81,7 @@ public interface IndexFeatureSet
         public IndexFeatureSet complete()
         {
             complete = true;
-            return new IndexFeatureSet()
-            {
-                @Override
-                public boolean isRowAware()
-                {
-                    return isRowAware;
-                }
-                @Override
-                public boolean hasVectorIndexChecksum()
-                {
-                    return hasVectorIndexChecksum;
-                }
-            };
+            return Version.LATEST.onDiskFormat().indexFeatureSet();
         }
     }
 }
