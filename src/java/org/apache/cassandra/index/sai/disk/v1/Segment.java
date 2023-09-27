@@ -32,7 +32,6 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -71,7 +70,8 @@ public class Segment implements Closeable, SegmentOrdering
         this.indexFiles = indexFiles;
         this.metadata = metadata;
 
-        this.index = Version.LATEST.onDiskFormat().newIndexSearcher(sstableContext, indexContext, indexFiles, metadata);
+        var format = sstableContext.indexDescriptor.version.onDiskFormat();
+        this.index = format.newIndexSearcher(sstableContext, indexContext, indexFiles, metadata);
     }
 
     @VisibleForTesting
