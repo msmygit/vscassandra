@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
+import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.IndexSearcher;
 import org.apache.cassandra.index.sai.disk.v1.PerIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.SegmentMetadata;
@@ -45,6 +46,27 @@ public class V3OnDiskFormat extends V2OnDiskFormat
                                                                                IndexComponent.PQ,
                                                                                IndexComponent.TERMS_DATA,
                                                                                IndexComponent.POSTING_LISTS);
+
+    private static final IndexFeatureSet v3IndexFeatureSet = new IndexFeatureSet()
+    {
+        @Override
+        public boolean isRowAware()
+        {
+            return true;
+        }
+
+        @Override
+        public boolean hasVectorIndexChecksum()
+        {
+            return false;
+        }
+    };
+
+    @Override
+    public IndexFeatureSet indexFeatureSet()
+    {
+        return v3IndexFeatureSet;
+    }
 
     @Override
     public IndexSearcher newIndexSearcher(SSTableContext sstableContext,
