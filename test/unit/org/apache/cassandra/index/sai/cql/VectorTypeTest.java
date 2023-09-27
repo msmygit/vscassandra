@@ -209,6 +209,27 @@ public class VectorTypeTest extends VectorTester
     }
 
     @Test
+    public void testWidePartition() throws Throwable
+    {
+        createTable("CREATE TABLE %s (pk int, i int, j int, v vector<float, 3>, PRIMARY KEY(pk, i))");
+        createIndex("CREATE CUSTOM INDEX ON %s(j) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(v) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        for (int pk = 0; pk < 10; pk++)
+            for (int i = 0; i < 10; i++)
+                execute("INSERT INTO %s (pk, i, j, v) VALUES (?, ?, ?, ?)",
+                        pk, i, i, vector((float) i, (float) i, getRandom().nextFloat()));
+
+        flush();
+        compact();
+
+        var result = execute("SELECT * FROM %s WHERE pk=1 AND j>=5");
+        makeRowStrings(result).forEach(System.out::println);
+        assertThat(result).hasSize(5);
+    }
+
+    @Test
     public void testTwoPredicatesManyRows() throws Throwable
     {
         createTable("CREATE TABLE %s (pk int, b boolean, v vector<float, 3>, PRIMARY KEY(pk))");
