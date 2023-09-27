@@ -344,7 +344,7 @@ public class CassandraOnHeapGraph<T>
     {
         // VSTODO ideally we should make this dynamic based on observed performance
         // currently this is hardcoded so that ada002 1536-dimension vectors get quantized harder
-        int M = vectorValues.dimension() <= 1024 ? vectorValues.dimension() / 2 : vectorValues.dimension() / 4;
+        int M = vectorValues.dimension() <= 1024 ? vectorValues.dimension() / 4 : vectorValues.dimension() / 8;
         // don't bother with PQ if there are fewer than 1K vectors
         writer.writeBoolean(vectorValues.size() >= 1024);
         if (vectorValues.size() < 1024)
