@@ -120,6 +120,7 @@ public class SegmentFlushTest
         IndexContext indexContext = new IndexContext("ks",
                                                      "cf",
                                                      UTF8Type.instance,
+                                                     Murmur3Partitioner.instance,
                                                      new ClusteringComparator(),
                                                      column,
                                                      IndexTarget.Type.SIMPLE,

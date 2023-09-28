@@ -262,6 +262,7 @@ public class SegmentMergerTest extends SAITester
         IndexContext indexContext = new IndexContext(table.keyspace,
                                                      table.name,
                                                      table.partitionKeyType,
+                                                     table.partitioner,
                                                      table.comparator,
                                                      target.left,
                                                      target.right,

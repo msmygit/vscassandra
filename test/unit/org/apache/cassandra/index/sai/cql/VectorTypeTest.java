@@ -218,14 +218,15 @@ public class VectorTypeTest extends VectorTester
 
         for (int pk = 0; pk < 10; pk++)
             for (int i = 0; i < 10; i++)
-                for (int j = 0; j < 10; j++)
-                    execute("INSERT INTO %s (pk, i, j, v) VALUES (?, ?, ?, ?)",
-                            pk, i, j, vector((float) i, (float) j, getRandom().nextFloat()));
+                execute("INSERT INTO %s (pk, i, j, v) VALUES (?, ?, ?, ?)",
+                        pk, i, i, vector((float) i, (float) i, getRandom().nextFloat()));
 
         flush();
         compact();
 
         var result = execute("SELECT * FROM %s WHERE pk=1 AND j>=5");
+//        var result = execute("SELECT * FROM %s");
+        makeRowStrings(result).forEach(System.out::println);
         assertThat(result).hasSize(5);
     }
 

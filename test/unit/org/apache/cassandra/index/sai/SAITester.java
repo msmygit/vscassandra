@@ -63,6 +63,7 @@ import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.exceptions.RequestFailureReason;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.sai.disk.v1.IndexWriterConfig;
@@ -128,7 +129,7 @@ public class SAITester extends CQLTester
 
     public static final ClusteringComparator EMPTY_COMPARATOR = new ClusteringComparator();
 
-    public static final PrimaryKey.Factory TEST_FACTORY = Version.LATEST.onDiskFormat().primaryKeyFactory(EMPTY_COMPARATOR);
+    public static final PrimaryKey.Factory TEST_FACTORY = Version.LATEST.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance, EMPTY_COMPARATOR);
 
 
     static
@@ -213,6 +214,7 @@ public class SAITester extends CQLTester
         return new IndexContext(cfs.getKeyspaceName(),
                                 cfs.getTableName(),
                                 UTF8Type.instance,
+                                Murmur3Partitioner.instance,
                                 new ClusteringComparator(),
                                 ColumnMetadata.regularColumn("sai", "internal", name, validator),
                                 IndexTarget.Type.SIMPLE,
@@ -225,6 +227,7 @@ public class SAITester extends CQLTester
         return new IndexContext("test_ks",
                                 "test_cf",
                                 UTF8Type.instance,
+                                Murmur3Partitioner.instance,
                                 new ClusteringComparator(),
                                 ColumnMetadata.regularColumn("sai", "internal", name, validator),
                                 IndexTarget.Type.SIMPLE,
@@ -237,6 +240,7 @@ public class SAITester extends CQLTester
         return new IndexContext("test_ks",
                                 "test_cf",
                                 UTF8Type.instance,
+                                Murmur3Partitioner.instance,
                                 new ClusteringComparator(),
                                 ColumnMetadata.regularColumn("sai", "internal", columnName, validator),
                                 IndexTarget.Type.SIMPLE,

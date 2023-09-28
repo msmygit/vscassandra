@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.PartitionAwarePrimaryKeyFactory;
@@ -100,16 +101,17 @@ public interface PrimaryKey extends Comparable<PrimaryKey>
      * Returns a {@link Factory} for creating {@link PrimaryKey} instances. The factory
      * returned is based on the capabilities of the {@link IndexFeatureSet}.
      *
+     * @param partitioner the {@link IPartitioner} used to create keys from comparable bytes
      * @param clusteringComparator the {@link ClusteringComparator} used by the
      *                             {@link RowAwarePrimaryKeyFactory} for clustering comparisons
      * @param indexFeatureSet the {@link IndexFeatureSet} used to decide the type of
      *                        factory to use
      * @return a {@link Factory} for {@link PrimaryKey} creation
      */
-    static Factory factory(ClusteringComparator clusteringComparator, IndexFeatureSet indexFeatureSet)
+    static Factory factory(IPartitioner partitioner, ClusteringComparator clusteringComparator, IndexFeatureSet indexFeatureSet)
     {
-        return indexFeatureSet.isRowAware() ? new RowAwarePrimaryKeyFactory(clusteringComparator)
-                                            : new PartitionAwarePrimaryKeyFactory();
+        return indexFeatureSet.isRowAware() ? new RowAwarePrimaryKeyFactory(partitioner, clusteringComparator)
+                                            : new PartitionAwarePrimaryKeyFactory(partitioner);
     }
 
     /**

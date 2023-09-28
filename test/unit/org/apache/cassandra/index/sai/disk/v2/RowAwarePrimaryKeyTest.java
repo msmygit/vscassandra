@@ -40,7 +40,7 @@ public class RowAwarePrimaryKeyTest extends SAITester
     @Test
     public void testHashCodeForDeffer()
     {
-        var factory = Version.BA.onDiskFormat().primaryKeyFactory(EMPTY_COMPARATOR);
+        var factory = Version.BA.onDiskFormat().primaryKeyFactory(Murmur3Partitioner.instance, EMPTY_COMPARATOR);
 
         // Test relies on this implementation detail
         assertTrue(factory instanceof RowAwarePrimaryKeyFactory);

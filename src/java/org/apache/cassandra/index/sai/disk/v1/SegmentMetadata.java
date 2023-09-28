@@ -220,7 +220,7 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
     {
         try
         {
-            out.writeInt(bytes.length);
+            out.writeVInt(bytes.length);
             out.writeBytes(bytes, 0, bytes.length);
         }
         catch (IOException ioe)

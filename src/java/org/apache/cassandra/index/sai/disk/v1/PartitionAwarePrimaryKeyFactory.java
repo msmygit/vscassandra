@@ -18,15 +18,20 @@
 
 package org.apache.cassandra.index.sai.disk.v1;
 
+import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.db.Clustering;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 /**
  * A partition-aware {@link PrimaryKey.Factory}. This creates {@link PrimaryKey} instances that are
@@ -34,11 +39,24 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  */
 public class PartitionAwarePrimaryKeyFactory implements PrimaryKey.Factory
 {
+    private final IPartitioner partitioner;
+
+    public PartitionAwarePrimaryKeyFactory(IPartitioner partitioner)
+    {
+        this.partitioner = partitioner;
+    }
+
     @Override
     public PrimaryKey createTokenOnly(Token token)
     {
         assert token != null;
         return new PartitionAwarePrimaryKey(token, null, null);
+    }
+
+    @Override
+    public PrimaryKey createPartitionKeyOnly(DecoratedKey partitionKey)
+    {
+        return PrimaryKey.Factory.super.createPartitionKeyOnly(partitionKey);
     }
 
     @Override
@@ -53,6 +71,21 @@ public class PartitionAwarePrimaryKeyFactory implements PrimaryKey.Factory
     {
         assert partitionKey != null;
         return new PartitionAwarePrimaryKey(partitionKey.getToken(), partitionKey, null);
+    }
+
+    @Override
+    public PrimaryKey fromComparableBytes(ByteSource byteSource)
+    {
+        ByteSource.Peekable peekable = ByteSource.peekable(byteSource);
+        ByteSource.Peekable tokenSource = ByteSourceInverse.nextComponentSource(peekable);
+        Token token = partitioner.getTokenFactory().fromComparableBytes(tokenSource, ByteComparable.Version.OSS50);
+
+        ByteSource.Peekable partitionKeySource = ByteSourceInverse.nextComponentSource(peekable);
+
+        ByteBuffer decoratedKey = ByteBuffer.wrap(ByteSourceInverse.getUnescapedBytes(partitionKeySource));
+        DecoratedKey partitionKey = new BufferDecoratedKey(token, decoratedKey);
+
+        return createPartitionKeyOnly(partitionKey);
     }
 
     private class PartitionAwarePrimaryKey implements PrimaryKey

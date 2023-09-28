@@ -29,6 +29,8 @@ import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -42,10 +44,12 @@ import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
  */
 public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
 {
+    private final IPartitioner partitioner;
     private final ClusteringComparator clusteringComparator;
 
-    public RowAwarePrimaryKeyFactory(ClusteringComparator clusteringComparator)
+    public RowAwarePrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator clusteringComparator)
     {
+        this.partitioner = partitioner;
         this.clusteringComparator = clusteringComparator;
     }
 
@@ -79,43 +83,34 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
     }
     /**
      * Create a {@link PrimaryKey} from a {@link ByteSource}. This should only be used with {@link ByteSource} instances
-     * created by calls to {@link PrimaryKey#asComparableBytes(Version)}.
+     * created by calls to {@link PrimaryKey#asComparableBytes(ByteComparable.Version)}.
      */
     public PrimaryKey fromComparableBytes(ByteSource byteSource)
     {
-        if (clusteringComparator.size() > 0)
-        {
-            ByteSource.Peekable peekable = ByteSource.peekable(byteSource);
-            DecoratedKey partitionKey = partitionKeyFromComparableBytes(ByteSourceInverse.nextComponentSource(peekable));
-            Clustering<?> clustering = clusteringFromByteComparable(ByteSourceInverse.nextComponentSource(peekable));
-            return create(partitionKey, clustering);
-        }
-        else
-        {
-            return create(partitionKeyFromComparableBytes(byteSource));
-        }
+        ByteSource.Peekable peekable = ByteSource.peekable(byteSource);
+        ByteSource.Peekable tokenSource = ByteSourceInverse.nextComponentSource(peekable);
+        Token token = partitioner.getTokenFactory().fromComparableBytes(tokenSource, ByteComparable.Version.OSS50);
+
+        ByteSource.Peekable partitionKeySource = ByteSourceInverse.nextComponentSource(peekable);
+
+        ByteBuffer decoratedKey = ByteBuffer.wrap(ByteSourceInverse.getUnescapedBytes(partitionKeySource));
+        DecoratedKey partitionKey = new BufferDecoratedKey(token, decoratedKey);
+
+        ByteSource.Peekable clusteringSource = ByteSourceInverse.nextComponentSource(peekable);
+        Clustering<?> clustering = clusteringFromByteComparable(clusteringSource);
+
+        return create(partitionKey, clustering);
     }
 
     /**
-     * Create a {@link Clustering} from a {@link ByteSource}. This is a separate method because of its use by
-     * the {@link org.apache.cassandra.index.sai.disk.v1.WidePrimaryKeyMap} to create its clustering keys.
+     * Create a {@link Clustering} from a {@link ByteSource}.
      */
-    public Clustering<?> clusteringFromByteComparable(ByteSource byteSource)
+    private Clustering<?> clusteringFromByteComparable(ByteSource byteSource)
     {
         Clustering<?> clustering = clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance, v -> byteSource);
 
         // Clustering is null for static rows
         return (clustering == null) ? Clustering.STATIC_CLUSTERING : clustering;
-    }
-
-    /**
-     * Create a {@link DecoratedKey} from a {@link ByteSource}. This is a separate method because of it's use by
-     * the {@link org.apache.cassandra.index.sai.disk.PrimaryKeyMap} implementations to create partition keys.
-     */
-    public DecoratedKey partitionKeyFromComparableBytes(ByteSource byteSource)
-    {
-        ByteBuffer decoratedKey = ByteBuffer.wrap(ByteSourceInverse.getUnescapedBytes(ByteSource.peekable(byteSource)));
-        return new BufferDecoratedKey(partitioner.getToken(decoratedKey), decoratedKey);
     }
 
     private class RowAwarePrimaryKey implements PrimaryKey

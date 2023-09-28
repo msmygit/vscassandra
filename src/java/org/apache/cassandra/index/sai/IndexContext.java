@@ -56,6 +56,7 @@ import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.AbstractBounds;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
@@ -117,6 +118,7 @@ public class IndexContext
     public IndexContext(@Nonnull String keyspace,
                         @Nonnull String table,
                         @Nonnull AbstractType<?> partitionKeyType,
+                        @Nonnull IPartitioner partitioner,
                         @Nonnull ClusteringComparator clusteringComparator,
                         @Nonnull ColumnMetadata column,
                         @Nonnull IndexTarget.Type indexType,
@@ -138,7 +140,7 @@ public class IndexContext
         this.columnQueryMetrics = isLiteral() ? new ColumnQueryMetrics.TrieIndexMetrics(keyspace, table, getIndexName())
                                               : new ColumnQueryMetrics.BKDIndexMetrics(keyspace, table, getIndexName());
 
-        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(clusteringComparator);
+        this.primaryKeyFactory = Version.LATEST.onDiskFormat().primaryKeyFactory(partitioner, clusteringComparator);
 
         if (config != null)
         {
