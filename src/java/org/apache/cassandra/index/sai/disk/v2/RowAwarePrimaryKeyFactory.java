@@ -18,19 +18,25 @@
 
 package org.apache.cassandra.index.sai.disk.v2;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.apache.cassandra.db.BufferDecoratedKey;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.marshal.ByteBufferAccessor;
+import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 
 /**
  * A row-aware {@link PrimaryKey.Factory}. This creates {@link PrimaryKey} instances that are
@@ -38,10 +44,12 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  */
 public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
 {
+    private final IPartitioner partitioner;
     private final ClusteringComparator clusteringComparator;
 
-    public RowAwarePrimaryKeyFactory(ClusteringComparator clusteringComparator)
+    public RowAwarePrimaryKeyFactory(IPartitioner partitioner, ClusteringComparator clusteringComparator)
     {
+        this.partitioner = partitioner;
         this.clusteringComparator = clusteringComparator;
     }
 
@@ -61,6 +69,48 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
     public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering)
     {
         return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering, null);
+    }
+
+    /**
+     * Create a {@link PrimaryKey} for tables without clustering columns
+     */
+    public PrimaryKey create(DecoratedKey partitionKey)
+    {
+        assert clusteringComparator.size() == 0 : "Cannot create a skinny primary key for a table with clustering columns";
+        assert partitionKey != null : "Cannot create a primary key with a null partition key";
+
+        return create(partitionKey, Clustering.EMPTY);
+    }
+    /**
+     * Create a {@link PrimaryKey} from a {@link ByteSource}. This should only be used with {@link ByteSource} instances
+     * created by calls to {@link PrimaryKey#asComparableBytes(ByteComparable.Version)}.
+     */
+    public PrimaryKey fromComparableBytes(ByteSource byteSource)
+    {
+        ByteSource.Peekable peekable = ByteSource.peekable(byteSource);
+        ByteSource.Peekable tokenSource = ByteSourceInverse.nextComponentSource(peekable);
+        Token token = partitioner.getTokenFactory().fromComparableBytes(tokenSource, ByteComparable.Version.OSS50);
+
+        ByteSource.Peekable partitionKeySource = ByteSourceInverse.nextComponentSource(peekable);
+
+        ByteBuffer decoratedKey = ByteBuffer.wrap(ByteSourceInverse.getUnescapedBytes(partitionKeySource));
+        DecoratedKey partitionKey = new BufferDecoratedKey(token, decoratedKey);
+
+        ByteSource.Peekable clusteringSource = ByteSourceInverse.nextComponentSource(peekable);
+        Clustering<?> clustering = clusteringFromByteComparable(clusteringSource);
+
+        return create(partitionKey, clustering);
+    }
+
+    /**
+     * Create a {@link Clustering} from a {@link ByteSource}.
+     */
+    private Clustering<?> clusteringFromByteComparable(ByteSource byteSource)
+    {
+        Clustering<?> clustering = clusteringComparator.clusteringFromByteComparable(ByteBufferAccessor.instance, v -> byteSource);
+
+        // Clustering is null for static rows
+        return (clustering == null) ? Clustering.STATIC_CLUSTERING : clustering;
     }
 
     private class RowAwarePrimaryKey implements PrimaryKey

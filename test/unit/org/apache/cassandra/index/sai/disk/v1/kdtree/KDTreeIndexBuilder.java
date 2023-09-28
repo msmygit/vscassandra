@@ -72,7 +72,7 @@ public class KDTreeIndexBuilder
 {
     public static final PrimaryKeyMap TEST_PRIMARY_KEY_MAP = new PrimaryKeyMap()
     {
-        private final PrimaryKey.Factory primaryKeyFactory = new PartitionAwarePrimaryKeyFactory();
+        private final PrimaryKey.Factory primaryKeyFactory = new PartitionAwarePrimaryKeyFactory(Murmur3Partitioner.instance);
 
         @Override
         public PrimaryKey primaryKeyFromRowId(long sstableRowId)

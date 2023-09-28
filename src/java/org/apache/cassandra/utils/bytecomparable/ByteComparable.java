@@ -39,6 +39,7 @@ public interface ByteComparable
     {
         LEGACY,
         OSS41,  // CASSANDRA 4.1 encoding, used in trie-based indices
+        OSS50,  // CASSANDRA 5.0 encoding
     }
 
     ByteComparable EMPTY = (Version version) -> ByteSource.EMPTY;

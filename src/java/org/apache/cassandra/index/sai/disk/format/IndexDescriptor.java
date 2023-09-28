@@ -93,7 +93,7 @@ public class IndexDescriptor
         this.descriptor = descriptor;
         this.partitioner = partitioner;
         this.clusteringComparator = clusteringComparator;
-        this.primaryKeyFactory = PrimaryKey.factory(clusteringComparator, version.onDiskFormat().indexFeatureSet());
+        this.primaryKeyFactory = PrimaryKey.factory(partitioner, clusteringComparator, version.onDiskFormat().indexFeatureSet());
     }
 
     public static IndexDescriptor create(Descriptor descriptor, IPartitioner partitioner, ClusteringComparator clusteringComparator)

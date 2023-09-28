@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 
 import org.junit.Test;
 
+import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.disk.v1.PartitionAwarePrimaryKeyFactory;
 
 public class TokenAwarePrimaryKeyTest extends AbstractPrimaryKeyTest
@@ -27,7 +28,7 @@ public class TokenAwarePrimaryKeyTest extends AbstractPrimaryKeyTest
     @Test
     public void simplePartitionTokenAwareTest() throws Throwable
     {
-        PrimaryKey.Factory factory = new PartitionAwarePrimaryKeyFactory();
+        PrimaryKey.Factory factory = new PartitionAwarePrimaryKeyFactory(Murmur3Partitioner.instance);
 
         PrimaryKey first = factory.createTokenOnly(makeKey(simplePartition, "1").getToken());
         PrimaryKey firstToken = factory.createTokenOnly(first.token());

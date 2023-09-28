@@ -111,12 +111,9 @@ public class MemtableIndexWriter implements PerIndexWriter
                 return;
             }
 
-            final DecoratedKey minKey = rowMapping.minKey.partitionKey();
-            final DecoratedKey maxKey = rowMapping.maxKey.partitionKey();
-
             if (indexContext.isVector())
             {
-                flushVectorIndex(minKey, maxKey, start, stopwatch);
+                flushVectorIndex(rowMapping.minKey, rowMapping.maxKey, start, stopwatch);
             }
             else
             {
@@ -124,7 +121,7 @@ public class MemtableIndexWriter implements PerIndexWriter
 
                 try (MemtableTermsIterator terms = new MemtableTermsIterator(memtableIndex.getMinTerm(), memtableIndex.getMaxTerm(), iterator))
                 {
-                    long cellCount = flush(minKey, maxKey, indexContext.getValidator(), terms, rowMapping.maxSegmentRowId);
+                    long cellCount = flush(rowMapping.minKey, rowMapping.maxKey, indexContext.getValidator(), terms, rowMapping.maxSegmentRowId);
 
                     completeIndexFlush(cellCount, start, stopwatch);
                 }
@@ -139,7 +136,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         }
     }
 
-    private long flush(DecoratedKey minKey, DecoratedKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
+    private long flush(PrimaryKey minKey, PrimaryKey maxKey, AbstractType<?> termComparator, MemtableTermsIterator terms, long maxSegmentRowId) throws IOException
     {
         long numRows;
         SegmentMetadata.ComponentMetadataMap indexMetas;
@@ -181,8 +178,8 @@ public class MemtableIndexWriter implements PerIndexWriter
                                                        numRows,
                                                        terms.getMinSSTableRowId(),
                                                        terms.getMaxSSTableRowId(),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(minKey),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(maxKey),
+                                                       minKey,
+                                                       maxKey,
                                                        terms.getMinTerm(),
                                                        terms.getMaxTerm(),
                                                        indexMetas);
@@ -195,7 +192,7 @@ public class MemtableIndexWriter implements PerIndexWriter
         return numRows;
     }
 
-    private void flushVectorIndex(DecoratedKey minKey, DecoratedKey maxKey, long startTime, Stopwatch stopwatch) throws IOException
+    private void flushVectorIndex(PrimaryKey minKey, PrimaryKey maxKey, long startTime, Stopwatch stopwatch) throws IOException
     {
         var vectorIndex = (VectorMemtableIndex) memtableIndex;
         SegmentMetadata.ComponentMetadataMap metadataMap = vectorIndex.writeData(indexDescriptor, indexContext, rowMapping::get);
@@ -206,8 +203,8 @@ public class MemtableIndexWriter implements PerIndexWriter
                                                        rowMapping.size(),
                                                        0,
                                                        rowMapping.maxSegmentRowId,
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(minKey),
-                                                       indexDescriptor.primaryKeyFactory.createPartitionKeyOnly(maxKey),
+                                                       minKey,
+                                                       maxKey,
                                                        ByteBufferUtil.bytes(0), // VSTODO by pass min max terms for vectors
                                                        ByteBufferUtil.bytes(0), // VSTODO by pass min max terms for vectors
                                                        metadataMap);

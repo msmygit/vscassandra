@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.lifecycle.LifecycleNewTracker;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
@@ -77,7 +78,7 @@ public interface OnDiskFormat
      * @param comparator
      * @return the primary key factory
      */
-    public PrimaryKey.Factory primaryKeyFactory(ClusteringComparator comparator);
+    public PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator);
 
     /**
      * Returns true if the per-sstable index components have been built and are valid.

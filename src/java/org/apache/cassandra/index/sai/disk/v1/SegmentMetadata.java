@@ -18,6 +18,7 @@
 package org.apache.cassandra.index.sai.disk.v1;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,6 +37,9 @@ import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.bytecomparable.ByteComparable;
+import org.apache.cassandra.utils.bytecomparable.ByteSource;
+import org.apache.cassandra.utils.bytecomparable.ByteSourceInverse;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 
@@ -121,8 +125,8 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         this.numRows = input.readLong();
         this.minSSTableRowId = input.readLong();
         this.maxSSTableRowId = input.readLong();
-        this.minKey = primaryKeyFactory.createPartitionKeyOnly(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
-        this.maxKey = primaryKeyFactory.createPartitionKeyOnly(DatabaseDescriptor.getPartitioner().decorateKey(readBytes(input)));
+        this.minKey = primaryKeyFactory.fromComparableBytes(ByteSource.fixedLength(readBytes(input)));
+        this.maxKey = primaryKeyFactory.fromComparableBytes(ByteSource.fixedLength(readBytes(input)));
         this.minTerm = readBytes(input);
         this.maxTerm = readBytes(input);
         this.componentMetadatas = new SegmentMetadata.ComponentMetadataMap(input);
@@ -162,9 +166,10 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
                 output.writeLong(metadata.minSSTableRowId);
                 output.writeLong(metadata.maxSSTableRowId);
 
-                Stream.of(metadata.minKey.partitionKey().getKey(),
-                          metadata.maxKey.partitionKey().getKey(),
-                          metadata.minTerm, metadata.maxTerm).forEach(bb -> writeBytes(bb, output));
+                Stream.of(ByteSourceInverse.readBytes(metadata.minKey.asComparableBytes(ByteComparable.Version.OSS50)),
+                          ByteSourceInverse.readBytes(metadata.maxKey.asComparableBytes(ByteComparable.Version.OSS50)))
+                      .forEach(b -> writeBytes(b, output));
+                Stream.of(metadata.minTerm, metadata.maxTerm).forEach(bb -> writeBytes(bb, output));
 
                 metadata.componentMetadatas.write(output);
             }
@@ -202,6 +207,19 @@ public class SegmentMetadata implements Comparable<SegmentMetadata>
         try
         {
             byte[] bytes = ByteBufferUtil.getArray(buf);
+            out.writeVInt(bytes.length);
+            out.writeBytes(bytes, 0, bytes.length);
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void writeBytes(byte[] bytes, IndexOutput out)
+    {
+        try
+        {
             out.writeVInt(bytes.length);
             out.writeBytes(bytes, 0, bytes.length);
         }

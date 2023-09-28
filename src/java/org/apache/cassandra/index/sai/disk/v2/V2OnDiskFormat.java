@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.db.ClusteringComparator;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.disk.PerSSTableWriter;
@@ -87,9 +88,9 @@ public class V2OnDiskFormat extends V1OnDiskFormat
     }
 
     @Override
-    public PrimaryKey.Factory primaryKeyFactory(ClusteringComparator comparator)
+    public PrimaryKey.Factory primaryKeyFactory(IPartitioner partitioner, ClusteringComparator comparator)
     {
-        return new RowAwarePrimaryKeyFactory(comparator);
+        return new RowAwarePrimaryKeyFactory(partitioner, comparator);
     }
 
     @Override
