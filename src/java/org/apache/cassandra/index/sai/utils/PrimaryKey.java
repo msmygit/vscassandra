@@ -92,6 +92,8 @@ public interface PrimaryKey extends Comparable<PrimaryKey>
          * @return a {@link PrimaryKey} contain the partition key and clustering
          */
         PrimaryKey create(DecoratedKey partitionKey, Clustering clustering);
+
+        PrimaryKey fromComparableBytes(ByteSource byteSource);
     }
 
     /**
