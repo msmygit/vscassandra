@@ -100,7 +100,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
     }
 
     @Override
-    public RangeIterator<PrimaryKey> search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator search(Expression exp, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         PostingList results = searchPosting(context, exp, keyRange, limit);
         return toPrimaryKeyIterator(results, context);
@@ -254,7 +254,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit) throws IOException
     {
         try (PrimaryKeyMap primaryKeyMap = primaryKeyMapFactory.newPerSSTablePrimaryKeyMap())
         {
@@ -267,7 +267,8 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             {
                 while (iterator.hasNext())
                 {
-                    Long sstableRowId = iterator.peek();
+                    // TODO figure out way to get from PK to sstableRowId
+                    PrimaryKey primaryKey = iterator.peek();
                     // if sstable row id has exceeded current ANN segment, stop
                     if (sstableRowId > metadata.maxSSTableRowId)
                         break;

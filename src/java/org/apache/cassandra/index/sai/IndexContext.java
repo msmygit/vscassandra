@@ -281,7 +281,7 @@ public class IndexContext
     }
 
 
-    public RangeIterator<PrimaryKey> searchMemtable(QueryContext context, Expression e, AbstractBounds<PartitionPosition> keyRange, int limit)
+    public RangeIterator searchMemtable(QueryContext context, Expression e, AbstractBounds<PartitionPosition> keyRange, int limit)
     {
         Collection<MemtableIndex> memtables = liveMemtables.values();
 
@@ -290,7 +290,7 @@ public class IndexContext
             return RangeIterator.empty();
         }
 
-        RangeUnionIterator.Builder<PrimaryKey> builder = RangeUnionIterator.builder();
+        RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
 
         for (MemtableIndex index : memtables)
         {
@@ -300,7 +300,7 @@ public class IndexContext
         return builder.build();
     }
 
-    public RangeIterator<PrimaryKey> reorderMemtable(Memtable memtable, QueryContext context, RangeIterator<PrimaryKey> iterator, Expression exp, int limit)
+    public RangeIterator reorderMemtable(Memtable memtable, QueryContext context, RangeIterator iterator, Expression exp, int limit)
     {
         var index = liveMemtables.get(memtable);
         return index.limitToTopResults(context, iterator, exp, limit);

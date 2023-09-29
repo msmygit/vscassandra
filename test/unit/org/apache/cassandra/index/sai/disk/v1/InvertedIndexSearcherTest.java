@@ -39,7 +39,6 @@ import org.apache.cassandra.index.sai.disk.format.Version;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexBuilder;
 import org.apache.cassandra.index.sai.disk.v1.trie.InvertedIndexWriter;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 import org.apache.cassandra.service.StorageService;
@@ -78,7 +77,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
         {
             for (int t = 0; t < numTerms; ++t)
             {
-                try (RangeIterator<PrimaryKey> results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), null, new QueryContext(), false, LIMIT))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());
@@ -94,7 +93,7 @@ public class InvertedIndexSearcherTest extends SaiRandomizedTest
                     assertFalse(results.hasNext());
                 }
 
-                try (RangeIterator<PrimaryKey> results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
+                try (RangeIterator results = searcher.search(new Expression(SAITester.createIndexContext("meh", UTF8Type.instance))
                         .add(Operator.EQ, wrap(termsEnum.get(t).left)), null, new QueryContext(), false, LIMIT))
                 {
                     assertEquals(results.getMinimum(), results.getCurrent());

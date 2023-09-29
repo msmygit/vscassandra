@@ -35,7 +35,7 @@ public interface MemtableOrdering
      *
      * Assumes that the the given RangeIterator spans the same rows as the implementing index's segment.
      */
-    default RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<PrimaryKey> iterator, Expression exp, int limit)
+    default RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit)
     {
         throw new UnsupportedOperationException();
     }

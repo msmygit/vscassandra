@@ -32,16 +32,16 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.utils.Throwables;
 
-public class TermIterator extends RangeIterator<PrimaryKey>
+public class TermIterator extends RangeIterator
 {
     private static final Logger logger = LoggerFactory.getLogger(TermIterator.class);
 
     private final QueryContext context;
 
-    private final RangeIterator<PrimaryKey> union;
+    private final RangeIterator union;
     private final Set<SSTableIndex> referencedIndexes;
 
-    private TermIterator(RangeIterator<PrimaryKey> union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
+    private TermIterator(RangeIterator union, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
     {
         super(union.getMinimum(), union.getMaximum(), union.getCount());
 
@@ -53,9 +53,9 @@ public class TermIterator extends RangeIterator<PrimaryKey>
     @SuppressWarnings("resource")
     public static TermIterator build(final Expression e, Set<SSTableIndex> perSSTableIndexes, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit)
     {
-        final List<RangeIterator<PrimaryKey>> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
+        final List<RangeIterator> tokens = new ArrayList<>(1 + perSSTableIndexes.size());;
 
-        RangeIterator<PrimaryKey> memtableIterator = e.context.searchMemtable(queryContext, e, keyRange, limit);
+        RangeIterator memtableIterator = e.context.searchMemtable(queryContext, e, keyRange, limit);
         if (memtableIterator != null)
             tokens.add(memtableIterator);
 
@@ -67,7 +67,7 @@ public class TermIterator extends RangeIterator<PrimaryKey>
                 queryContext.incSstablesHit();
                 assert !index.isReleased();
 
-                List<RangeIterator<PrimaryKey>> keyIterators = index.searchSSTableRowIds(e, keyRange, queryContext, defer, limit);
+                List<RangeIterator> keyIterators = index.searchSSTableRowIds(e, keyRange, queryContext, defer, limit);
 
                 if (keyIterators == null || keyIterators.isEmpty())
                     continue;
@@ -83,7 +83,7 @@ public class TermIterator extends RangeIterator<PrimaryKey>
             }
         }
 
-        RangeIterator<PrimaryKey> ranges = RangeUnionIterator.build(tokens);
+        RangeIterator ranges = RangeUnionIterator.build(tokens);
         return new TermIterator(ranges, perSSTableIndexes, queryContext);
     }
 

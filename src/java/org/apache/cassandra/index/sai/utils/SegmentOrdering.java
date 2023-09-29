@@ -39,7 +39,7 @@ public interface SegmentOrdering
     /**
      * Reorder, limit, and put back into original order the results from a single sstable
      */
-    default RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    default RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit) throws IOException
     {
         throw new UnsupportedOperationException();
     }

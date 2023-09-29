@@ -137,7 +137,7 @@ public class Segment implements Closeable, SegmentOrdering
      * @param limit      the num of rows to returned, used by ANN index
      * @return range iterator of {@link PrimaryKey} that matches given expression
      */
-    public RangeIterator<PrimaryKey> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
+    public RangeIterator search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext context, boolean defer, int limit) throws IOException
     {
         return index.search(expression, keyRange, context, defer, limit);
     }
@@ -158,7 +158,7 @@ public class Segment implements Closeable, SegmentOrdering
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit) throws IOException
     {
         return index.limitToTopResults(context, iterator, exp, limit);
     }

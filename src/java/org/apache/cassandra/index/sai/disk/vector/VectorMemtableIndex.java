@@ -152,7 +152,7 @@ public class VectorMemtableIndex implements MemtableIndex
     }
 
     @Override
-    public RangeIterator<PrimaryKey> search(QueryContext queryContext, Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
+    public RangeIterator search(QueryContext queryContext, Expression expr, AbstractBounds<PartitionPosition> keyRange, int limit)
     {
         assert expr.getOp() == Expression.Op.ANN : "Only ANN is supported for vector search, received " + expr.getOp();
 
@@ -176,7 +176,7 @@ public class VectorMemtableIndex implements MemtableIndex
                 resultKeys = resultKeys.stream().filter(pk -> !queryContext.containsShadowedPrimaryKey(pk)).collect(Collectors.toSet());
 
             if (resultKeys.isEmpty())
-                return RangeIterator.emptyKeys();
+                return RangeIterator.empty();
 
             int bruteForceRows = maxBruteForceRows(limit, resultKeys.size(), graph.size());
             logger.trace("Search range covers {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
@@ -196,12 +196,12 @@ public class VectorMemtableIndex implements MemtableIndex
 
         var keyQueue = graph.search(qv, limit, bits);
         if (keyQueue.isEmpty())
-            return RangeIterator.emptyKeys();
+            return RangeIterator.empty();
         return new ReorderingRangeIterator(keyQueue);
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<PrimaryKey> iterator, Expression exp, int limit)
+    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit)
     {
         Set<PrimaryKey> results = new HashSet<>();
         while (iterator.hasNext())
@@ -219,7 +219,7 @@ public class VectorMemtableIndex implements MemtableIndex
         if (results.size() <= maxBruteForceRows)
         {
             if (results.isEmpty())
-                return RangeIterator.emptyKeys();
+                return RangeIterator.empty();
             return new ReorderingRangeIterator(new PriorityQueue<>(results));
         }
 
@@ -227,7 +227,7 @@ public class VectorMemtableIndex implements MemtableIndex
         var bits = new KeyFilteringBits(results);
         var keyQueue = graph.search(qv, limit, bits);
         if (keyQueue.isEmpty())
-            return RangeIterator.emptyKeys();
+            return RangeIterator.empty();
         return new ReorderingRangeIterator(keyQueue);
     }
 
@@ -338,7 +338,7 @@ public class VectorMemtableIndex implements MemtableIndex
         }
     }
 
-    private class ReorderingRangeIterator extends RangeIterator<PrimaryKey>
+    private class ReorderingRangeIterator extends RangeIterator
     {
         private final PriorityQueue<PrimaryKey> keyQueue;
 

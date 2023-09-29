@@ -205,7 +205,7 @@ public class Operation
         }
     }
 
-    static RangeIterator<PrimaryKey> buildIterator(QueryController controller)
+    static RangeIterator buildIterator(QueryController controller)
     {
         return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
     }
@@ -243,7 +243,7 @@ public class Operation
 
         abstract FilterTree filterTree();
 
-        abstract RangeIterator<PrimaryKey> rangeIterator(QueryController controller);
+        abstract RangeIterator rangeIterator(QueryController controller);
 
         static Node buildTree(RowFilter.FilterElement filterOperation)
         {
@@ -343,7 +343,7 @@ public class Operation
         }
 
         @Override
-        RangeIterator<PrimaryKey> rangeIterator(QueryController controller)
+        RangeIterator rangeIterator(QueryController controller)
         {
             var builder = RangeIntersectionIterator.<PrimaryKey>sizedBuilder(1 + children.size());
             if (!expressionMap.isEmpty())
@@ -370,7 +370,7 @@ public class Operation
         }
 
         @Override
-        RangeIterator<PrimaryKey> rangeIterator(QueryController controller)
+        RangeIterator rangeIterator(QueryController controller)
         {
             var builder = RangeUnionIterator.<PrimaryKey>builder(1 + children.size());
             if (!expressionMap.isEmpty())

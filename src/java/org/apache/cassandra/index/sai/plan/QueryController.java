@@ -61,7 +61,6 @@ import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.CheckpointingIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.SSTableRowIdKeyRangeIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
@@ -365,7 +364,7 @@ public class QueryController
 
     private static <T extends Comparable<T>> RangeIterator<T> buildIterator(Operation.OperationType op, List<RangeIterator<T>> subIterators, boolean isAnnHybridSearch)
     {
-        RangeIterator.Builder<T> builder = null;
+        RangeIterator.Builder builder = null;
         if (op == Operation.OperationType.OR)
             builder = RangeUnionIterator.<T>builder(subIterators.size());
         else if (isAnnHybridSearch)

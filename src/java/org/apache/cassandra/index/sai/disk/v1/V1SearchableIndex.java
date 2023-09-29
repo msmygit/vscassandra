@@ -35,7 +35,6 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableContext;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
 import org.apache.cassandra.index.sai.plan.Expression;
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.RangeUnionIterator;
 import org.apache.cassandra.index.sai.utils.TypeUtil;
@@ -160,13 +159,13 @@ public class V1SearchableIndex implements SearchableIndex
     }
 
     @Override
-    public List<RangeIterator<PrimaryKey>> search(Expression expression,
+    public List<RangeIterator> search(Expression expression,
                                             AbstractBounds<PartitionPosition> keyRange,
                                             QueryContext context,
                                             boolean defer,
                                             int limit) throws IOException
     {
-        List<RangeIterator<PrimaryKey>> iterators = new ArrayList<>();
+        List<RangeIterator> iterators = new ArrayList<>();
 
         for (Segment segment : segments)
         {
@@ -180,9 +179,9 @@ public class V1SearchableIndex implements SearchableIndex
     }
 
     @Override
-    public RangeIterator<PrimaryKey> limitToTopResults(QueryContext context, RangeIterator<Long> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit) throws IOException
     {
-        RangeUnionIterator.Builder<PrimaryKey> unionIteratorBuilder = new RangeUnionIterator.Builder<>(segments.size());
+        RangeUnionIterator.Builder unionIteratorBuilder = new RangeUnionIterator.Builder(segments.size());
         for (Segment segment : segments)
             unionIteratorBuilder.add(segment.limitToTopResults(context, iterator, exp, limit));
 

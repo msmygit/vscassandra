@@ -29,15 +29,15 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.FileUtils;
 
-public class CheckpointingIterator<T extends Comparable<T>> extends RangeIterator<T>
+public class CheckpointingIterator extends RangeIterator
 {
     private static final Logger logger = LoggerFactory.getLogger(CheckpointingIterator.class);
 
     private final QueryContext context;
-    private final RangeIterator<T> union;
+    private final RangeIterator union;
     private final Iterable<SSTableIndex> referencedIndexes;
 
-    public CheckpointingIterator(RangeIterator<T> wrapped, Collection<SSTableIndex> referencedIndexes, Collection<SSTableIndex> referencedAnnIndexesInHybridSearch, QueryContext queryContext)
+    public CheckpointingIterator(RangeIterator wrapped, Collection<SSTableIndex> referencedIndexes, Collection<SSTableIndex> referencedAnnIndexesInHybridSearch, QueryContext queryContext)
     {
         super(wrapped.getMinimum(), wrapped.getMaximum(), wrapped.getCount());
 
@@ -49,7 +49,7 @@ public class CheckpointingIterator<T extends Comparable<T>> extends RangeIterato
         this.context = queryContext;
     }
 
-    protected T computeNext()
+    protected PrimaryKey computeNext()
     {
         try
         {
@@ -61,7 +61,7 @@ public class CheckpointingIterator<T extends Comparable<T>> extends RangeIterato
         }
     }
 
-    protected void performSkipTo(T nextKey)
+    protected void performSkipTo(PrimaryKey nextKey)
     {
         try
         {
