@@ -28,8 +28,6 @@ import org.apache.cassandra.index.sai.disk.IndexSearcherContext;
 import org.apache.cassandra.index.sai.disk.PostingList;
 import org.apache.cassandra.index.sai.disk.PostingListRangeIterator;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.SSTableRowIdPostingList;
-import org.apache.cassandra.index.sai.disk.SSTableRowIdsRangeIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
@@ -94,23 +92,5 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
                                                                         postingList.peekable());
 
         return new PostingListRangeIterator(indexContext, primaryKeyMapFactory.newPerSSTablePrimaryKeyMap(), searcherContext);
-    }
-
-    // TODO can I remove this method? It is not used now.
-    protected RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
-    {
-        if (postingList == null || postingList.size() == 0)
-            return RangeIterator.emptyLongs();
-
-        SSTableRowIdPostingList sstablePosting = new SSTableRowIdPostingList(postingList, metadata.segmentRowIdOffset);
-        IndexSearcherContext searcherContext = new IndexSearcherContext(metadata.minKey,
-                                                                        metadata.maxKey,
-                                                                        metadata.minSSTableRowId,
-                                                                        metadata.maxSSTableRowId,
-                                                                        metadata.segmentRowIdOffset,
-                                                                        queryContext,
-                                                                        sstablePosting.peekable());
-
-        return new SSTableRowIdsRangeIterator(indexContext, searcherContext);
     }
 }
