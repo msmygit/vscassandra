@@ -37,6 +37,7 @@ import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.index.sai.disk.v1.kdtree.KDTreeIndexBuilder;
 import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SaiRandomizedTest;
 
@@ -164,7 +165,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
                                                   final NumberType<T> rawType, final NumberType<?> encodedType,
                                                   final Function<Short, T> rawValueProducer) throws Exception
     {
-        try (RangeIterator<Long> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator<PrimaryKey> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.EQ;
             lower = upper = new Bound(rawType.decompose(rawValueProducer.apply(EQ_TEST_LOWER_BOUND_INCLUSIVE)), encodedType, true);
@@ -200,7 +201,7 @@ public class KDTreeIndexSearcherTest extends SaiRandomizedTest
                                                      final NumberType<T> rawType, final NumberType<?> encodedType,
                                                      final Function<Short, T> rawValueProducer, List<Long> expectedTokenList) throws Exception
     {
-        try (RangeIterator<Long> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
+        try (RangeIterator<PrimaryKey> results = indexSearcher.search(new Expression(SAITester.createIndexContext("meh", rawType))
         {{
             operation = Op.RANGE;
 
