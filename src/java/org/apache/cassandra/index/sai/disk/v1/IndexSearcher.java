@@ -35,7 +35,6 @@ import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.index.sai.utils.SegmentOrdering;
-import org.apache.cassandra.index.sai.utils.TypeUtil;
 
 /**
  * Abstract reader for individual segments of an on-disk index.
@@ -45,36 +44,23 @@ import org.apache.cassandra.index.sai.utils.TypeUtil;
  */
 public abstract class IndexSearcher implements Closeable, SegmentOrdering
 {
-    final PrimaryKeyMap.Factory primaryKeyMapFactory;
+    protected final PrimaryKeyMap.Factory primaryKeyMapFactory;
     final PerIndexFiles indexFiles;
-    final SegmentMetadata metadata;
+    protected final SegmentMetadata metadata;
     final IndexDescriptor indexDescriptor;
-    final IndexContext indexContext;
+    protected final IndexContext indexContext;
 
-    IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                  PerIndexFiles perIndexFiles,
-                  SegmentMetadata segmentMetadata,
-                  IndexDescriptor indexDescriptor,
-                  IndexContext indexContext)
+    protected IndexSearcher(PrimaryKeyMap.Factory primaryKeyMapFactory,
+                            PerIndexFiles perIndexFiles,
+                            SegmentMetadata segmentMetadata,
+                            IndexDescriptor indexDescriptor,
+                            IndexContext indexContext)
     {
         this.primaryKeyMapFactory = primaryKeyMapFactory;
         this.indexFiles = perIndexFiles;
         this.metadata = segmentMetadata;
         this.indexDescriptor = indexDescriptor;
         this.indexContext = indexContext;
-    }
-
-    public static IndexSearcher open(PrimaryKeyMap.Factory primaryKeyMapFactory,
-                                     PerIndexFiles indexFiles,
-                                     SegmentMetadata segmentMetadata,
-                                     IndexDescriptor indexDescriptor,
-                                     IndexContext indexContext) throws IOException
-    {
-        if (indexContext.isVector())
-            return new VectorIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
-        if (TypeUtil.isLiteral(indexContext.getValidator()))
-            return new InvertedIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
-        return new KDTreeIndexSearcher(primaryKeyMapFactory, indexFiles, segmentMetadata, indexDescriptor, indexContext);
     }
 
     /**
@@ -94,7 +80,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
      */
     public abstract RangeIterator<PrimaryKey> search(Expression expression, AbstractBounds<PartitionPosition> keyRange, QueryContext queryContext, boolean defer, int limit) throws IOException;
 
-    RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    protected RangeIterator<PrimaryKey> toPrimaryKeyIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyKeys();
@@ -111,7 +97,7 @@ public abstract class IndexSearcher implements Closeable, SegmentOrdering
     }
 
     // TODO can I remove this method? It is not used now.
-    RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
+    protected RangeIterator<Long> toSSTableRowIdsIterator(PostingList postingList, QueryContext queryContext) throws IOException
     {
         if (postingList == null || postingList.size() == 0)
             return RangeIterator.emptyLongs();

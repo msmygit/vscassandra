@@ -30,11 +30,16 @@ import org.junit.Test;
 
 import org.apache.cassandra.config.CassandraRelevantProperties;
 import org.apache.cassandra.cql3.UntypedResultSet;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.marshal.FloatType;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.VectorType;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.tracing.TracingTestImpl;
@@ -51,7 +56,33 @@ public class VectorTypeTest extends VectorTester
     {
         System.setProperty("cassandra.custom_tracing_class", "org.apache.cassandra.tracing.TracingTestImpl");
     }
-    
+
+    private void verifyChecksum() {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        cfs.indexManager.listIndexes().stream().forEach(index -> {
+            var indexContext = SAITester.createIndexContext(index.getIndexMetadata().name, VectorType.getInstance(FloatType.instance, 100), cfs);
+            if (!indexContext.getColumnName().matches("table_\\d+_val_idx"))
+            {
+                return;
+            }
+            logger.info("Verifying checksum for index {}", index.getIndexMetadata().name);
+            boolean checksumValid = verifyChecksum(indexContext);
+            assertThat(checksumValid).isTrue();
+        });
+    }
+
+    @Override
+    public void flush() {
+        super.flush();
+        verifyChecksum();
+    }
+
+    @Override
+    public void compact() {
+        super.compact();
+        verifyChecksum();
+    }
+
     @Test
     public void endToEndTest() throws Throwable
     {
@@ -696,5 +727,26 @@ public class VectorTypeTest extends VectorTester
                              "SELECT similarity_cosine([1, 2, 3], value) FROM %s WHERE pk=0");
         assertInvalidMessage("Required 2 elements, but saw 3",
                              "SELECT similarity_cosine([1, 2], [3, 4, 5]) FROM %s WHERE pk=0");
+    }
+
+    @Test
+    public void testSamePKWithBruteForceAndGraphBasedScoring()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, vec vector<float, 2>, PRIMARY KEY(pk))");
+        // Use euclidean distance to more easily verify correctness of caching
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function' : 'euclidean' }");
+
+        // Put one row in the first ss table to guarantee brute force method. This vector is also the most similar.
+        execute("INSERT INTO %s (pk, vec) VALUES (10, [1,1])");
+        flush();
+
+        // Must be enough rows to go to graph
+        for (int j = 1; j <= 10; j++)
+        {
+            execute("INSERT INTO %s (pk, vec) VALUES (?, [?,?])", j, j, j);
+        }
+        flush();
+
+        assertRows(execute("SELECT pk FROM %s ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1), row(2));
     }
 }
