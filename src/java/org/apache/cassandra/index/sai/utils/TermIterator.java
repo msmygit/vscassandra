@@ -67,7 +67,7 @@ public class TermIterator extends RangeIterator
                 queryContext.incSstablesHit();
                 assert !index.isReleased();
 
-                List<RangeIterator> keyIterators = index.searchSSTableRowIds(e, keyRange, queryContext, defer, limit);
+                List<RangeIterator> keyIterators = index.search(e, keyRange, queryContext, defer, limit);
 
                 if (keyIterators == null || keyIterators.isEmpty())
                     continue;

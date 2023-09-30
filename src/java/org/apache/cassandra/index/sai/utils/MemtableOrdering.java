@@ -18,6 +18,8 @@
 
 package org.apache.cassandra.index.sai.utils;
 
+import java.util.List;
+
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.plan.Expression;
 
@@ -35,7 +37,7 @@ public interface MemtableOrdering
      *
      * Assumes that the the given RangeIterator spans the same rows as the implementing index's segment.
      */
-    default RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit)
+    default RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit)
     {
         throw new UnsupportedOperationException();
     }

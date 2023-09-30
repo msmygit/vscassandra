@@ -362,6 +362,8 @@ public class VectorLocalTest extends VectorTester
         {
             var q = word2vec.vector(word2vec.word(i));
             int limit = Math.min(getRandom().nextIntBetween(10, 50), vectorCountPerSSTable);
+            //Randomized test failed. To rerun test use -Dcassandra.test.random.seed=34467310538501
+            //TODO failed with java.lang.RuntimeException: java.lang.AssertionError: index=-1,length=47
             UntypedResultSet result = execute("SELECT * FROM %s ORDER BY val ann of ? LIMIT ?", vector(q), limit);
             assertThat(result).hasSize(limit);
 
@@ -423,6 +425,8 @@ public class VectorLocalTest extends VectorTester
         {
             int limit = Math.min(getRandom().nextIntBetween(30, 50), vectorCountPerSSTable);
             float[] queryVector = vectorsByStringValue.get(stringValue).stream().findAny().get();
+            //Randomized test failed. To rerun test use -Dcassandra.test.random.seed=35632175396882
+            //TODO java.lang.AssertionError: index=-1,length=51
             UntypedResultSet resultSet = search(stringValue, queryVector, limit);
 
             // expect recall to be at least 0.8

@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableSet;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -201,12 +202,12 @@ public class VectorMemtableIndex implements MemtableIndex
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit)
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit)
     {
+        // todo why hash set? Don't we have the keys in priority order already?
         Set<PrimaryKey> results = new HashSet<>();
-        while (iterator.hasNext())
+        for (PrimaryKey key : iterator)
         {
-            var key = iterator.next();
             if (!context.containsShadowedPrimaryKey(key))
                 results.add(key);
         }

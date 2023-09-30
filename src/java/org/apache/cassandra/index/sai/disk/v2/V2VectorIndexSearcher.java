@@ -19,6 +19,7 @@ package org.apache.cassandra.index.sai.disk.v2;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.List;
 import javax.annotation.Nullable;
 
 import com.google.common.base.MoreObjects;
@@ -254,7 +255,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, RangeIterator iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit) throws IOException
     {
         try (PrimaryKeyMap primaryKeyMap = primaryKeyMapFactory.newPerSSTablePrimaryKeyMap())
         {
@@ -265,15 +266,14 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             var rowIds = new IntArrayList();
             try (var ordinalsView = graph.getOrdinalsView())
             {
-                while (iterator.hasNext())
+                for (PrimaryKey primaryKey : iterator)
                 {
-                    // TODO figure out way to get from PK to sstableRowId
-                    PrimaryKey primaryKey = iterator.peek();
+                    // TODO How expensive am I? I don't see another way to do this right now, but seems expensive.
+                    long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(primaryKey);
                     // if sstable row id has exceeded current ANN segment, stop
                     if (sstableRowId > metadata.maxSSTableRowId)
                         break;
 
-                    iterator.next();
                     // skip rows that are not in our segment (or more preciesely, have no vectors that were indexed)
                     if (sstableRowId < metadata.minSSTableRowId)
                         continue;

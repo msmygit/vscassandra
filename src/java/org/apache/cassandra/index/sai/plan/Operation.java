@@ -18,10 +18,12 @@
 
 package org.apache.cassandra.index.sai.plan;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
@@ -207,7 +209,38 @@ public class Operation
 
     static RangeIterator buildIterator(QueryController controller)
     {
-        return Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        var orderings = controller.filterOperation().expressions()
+                                  .stream().filter(e -> e.operator() == Operator.ANN).collect(Collectors.toList());
+        assert orderings.size() <= 1;
+        if (controller.filterOperation().expressions().size() == 1 && orderings.size() == 1)
+        {
+            // If we only have one expression, we can use the ANN index to order and limit
+            return controller.getTopKRows(orderings.get(0));
+        }
+        else
+        {
+            var iter = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+            if (orderings.isEmpty())
+                return iter;
+            try
+            {
+                return controller.getTopKRows(iter, orderings.get(0));
+            }
+            finally
+            {
+                try
+                {
+                    // TODO find cleaner way to do this, but we currently need to close this later to prevent
+                    // closing search indexes too early (when moved to inside the getTopKRows right after
+                    // exhausting the iterator, we get failures)
+                    iter.close();
+                }
+                catch (IOException e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
     }
 
     static FilterTree buildFilter(QueryController controller)
@@ -345,7 +378,7 @@ public class Operation
         @Override
         RangeIterator rangeIterator(QueryController controller)
         {
-            var builder = RangeIntersectionIterator.<PrimaryKey>sizedBuilder(1 + children.size());
+            var builder = RangeIntersectionIterator.sizedBuilder(1 + children.size());
             if (!expressionMap.isEmpty())
                 builder.add(controller.getIndexes(OperationType.AND, expressionMap.values()));
             for (Node child : children)

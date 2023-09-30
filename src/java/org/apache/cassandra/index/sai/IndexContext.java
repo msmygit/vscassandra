@@ -29,7 +29,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -300,10 +299,24 @@ public class IndexContext
         return builder.build();
     }
 
-    public RangeIterator reorderMemtable(Memtable memtable, QueryContext context, RangeIterator iterator, Expression exp, int limit)
+    // Search all memtables for all PrimaryKeys in list.
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> source, Expression e, int limit)
     {
-        var index = liveMemtables.get(memtable);
-        return index.limitToTopResults(context, iterator, exp, limit);
+        Collection<MemtableIndex> memtables = liveMemtables.values();
+
+        if (memtables.isEmpty())
+        {
+            return RangeIterator.empty();
+        }
+
+        RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
+
+        for (MemtableIndex index : memtables)
+        {
+            builder.add(index.limitToTopResults(context, source, e, limit));
+        }
+
+        return builder.build();
     }
 
     public long liveMemtableWriteCount()
