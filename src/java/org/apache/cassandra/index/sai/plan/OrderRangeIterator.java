@@ -43,20 +43,6 @@ public class OrderRangeIterator extends RangeIterator
         this.nextRangeFunction = nextRangeFunction;
     }
 
-    // TODO figure out what needs to be overridden in this class.
-//    @Override
-//    public boolean tryToComputeNext()
-//    {
-//        return (nextIterator != null && nextIterator.hasNext()) || wrapped.hasNext();
-//    }
-
-    protected boolean tryToComputeNext()
-    {
-        super.tryToComputeNext();
-        // todo why is this necessary
-        return next != null;
-    }
-
     @Override
     public PrimaryKey computeNext()
     {
@@ -79,7 +65,6 @@ public class OrderRangeIterator extends RangeIterator
             if (!nextIterator.hasNext())
                 return endOfData();
         }
-        // todo getting no such element here... seems crazy to me!
         return nextIterator.next();
     }
 
@@ -89,6 +74,7 @@ public class OrderRangeIterator extends RangeIterator
         input.skipTo(nextToken);
         if (nextIterator != null && nextToken.compareTo(nextIterator.getMaximum()) > 0)
         {
+            // TODO will closing this before opening the next one lead to issues?
             FileUtils.closeQuietly(nextIterator);
             nextIterator = null;
         }
@@ -98,6 +84,4 @@ public class OrderRangeIterator extends RangeIterator
         FileUtils.closeQuietly(input);
         FileUtils.closeQuietly(nextIterator);
     }
-
-
 }
