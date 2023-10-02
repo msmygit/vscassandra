@@ -67,7 +67,7 @@ public class Segment implements Closeable, SegmentOrdering
         this.maxKey = metadata.maxKey.token();
         this.maxKeyBound = maxKey.maxKeyBound();
 
-        this.primaryKeyMapFactory = sstableContext.primaryKeyMapFactory;
+        this.primaryKeyMapFactory = sstableContext.primaryKeyMapFactory();
         this.indexFiles = indexFiles;
         this.metadata = metadata;
 
