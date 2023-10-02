@@ -207,7 +207,7 @@ public class VectorMemtableIndex implements MemtableIndex
         if (minimumKey == null)
         {
             assert maximumKey == null : "Minimum key is null but maximum key is not";
-            return RangeIterator.emptyKeys();
+            return RangeIterator.empty();
         }
         // todo why hash set? Don't we have the keys in priority order already?
         Set<PrimaryKey> results = new HashSet<>();
