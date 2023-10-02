@@ -472,4 +472,85 @@ public class VectorUpdateDeleteTest extends VectorTester
         var result = execute("SELECT * FROM %s ORDER BY val ann of [1.0, 2.0, 3.0] LIMIT 1");
         assertThat(result).hasSize(1);
     }
+
+    @Test
+    public void testVectorRowWhereUpdateMakesRowMatchNonOrderingPredicates()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, val text, vec vector<float, 2>, PRIMARY KEY(pk))");
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        // Split the row across 1 sstable and the memtable.
+        execute("INSERT INTO %s (pk, vec) VALUES (1, [1,1])");
+        flush();
+        execute("INSERT INTO %s (pk, val) VALUES (1, 'match me')");
+
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1));
+        // Push memtable to sstable. we should get same result
+        flush();
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1));
+
+        // Run the test again but instead inserting a full row and then overwrite val to match the predicate.
+        // This covers a different case because when there is no data for a column, it doesn't get an index file.
+
+        execute("INSERT INTO %s (pk, val, vec) VALUES (1, 'no match', [1,1])");
+        flush();
+        execute("INSERT INTO %s (pk, val) VALUES (1, 'match me')");
+
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1));
+        // Push memtable to sstable. we should get same result
+        flush();
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1));
+    }
+
+    // We need to make sure that we search each vector index for all relevant primary keys. In this test, row 1
+    // matches the query predicate, but has a low score. It is later updated to have a vector that is closer to the
+    // searched vector. As such, we need to make sure that we get all possible primary keys that match the predicates
+    // and use those to search for topk vectors.
+    @Test
+    public void testUpdateVectorWithSplitRow()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, val text, vec vector<float, 2>, PRIMARY KEY(pk))");
+        // Use euclidean distance to more easily verify correctness of caching
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function' : 'euclidean' }");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        // We will search for [11,11]
+        execute("INSERT INTO %s (pk, val, vec) VALUES (1, 'match me', [1,1])");
+        execute("INSERT INTO %s (pk, val, vec) VALUES (2, 'match me', [10,10])");
+        flush();
+        execute("INSERT INTO %s (pk, val, vec) VALUES (3, 'match me', [12,12])");
+        // Overwrite pk 1 with a vector that is closest to the search vector
+        execute("INSERT INTO %s (pk, vec) VALUES (1, [11,11])");
+
+
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [11,11] LIMIT 1"), row(1));
+        // Push memtable to sstable. we should get same result
+        flush();
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [11,11] LIMIT 1"), row(1));
+    }
+
+    @Test
+    public void testUpdateNonVectorColumnWhereNoSingleSSTableRowMatchesAllPredicates()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, val1 text, val2 text, vec vector<float, 2>, PRIMARY KEY(pk))");
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val1) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val2) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (pk, val1, vec) VALUES (1, 'match me', [1,1])");
+        execute("INSERT INTO %s (pk, val2, vec) VALUES (2, 'match me', [1,2])");
+        flush();
+        execute("INSERT INTO %s (pk, val2, vec) VALUES (1, 'match me', [1,1])");
+        execute("INSERT INTO %s (pk, val1, vec) VALUES (2, 'match me', [1,2])");
+
+
+        assertRows(execute("SELECT pk FROM %s WHERE val1 = 'match me' AND val2 = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1), row(2));
+        // Push memtable to sstable. we should get same result
+        flush();
+        assertRows(execute("SELECT pk FROM %s WHERE val1 = 'match me' AND val2 = 'match me' ORDER BY vec ANN OF [11,11] LIMIT 2"), row(1), row(2));
+    }
 }
