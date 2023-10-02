@@ -290,12 +290,14 @@ public class QueryController
     {
         // TODO test different chunk sizes. Ran into problems when too low.
         // specifically, need to be bigger than limit and account for shadowed keys
-        return new OrderRangeIterator(source, getLimit() + queryContext.getShadowedPrimaryKeys().size(), expression, this);
+        return new OrderRangeIterator(source,
+                                      getLimit() + queryContext.getShadowedPrimaryKeys().size(),
+                                      list -> this.getTopKRows(list, expression));
     }
 
     // TODO see about ways to collapse the two getTopKRows methods
     // This is essentially the old hybrid search logic
-    public RangeIterator getTopKRows(List<PrimaryKey> sourceKeys, RowFilter.Expression expression)
+    private RangeIterator getTopKRows(List<PrimaryKey> sourceKeys, RowFilter.Expression expression)
     {
         // this is the hybrid, the above is the pure
         var planExpression = new Expression(this.getContext(expression));

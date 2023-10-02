@@ -20,8 +20,8 @@ package org.apache.cassandra.index.sai.plan;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
-import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.FileUtils;
@@ -30,20 +30,17 @@ import org.apache.cassandra.io.util.FileUtils;
 // take the top ones and then put them back in primary key order
 public class OrderRangeIterator extends RangeIterator
 {
-    private final RangeIterator wrapped;
+    private final RangeIterator input;
     private final int chunkSize;
-    private final RowFilter.Expression expression;
-    private final QueryController controller;
+    private final Function<List<PrimaryKey>, RangeIterator> nextRangeFunction;
     private RangeIterator nextIterator;
 
-    public OrderRangeIterator(RangeIterator wrapped, int chunkSize, RowFilter.Expression expression, QueryController controller)
+    public OrderRangeIterator(RangeIterator input, int chunkSize, Function<List<PrimaryKey>, RangeIterator> nextRangeFunction)
     {
-        super(wrapped);
-        System.out.println("Creating orderer");
-        this.wrapped = wrapped;
+        super(input);
+        this.input = input;
         this.chunkSize = chunkSize;
-        this.expression = expression;
-        this.controller = controller;
+        this.nextRangeFunction = nextRangeFunction;
     }
 
     // TODO figure out what needs to be overridden in this class.
@@ -65,18 +62,17 @@ public class OrderRangeIterator extends RangeIterator
     {
         if (nextIterator == null || !nextIterator.hasNext())
         {
-            System.out.println("Creating nextIterator");
-            if (!wrapped.hasNext())
+            if (!input.hasNext())
                 return endOfData();
             List<PrimaryKey> nextKeys = new ArrayList<>(chunkSize);
             do
             {
-                nextKeys.add(wrapped.next());
+                nextKeys.add(input.next());
             }
-            while (wrapped.hasNext() && nextKeys.size() < chunkSize);
+            while (input.hasNext() && nextKeys.size() < chunkSize);
             // each call here gets new leases...
             var previousIterator = nextIterator;
-            nextIterator = controller.getTopKRows(nextKeys, expression);
+            nextIterator = nextRangeFunction.apply(nextKeys);
             // Close afterward to make sure we keep the references counted correctly.
             if (previousIterator != null)
                 FileUtils.closeQuietly(previousIterator);
@@ -87,16 +83,10 @@ public class OrderRangeIterator extends RangeIterator
         return nextIterator.next();
     }
 
-    // -Dcassandra.test.random.seed=61262512248244 failure
-    // there was leak detected during testUpdateNonVectorColumnWhereNoSingleSSTableRowMatchesAllPredicates, but
-    // only on first run...
-
     @Override
     protected void performSkipTo(PrimaryKey nextToken)
     {
-        // TODO is this necessary
-        System.out.println("Skipping to " + nextToken);
-        wrapped.skipTo(nextToken);
+        input.skipTo(nextToken);
         if (nextIterator != null && nextToken.compareTo(nextIterator.getMaximum()) > 0)
         {
             FileUtils.closeQuietly(nextIterator);
@@ -105,7 +95,7 @@ public class OrderRangeIterator extends RangeIterator
     }
 
     public void close() {
-        FileUtils.closeQuietly(wrapped);
+        FileUtils.closeQuietly(input);
         FileUtils.closeQuietly(nextIterator);
     }
 
