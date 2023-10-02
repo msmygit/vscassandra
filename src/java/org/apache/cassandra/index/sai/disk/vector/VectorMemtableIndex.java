@@ -204,6 +204,11 @@ public class VectorMemtableIndex implements MemtableIndex
     @Override
     public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit)
     {
+        if (minimumKey == null)
+        {
+            assert maximumKey == null : "Minimum key is null but maximum key is not";
+            return RangeIterator.emptyKeys();
+        }
         // todo why hash set? Don't we have the keys in priority order already?
         Set<PrimaryKey> results = new HashSet<>();
         for (PrimaryKey key : iterator)
