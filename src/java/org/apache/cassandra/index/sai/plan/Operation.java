@@ -215,32 +215,13 @@ public class Operation
         if (controller.filterOperation().expressions().size() == 1 && orderings.size() == 1)
         {
             // If we only have one expression, we can use the ANN index to order and limit
+            // TODO is it okay to bypass the other Node buildTree methods?
             return controller.getTopKRows(orderings.get(0));
         }
-        else
-        {
-            var iter = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
-            if (orderings.isEmpty())
-                return iter;
-            try
-            {
-                return controller.getTopKRows(iter, orderings.get(0));
-            }
-            finally
-            {
-                try
-                {
-                    // TODO find cleaner way to do this, but we currently need to close this later to prevent
-                    // closing search indexes too early (when moved to inside the getTopKRows right after
-                    // exhausting the iterator, we get failures)
-                    iter.close();
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
+        var iter = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
+        if (orderings.isEmpty())
+            return iter;
+        return controller.getTopKRows(iter, orderings.get(0));
     }
 
     static FilterTree buildFilter(QueryController controller)

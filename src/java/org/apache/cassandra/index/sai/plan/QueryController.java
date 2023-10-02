@@ -286,20 +286,17 @@ public class QueryController
         }
     }
 
-    // TODO see about ways to collapse the two getTopKRows methods
-    // This is essentially the old hybrid search logic
     public RangeIterator getTopKRows(RangeIterator source, RowFilter.Expression expression)
     {
-        if (!source.hasNext())
-            return RangeIterator.empty();
-        // TODO handle overflow with chunking solution to handle issues with many primary keys.
-        final List<PrimaryKey> sourceKeys = new ArrayList<>();
-        do
-        {
-            sourceKeys.add(source.next());
-        }
-        while (source.hasNext());
+        // TODO test different chunk sizes. Ran into problems when too low.
+        // specifically, need to be bigger than limit and account for shadowed keys
+        return new OrderRangeIterator(source, getLimit() + queryContext.getShadowedPrimaryKeys().size(), expression, this);
+    }
 
+    // TODO see about ways to collapse the two getTopKRows methods
+    // This is essentially the old hybrid search logic
+    public RangeIterator getTopKRows(List<PrimaryKey> sourceKeys, RowFilter.Expression expression)
+    {
         // this is the hybrid, the above is the pure
         var planExpression = new Expression(this.getContext(expression));
         planExpression.add(Operator.ANN, expression.getIndexValue().duplicate());
