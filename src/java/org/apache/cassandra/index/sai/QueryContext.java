@@ -122,6 +122,12 @@ public class QueryContext
         return shadowedPrimaryKeys == null || !shadowedPrimaryKeys.contains(primaryKeyMap.primaryKeyFromRowId(sstableRowId));
     }
 
+    public boolean shouldInclude(long sstableRowId, PrimaryKeyMap primaryKeyMap, PrimaryKey pk)
+    {
+        return primaryKeyMap.primaryKeyFromRowId(sstableRowId).equals(pk) &&
+               (shadowedPrimaryKeys == null || !shadowedPrimaryKeys.contains(pk));
+    }
+
     public boolean containsShadowedPrimaryKey(PrimaryKey primaryKey)
     {
         return shadowedPrimaryKeys != null && shadowedPrimaryKeys.contains(primaryKey);
