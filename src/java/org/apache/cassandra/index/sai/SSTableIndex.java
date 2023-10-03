@@ -226,9 +226,9 @@ public class SSTableIndex implements SegmentOrdering
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit) throws IOException
     {
-        return searchableIndex.limitToTopResults(context, iterator, exp, limit);
+        return searchableIndex.limitToTopResults(context, keys, exp, limit);
     }
 
     public String toString()

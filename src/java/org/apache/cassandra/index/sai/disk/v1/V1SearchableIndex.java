@@ -180,11 +180,11 @@ public class V1SearchableIndex implements SearchableIndex
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit) throws IOException
     {
         RangeUnionIterator.Builder unionIteratorBuilder = new RangeUnionIterator.Builder(segments.size());
         for (Segment segment : segments)
-            unionIteratorBuilder.add(segment.limitToTopResults(context, iterator, exp, limit));
+            unionIteratorBuilder.add(segment.limitToTopResults(context, keys, exp, limit));
 
         return unionIteratorBuilder.build();
     }

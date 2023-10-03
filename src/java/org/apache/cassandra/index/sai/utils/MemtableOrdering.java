@@ -35,9 +35,9 @@ public interface MemtableOrdering
      * This requires materializing the results into a BitSet or List, so any intersections we can perform
      * to minimize the input size should be performed before calling this.
      *
-     * Assumes that the the given RangeIterator spans the same rows as the implementing index's segment.
+     * Assumes that the given  spans the same rows as the implementing index's segment.
      */
-    default RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit)
+    default RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit)
     {
         throw new UnsupportedOperationException();
     }

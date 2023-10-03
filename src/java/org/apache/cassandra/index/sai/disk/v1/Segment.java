@@ -159,9 +159,9 @@ public class Segment implements Closeable, SegmentOrdering
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit) throws IOException
     {
-        return index.limitToTopResults(context, iterator, exp, limit);
+        return index.limitToTopResults(context, keys, exp, limit);
     }
 
     @Override

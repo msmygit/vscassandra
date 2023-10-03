@@ -339,7 +339,7 @@ public class QueryController
 
     }
 
-    private RangeIterator reorderAndLimitBySSTableRowIds(List<PrimaryKey> original, SSTableReader sstable, QueryViewBuilder.QueryView annQueryView)
+    private RangeIterator reorderAndLimitBySSTableRowIds(List<PrimaryKey> keys, SSTableReader sstable, QueryViewBuilder.QueryView annQueryView)
     {
         List<QueryViewBuilder.IndexExpression> annIndexExpressions = annQueryView.view.get(sstable);
         assert annIndexExpressions.size() == 1 : "only one index is expected in ANN expression, found " + annIndexExpressions.size() + " in " + annIndexExpressions;
@@ -347,7 +347,7 @@ public class QueryController
 
         try
         {
-            return annIndexExpression.index.limitToTopResults(queryContext, original, annIndexExpression.expression, getLimit());
+            return annIndexExpression.index.limitToTopResults(queryContext, keys, annIndexExpression.expression, getLimit());
         }
         catch (IOException e)
         {

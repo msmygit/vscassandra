@@ -61,9 +61,9 @@ public interface SearchableIndex extends Closeable, SegmentOrdering
     public DecoratedKey maxKey();
 
     public List<RangeIterator> search(Expression expression,
-                                                  AbstractBounds<PartitionPosition> keyRange,
-                                                  QueryContext context,
-                                                  boolean defer, int limit) throws IOException;
+                                      AbstractBounds<PartitionPosition> keyRange,
+                                      QueryContext context,
+                                      boolean defer, int limit) throws IOException;
 
     public void populateSystemView(SimpleDataSet dataSet, SSTableReader sstable);
 }

@@ -202,7 +202,7 @@ public class VectorMemtableIndex implements MemtableIndex
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit)
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit)
     {
         if (minimumKey == null)
         {
@@ -211,7 +211,7 @@ public class VectorMemtableIndex implements MemtableIndex
         }
         // todo why hash set? Don't we have the keys in priority order already?
         Set<PrimaryKey> results = new HashSet<>();
-        for (PrimaryKey key : iterator)
+        for (PrimaryKey key : keys)
         {
             assert context.shouldInclude(key);
             results.add(key);
