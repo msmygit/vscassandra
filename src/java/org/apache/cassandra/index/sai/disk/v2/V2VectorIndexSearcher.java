@@ -278,15 +278,16 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                     if (sstableRowId < metadata.minSSTableRowId)
                         continue;
 
+                    if (!context.shouldInclude(sstableRowId, primaryKeyMap))
+                        continue;
+
                     int segmentRowId = metadata.toSegmentRowId(sstableRowId);
                     rowIds.add(segmentRowId);
-
+                    // TODO now that we know the size of keys evaluated, is it worth doing the brute
+                    // force check eagerly to potentially skip finding the ordinal for the row id?
                     int ordinal = ordinalsView.getOrdinalForRowId(segmentRowId);
                     if (ordinal >= 0)
-                    {
-                        if (context.shouldInclude(sstableRowId, primaryKeyMap))
-                            bits.set(ordinal);
-                    }
+                        bits.set(ordinal);
                 }
             }
 
