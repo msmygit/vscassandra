@@ -296,8 +296,11 @@ public class QueryController
 
     // TODO see about ways to collapse the two getTopKRows methods
     // This is essentially the old hybrid search logic
-    private RangeIterator getTopKRows(List<PrimaryKey> sourceKeys, RowFilter.Expression expression)
+    private RangeIterator getTopKRows(List<PrimaryKey> rawSourceKeys, RowFilter.Expression expression)
     {
+        // Filter out PKs now. Each PK is passed to every segment of the ANN index, so filtering shadowed keys
+        // eagerly can save some work when going from PK to row id for on disk segments.
+        var sourceKeys = rawSourceKeys.stream().filter(queryContext::shouldInclude).collect(Collectors.toList());
         // this is the hybrid, the above is the pure
         var planExpression = new Expression(this.getContext(expression));
         planExpression.add(Operator.ANN, expression.getIndexValue().duplicate());

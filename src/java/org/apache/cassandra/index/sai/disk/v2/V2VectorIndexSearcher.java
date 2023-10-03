@@ -280,7 +280,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                     if (sstableRowId < metadata.minSSTableRowId)
                         continue;
 
-                    if (!context.shouldInclude(sstableRowId, primaryKeyMap, primaryKey))
+                    if (!primaryKeyMap.primaryKeyFromRowId(sstableRowId).equals(primaryKey))
                         continue;
 
                     int segmentRowId = metadata.toSegmentRowId(sstableRowId);

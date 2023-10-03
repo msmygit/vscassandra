@@ -174,7 +174,7 @@ public class VectorMemtableIndex implements MemtableIndex
 
             Set<PrimaryKey> resultKeys = isMaxToken ? primaryKeys.tailSet(left, leftInclusive) : primaryKeys.subSet(left, leftInclusive, right, rightInclusive);
             if (!queryContext.getShadowedPrimaryKeys().isEmpty())
-                resultKeys = resultKeys.stream().filter(pk -> !queryContext.containsShadowedPrimaryKey(pk)).collect(Collectors.toSet());
+                resultKeys = resultKeys.stream().filter(queryContext::shouldInclude).collect(Collectors.toSet());
 
             if (resultKeys.isEmpty())
                 return RangeIterator.empty();
@@ -213,8 +213,8 @@ public class VectorMemtableIndex implements MemtableIndex
         Set<PrimaryKey> results = new HashSet<>();
         for (PrimaryKey key : iterator)
         {
-            if (!context.containsShadowedPrimaryKey(key))
-                results.add(key);
+            assert context.shouldInclude(key);
+            results.add(key);
         }
 
         int maxBruteForceRows = maxBruteForceRows(limit, results.size(), graph.size());
