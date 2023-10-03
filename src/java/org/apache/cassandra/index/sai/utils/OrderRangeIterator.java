@@ -24,8 +24,6 @@ import java.util.function.Function;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import org.apache.cassandra.index.sai.utils.PrimaryKey;
-import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.FileUtils;
 
 // This is essentially a filter on top of a range iterator where we order chunks of primary keys,
@@ -37,6 +35,7 @@ public class OrderRangeIterator extends RangeIterator
     private final int chunkSize;
     private final Function<List<PrimaryKey>, RangeIterator> nextRangeFunction;
     private RangeIterator nextIterator;
+    private ArrayList<PrimaryKey> nextKeys;
 
     public OrderRangeIterator(RangeIterator input, int chunkSize, Function<List<PrimaryKey>, RangeIterator> nextRangeFunction)
     {
@@ -44,40 +43,34 @@ public class OrderRangeIterator extends RangeIterator
         this.input = input;
         this.chunkSize = chunkSize;
         this.nextRangeFunction = nextRangeFunction;
+        this.nextKeys = new ArrayList<>(chunkSize);
     }
 
     @Override
     public PrimaryKey computeNext()
     {
         if (nextIterator == null || !nextIterator.hasNext())
-            nextIterator = computeNextIterator();
-        if (nextIterator == null)
-            return endOfData();
-        return nextIterator.next();
-    }
-
-    private RangeIterator computeNextIterator()
-    {
-        if (!input.hasNext())
-            return null;
-        List<PrimaryKey> nextKeys = new ArrayList<>(chunkSize);
-        do
         {
-            nextKeys.add(input.next());
-            // todo that was the wrong order for hasNext... wow, very subtle
-            // we're still failing for chunk size 1 though
+            do
+            {
+                if (!input.hasNext())
+                    return endOfData();
+                nextKeys.clear();
+                do
+                {
+                    nextKeys.add(input.next());
+                }
+                while (nextKeys.size() < chunkSize && input.hasNext());
+                // Get the next iterator before closing this one to prevent releasing the resource.
+                var previousIterator = nextIterator;
+                // If this results in an exception, previousIterator is closed in close() method.
+                nextIterator = nextRangeFunction.apply(nextKeys);
+                if (previousIterator != null)
+                    FileUtils.closeQuietly(previousIterator);
+                // nextIterator might not have any rows due to shadowed primary keys
+            } while (!nextIterator.hasNext());
         }
-        while (nextKeys.size() < chunkSize && input.hasNext());
-        // each call here gets new leases...
-        var previousIterator = nextIterator;
-        // TODO how do we handle errors out of this handle errors?
-        nextIterator = nextRangeFunction.apply(nextKeys);
-        // Close afterward to make sure we keep the references counted correctly.
-        if (previousIterator != null)
-            FileUtils.closeQuietly(previousIterator);
-        if (!nextIterator.hasNext())
-            return computeNextIterator();
-        return nextIterator;
+        return nextIterator.next();
     }
 
     @Override
