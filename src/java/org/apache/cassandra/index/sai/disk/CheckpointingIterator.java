@@ -37,15 +37,12 @@ public class CheckpointingIterator extends RangeIterator
     private final RangeIterator union;
     private final Iterable<SSTableIndex> referencedIndexes;
 
-    public CheckpointingIterator(RangeIterator wrapped, Collection<SSTableIndex> referencedIndexes, Collection<SSTableIndex> referencedAnnIndexesInHybridSearch, QueryContext queryContext)
+    public CheckpointingIterator(RangeIterator wrapped, Collection<SSTableIndex> referencedIndexes, QueryContext queryContext)
     {
         super(wrapped.getMinimum(), wrapped.getMaximum(), wrapped.getCount());
 
         this.union = wrapped;
-        if (referencedAnnIndexesInHybridSearch != null)
-            this.referencedIndexes = Iterables.concat(referencedIndexes, referencedAnnIndexesInHybridSearch);
-        else
-            this.referencedIndexes = referencedIndexes;
+        this.referencedIndexes = referencedIndexes;
         this.context = queryContext;
     }
 

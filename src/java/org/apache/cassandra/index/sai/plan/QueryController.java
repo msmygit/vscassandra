@@ -276,7 +276,6 @@ public class QueryController
             RangeIterator union = RangeUnionIterator.build(allIntersections);
             return new CheckpointingIterator(union,
                                              queryView.referencedIndexes,
-                                             null,
                                              queryContext);
         }
         catch (Throwable t)
@@ -327,7 +326,6 @@ public class QueryController
             // TODO can we remove this class now?
             return new CheckpointingIterator(union,
                                                queryView.referencedIndexes,
-                                               null,
                                                queryContext);
         }
         catch (Throwable t)
