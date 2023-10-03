@@ -73,12 +73,7 @@ public class OrderRangeIterator extends RangeIterator
     protected void performSkipTo(PrimaryKey nextToken)
     {
         input.skipTo(nextToken);
-        if (nextIterator != null && nextToken.compareTo(nextIterator.getMaximum()) > 0)
-        {
-            // TODO will closing this before opening the next one lead to issues?
-            FileUtils.closeQuietly(nextIterator);
-            nextIterator = null;
-        }
+        nextIterator.skipTo(nextToken);
     }
 
     public void close() {
