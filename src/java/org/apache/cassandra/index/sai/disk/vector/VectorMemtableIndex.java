@@ -209,13 +209,11 @@ public class VectorMemtableIndex implements MemtableIndex
             assert maximumKey == null : "Minimum key is null but maximum key is not";
             return RangeIterator.empty();
         }
-        // todo why hash set? Don't we have the keys in priority order already?
-        Set<PrimaryKey> results = new HashSet<>();
-        for (PrimaryKey key : keys)
-        {
-            assert context.shouldInclude(key);
-            results.add(key);
-        }
+        // TODO revisit collection type. We need a new RangeIterator that takes a token ordered list of PrimaryKeys
+        Set<PrimaryKey> results = keys.stream()
+                                      .dropWhile(k -> k.compareTo(minimumKey) < 0)
+                                      .takeWhile(k -> k.compareTo(maximumKey) <= 0)
+                                      .collect(Collectors.toSet());
 
         int maxBruteForceRows = maxBruteForceRows(limit, results.size(), graph.size());
         logger.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",

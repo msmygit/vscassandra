@@ -29,11 +29,8 @@ import org.apache.cassandra.index.sai.plan.Expression;
 public interface MemtableOrdering
 {
     /**
-     * Filter the given RangeIterator results to the top `limit` results corresponding to the given expression,
+     * Filter the given list of {@link PrimaryKey} results to the top `limit` results corresponding to the given expression,
      * Returns an iterator over the results that is put back in token order.
-     *
-     * This requires materializing the results into a BitSet or List, so any intersections we can perform
-     * to minimize the input size should be performed before calling this.
      *
      * Assumes that the given  spans the same rows as the implementing index's segment.
      */
