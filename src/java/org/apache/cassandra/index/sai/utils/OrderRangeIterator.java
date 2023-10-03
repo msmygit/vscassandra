@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.index.sai.plan;
+package org.apache.cassandra.index.sai.utils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +58,7 @@ public class OrderRangeIterator extends RangeIterator
             while (input.hasNext() && nextKeys.size() < chunkSize);
             // each call here gets new leases...
             var previousIterator = nextIterator;
+            // TODO how do we handle errors out of this handle errors?
             nextIterator = nextRangeFunction.apply(nextKeys);
             // Close afterward to make sure we keep the references counted correctly.
             if (previousIterator != null)
