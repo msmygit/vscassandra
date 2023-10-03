@@ -22,12 +22,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import javax.annotation.concurrent.NotThreadSafe;
+
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
 import org.apache.cassandra.io.util.FileUtils;
 
 // This is essentially a filter on top of a range iterator where we order chunks of primary keys,
 // take the top ones and then put them back in primary key order
+@NotThreadSafe
 public class OrderRangeIterator extends RangeIterator
 {
     private final RangeIterator input;

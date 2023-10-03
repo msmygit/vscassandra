@@ -288,8 +288,9 @@ public class QueryController
 
     public RangeIterator getTopKRows(RangeIterator source, RowFilter.Expression expression)
     {
-        // TODO test different chunk sizes. Ran into problems when too low.
-        // specifically, need to be bigger than limit and account for shadowed keys
+        // TODO find way to test different chunk sizes. Ran into problems when too low.
+        // Specifically, it appears we need chunk size bigger than limit + num shadowed keys, but that doesn't
+        // really make sense. Need to investigate more.
         return new OrderRangeIterator(source,
                                       getLimit() + queryContext.getShadowedPrimaryKeys().size(),
                                       list -> this.getTopKRows(list, expression));

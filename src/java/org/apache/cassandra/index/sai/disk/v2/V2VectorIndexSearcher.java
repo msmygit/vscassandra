@@ -253,19 +253,21 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
     }
 
     @Override
-    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> iterator, Expression exp, int limit) throws IOException
+    public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit) throws IOException
     {
         try (PrimaryKeyMap primaryKeyMap = primaryKeyMapFactory.newPerSSTablePrimaryKeyMap())
         {
-            // the iterator represents keys from all the segments in our sstable -- we'll only pull of those that
+            // the iterator represents keys from the whole table -- we'll only pull of those that
             // are from our own token range so we can use row ids to order the results by vector similarity.
             var maxSegmentRowId = metadata.toSegmentRowId(metadata.maxSSTableRowId);
             SparseFixedBitSet bits = bitSetForSearch();
             var rowIds = new IntArrayList();
             try (var ordinalsView = graph.getOrdinalsView())
             {
-                for (PrimaryKey primaryKey : iterator)
+                for (PrimaryKey primaryKey : keys)
                 {
+                    if (primaryKey.compareTo(metadata.minKey) < 0 || primaryKey.compareTo(metadata.maxKey) > 0)
+                        continue;
                     // TODO How expensive am I? I don't see another way to do this right now, but seems expensive.
                     long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(primaryKey);
                     // if sstable row id has exceeded current ANN segment, stop

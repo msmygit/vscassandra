@@ -214,8 +214,7 @@ public class Operation
         assert orderings.size() <= 1;
         if (controller.filterOperation().expressions().size() == 1 && orderings.size() == 1)
         {
-            // If we only have one expression, we can use the ANN index to order and limit
-            // TODO is it okay to bypass the other Node buildTree methods?
+            // If we only have one expression, we just use the ANN index to order and limit.
             return controller.getTopKRows(orderings.get(0));
         }
         var iter = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
