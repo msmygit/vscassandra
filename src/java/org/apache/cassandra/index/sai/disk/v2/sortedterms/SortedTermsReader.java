@@ -105,19 +105,34 @@ public class SortedTermsReader
 
     /**
      * Returns the point id (ordinal) of the target term or the next greater if no exact match found.
+     * @param term
+     * @return
+     */
+    public long getNextPointId(@Nonnull ByteComparable term)
+    {
+        return getPointId(term, false);
+    }
+
+    /**
+     * Returns the point id (ordinal) of the target term.
      * If reached the end of the terms file, returns <code>Long.MAX_VALUE</code>.
      * Complexity of this operation is O(log n).
      *
      * @param term target term to lookup
      */
-    public long getPointId(@Nonnull ByteComparable term)
+    public long getExactPointId(@Nonnull ByteComparable term)
+    {
+        return getPointId(term, true);
+    }
+
+    private long getPointId(@Nonnull ByteComparable term, boolean exactMatch)
     {
         Preconditions.checkNotNull(term, "term null");
 
         try (TrieRangeIterator reader = new TrieRangeIterator(termsTrie.instantiateRebufferer(),
                                                               meta.trieFP,
                                                               term,
-                                                              null,
+                                                              exactMatch ? term : null,
                                                               true,
                                                               true))
         {
