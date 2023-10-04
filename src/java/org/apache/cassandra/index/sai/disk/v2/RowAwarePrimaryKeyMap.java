@@ -166,13 +166,13 @@ public class RowAwarePrimaryKeyMap implements PrimaryKeyMap
     @Override
     public long rowIdFromPrimaryKey(PrimaryKey key)
     {
-        return sortedTermsReader.getPointId(v -> key.asComparableBytes(v));
+        return sortedTermsReader.getExactPointId(v -> key.asComparableBytes(v));
     }
 
     @Override
     public long firstRowIdFromPrimaryKey(PrimaryKey key)
     {
-        return sortedTermsReader.getPointId(v -> key.asComparableBytesMinPrefix(v));
+        return sortedTermsReader.getNextPointId(v -> key.asComparableBytesMinPrefix(v));
     }
 
     @Override
