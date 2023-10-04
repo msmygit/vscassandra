@@ -269,18 +269,13 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                     if (primaryKey.compareTo(metadata.minKey) < 0 || primaryKey.compareTo(metadata.maxKey) > 0)
                         continue;
                     // TODO How expensive am I? I don't see another way to do this right now, but seems expensive.
-                    // TODO this returns wrong rows if the PK is not in the table... see if we can get it to return
-                    // -1 when the PK is not in the table.
                     long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(primaryKey);
                     // if sstable row id has exceeded current ANN segment, stop
-                    if (sstableRowId > metadata.maxSSTableRowId)
+                    if (sstableRowId > metadata.maxSSTableRowId || sstableRowId == Long.MAX_VALUE)
                         break;
 
                     // skip rows that are not in our segment (or more preciesely, have no vectors that were indexed)
                     if (sstableRowId < metadata.minSSTableRowId)
-                        continue;
-
-                    if (!primaryKeyMap.primaryKeyFromRowId(sstableRowId).equals(primaryKey))
                         continue;
 
                     int segmentRowId = metadata.toSegmentRowId(sstableRowId);
