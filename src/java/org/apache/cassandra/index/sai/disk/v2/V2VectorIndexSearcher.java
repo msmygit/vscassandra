@@ -268,20 +268,20 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
                 {
                     if (primaryKey.compareTo(metadata.minKey) < 0 || primaryKey.compareTo(metadata.maxKey) > 0)
                         continue;
-                    // TODO How expensive am I? I don't see another way to do this right now, but seems expensive.
+                    // TODO this is O(log n), is this a hotspot?
                     long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(primaryKey);
-                    // if sstable row id has exceeded current ANN segment, stop
-                    if (sstableRowId > metadata.maxSSTableRowId || sstableRowId == Long.MAX_VALUE)
-                        break;
-
                     // skip rows that are not in our segment (or more preciesely, have no vectors that were indexed)
                     if (sstableRowId < metadata.minSSTableRowId)
                         continue;
 
+                    // if sstable row id has exceeded current ANN segment, stop
+                    if (sstableRowId > metadata.maxSSTableRowId || sstableRowId == Long.MAX_VALUE)
+                        break;
+
                     int segmentRowId = metadata.toSegmentRowId(sstableRowId);
                     rowIds.add(segmentRowId);
                     // TODO now that we know the size of keys evaluated, is it worth doing the brute
-                    // force check eagerly to potentially skip finding the ordinal for the row id?
+                    // force check eagerly to potentially skip the PK to sstable row id to ordinal lookup?
                     int ordinal = ordinalsView.getOrdinalForRowId(segmentRowId);
                     if (ordinal >= 0)
                         bits.set(ordinal);

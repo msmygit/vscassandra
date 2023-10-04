@@ -209,7 +209,8 @@ public class VectorMemtableIndex implements MemtableIndex
             assert maximumKey == null : "Minimum key is null but maximum key is not";
             return RangeIterator.empty();
         }
-        // TODO revisit collection type. We need a new RangeIterator that takes a token ordered list of PrimaryKeys
+        // TODO revisit collection type. keys are already in correct order, so in brute force scenario, we are
+        // denormalizing for no reason. We'd need to add a new RangeIterator that takes a token ordered list of PrimaryKeys
         Set<PrimaryKey> results = keys.stream()
                                       .dropWhile(k -> k.compareTo(minimumKey) < 0)
                                       .takeWhile(k -> k.compareTo(maximumKey) <= 0)
