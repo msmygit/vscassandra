@@ -249,7 +249,7 @@ public class QueryController
         return builder.build();
     }
 
-    // This is purely ANN
+    // This is an ANN only query
     public RangeIterator getTopKRows(RowFilter.Expression expression)
     {
         assert expression.operator() == Operator.ANN;
@@ -266,17 +266,7 @@ public class QueryController
                                                                                  .stream()
                                                                                  .map(e -> createRowIdIterator(e, true))
                                                                                  .collect(Collectors.toList());
-
-            Iterable<RangeIterator> allIntersections = Iterables.concat(sstableIntersections, Collections.singleton(memtableResults));
-
-            queryContext.sstablesHit += queryView.referencedIndexes
-                                        .stream()
-                                        .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
-            queryContext.checkpoint();
-            RangeIterator union = RangeUnionIterator.build(allIntersections);
-            return new CheckpointingIterator(union,
-                                             queryView.referencedIndexes,
-                                             queryContext);
+            return buildRangeIteratorForTopKLimit(sstableIntersections, memtableResults, queryView.referencedIndexes);
         }
         catch (Throwable t)
         {
@@ -286,6 +276,7 @@ public class QueryController
         }
     }
 
+    // This is a hybrid query. We apply all other predicates before ordering and limiting.
     public RangeIterator getTopKRows(RangeIterator source, RowFilter.Expression expression)
     {
         // TODO find way to test different chunk sizes. Found a fundamental flaw with 1, so it'd be good to continue
@@ -295,8 +286,6 @@ public class QueryController
                                       list -> this.getTopKRows(list, expression));
     }
 
-    // TODO see about ways to collapse the two getTopKRows methods
-    // This is essentially the old hybrid search logic
     private RangeIterator getTopKRows(List<PrimaryKey> rawSourceKeys, RowFilter.Expression expression)
     {
         // Filter out PKs now. Each PK is passed to every segment of the ANN index, so filtering shadowed keys
@@ -319,17 +308,7 @@ public class QueryController
                                                                                  })
                                                                                  .collect(Collectors.toList());
 
-            Iterable<RangeIterator> allIntersections = Iterables.concat(sstableIntersections, Collections.singleton(memtableResults));
-
-            queryContext.sstablesHit += queryView.referencedIndexes
-                                        .stream()
-                                        .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
-            queryContext.checkpoint();
-            RangeIterator union = RangeUnionIterator.build(allIntersections);
-            // TODO can we remove this class now?
-            return new CheckpointingIterator(union,
-                                               queryView.referencedIndexes,
-                                               queryContext);
+            return buildRangeIteratorForTopKLimit(sstableIntersections, memtableResults, queryView.referencedIndexes);
         }
         catch (Throwable t)
         {
@@ -338,6 +317,24 @@ public class QueryController
             throw t;
         }
 
+    }
+
+    private RangeIterator buildRangeIteratorForTopKLimit(List<RangeIterator> sstableIntersections,
+                                                         RangeIterator memtableResults,
+                                                         Set<SSTableIndex> referencedIndexes)
+    {
+        queryContext.sstablesHit += referencedIndexes
+                                    .stream()
+                                    .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
+        queryContext.checkpoint();
+        RangeIterator union = RangeUnionIterator.builder(sstableIntersections.size() + 1)
+                              .add(sstableIntersections)
+                              .add(memtableResults)
+                              .build();
+        // TODO can we remove this class now?
+        return new CheckpointingIterator(union,
+                                         referencedIndexes,
+                                         queryContext);
     }
 
     private RangeIterator reorderAndLimitBySSTableRowIds(List<PrimaryKey> keys, SSTableReader sstable, QueryViewBuilder.QueryView annQueryView)
@@ -393,7 +390,6 @@ public class QueryController
                                         }
                                     }).collect(Collectors.toList());
 
-        // we need to do all the intersections at the index level, or ordering won't work
         return RangeUnionIterator.builder(subIterators.size()).add(subIterators).build();
     }
 
