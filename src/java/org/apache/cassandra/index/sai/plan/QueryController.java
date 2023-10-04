@@ -31,7 +31,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.slf4j.Logger;
@@ -59,7 +58,6 @@ import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
-import org.apache.cassandra.index.sai.disk.CheckpointingIterator;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
@@ -266,7 +264,7 @@ public class QueryController
                                                                                  .stream()
                                                                                  .map(e -> createRowIdIterator(e, true))
                                                                                  .collect(Collectors.toList());
-            return buildRangeIteratorForTopKLimit(sstableIntersections, memtableResults, queryView.referencedIndexes);
+            return TermIterator.build(sstableIntersections, memtableResults, queryView.referencedIndexes, queryContext);
         }
         catch (Throwable t)
         {
@@ -308,7 +306,7 @@ public class QueryController
                                                                                  })
                                                                                  .collect(Collectors.toList());
 
-            return buildRangeIteratorForTopKLimit(sstableIntersections, memtableResults, queryView.referencedIndexes);
+            return TermIterator.build(sstableIntersections, memtableResults, queryView.referencedIndexes, queryContext);
         }
         catch (Throwable t)
         {
@@ -317,24 +315,6 @@ public class QueryController
             throw t;
         }
 
-    }
-
-    private RangeIterator buildRangeIteratorForTopKLimit(List<RangeIterator> sstableIntersections,
-                                                         RangeIterator memtableResults,
-                                                         Set<SSTableIndex> referencedIndexes)
-    {
-        queryContext.sstablesHit += referencedIndexes
-                                    .stream()
-                                    .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
-        queryContext.checkpoint();
-        RangeIterator union = RangeUnionIterator.builder(sstableIntersections.size() + 1)
-                              .add(sstableIntersections)
-                              .add(memtableResults)
-                              .build();
-        // TODO can we remove this class now?
-        return new CheckpointingIterator(union,
-                                         referencedIndexes,
-                                         queryContext);
     }
 
     private RangeIterator reorderAndLimitBySSTableRowIds(List<PrimaryKey> keys, SSTableReader sstable, QueryViewBuilder.QueryView annQueryView)

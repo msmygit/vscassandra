@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.utils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,19 @@ public class TermIterator extends RangeIterator
         this.union = union;
         this.referencedIndexes = referencedIndexes;
         this.context = queryContext;
+    }
+
+    public static TermIterator build(List<RangeIterator> sstableIntersections, RangeIterator memtableResults, Set<SSTableIndex> referencedIndexes, QueryContext queryContext)
+    {
+        queryContext.sstablesHit += referencedIndexes
+                                    .stream()
+                                    .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
+        queryContext.checkpoint();
+        RangeIterator union = RangeUnionIterator.builder(sstableIntersections.size() + 1)
+                                                .add(sstableIntersections)
+                                                .add(memtableResults)
+                                                .build();
+        return new TermIterator(union, referencedIndexes, queryContext);
     }
 
     @SuppressWarnings("resource")
