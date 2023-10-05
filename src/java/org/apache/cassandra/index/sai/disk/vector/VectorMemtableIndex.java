@@ -209,12 +209,10 @@ public class VectorMemtableIndex implements MemtableIndex
             assert maximumKey == null : "Minimum key is null but maximum key is not";
             return RangeIterator.empty();
         }
-        // TODO revisit collection type. keys are already in correct order, so in brute force scenario, we are
-        // denormalizing for no reason. We'd need to add a new RangeIterator that takes a token ordered list of PrimaryKeys
-        Set<PrimaryKey> results = keys.stream()
+        List<PrimaryKey> results = keys.stream()
                                       .dropWhile(k -> k.compareTo(minimumKey) < 0)
                                       .takeWhile(k -> k.compareTo(maximumKey) <= 0)
-                                      .collect(Collectors.toSet());
+                                      .collect(Collectors.toList());
 
         int maxBruteForceRows = maxBruteForceRows(limit, results.size(), graph.size());
         logger.trace("SAI materialized {} rows; max brute force rows is {} for memtable index with {} nodes, LIMIT {}",
@@ -225,7 +223,7 @@ public class VectorMemtableIndex implements MemtableIndex
         {
             if (results.isEmpty())
                 return RangeIterator.empty();
-            return new ReorderingRangeIterator(new PriorityQueue<>(results));
+            return new ListRangeIterator(results);
         }
 
         float[] qv = exp.lower.value.vector;
@@ -372,13 +370,53 @@ public class VectorMemtableIndex implements MemtableIndex
         }
     }
 
+    private class ListRangeIterator extends RangeIterator
+    {
+        private final Iterator<PrimaryKey> keyQueue;
+        private PrimaryKey maybeNext;
+
+        ListRangeIterator(List<PrimaryKey> keyQueue)
+        {
+            super(minimumKey, maximumKey, keyQueue.size());
+            this.keyQueue = keyQueue.iterator();
+        }
+
+        @Override
+        protected void performSkipTo(PrimaryKey nextKey)
+        {
+            while (!keyQueue.hasNext())
+            {
+                maybeNext = keyQueue.next();
+                if (maybeNext.compareTo(nextKey) >= 0)
+                    break;
+            }
+        }
+
+        @Override
+        public void close() {}
+
+        @Override
+        protected PrimaryKey computeNext()
+        {
+            if (maybeNext != null)
+            {
+                var next = maybeNext;
+                maybeNext = null;
+                return next;
+            }
+            if (keyQueue.hasNext())
+                return keyQueue.next();
+            return endOfData();
+        }
+    }
+
     private class KeyFilteringBits implements Bits
     {
         private final Set<PrimaryKey> results;
 
-        public KeyFilteringBits(Set<PrimaryKey> results)
+        public KeyFilteringBits(List<PrimaryKey> results)
         {
-            this.results = results;
+            this.results = new HashSet<>(results);
         }
 
         @Override
