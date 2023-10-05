@@ -288,7 +288,8 @@ public class QueryController
     {
         // Filter out PKs now. Each PK is passed to every segment of the ANN index, so filtering shadowed keys
         // eagerly can save some work when going from PK to row id for on disk segments.
-        var sourceKeys = rawSourceKeys.stream().filter(queryContext::shouldInclude).collect(Collectors.toList());
+        // Since the result is shared with multiple streams, we use an unmodifiable list.
+        var sourceKeys = rawSourceKeys.stream().filter(queryContext::shouldInclude).collect(Collectors.toUnmodifiableList());
         // this is the hybrid, the above is the pure
         var planExpression = new Expression(this.getContext(expression));
         planExpression.add(Operator.ANN, expression.getIndexValue().duplicate());
