@@ -58,6 +58,8 @@ import org.apache.cassandra.db.lifecycle.SSTableSet;
 import org.apache.cassandra.db.lifecycle.View;
 import org.apache.cassandra.db.memtable.Memtable;
 import org.apache.cassandra.index.SecondaryIndexManager;
+import org.apache.cassandra.index.sai.IndexContext;
+import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.io.compress.CompressionMetadata;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.io.sstable.metadata.MetadataCollector;
@@ -214,6 +216,18 @@ public class TableMetrics
     public final Gauge<Integer> pendingCompactions;
     /** Number of SSTables on disk for this CF */
     public final Gauge<Integer> liveSSTableCount;
+    /** Number of SSTables cell count for SAI */
+    public final Gauge<Long> ssTableCellCount;
+    /** Memtable on heap index bytes for SAI */
+    public final Gauge<Long> memtableOnHeapIndexBytes;
+    /** Memtable off heap index bytes for SAI */
+    public final Gauge<Long> memtableOffHeapIndexBytes;
+    /** Live memtable index write count for SAI */
+    public final Gauge<Long> liveMemtableIndexWriteCount;
+    /** Disk used bytes for SAI */
+    public final Gauge<Long> diskUsedBytes;
+    /** Index file cached bytes for SAI */
+    public final Gauge<Long> indexFileCacheBytes;
     /** Number of SSTables with old version on disk for this CF */
     public final Gauge<Integer> oldVersionSSTableCount;
     /** Disk space used by SSTables belonging to this table */
@@ -696,6 +710,16 @@ public class TableMetrics
         compactionTimePerKb = ExpMovingAverage.decayBy100();
         pendingCompactions = createTableGauge("PendingCompactions", () -> cfs.getCompactionStrategy().getEstimatedRemainingTasks());
         liveSSTableCount = createTableGauge("LiveSSTableCount", () -> cfs.getLiveSSTables().size());
+        // SAI-related metrics
+        StorageAttachedIndex sai = (StorageAttachedIndex) cfs.getIndexManager().getIndexByName(String.format("%s_value_idx", cfs.getTableName()));
+        IndexContext indexContext = sai.getIndexContext();
+
+        ssTableCellCount = createTableGauge("SSTableCellCount", () -> indexContext.getCellCount());
+        memtableOnHeapIndexBytes = createTableGauge("MemtableOnHeapIndexBytes", () -> indexContext.estimatedOnHeapMemIndexMemoryUsed());
+        memtableOffHeapIndexBytes = createTableGauge("MemtableOffHeapIndexBytes", () -> indexContext.estimatedOffHeapMemIndexMemoryUsed());
+        liveMemtableIndexWriteCount = createTableGauge("LiveMemtableIndexWriteCount", () -> indexContext.liveMemtableWriteCount());
+        diskUsedBytes = createTableGauge("DiskUsedBytes", () -> indexContext.diskUsage());
+        indexFileCacheBytes = createTableGauge("IndexFileCacheBytes", () -> indexContext.indexFileCacheSize());
         oldVersionSSTableCount = createTableGauge("OldVersionSSTableCount", new Gauge<Integer>()
         {
             public Integer getValue()
