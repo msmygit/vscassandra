@@ -25,6 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import com.google.common.collect.ImmutableSet;
 
 import org.apache.commons.lang3.StringUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.cassandra.db.marshal.CompositeType;
@@ -34,6 +35,7 @@ import org.apache.cassandra.db.marshal.MapType;
 import org.apache.cassandra.db.marshal.SetType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.index.sai.SAITester;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -57,6 +59,7 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.transport.messages.ResultMessage;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.MD5Digest;
 import org.apache.cassandra.utils.Pair;
 
@@ -72,9 +75,30 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class SecondaryIndexTest extends CQLTester
+public class SecondaryIndexTest extends SAITester
 {
     public static final int TOO_BIG = 1024 * 65;
+
+    @Before
+    public void setup()
+    {
+        requireNetwork();
+    }
+
+    @Test
+    public void testInvalidValue() throws Throwable
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (k int PRIMARY KEY, v map<text, text>,)");
+        createIndex("CREATE CUSTOM INDEX idx ON %s(ENTRIES(v)) USING 'StorageAttachedIndex'");
+        waitForIndex(KEYSPACE, currentTable(), "idx");
+
+        String key = UTF8Type.instance.compose(ByteBuffer.allocate(FBUtilities.MAX_UNSIGNED_SHORT / 2 + 1));
+        execute("INSERT INTO %s (k, v) VALUES (0, {'" + key + "': ''})");
+        assertRows(execute("SELECT * FROM %s WHERE v['"+ key +"'] = ''"), row(0, map(key, "")));
+
+        flush();
+        assertRows(execute("SELECT * FROM %s WHERE v['"+ key +"'] = ''"), row(0, map(key, "")));
+    }
 
     @Test
     public void testCreateAndDropIndex() throws Throwable
