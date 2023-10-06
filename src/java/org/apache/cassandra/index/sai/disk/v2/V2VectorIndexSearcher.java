@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai.disk.v2;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.List;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import com.google.common.base.MoreObjects;
@@ -255,6 +256,11 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
     @Override
     public RangeIterator limitToTopResults(QueryContext context, List<PrimaryKey> keys, Expression exp, int limit) throws IOException
     {
+        // VSTODO would it be better to do a binary search to find the boundaries?
+        List<PrimaryKey> keysInRange = keys.stream()
+                                           .dropWhile(k -> k.compareTo(metadata.minKey) < 0)
+                                           .takeWhile(k -> k.compareTo(metadata.maxKey) <= 0)
+                                           .collect(Collectors.toList());
         try (PrimaryKeyMap primaryKeyMap = primaryKeyMapFactory.newPerSSTablePrimaryKeyMap())
         {
             // the iterator represents keys from the whole table -- we'll only pull of those that
@@ -264,11 +270,9 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             var rowIds = new IntArrayList();
             try (var ordinalsView = graph.getOrdinalsView())
             {
-                for (PrimaryKey primaryKey : keys)
+                for (PrimaryKey primaryKey : keysInRange)
                 {
-                    if (primaryKey.compareTo(metadata.minKey) < 0 || primaryKey.compareTo(metadata.maxKey) > 0)
-                        continue;
-                    // TODO this is O(log n), is this a hotspot?
+                    // VSTODO this is O(log n), is this a hotspot?
                     long sstableRowId = primaryKeyMap.rowIdFromPrimaryKey(primaryKey);
                     // skip rows that are not in our segment (or more preciesely, have no vectors that were indexed)
                     // or are not in this segment (which we can tell because the row id is Long.MAX_VALUE)
@@ -281,7 +285,7 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
 
                     int segmentRowId = metadata.toSegmentRowId(sstableRowId);
                     rowIds.add(segmentRowId);
-                    // TODO now that we know the size of keys evaluated, is it worth doing the brute
+                    // VSTODO now that we know the size of keys evaluated, is it worth doing the brute
                     // force check eagerly to potentially skip the PK to sstable row id to ordinal lookup?
                     int ordinal = ordinalsView.getOrdinalForRowId(segmentRowId);
                     if (ordinal >= 0)
