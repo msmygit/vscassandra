@@ -262,8 +262,12 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                 if (key == null) break;
                 if (key.equals(lastKey)) break;
 
-                lastKey = key;
-                keys.add(key);
+                while (key != null)
+                {
+                    lastKey = key;
+                    keys.add(key);
+                    key = nextSelectedKeyInPartition(key.partitionKey());
+                }
             }
             return keys;
         }
