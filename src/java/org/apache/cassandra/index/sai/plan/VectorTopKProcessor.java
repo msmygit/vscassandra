@@ -122,6 +122,7 @@ public class VectorTopKProcessor
                 commands.parallelStream().forEach(tuple -> {
                     try(var part = pIter.commandToIterator(tuple.left(), tuple.right()))
                     {
+                        if (part == null) return;
                         processPart(part, unfilteredByPartition, topK, true);
                     }
                 });
