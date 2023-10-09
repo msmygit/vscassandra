@@ -48,35 +48,35 @@ public class QueryContext
 {
     private static final boolean DISABLE_TIMEOUT = Boolean.getBoolean("cassandra.sai.test.disable.timeout");
 
-    private final long queryStartTimeNanos;
+    protected final long queryStartTimeNanos;
 
     public final long executionQuotaNano;
 
-    public long sstablesHit = 0;
-    public long segmentsHit = 0;
-    public long partitionsRead = 0;
-    public long rowsFiltered = 0;
+    private long sstablesHit = 0;
+    private long segmentsHit = 0;
+    private long partitionsRead = 0;
+    private long rowsFiltered = 0;
 
-    public long trieSegmentsHit = 0;
+    private long trieSegmentsHit = 0;
 
-    public long bkdPostingListsHit = 0;
-    public long bkdSegmentsHit = 0;
+    private long bkdPostingListsHit = 0;
+    private long bkdSegmentsHit = 0;
 
-    public long bkdPostingsSkips = 0;
-    public long bkdPostingsDecodes = 0;
+    private long bkdPostingsSkips = 0;
+    private long bkdPostingsDecodes = 0;
 
-    public long triePostingsSkips = 0;
-    public long triePostingsDecodes = 0;
+    private long triePostingsSkips = 0;
+    private long triePostingsDecodes = 0;
 
-    public long tokenSkippingCacheHits = 0;
-    public long tokenSkippingLookups = 0;
+    private long tokenSkippingCacheHits = 0;
+    private long tokenSkippingLookups = 0;
 
-    public long queryTimeouts = 0;
+    private long queryTimeouts = 0;
 
-    public int hnswVectorsAccessed;
-    public int hnswVectorCacheHits;
+    private long hnswVectorsAccessed;
+    private long hnswVectorCacheHits;
 
-    private TreeSet<PrimaryKey> shadowedPrimaryKeys; // allocate when needed
+    private NavigableSet<PrimaryKey> shadowedPrimaryKeys; // allocate when needed
 
     @VisibleForTesting
     public QueryContext()
@@ -86,8 +86,38 @@ public class QueryContext
 
     public QueryContext(long executionQuotaMs)
     {
-        this.executionQuotaNano = TimeUnit.MILLISECONDS.toNanos(executionQuotaMs);
-        queryStartTimeNanos = System.nanoTime();
+        this(TimeUnit.MILLISECONDS.toNanos(executionQuotaMs), System.nanoTime());
+    }
+
+    public QueryContext(long executionQuotaNanos, long queryStartTimeNanos)
+    {
+        this.executionQuotaNano = executionQuotaNanos;
+        this.queryStartTimeNanos = queryStartTimeNanos;
+    }
+
+    public void addFrom(QueryContext other)
+    {
+        addSstablesHit(other.sstablesHit());
+        addSegmentsHit(other.segmentsHit());
+        addPartitionsRead(other.partitionsRead());
+        addRowsFiltered(other.rowsFiltered());
+        addTrieSegmentsHit(other.trieSegmentsHit());
+        addBkdPostingListsHit(other.bkdPostingListsHit());
+        addBkdSegmentsHit(other.bkdSegmentsHit());
+        addBkdPostingsSkips(other.bkdPostingsSkips());
+        addBkdPostingsDecodes(other.bkdPostingsDecodes());
+        addTriePostingsSkips(other.triePostingsSkips());
+        addTriePostingsDecodes(other.triePostingsDecodes());
+        addTokenSkippingCacheHits(other.tokenSkippingCacheHits());
+        addTokenSkippingLookups(other.tokenSkippingLookups());
+        addQueryTimeouts(other.queryTimeouts());
+        addHnswVectorsAccessed(other.hnswVectorsAccessed());
+        addHnswVectorCacheHits(other.hnswVectorCacheHits());
+
+        var shadowed = other.getShadowedPrimaryKeys();
+        if (!shadowed.isEmpty()) {
+            shadowed.forEach(this::recordShadowedPrimaryKey);
+        }
     }
 
     public long totalQueryTimeNs()
@@ -95,16 +125,148 @@ public class QueryContext
         return System.nanoTime() - queryStartTimeNanos;
     }
 
-    public void incSstablesHit()
+    // setters
+    public void addSstablesHit(long val)
     {
-        sstablesHit++;
+        sstablesHit += val;
+    }
+    public void addSegmentsHit(long val) {
+        segmentsHit += val;
+    }
+    public void addPartitionsRead(long val)
+    {
+        partitionsRead += val;
+    }
+    public void addRowsFiltered(long val)
+    {
+        rowsFiltered += val;
+    }
+    public void addTrieSegmentsHit(long val)
+    {
+        trieSegmentsHit += val;
+    }
+    public void addBkdPostingListsHit(long val)
+    {
+        bkdPostingListsHit += val;
+    }
+    public void addBkdSegmentsHit(long val)
+    {
+        bkdSegmentsHit += val;
+    }
+    public void addBkdPostingsSkips(long val)
+    {
+        bkdPostingsSkips += val;
+    }
+    public void addBkdPostingsDecodes(long val)
+    {
+        bkdPostingsDecodes += val;
+    }
+    public void addTriePostingsSkips(long val)
+    {
+        triePostingsSkips += val;
+    }
+    public void addTriePostingsDecodes(long val)
+    {
+        triePostingsDecodes += val;
     }
 
+    public void addTokenSkippingCacheHits(long val)
+    {
+        tokenSkippingCacheHits += val;
+    }
+    public void addTokenSkippingLookups(long val)
+    {
+        tokenSkippingLookups += val;
+    }
+    public void addQueryTimeouts(long val)
+    {
+        queryTimeouts += val;
+    }
+    public void addHnswVectorsAccessed(long val)
+    {
+        hnswVectorsAccessed += val;
+    }
+    public void addHnswVectorCacheHits(long val)
+    {
+        hnswVectorCacheHits += val;
+    }
+    
+    // getters
+
+    public long sstablesHit()
+    {
+        return sstablesHit;
+    }
+
+    public long segmentsHit() {
+        return segmentsHit;
+    }
+    public long partitionsRead()
+    {
+        return partitionsRead;
+    }
+    public long rowsFiltered()
+    {
+        return rowsFiltered;
+    }
+
+    public long trieSegmentsHit()
+    {
+        return trieSegmentsHit;
+    }
+
+    public long bkdPostingListsHit()
+    {
+        return bkdPostingListsHit;
+    }
+    public long bkdSegmentsHit()
+    {
+        return bkdSegmentsHit;
+    }
+    public long bkdPostingsSkips()
+    {
+        return bkdPostingsSkips;
+    }
+    public long bkdPostingsDecodes()
+    {
+        return bkdPostingsDecodes;
+    }
+    public long triePostingsSkips()
+    {
+        return triePostingsSkips;
+    }
+    public long triePostingsDecodes()
+    {
+        return triePostingsDecodes;
+    }
+    public long tokenSkippingCacheHits()
+    {
+        return tokenSkippingCacheHits;
+    }
+    public long tokenSkippingLookups()
+    {
+        return tokenSkippingLookups;
+    }
+
+    public long queryTimeouts()
+    {
+        return queryTimeouts;
+    }
+
+    public long hnswVectorsAccessed()
+    {
+        return hnswVectorsAccessed;
+    }
+    public long hnswVectorCacheHits()
+    {
+        return hnswVectorCacheHits;
+    }
+    
     public void checkpoint()
     {
         if (totalQueryTimeNs() >= executionQuotaNano && !DISABLE_TIMEOUT)
         {
-            queryTimeouts++;
+            addQueryTimeouts(1);
             throw new AbortedOperationException();
         }
     }
@@ -139,7 +301,7 @@ public class QueryContext
 
     public Bits bitsetForShadowedPrimaryKeys(CassandraOnHeapGraph<PrimaryKey> graph)
     {
-        if (shadowedPrimaryKeys == null)
+        if (getShadowedPrimaryKeys().isEmpty())
             return null;
 
         return new IgnoredKeysBits(graph, shadowedPrimaryKeys);

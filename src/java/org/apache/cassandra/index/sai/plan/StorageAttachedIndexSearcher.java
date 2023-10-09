@@ -52,6 +52,7 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.RequestTimeoutException;
 import org.apache.cassandra.index.Index;
+import org.apache.cassandra.index.sai.ConcurrentQueryContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
@@ -113,7 +114,8 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) throws RequestTimeoutException
     {
-        Supplier<ResultRetriever> queryIndexes = () -> new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, queryContext, command.isTopK());
+        final var qContext = command.isTopK() ? new ConcurrentQueryContext(queryContext) : queryContext;
+        Supplier<ResultRetriever> queryIndexes = () -> new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, qContext, command.isTopK());
         if (!command.isTopK())
             return queryIndexes.get();
 
@@ -121,13 +123,16 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         // First time to find out there are shadowed keys, second time to find out there are no more shadow keys.
         while (true)
         {
-            long lastShadowedKeysCount = queryContext.getShadowedPrimaryKeys().size();
+            long lastShadowedKeysCount = qContext.getShadowedPrimaryKeys().size();
             ResultRetriever result = queryIndexes.get();
             UnfilteredPartitionIterator topK = (UnfilteredPartitionIterator) new VectorTopKProcessor(command).filter(result);
 
-            long currentShadowedKeysCount = queryContext.getShadowedPrimaryKeys().size();
+            long currentShadowedKeysCount = qContext.getShadowedPrimaryKeys().size();
             if (lastShadowedKeysCount == currentShadowedKeysCount)
+            {
+                queryContext.addFrom(qContext);
                 return topK;
+            }
             Tracing.trace("Found {} new shadowed keys, rerunning query", currentShadowedKeysCount - lastShadowedKeysCount);
         }
     }
@@ -286,7 +291,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         {
             try (UnfilteredRowIterator partition = controller.initPartitionReadCommand(command, executionController))
             {
-                queryContext.partitionsRead++;
+                queryContext.addPartitionsRead(1);
 
                 return applyIndexFilter(key, partition, filterTree, queryContext);
             }
@@ -471,7 +476,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
 
             try (UnfilteredRowIterator partition = controller.getPartition(key, executionController))
             {
-                queryContext.partitionsRead++;
+                queryContext.addPartitionsRead(1);
 
                 return applyIndexFilter(key, partition, filterTree, queryContext);
             }
@@ -486,7 +491,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
             {
                 Unfiltered row = partition.next();
 
-                queryContext.rowsFiltered++;
+                queryContext.addRowsFiltered(1);
                 if (tree.isSatisfiedBy(key.partitionKey(), row, staticRow))
                 {
                     clusters.add(row);
@@ -495,7 +500,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
 
             if (clusters.isEmpty())
             {
-                queryContext.rowsFiltered++;
+                queryContext.addRowsFiltered(1);
                 if (tree.isSatisfiedBy(key.partitionKey(), staticRow, staticRow))
                 {
                     clusters.add(staticRow);
@@ -630,7 +635,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
                         while (delegate.hasNext())
                         {
                             Row row = delegate.next();
-                            queryContext.rowsFiltered++;
+                            queryContext.addRowsFiltered(1);
                             if (tree.isSatisfiedBy(delegate.partitionKey(), row, staticRow))
                                 return row;
                         }

@@ -271,9 +271,10 @@ public class QueryController
 
             Iterable<RangeIterator<PrimaryKey>> allIntersections = Iterables.concat(sstableIntersections, memtableIntersections);
 
-            queryContext.sstablesHit += queryView.referencedIndexes
+            var hits = queryView.referencedIndexes
                                         .stream()
                                         .map(SSTableIndex::getSSTable).collect(Collectors.toSet()).size();
+            queryContext.addSstablesHit(hits);
             queryContext.checkpoint();
             RangeIterator<PrimaryKey> union = RangeUnionIterator.build(allIntersections);
             return new CheckpointingIterator<>(union,
