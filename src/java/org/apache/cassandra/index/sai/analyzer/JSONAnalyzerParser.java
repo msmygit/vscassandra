@@ -26,7 +26,6 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.sai.analyzer.filter.BuiltInAnalyzers;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.custom.CustomAnalyzer;
-import org.apache.lucene.analysis.ngram.NGramFilterFactory;
 import org.apache.lucene.analysis.ngram.NGramTokenizerFactory;
 
 public class JSONAnalyzerParser
