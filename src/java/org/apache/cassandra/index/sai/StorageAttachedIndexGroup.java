@@ -85,7 +85,7 @@ public class StorageAttachedIndexGroup implements Index.Group, INotificationCons
 
     private final SSTableContextManager contextManager;
 
-    StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
+    public StorageAttachedIndexGroup(ColumnFamilyStore baseCfs)
     {
         this.baseCfs = baseCfs;
         this.queryMetrics = new TableQueryMetrics(baseCfs.metadata());
