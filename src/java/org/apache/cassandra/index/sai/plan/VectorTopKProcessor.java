@@ -23,12 +23,16 @@ import java.util.AbstractQueue;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ForkJoinPool;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
@@ -47,6 +51,7 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.BaseRowIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
+import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -119,22 +124,30 @@ public class VectorTopKProcessor
             ParallelizablePartitionIterator pIter = (ParallelizablePartitionIterator) partitions;
             var commands = pIter.getUninitializedCommands();
             customPool.submit(() -> {
-                commands.parallelStream().forEach(tuple -> {
-                    try(var part = pIter.commandToIterator(tuple.left(), tuple.right()))
-                    {
-                        if (part == null) return;
-                        processPart(part, unfilteredByPartition, topK, true);
-                    }
-                });
+                var listOfListOfTriples = commands.parallelStream()
+                          .map(tuple -> {
+                              try (var part = pIter.commandToIterator(tuple.left(), tuple.right()))
+                              {
+                                  if (part == null) return null;
+                                  return processPart(part, unfilteredByPartition, topK, true);
+                              }
+                          })
+                          .filter(Objects::nonNull)
+                          .collect(Collectors.toList());
+                for (var triples: listOfListOfTriples) {
+                    moveToPq(topK, triples);
+                }
             }).join();
         } else {
-            // FilteredPartitions does implement ParallelizablePartitionIterator, yet
+            // FilteredPartitions does implement ParallelizablePartitionIterator.
+            // Realistically, this won't benefit from parallelizm as these are coming from in-memory/memetable data.
             while (partitions.hasNext())
             {
                 // have to close to move to the next partition, otherwise hasNext() fails
                 try (var part = partitions.next())
                 {
-                    processPart(part, unfilteredByPartition, topK, false);
+                    var triples = processPart(part, unfilteredByPartition, topK, false);
+                    moveToPq(topK, triples);
                 }
             }
         }
@@ -153,7 +166,7 @@ public class VectorTopKProcessor
         return new InMemoryUnfilteredPartitionIterator(command, unfilteredByPartition);
     }
 
-    private <U extends Unfiltered> void processPart(BaseRowIterator<U> part, 
+    private <U extends Unfiltered> List<Triple<PartitionInfo, Row, Float>> processPart(BaseRowIterator<U> part,
                                                     SortedMap<PartitionInfo, TreeSet<Unfiltered>> unfilteredByPartition,
                                                     AbstractQueue<Triple<PartitionInfo, Row, Float>> topK,
                                                     boolean isParallel)
@@ -191,19 +204,8 @@ public class VectorTopKProcessor
             var triple = Triple.of(partitionInfo, row, keyAndStaticScore + rowScore);
             res.add(triple);
         }
-        if (res.isEmpty())
-            return;
-        if (isParallel)
-        {
-            synchronized (topK)
-            {
-                moveToPq(topK, res);
-            }
-        }
-        else
-        {
-            moveToPq(topK, res);
-        }
+
+        return res;
     }
 
     private void addUnfiltered(SortedMap<PartitionInfo, TreeSet<Unfiltered>> unfilteredByPartition, PartitionInfo partitionInfo, Unfiltered unfiltered)
