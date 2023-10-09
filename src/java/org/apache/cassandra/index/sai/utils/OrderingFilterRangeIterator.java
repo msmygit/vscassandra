@@ -26,10 +26,14 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import org.apache.cassandra.io.util.FileUtils;
 
-// This is essentially a filter on top of a range iterator where we order chunks of primary keys,
-// take the top ones and then put them back in primary key order
+/**
+ * This iterator is a work in progress.
+ * It currently consumes a chunk of {@link PrimaryKey}s from the {@link RangeIterator}, passes them to the
+ * {@link Function} to filter the chunk of {@link PrimaryKey}s and then pass the results to next consumer.
+ * The PKs are currently returned in {@link PrimaryKey} order, but that contract may change.
+ */
 @NotThreadSafe
-public class OrderRangeIterator extends RangeIterator
+public class OrderingFilterRangeIterator extends RangeIterator
 {
     private final RangeIterator input;
     private final int chunkSize;
@@ -37,7 +41,7 @@ public class OrderRangeIterator extends RangeIterator
     private RangeIterator nextIterator;
     private ArrayList<PrimaryKey> nextKeys;
 
-    public OrderRangeIterator(RangeIterator input, int chunkSize, Function<List<PrimaryKey>, RangeIterator> nextRangeFunction)
+    public OrderingFilterRangeIterator(RangeIterator input, int chunkSize, Function<List<PrimaryKey>, RangeIterator> nextRangeFunction)
     {
         super(input);
         this.input = input;

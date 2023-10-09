@@ -61,7 +61,7 @@ import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.metrics.TableQueryMetrics;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
-import org.apache.cassandra.index.sai.utils.OrderRangeIterator;
+import org.apache.cassandra.index.sai.utils.OrderingFilterRangeIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeConcatIterator;
 import org.apache.cassandra.index.sai.utils.RangeIntersectionIterator;
@@ -277,10 +277,10 @@ public class QueryController
     // This is a hybrid query. We apply all other predicates before ordering and limiting.
     public RangeIterator getTopKRows(RangeIterator source, RowFilter.Expression expression)
     {
-        // TODO find way to test different chunk sizes. Found a fundamental flaw with 1, so it'd be good to continue
+        // VSTODO find way to test different chunk sizes. Found a fundamental flaw with 1, so it'd be good to continue
         // testing that case.
-        return new OrderRangeIterator(source,
-                                      100000,
+        return new OrderingFilterRangeIterator(source,
+                                               100000,
                                       list -> this.getTopKRows(list, expression));
     }
 
