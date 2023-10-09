@@ -108,7 +108,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) throws RequestTimeoutException
     {
-        // TODO see about switching to use an order op instead of ann
+        // VSTODO see about switching to use an order op instead of ann
         Supplier<ResultRetriever> queryIndexes = () -> new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, queryContext, command.isTopK());
         if (!command.isTopK())
             return queryIndexes.get();

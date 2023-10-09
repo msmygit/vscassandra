@@ -218,7 +218,7 @@ public class QueryController
     {
         assert !expressions.isEmpty() : "expressions should not be empty for " + op + " in " + filterOperation;
 
-        // TODO move ANN out of expressions and into its own abstraction? That will help get generic ORDER BY support
+        // VSTODO move ANN out of expressions and into its own abstraction? That will help get generic ORDER BY support
         Collection<Expression> exp = expressions.stream().filter(e -> e.operation != Expression.Op.ANN).collect(Collectors.toList());
         boolean defer = op == Operation.OperationType.OR || RangeIntersectionIterator.shouldDefer(exp.size());
         RangeIterator.Builder builder = op == Operation.OperationType.OR
