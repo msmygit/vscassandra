@@ -51,7 +51,19 @@ public class VectorTypeTest extends VectorTester
     {
         System.setProperty("cassandra.custom_tracing_class", "org.apache.cassandra.tracing.TracingTestImpl");
     }
-    
+
+    @Override
+    public void flush() {
+        super.flush();
+        verifyChecksum();
+    }
+
+    @Override
+    public void compact() {
+        super.compact();
+        verifyChecksum();
+    }
+
     @Test
     public void endToEndTest() throws Throwable
     {
@@ -175,6 +187,24 @@ public class VectorTypeTest extends VectorTester
 
         result = execute("SELECT * FROM %s WHERE b=true ORDER BY v ANN OF [3.1, 4.1, 5.1] LIMIT 2");
         assertThat(result).hasSize(2);
+    }
+
+    @Test
+    public void testTwoPredicatesWithUnnecessaryAllowFiltering() throws Throwable
+    {
+        createTable("CREATE TABLE %s (pk int, b int, v vector<float, 3>, PRIMARY KEY(pk, b))");
+        createIndex("CREATE CUSTOM INDEX ON %s(v) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(b) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        execute("INSERT INTO %s (pk, b, v) VALUES (0, 0, [1.0, 2.0, 3.0])");
+        execute("INSERT INTO %s (pk, b, v) VALUES (1, 2, [2.0, 3.0, 4.0])");
+        execute("INSERT INTO %s (pk, b, v) VALUES (2, 4, [3.0, 4.0, 5.0])");
+        execute("INSERT INTO %s (pk, b, v) VALUES (3, 6, [4.0, 5.0, 6.0])");
+
+        // Choose a vector closer to b = 0 to ensure that b's restriction is applied.
+        assertRows(execute("SELECT pk FROM %s WHERE b > 2 ORDER BY v ANN OF [1,2,3] LIMIT 2 ALLOW FILTERING;"),
+                   row(2), row(3));
     }
 
     @Test
@@ -696,5 +726,42 @@ public class VectorTypeTest extends VectorTester
                              "SELECT similarity_cosine([1, 2, 3], value) FROM %s WHERE pk=0");
         assertInvalidMessage("Required 2 elements, but saw 3",
                              "SELECT similarity_cosine([1, 2], [3, 4, 5]) FROM %s WHERE pk=0");
+    }
+
+    @Test
+    public void testSamePKWithBruteForceAndGraphBasedScoring()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, vec vector<float, 2>, PRIMARY KEY(pk))");
+        // Use euclidean distance to more easily verify correctness of caching
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex' WITH OPTIONS = { 'similarity_function' : 'euclidean' }");
+
+        // Put one row in the first ss table to guarantee brute force method. This vector is also the most similar.
+        execute("INSERT INTO %s (pk, vec) VALUES (10, [1,1])");
+        flush();
+
+        // Must be enough rows to go to graph
+        for (int j = 1; j <= 10; j++)
+        {
+            execute("INSERT INTO %s (pk, vec) VALUES (?, [?,?])", j, j, j);
+        }
+        flush();
+
+        assertRows(execute("SELECT pk FROM %s ORDER BY vec ANN OF [1,1] LIMIT 2"), row(1), row(2));
+    }
+
+    @Test
+    public void testRowWithMissingVectorThatMatchesQueryPredicates()
+    {
+        createTable(KEYSPACE, "CREATE TABLE %s (pk int, val text, vec vector<float, 2>, PRIMARY KEY(pk))");
+        createIndex("CREATE CUSTOM INDEX ON %s(vec) USING 'StorageAttachedIndex'");
+        createIndex("CREATE CUSTOM INDEX ON %s(val) USING 'StorageAttachedIndex'");
+        waitForIndexQueryable();
+
+        // There was an edge case where we failed because there was just a single row in the table.
+        execute("INSERT INTO %s (pk, val) VALUES (1, 'match me')");
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"));
+        // Push memtable to sstable. we should get same result
+        flush();
+        assertRows(execute("SELECT pk FROM %s WHERE val = 'match me' ORDER BY vec ANN OF [1,1] LIMIT 2"));
     }
 }

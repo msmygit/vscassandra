@@ -18,12 +18,29 @@
 
 package org.apache.cassandra.index.sai.cql;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+
+import org.apache.commons.lang.reflect.FieldUtils;
 import org.junit.Before;
 
+import io.github.jbellis.jvector.graph.GraphIndexBuilder;
+import io.github.jbellis.jvector.graph.GraphSearcher;
+import io.github.jbellis.jvector.vector.VectorEncoding;
+import io.github.jbellis.jvector.vector.VectorSimilarityFunction;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.index.sai.IndexContext;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.index.sai.disk.vector.ConcurrentVectorValues;
 import org.apache.cassandra.inject.ActionBuilder;
 import org.apache.cassandra.inject.Injections;
 import org.apache.cassandra.inject.InvokePointBuilder;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class VectorTester extends SAITester
 {
@@ -33,17 +50,95 @@ public class VectorTester extends SAITester
         // override maxBruteForceRows to a random number between 0 and 4 so that we make sure
         // the non-brute-force path gets called during tests (which mostly involve small numbers of rows)
         var n = getRandom().nextIntBetween(0, 4);
-        var ipb = InvokePointBuilder.newInvokePoint()
-                                    .onClass("org.apache.cassandra.index.sai.disk.v1.VectorIndexSearcher")
-                                    .onMethod("limitToTopResults")
-                                    .atEntry();
+        var limitToTopResults = InvokePointBuilder.newInvokePoint()
+                                                  .onClass("org.apache.cassandra.index.sai.disk.v2.V2VectorIndexSearcher")
+                                                  .onMethod("limitToTopResults")
+                                                  .atEntry();
+        var bitsOrPostingListForKeyRange = InvokePointBuilder.newInvokePoint()
+                                                             .onClass("org.apache.cassandra.index.sai.disk.v2.V2VectorIndexSearcher")
+                                                             .onMethod("bitsOrPostingListForKeyRange")
+                                                             .atEntry();
         var ab = ActionBuilder.newActionBuilder()
                               .actions()
                               .doAction("$this.globalBruteForceRows = " + n);
         var changeBruteForceThreshold = Injections.newCustom("force_non_bruteforce_queries")
-                                                  .add(ipb)
+                                                  .add(limitToTopResults)
+                                                  .add(bitsOrPostingListForKeyRange)
                                                   .add(ab)
                                                   .build();
         Injections.inject(changeBruteForceThreshold);
+    }
+
+    public static double rawIndexedRecall(Collection<float[]> vectors, float[] query, List<float[]> result, int topK) throws IOException
+    {
+        ConcurrentVectorValues vectorValues = new ConcurrentVectorValues(query.length);
+        int ordinal = 0;
+
+        var graphBuilder = new GraphIndexBuilder<>(vectorValues,
+                                                   VectorEncoding.FLOAT32,
+                                                   VectorSimilarityFunction.COSINE,
+                                                   16,
+                                                   100,
+                                                   1.2f,
+                                                   1.4f);
+
+        for (float[] vector : vectors)
+        {
+            vectorValues.add(ordinal, vector);
+            graphBuilder.addGraphNode(ordinal++, vectorValues);
+        }
+
+        var results = GraphSearcher.search(query,
+                                           topK,
+                                           vectorValues,
+                                           VectorEncoding.FLOAT32,
+                                           VectorSimilarityFunction.COSINE,
+                                           graphBuilder.getGraph(),
+                                           null);
+
+        List<float[]> nearestNeighbors = new ArrayList<>();
+        for (var ns : results.getNodes())
+            nearestNeighbors.add(vectorValues.vectorValue(ns.node));
+
+        return recallMatch(nearestNeighbors, result, topK);
+    }
+
+    public static double recallMatch(List<float[]> expected, List<float[]> actual, int topK)
+    {
+        if (expected.isEmpty() && actual.isEmpty())
+            return 1.0;
+
+        int matches = 0;
+        for (float[] in : expected)
+        {
+            for (float[] out : actual)
+            {
+                if (Arrays.compare(in, out) == 0)
+                {
+                    matches++;
+                    break;
+                }
+            }
+        }
+
+        return (double) matches / topK;
+    }
+
+    protected void verifyChecksum() {
+        ColumnFamilyStore cfs = Keyspace.open(KEYSPACE).getColumnFamilyStore(currentTable());
+        cfs.indexManager.listIndexes().stream().forEach(index -> {
+            try
+            {
+                var indexContext = (IndexContext) FieldUtils
+                                                  .getDeclaredField(index.getClass(), "indexContext", true)
+                                                  .get(index);
+                logger.info("Verifying checksum for index {}", index.getIndexMetadata().name);
+                boolean checksumValid = verifyChecksum(indexContext);
+                assertThat(checksumValid).isTrue();
+            } catch (IllegalAccessException e)
+            {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }
