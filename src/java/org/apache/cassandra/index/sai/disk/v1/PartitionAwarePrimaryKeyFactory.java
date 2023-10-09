@@ -21,10 +21,13 @@ package org.apache.cassandra.index.sai.disk.v1;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+import org.apache.commons.lang3.NotImplementedException;
+
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
@@ -55,6 +58,12 @@ public class PartitionAwarePrimaryKeyFactory implements PrimaryKey.Factory
         return new PartitionAwarePrimaryKey(partitionKey.getToken(), partitionKey, null);
     }
 
+    @Override
+    public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering, SSTableId ssTableId, long sstableRowId)
+    {
+        throw new NotImplementedException();
+    }
+
     private class PartitionAwarePrimaryKey implements PrimaryKey
     {
         private final Token token;
@@ -83,6 +92,18 @@ public class PartitionAwarePrimaryKeyFactory implements PrimaryKey.Factory
         public Token token()
         {
             return this.token;
+        }
+
+        @Override
+        public long sstableRowId(SSTableId ssTableId)
+        {
+            throw new NotImplementedException();
+        }
+
+        @Override
+        public void mergeSSTableMetadata(PrimaryKey other)
+        {
+            throw new NotImplementedException();
         }
 
         @Override

@@ -19,16 +19,32 @@ package org.apache.cassandra.index.sai.utils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.function.LongFunction;
 
+import org.apache.cassandra.db.BufferDecoratedKey;
+import org.apache.cassandra.db.Clustering;
+import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.index.sai.SAITester;
+import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
+import org.apache.cassandra.utils.ByteBufferUtil;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class LongIterator extends RangeIterator
 {
     private final List<PrimaryKey> keys;
     private int currentIdx = 0;
+
+    private static long tokenToRowIdShift(long rowId)
+    {
+        return rowId + 100;
+    }
 
     /**
      * whether LongIterator should throw exception during iteration.
@@ -38,16 +54,21 @@ public class LongIterator extends RangeIterator
 
     public LongIterator(long[] tokens)
     {
-        this(tokens, t -> t);
+        this(tokens, 0);
     }
 
-    public LongIterator(long[] tokens, LongFunction<Long> toOffset)
+    public LongIterator(long[] tokens, int sstableId)
+    {
+        this(tokens, sstableId, LongIterator::tokenToRowIdShift);
+    }
+
+    public LongIterator(long[] tokens, int sstableId, LongFunction<Long> toOffset)
     {
         super(tokens.length == 0 ? null : fromToken(tokens[0]), tokens.length == 0 ? null : fromToken(tokens[tokens.length - 1]), tokens.length);
 
         this.keys = new ArrayList<>(tokens.length);
         for (long token : tokens)
-            this.keys.add(fromTokenAndRowId(token, toOffset.apply(token)));
+            this.keys.add(fromTokenAndRowId(token, sstableId, toOffset.apply(token)));
     }
 
     public LongIterator throwsException()
@@ -92,6 +113,40 @@ public class LongIterator extends RangeIterator
         return SAITester.TEST_FACTORY.createTokenOnly(new Murmur3Partitioner.LongToken(token));
     }
 
+    /**
+     * A convenience method to assert that the given iterator contains the expected tokens and sstable id/row id pairs.
+     * @param expectedMap a map from token id to a list of sstable ids associated with each token.
+     * @param actual the iterator to be validated
+     */
+    public static void assertEqual(Map<Long, List<Integer>> expectedMap, RangeIterator actual)
+    {
+        var expected = expectedMap.entrySet().iterator();
+        while (actual.hasNext())
+        {
+            assertTrue(expected.hasNext());
+            PrimaryKey next = actual.next();
+            Map.Entry<Long, List<Integer>> entry = expected.next();
+            long expectedToken = entry.getKey();
+            assertEquals(expectedToken, next.token().getLongValue());
+            for (int sstableId : entry.getValue())
+            {
+                long rowId = tokenToRowIdShift(expectedToken);
+                assertEquals(rowId, next.sstableRowId(new SequenceBasedSSTableId(sstableId)));
+            }
+        }
+        assertFalse(expected.hasNext());
+    }
+
+    public static void updateExpectedMap(Map<Long, List<Integer>> expectedMap, long[] tokens, List<Integer> sstableIds)
+    {
+        for (int i = 0; i < tokens.length; i++)
+        {
+            long token = tokens[i];
+            var overwritten = expectedMap.put(token, sstableIds);
+            // Test is not meant to overwrite values since that might be confusing
+            assertNull(overwritten);
+        }
+    }
 
     public static List<Long> convert(RangeIterator tokens)
     {
@@ -111,8 +166,9 @@ public class LongIterator extends RangeIterator
         }};
     }
 
-    private PrimaryKey fromTokenAndRowId(long token, long rowId)
+    private PrimaryKey fromTokenAndRowId(long token, int sstableId, long rowId)
     {
-        return SAITester.TEST_FACTORY.createTokenOnly(new Murmur3Partitioner.LongToken(token));
+        DecoratedKey key = new BufferDecoratedKey(new Murmur3Partitioner.LongToken(token), ByteBufferUtil.bytes(token));
+        return SAITester.TEST_FACTORY.create(key, Clustering.EMPTY, new SequenceBasedSSTableId(sstableId), rowId);
     }
 }

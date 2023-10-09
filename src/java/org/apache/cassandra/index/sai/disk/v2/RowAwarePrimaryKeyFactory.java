@@ -19,6 +19,8 @@
 package org.apache.cassandra.index.sai.disk.v2;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -28,6 +30,7 @@ import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
@@ -48,19 +51,25 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
     @Override
     public PrimaryKey createTokenOnly(Token token)
     {
-        return new RowAwarePrimaryKey(token, null, null, null);
+        return new RowAwarePrimaryKey(token, null, null, null, null, 0);
     }
 
     @Override
     public PrimaryKey createDeferred(Token token, Supplier<PrimaryKey> primaryKeySupplier)
     {
-        return new RowAwarePrimaryKey(token, null, null, primaryKeySupplier);
+        return new RowAwarePrimaryKey(token, null, null, primaryKeySupplier, null, 0);
     }
 
     @Override
     public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering)
     {
-        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering, null);
+        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering, null, null, 0);
+    }
+
+    @Override
+    public PrimaryKey create(DecoratedKey partitionKey, Clustering clustering, SSTableId sstableId, long sstableRowId)
+    {
+        return new RowAwarePrimaryKey(partitionKey.getToken(), partitionKey, clustering, null, sstableId, sstableRowId);
     }
 
     private class RowAwarePrimaryKey implements PrimaryKey
@@ -70,12 +79,53 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
         private Clustering clustering;
         private Supplier<PrimaryKey> primaryKeySupplier;
 
-        private RowAwarePrimaryKey(Token token, DecoratedKey partitionKey, Clustering clustering, Supplier<PrimaryKey> primaryKeySupplier)
+        // Only meant for tracking the source of the PrimaryKey. Not meant for comparing keys.
+        // A map from sstable id to sstable row id.
+        private transient Map<SSTableId<?>, Long> sstableRows = null;
+
+        private RowAwarePrimaryKey(Token token, DecoratedKey partitionKey, Clustering clustering, Supplier<PrimaryKey> primaryKeySupplier, SSTableId<?> sstableId, long sstableRowId)
         {
             this.token = token;
             this.partitionKey = partitionKey;
             this.clustering = clustering;
             this.primaryKeySupplier = primaryKeySupplier;
+            if (sstableId != null)
+            {
+                this.sstableRows = new HashMap<>(1);
+                this.sstableRows.put(sstableId, sstableRowId);
+            }
+        }
+
+        public Map<SSTableId<?>, Long> getSstableRows()
+        {
+            return sstableRows;
+        }
+
+        @Override
+        public long sstableRowId(SSTableId<?> ssTableId)
+        {
+            return sstableRows.getOrDefault(ssTableId, -1L);
+        }
+
+        @Override
+        public void mergeSSTableMetadata(PrimaryKey other)
+        {
+            assert other instanceof RowAwarePrimaryKey;
+            RowAwarePrimaryKey otherRowAwarePrimaryKey = (RowAwarePrimaryKey) other;
+            var otherSstableRows = otherRowAwarePrimaryKey.getSstableRows();
+            if (otherSstableRows == null)
+                return;
+            if (sstableRows == null)
+            {
+                sstableRows = otherSstableRows;
+                return;
+            }
+            for (var entry : otherSstableRows.entrySet())
+            {
+                var sstableRowId = entry.getValue();
+                Long previousValue = sstableRows.put(entry.getKey(), sstableRowId);
+                assert previousValue == null || previousValue.equals(sstableRowId) : String.format("Cannot overwrite sstable row id %d with %d", previousValue, sstableRowId);
+            }
         }
 
         @Override
@@ -106,6 +156,7 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
                 PrimaryKey deferredPrimaryKey = primaryKeySupplier.get();
                 this.partitionKey = deferredPrimaryKey.partitionKey();
                 this.clustering = deferredPrimaryKey.clustering();
+                this.mergeSSTableMetadata(deferredPrimaryKey);
                 primaryKeySupplier = null;
             }
             return this;
@@ -206,6 +257,15 @@ public class RowAwarePrimaryKeyFactory implements PrimaryKey.Factory
                                  clustering == null ? null :String.join(",", Arrays.stream(clustering.getBufferArray())
                                                                                    .map(ByteBufferUtil::bytesToHex)
                                                                                    .collect(Collectors.toList())));
+        }
+    }
+
+    public class SSTableRow {
+        public final SSTableId ssTableId;
+        public final long sstableRowId;
+        SSTableRow(SSTableId ssTableId, long sstableRowId) {
+            this.ssTableId = ssTableId;
+            this.sstableRowId = sstableRowId;
         }
     }
 }

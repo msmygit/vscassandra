@@ -282,7 +282,9 @@ public class V2VectorIndexSearcher extends IndexSearcher implements SegmentOrder
             {
                 for (PrimaryKey primaryKey : keysInRange)
                 {
-                    long sstableRowId = primaryKeyMap.exactRowIdForPrimaryKey(primaryKey);
+                    long sstableRowId = primaryKey.sstableRowId(primaryKeyMap.getSSTableId());
+                    if (sstableRowId < 0)
+                        sstableRowId = primaryKeyMap.exactRowIdForPrimaryKey(primaryKey);
                     // skip rows that are not in our segment (or more preciesely, have no vectors that were indexed)
                     // or are not in this segment (exactRowIdForPrimaryKey returns a negative value for not found)
                     if (sstableRowId < metadata.minSSTableRowId)

@@ -26,6 +26,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.v1.PartitionAwarePrimaryKeyFactory;
 import org.apache.cassandra.index.sai.disk.v2.RowAwarePrimaryKeyFactory;
+import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.utils.bytecomparable.ByteComparable;
 import org.apache.cassandra.utils.bytecomparable.ByteSource;
 
@@ -92,6 +93,16 @@ public interface PrimaryKey extends Comparable<PrimaryKey>
          * @return a {@link PrimaryKey} contain the partition key and clustering
          */
         PrimaryKey create(DecoratedKey partitionKey, Clustering clustering);
+
+        /**
+         * Creates a {@link PrimaryKey} that is fully represented by partition key
+         * and clustering.
+         *
+         * @param partitionKey the {@link DecoratedKey}
+         * @param clustering the {@link Clustering}
+         * @return a {@link PrimaryKey} contain the partition key and clustering
+         */
+        PrimaryKey create(DecoratedKey partitionKey, Clustering clustering, SSTableId ssTableId, long sstableRowId);
     }
 
     /**
@@ -116,6 +127,10 @@ public interface PrimaryKey extends Comparable<PrimaryKey>
      * @return the {@link Token}
      */
     Token token();
+
+    long sstableRowId(SSTableId<?> sstableId);
+
+    void mergeSSTableMetadata(PrimaryKey other);
 
     /**
      * Returns the {@link DecoratedKey} associated with this primary key.

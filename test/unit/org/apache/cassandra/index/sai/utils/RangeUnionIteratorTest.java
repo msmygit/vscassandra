@@ -19,7 +19,9 @@ package org.apache.cassandra.index.sai.utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.Assert;
@@ -39,11 +41,15 @@ public class RangeUnionIteratorTest extends AbstractRangeIteratorTest
     {
         RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
 
-        builder.add(new LongIterator(new long[] { 2L, 3L, 5L, 6L }));
-        builder.add(new LongIterator(new long[] { 1L, 7L }));
-        builder.add(new LongIterator(new long[] { 4L, 8L, 9L, 10L }));
+        builder.add(new LongIterator(new long[] { 2L, 3L, 5L, 6L }, 0));
+        builder.add(new LongIterator(new long[] { 1L, 7L }, 1));
+        builder.add(new LongIterator(new long[] { 4L, 8L, 9L, 10L }, 2));
 
-        Assert.assertEquals(convert(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L), convert(builder.build()));
+        Map<Long, List<Integer>> expected = new HashMap<>();
+        LongIterator.updateExpectedMap(expected, new long[] { 2L, 3L, 5L, 6L }, List.of(0));
+        LongIterator.updateExpectedMap(expected, new long[] { 1L, 7L }, List.of(1));
+        LongIterator.updateExpectedMap(expected, new long[] { 4L, 8L, 9L, 10L }, List.of(2));
+        LongIterator.assertEqual(expected, builder.build());
     }
 
     @Test
@@ -51,9 +57,11 @@ public class RangeUnionIteratorTest extends AbstractRangeIteratorTest
     {
         RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
 
-        builder.add(new LongIterator(new long[] { 1L, 2L, 4L, 9L }));
+        builder.add(new LongIterator(new long[] { 1L, 2L, 4L, 9L }, 1));
 
-        Assert.assertEquals(convert(1L, 2L, 4L, 9L), convert(builder.build()));
+        Map<Long, List<Integer>> expected = new HashMap<>();
+        LongIterator.updateExpectedMap(expected, new long[] { 1L, 2L, 4L, 9L }, List.of(1));
+        LongIterator.assertEqual(expected, builder.build());
     }
 
     @Test
@@ -61,13 +69,19 @@ public class RangeUnionIteratorTest extends AbstractRangeIteratorTest
     {
         RangeUnionIterator.Builder builder = RangeUnionIterator.builder();
 
-        builder.add(new LongIterator(new long[] { 1L, 4L, 6L, 7L }));
-        builder.add(new LongIterator(new long[] { 2L, 3L, 5L, 6L }));
-        builder.add(new LongIterator(new long[] { 4L, 6L, 8L, 9L, 10L }));
+        builder.add(new LongIterator(new long[] { 1L, 4L, 6L, 7L }, 0));
+        builder.add(new LongIterator(new long[] { 2L, 3L, 5L, 6L }, 1));
+        builder.add(new LongIterator(new long[] { 4L, 6L, 8L, 9L, 10L }, 2));
 
-        List<Long> values = convert(builder.build());
 
-        Assert.assertEquals(values.toString(), convert(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L), values);
+        Map<Long, List<Integer>> expected = new HashMap<>();
+        LongIterator.updateExpectedMap(expected, new long[]{ 1L, 7L}, List.of(0));
+        LongIterator.updateExpectedMap(expected, new long[]{ 2L, 3L, 5L }, List.of(1));
+        LongIterator.updateExpectedMap(expected, new long[]{ 8L, 9L, 10L }, List.of(2));
+        LongIterator.updateExpectedMap(expected, new long[]{ 4L }, List.of(0, 2));
+        LongIterator.updateExpectedMap(expected, new long[]{ 6L }, List.of(0, 1, 2));
+
+        LongIterator.assertEqual(expected, builder.build());
     }
 
     @Test

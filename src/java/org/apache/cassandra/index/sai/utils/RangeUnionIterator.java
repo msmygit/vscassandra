@@ -52,8 +52,13 @@ public class RangeUnionIterator extends RangeIterator
             if (range.hasNext())
             {
                 // Avoid repeated values but only if we have read at least one value
-                while (next != null && range.hasNext() && range.peek().compareTo(getCurrent()) == 0)
+                while (next != null && range.hasNext())
+                {
+                    if (range.peek().compareTo(getCurrent()) != 0)
+                        break;
+                    getCurrent().mergeSSTableMetadata(range.peek());
                     range.next();
+                }
                 if (!range.hasNext())
                     continue;
                 if (candidate == null)
@@ -65,7 +70,10 @@ public class RangeUnionIterator extends RangeIterator
                 {
                     int cmp = candidate.compareTo(range.peek());
                     if (cmp == 0)
+                    {
+                        candidate.mergeSSTableMetadata(range.peek());
                         candidates.add(range);
+                    }
                     else if (cmp > 0)
                     {
                         candidates.clear();

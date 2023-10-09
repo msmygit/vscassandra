@@ -20,7 +20,9 @@ package org.apache.cassandra.index.sai.utils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -72,11 +74,14 @@ public class RangeIntersectionIteratorTest extends AbstractRangeIteratorTest
     {
         RangeIterator.Builder builder = RangeIntersectionIterator.builder();
 
-        builder.add(new LongIterator(new long[] { 1L, 4L, 6L, 7L }));
-        builder.add(new LongIterator(new long[] { 2L, 4L, 5L, 6L }));
-        builder.add(new LongIterator(new long[] { 4L, 6L, 8L, 9L, 10L }));
+        builder.add(new LongIterator(new long[] { 1L, 4L, 6L, 7L }, 0));
+        builder.add(new LongIterator(new long[] { 2L, 4L, 5L, 6L }, 1));
+        builder.add(new LongIterator(new long[] { 4L, 6L, 8L, 9L, 10L }, 2));
 
-        Assert.assertEquals(convert(4L, 6L), convert(builder.build()));
+        Map<Long, List<Integer>> expected = new HashMap<>();
+        expected.put(4L, List.of(0, 1, 2));
+        expected.put(6L, List.of(0, 1, 2));
+        LongIterator.assertEqual(expected, builder.build());
     }
 
     @Test
@@ -84,10 +89,15 @@ public class RangeIntersectionIteratorTest extends AbstractRangeIteratorTest
     {
         RangeIterator.Builder builder = RangeIntersectionIterator.builder();
 
-        builder.add(new LongIterator(new long[] { 1L, 2L, 3L, 4L }));
-        builder.add(new LongIterator(new long[] { 1L, 2L, 3L, 4L }));
+        builder.add(new LongIterator(new long[] { 1L, 2L, 3L, 4L }, 0));
+        builder.add(new LongIterator(new long[] { 1L, 2L, 3L, 4L }, 0));
 
-        Assert.assertEquals(convert(1L, 2L, 3L, 4L), convert(builder.build()));
+        Map<Long, List<Integer>> expected = new HashMap<>();
+        expected.put(1L, List.of(0));
+        expected.put(2L, List.of(0));
+        expected.put(3L, List.of(0));
+        expected.put(4L, List.of(0));
+        LongIterator.assertEqual(expected, builder.build());
     }
 
     @Test

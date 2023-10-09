@@ -90,7 +90,7 @@ public class AbstractRangeIteratorTest extends SaiRandomizedTest
 
     protected LongIterator build(long[] tokensA, boolean onErrorA)
     {
-        LongIterator rangeA = new LongIterator(tokensA);
+        LongIterator rangeA = new LongIterator(tokensA, 0);
 
         if (onErrorA)
             rangeA.throwsException();
