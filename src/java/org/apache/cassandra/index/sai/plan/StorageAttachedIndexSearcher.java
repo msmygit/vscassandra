@@ -52,7 +52,6 @@ import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.RequestTimeoutException;
 import org.apache.cassandra.index.Index;
-import org.apache.cassandra.index.sai.ConcurrentQueryContext;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.SSTableIndex;
 import org.apache.cassandra.index.sai.analyzer.AbstractAnalyzer;
@@ -114,8 +113,7 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
     @Override
     public UnfilteredPartitionIterator search(ReadExecutionController executionController) throws RequestTimeoutException
     {
-        final var qContext = command.isTopK() ? new ConcurrentQueryContext(queryContext) : queryContext;
-        Supplier<ResultRetriever> queryIndexes = () -> new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, qContext, command.isTopK());
+        Supplier<ResultRetriever> queryIndexes = () -> new ResultRetriever(analyze(), analyzeFilter(), controller, executionController, queryContext, command.isTopK());
         if (!command.isTopK())
             return queryIndexes.get();
 
@@ -123,16 +121,13 @@ public class StorageAttachedIndexSearcher implements Index.Searcher
         // First time to find out there are shadowed keys, second time to find out there are no more shadow keys.
         while (true)
         {
-            long lastShadowedKeysCount = qContext.getShadowedPrimaryKeys().size();
+            long lastShadowedKeysCount = queryContext.getShadowedPrimaryKeys().size();
             ResultRetriever result = queryIndexes.get();
             UnfilteredPartitionIterator topK = (UnfilteredPartitionIterator) new VectorTopKProcessor(command).filter(result);
 
-            long currentShadowedKeysCount = qContext.getShadowedPrimaryKeys().size();
+            long currentShadowedKeysCount = queryContext.getShadowedPrimaryKeys().size();
             if (lastShadowedKeysCount == currentShadowedKeysCount)
-            {
-                queryContext.addFrom(qContext);
                 return topK;
-            }
             Tracing.trace("Found {} new shadowed keys, rerunning query", currentShadowedKeysCount - lastShadowedKeysCount);
         }
     }
