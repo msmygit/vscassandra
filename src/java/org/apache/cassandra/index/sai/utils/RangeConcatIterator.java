@@ -105,7 +105,7 @@ public class RangeConcatIterator extends RangeIterator
         return new Builder().add(tokens).build();
     }
 
-    public static class Builder<T extends Comparable<T>> extends RangeIterator.Builder
+    public static class Builder extends RangeIterator.Builder
     {
         public Builder()
         {
