@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -717,14 +716,26 @@ public class TableMetrics
         liveSSTableCount = createTableGauge("LiveSSTableCount", () -> cfs.getLiveSSTables().size());
 
         // Added SAI metrics
-        cfs.indexManager.listIndexes().stream().filter(index -> index instanceof StorageAttachedIndex).forEach(sai -> {
-            ssTableCellCount = createTableGauge("SSTableCellCount", () -> ((StorageAttachedIndex) sai).getIndexContext().getCellCount());
-            memtableOnHeapIndexBytes = createTableGauge("MemtableOnHeapIndexBytes", () ->((StorageAttachedIndex) sai).getIndexContext().estimatedOnHeapMemIndexMemoryUsed());
-            memtableOffHeapIndexBytes = createTableGauge("MemtableOffHeapIndexBytes", () -> ((StorageAttachedIndex) sai).getIndexContext().estimatedOffHeapMemIndexMemoryUsed());
-            liveMemtableIndexWriteCount = createTableGauge("LiveMemtableIndexWriteCount", () ->((StorageAttachedIndex) sai).getIndexContext().liveMemtableWriteCount());
-            diskUsedBytes = createTableGauge("DiskUsedBytes", () -> ((StorageAttachedIndex) sai).getIndexContext().diskUsage());
-            indexFileCacheBytes = createTableGauge("IndexFileCacheBytes", () ->((StorageAttachedIndex) sai).getIndexContext().indexFileCacheSize());
-        });
+        if (cfs.indexManager.hasIndexes()){
+            ArrayList<Index> listIndexes = (ArrayList<Index>) cfs.indexManager.listIndexes();
+            logger.debug("cfs.indexManager has {} indices", listIndexes.size());
+            for (Index indexFromList : listIndexes) {
+                String indexName = indexFromList.getIndexMetadata().name;
+                logger.debug("Considering index named {}...", indexName);
+                if (indexFromList instanceof StorageAttachedIndex){
+                    logger.debug("The index named {} is an SAI", indexName);
+
+                    logger.info("SAI metrics ({}, {}, {}, {}, {}, {}) are being logged for the SAI index named {}...", "SSTableCellCount", "MemtableOnHeapIndexBytes", "MemtableOffHeapIndexBytes", "LiveMemtableIndexWriteCount", "DiskUsedBytes", "IndexFileCacheBytes", indexName);
+                    ssTableCellCount = createTableGauge("SSTableCellCount", () -> ((StorageAttachedIndex) indexFromList).getIndexContext().getCellCount());
+                    memtableOnHeapIndexBytes = createTableGauge("MemtableOnHeapIndexBytes", () ->((StorageAttachedIndex) indexFromList).getIndexContext().estimatedOnHeapMemIndexMemoryUsed());
+                    memtableOffHeapIndexBytes = createTableGauge("MemtableOffHeapIndexBytes", () -> ((StorageAttachedIndex) indexFromList).getIndexContext().estimatedOffHeapMemIndexMemoryUsed());
+                    liveMemtableIndexWriteCount = createTableGauge("LiveMemtableIndexWriteCount", () ->((StorageAttachedIndex) indexFromList).getIndexContext().liveMemtableWriteCount());
+                    diskUsedBytes = createTableGauge("DiskUsedBytes", () -> ((StorageAttachedIndex) indexFromList).getIndexContext().diskUsage());
+                    indexFileCacheBytes = createTableGauge("IndexFileCacheBytes", () ->((StorageAttachedIndex) indexFromList).getIndexContext().indexFileCacheSize());
+                    logger.info("SAI metrics ({}, {}, {}, {}, {}, {}) have been logged for the SAI index named {}.", "SSTableCellCount", "MemtableOnHeapIndexBytes", "MemtableOffHeapIndexBytes", "LiveMemtableIndexWriteCount", "DiskUsedBytes", "IndexFileCacheBytes", indexName);
+                };
+            }
+        }
 
         oldVersionSSTableCount = createTableGauge("OldVersionSSTableCount", new Gauge<Integer>()
         {
