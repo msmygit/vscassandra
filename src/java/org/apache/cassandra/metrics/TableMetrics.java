@@ -21,6 +21,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -717,7 +718,7 @@ public class TableMetrics
 
         // Added SAI metrics
         if (cfs.indexManager.hasIndexes()){
-            ArrayList<Index> listIndexes = (ArrayList<Index>) cfs.indexManager.listIndexes();
+            Collection<Index> listIndexes = cfs.indexManager.listIndexes();
             logger.debug("cfs.indexManager has {} indices", listIndexes.size());
             for (Index indexFromList : listIndexes) {
                 String indexName = indexFromList.getIndexMetadata().name;
