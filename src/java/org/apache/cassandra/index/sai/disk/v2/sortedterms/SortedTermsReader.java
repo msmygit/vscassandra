@@ -115,15 +115,10 @@ public class SortedTermsReader
     {
         Preconditions.checkNotNull(term, "term null");
 
-        try (TrieRangeIterator reader = new TrieRangeIterator(termsTrie.instantiateRebufferer(),
-                                                              meta.trieFP,
-                                                              term,
-                                                              null,
-                                                              true,
-                                                              true))
+        try (TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(termsTrie.instantiateRebufferer(), meta.trieFP))
         {
-            final Iterator<Pair<ByteSource, Long>> iterator = reader.iterator();
-            return iterator.hasNext() ? iterator.next().right : NOT_FOUND;
+            long result = reader.ceiling(term);
+            return result < 0 ? NOT_FOUND : result;
         }
     }
 
@@ -154,9 +149,10 @@ public class SortedTermsReader
     {
         Preconditions.checkNotNull(term, "term null");
 
-        try (ReversedTrieRangeIterator reader = new ReversedTrieRangeIterator(termsTrie.instantiateRebufferer(), meta.trieFP, term, true))
+        try (TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(termsTrie.instantiateRebufferer(), meta.trieFP))
         {
-            return reader.nextId();
+            long result = reader.floor(term);
+            return result < 0 ? NOT_FOUND : result;
         }
     }
 

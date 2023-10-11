@@ -88,6 +88,61 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
     }
 
     @Test
+    public void testCeiling() throws Exception
+    {
+        long fp;
+        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, false))
+        {
+            writer.add(asByteComparable("ab"), 0);
+            writer.add(asByteComparable("abb"), 1);
+            writer.add(asByteComparable("abc"), 2);
+            writer.add(asByteComparable("abcd"), 3);
+            writer.add(asByteComparable("abd"), 4);
+            fp = writer.complete(new MutableLong());
+        }
+
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
+             TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
+        {
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("a")));
+            assertEquals(0, reader.ceiling(asByteComparable("ab")));
+            assertEquals(2, reader.ceiling(asByteComparable("abbb")));
+            assertEquals(2, reader.ceiling(asByteComparable("abc")));
+            assertEquals(3, reader.ceiling(asByteComparable("abca")));
+            assertEquals(1, reader.ceiling(asByteComparable("abb")));
+            assertEquals(2, reader.ceiling(asByteComparable("abba")));
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("abda")));
+        }
+    }
+
+    @Test
+    public void testFloor() throws Exception
+    {
+        long fp;
+        try (TrieTermsDictionaryWriter writer = new TrieTermsDictionaryWriter(indexDescriptor, indexContext, false))
+        {
+            writer.add(asByteComparable("ab"), 0);
+            writer.add(asByteComparable("abb"), 1);
+            writer.add(asByteComparable("abc"), 2);
+            writer.add(asByteComparable("abcd"), 3);
+            writer.add(asByteComparable("abd"), 4);
+            fp = writer.complete(new MutableLong());
+        }
+
+        try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
+             TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
+        {
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.floor(asByteComparable("a")));
+            assertEquals(0, reader.floor(asByteComparable("ab")));
+            assertEquals(2, reader.floor(asByteComparable("abc")));
+            assertEquals(1, reader.floor(asByteComparable("abca")));
+            assertEquals(1, reader.floor(asByteComparable("abb")));
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.floor(asByteComparable("abba")));
+            assertEquals(3, reader.floor(asByteComparable("abda")));
+        }
+    }
+
+    @Test
     public void testTermEnum() throws IOException
     {
         final List<ByteComparable> byteComparables = generateSortedByteComparables();

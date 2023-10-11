@@ -95,6 +95,30 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
         return getCurrentPayload();
     }
 
+    public long ceiling(ByteComparable key)
+    {
+        int b = followWithGreater(key);
+        if (b != ByteSource.END_OF_STREAM)
+        {
+            if (greaterBranch == -1)
+                return NOT_FOUND;
+            goMin(greaterBranch);
+        }
+        return getCurrentPayload();
+    }
+
+    public long floor(ByteComparable key)
+    {
+        int b = followWithLesser(key);
+        if (b != ByteSource.END_OF_STREAM)
+        {
+            if (lesserBranch == -1)
+                return NOT_FOUND;
+            goMax(lesserBranch);
+        }
+        return getCurrentPayload();
+    }
+
     public Iterator<Pair<ByteComparable, Long>> iterator()
     {
         return new AbstractIterator<Pair<ByteComparable, Long>>()
