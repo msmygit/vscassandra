@@ -20,6 +20,7 @@ package org.apache.cassandra.index.sai;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,9 +33,12 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.virtual.SimpleDataSet;
 import org.apache.cassandra.dht.AbstractBounds;
+import org.apache.cassandra.index.sai.disk.PrimaryKeyMapIterator;
 import org.apache.cassandra.index.sai.disk.SearchableIndex;
+import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.format.IndexFeatureSet;
 import org.apache.cassandra.index.sai.disk.format.Version;
+import org.apache.cassandra.index.sai.disk.v1.V1OnDiskFormat;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.index.sai.utils.RangeIterator;
@@ -144,7 +148,11 @@ public class SSTableIndex implements SegmentOrdering
                                       boolean defer,
                                       int limit) throws IOException
     {
-        return searchableIndex.search(expression, keyRange, context, defer, limit);
+        // for NEQ, NOT_CONTAINS_KEY, NOT_CONTAINS_VALUE we return everything
+        // and AntiJoin + post-filtering at the top level will filter out the unnecesary keys
+        return expression.getOp().isNonEquality()
+                ? allSSTableKeys(keyRange)
+                : searchableIndex.search(expression, keyRange, context, defer, limit);
     }
 
     public void populateSegmentView(SimpleDataSet dataSet)
@@ -239,4 +247,11 @@ public class SSTableIndex implements SegmentOrdering
                           .add("totalRows", sstable.getTotalRows())
                           .toString();
     }
+
+    protected final List<RangeIterator> allSSTableKeys(AbstractBounds<PartitionPosition> keyRange) throws IOException
+    {
+        PrimaryKeyMapIterator iterator = PrimaryKeyMapIterator.create(sstableContext, keyRange);
+        return Collections.singletonList(iterator);
+    }
+
 }

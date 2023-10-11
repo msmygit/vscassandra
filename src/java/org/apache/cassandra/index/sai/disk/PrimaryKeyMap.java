@@ -94,6 +94,11 @@ public interface PrimaryKeyMap extends Closeable
      */
     boolean isNotFound(long sstableRowId);
 
+    /**
+     * Returns the number of primary keys in the map
+     */
+    long count();
+
     @Override
     default void close() throws IOException
     {

@@ -104,13 +104,15 @@ public class Operation
                 switch (e.operator())
                 {
                     case EQ:
-                        // EQ operator will always be a multiple expression because it is being used by
+                        // EQ and NEQ operator will always be a multiple expression because it is being used by
                         // map entries
                         isMultiExpression = indexContext.isNonFrozenCollection();
                         break;
 
                     case CONTAINS:
                     case CONTAINS_KEY:
+                    case NOT_CONTAINS:
+                    case NOT_CONTAINS_KEY:
                     case LIKE_PREFIX:
                     case LIKE_MATCHES:
                     case ANALYZER_MATCHES:
@@ -200,6 +202,8 @@ public class Operation
                 return 2;
 
             case NEQ:
+            case NOT_CONTAINS:
+            case NOT_CONTAINS_KEY:
                 return 1;
 
             default:
