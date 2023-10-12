@@ -98,27 +98,33 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
     public long ceiling(ByteComparable key)
     {
         int b = followWithGreater(key);
-        if (b != ByteSource.END_OF_STREAM || getCurrentPayload() == NOT_FOUND)
+        // We use initialResult to save a call to getCurrentPayload(). This happens when the current node
+        // is equal to the key we're looking for.
+        long initialResult;
+        if (b != ByteSource.END_OF_STREAM || (initialResult = getCurrentPayload()) == NOT_FOUND)
         {
             if (greaterBranch == -1)
                 return NOT_FOUND;
             goMin(greaterBranch);
             return getCurrentPayload();
         }
-        return NOT_FOUND;
+        return initialResult;
     }
 
     public long floor(ByteComparable key)
     {
         int b = followWithLesser(key);
-        if (b != ByteSource.END_OF_STREAM || getCurrentPayload() == NOT_FOUND)
+        // We use initialResult to save a call to getCurrentPayload(). This happens when the current node
+        // is equal to the key we're looking for.
+        long initialResult;
+        if (b != ByteSource.END_OF_STREAM || (initialResult = getCurrentPayload()) == NOT_FOUND)
         {
             if (lesserBranch == -1)
                 return NOT_FOUND;
             goMax(lesserBranch);
             return getCurrentPayload();
         }
-        return NOT_FOUND;
+        return initialResult;
     }
 
     public Iterator<Pair<ByteComparable, Long>> iterator()
