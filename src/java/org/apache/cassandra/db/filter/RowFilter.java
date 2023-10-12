@@ -300,7 +300,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
 
         public void addMapEquality(ColumnMetadata def, ByteBuffer key, Operator op, ByteBuffer value)
         {
-            add(new MapEqualityExpression(def, key, op, value));
+            add(new MapComparisonExpression(def, key, op, value));
         }
 
         public void addCustomIndexExpression(TableMetadata metadata, IndexMetadata targetIndex, ByteBuffer value)
@@ -763,7 +763,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                         ByteBufferUtil.writeWithShortLength(expression.value, out);
                         break;
                     case MAP_EQUALITY:
-                        MapEqualityExpression mexpr = (MapEqualityExpression)expression;
+                        MapComparisonExpression mexpr = (MapComparisonExpression)expression;
                         ByteBufferUtil.writeWithShortLength(mexpr.key, out);
                         ByteBufferUtil.writeWithShortLength(mexpr.value, out);
                         break;
@@ -801,7 +801,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                     case MAP_EQUALITY:
                         ByteBuffer key = ByteBufferUtil.readWithShortLength(in);
                         ByteBuffer value = ByteBufferUtil.readWithShortLength(in);
-                        return new MapEqualityExpression(column, key, operator, value);
+                        return new MapComparisonExpression(column, key, operator, value);
                 }
                 throw new AssertionError();
             }
@@ -822,7 +822,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                         size += ByteBufferUtil.serializedSizeWithShortLength(((SimpleExpression)expression).value);
                         break;
                     case MAP_EQUALITY:
-                        MapEqualityExpression mexpr = (MapEqualityExpression)expression;
+                        MapComparisonExpression mexpr = (MapComparisonExpression)expression;
                         size += ByteBufferUtil.serializedSizeWithShortLength(mexpr.key)
                               + ByteBufferUtil.serializedSizeWithShortLength(mexpr.value);
                         break;
@@ -991,14 +991,14 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
      * An expression of the form 'column' ['key'] = 'value' (which is only
      * supported when 'column' is a map).
      */
-    public static class MapEqualityExpression extends Expression
+    public static class MapComparisonExpression extends Expression
     {
         private final ByteBuffer key;
 
-        public MapEqualityExpression(ColumnMetadata column, ByteBuffer key, Operator operator, ByteBuffer value)
+        public MapComparisonExpression(ColumnMetadata column, ByteBuffer key, Operator operator, ByteBuffer value)
         {
             super(column, operator, value);
-            assert column.type instanceof MapType && operator == Operator.EQ;
+            assert column.type instanceof MapType && (operator == Operator.EQ || operator.isSlice());
             this.key = key;
         }
 
@@ -1027,11 +1027,14 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
             if (row.isStatic() != column.isStatic())
                 return true;
 
+            int comp;
             MapType<?, ?> mt = (MapType<?, ?>)column.type;
             if (column.isComplex())
             {
                 Cell<?> cell = row.getCell(column, CellPath.create(key));
-                return cell != null && mt.valueComparator().compare(cell.buffer(), value) == 0;
+                if (cell == null)
+                    return false;
+                comp = mt.valueComparator().compare(cell.buffer(), value);
             }
             else
             {
@@ -1040,7 +1043,23 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
                     return false;
 
                 ByteBuffer foundValue = mt.getSerializer().getSerializedValue(serializedMap, key, mt.getKeysType());
-                return foundValue != null && mt.valueComparator().compare(foundValue, value) == 0;
+                if (foundValue == null)
+                    return false;
+                comp = mt.valueComparator().compare(foundValue, value);
+            }
+            switch (operator) {
+                case EQ:
+                    return comp == 0;
+                case LT:
+                    return comp < 0;
+                case LTE:
+                    return comp <= 0;
+                case GT:
+                    return comp > 0;
+                case GTE:
+                    return comp >= 0;
+                default:
+                    throw new AssertionError();
             }
         }
 
@@ -1057,10 +1076,10 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
             if (this == o)
                 return true;
 
-            if (!(o instanceof MapEqualityExpression))
+            if (!(o instanceof MapComparisonExpression))
                 return false;
 
-            MapEqualityExpression that = (MapEqualityExpression)o;
+            MapComparisonExpression that = (MapComparisonExpression)o;
 
             return Objects.equal(this.column.name, that.column.name)
                 && Objects.equal(this.operator, that.operator)

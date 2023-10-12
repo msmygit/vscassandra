@@ -442,6 +442,9 @@ public abstract class SingleColumnRestriction implements SingleRestriction
         }
     }
 
+    /**
+     * A slice restriction on a given key's value within a map.
+     */
     public static class MapSliceRestriction extends SingleColumnRestriction
     {
         private final Term key;
@@ -513,15 +516,20 @@ public abstract class SingleColumnRestriction implements SingleRestriction
         @Override
         public void addToRowFilter(RowFilter.Builder filter, IndexRegistry indexRegistry, QueryOptions options)
         {
-            for (Bound b : Bound.values())
-                if (hasBound(b))
-                    filter.add(columnDef, slice.getIndexOperator(b), slice.bound(b).bindAndGet(options));
+            // todo double bounded slices could be more efficient
+            var start = slice.bound(Bound.START);
+            if (start != null)
+                filter.addMapEquality(columnDef, key.bindAndGet(options), slice.isInclusive(Bound.START) ? Operator.GTE : Operator.GT, start.bindAndGet(options));
+            var end = slice.bound(Bound.END);
+            if (end != null)
+                filter.addMapEquality(columnDef, key.bindAndGet(options), slice.isInclusive(Bound.END) ? Operator.LTE : Operator.LT, end.bindAndGet(options));
         }
 
         @Override
         protected boolean isSupportedBy(Index index)
         {
-            return slice.isSupportedBy(columnDef, index);
+            // todo revisit
+            return true;
         }
 
         @Override
