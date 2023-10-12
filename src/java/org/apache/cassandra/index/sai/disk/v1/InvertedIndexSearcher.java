@@ -94,12 +94,21 @@ public class InvertedIndexSearcher extends IndexSearcher
         if (logger.isTraceEnabled())
             logger.trace(indexContext.logMessage("Searching on expression '{}'..."), exp);
 
-        if (!exp.getOp().isEquality() && exp.getOp() != Expression.Op.MATCH)
-            throw new IllegalArgumentException(indexContext.logMessage("Unsupported expression: " + exp));
-
-        final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
-        QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
-        return reader.exactMatch(term, listener, context);
+        if (exp.getOp().isEquality() || exp.getOp() == Expression.Op.MATCH)
+        {
+            final ByteComparable term = ByteComparable.fixedLength(exp.lower.value.encoded);
+            QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
+            return reader.exactMatch(term, listener, context);
+        }
+        else if (exp.getOp() == Expression.Op.RANGE)
+        {
+            // TODO how to get suffix for range inclusivity??
+            final ByteComparable lower = ByteComparable.fixedLength(exp.lower.value.encoded);
+            final ByteComparable upper = null;
+            QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
+            return reader.rangeMatch(lower, upper, listener, context);
+        }
+        throw new IllegalArgumentException("you failed");
     }
 
     @Override

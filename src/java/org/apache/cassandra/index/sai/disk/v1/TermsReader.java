@@ -35,6 +35,8 @@ import org.apache.cassandra.index.sai.disk.TermsIterator;
 import org.apache.cassandra.index.sai.disk.v1.postings.PostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.postings.ScanningPostingsReader;
 import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryReader;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsReader;
+import org.apache.cassandra.index.sai.disk.v2.sortedterms.TrieRangeIterator;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
@@ -125,6 +127,12 @@ public class TermsReader implements Closeable
         return new TermQuery(term, perQueryEventListener, context).execute();
     }
 
+    public PostingList rangeMatch(ByteComparable lower, ByteComparable upper, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
+    {
+        perQueryEventListener.onSegmentHit();
+        return new RangeQuery(lower, upper, perQueryEventListener, context).execute();
+    }
+
     @VisibleForTesting
     public class TermQuery
     {
@@ -201,6 +209,65 @@ public class TermsReader implements Closeable
 
             return new PostingsReader(postingsInput, header, listener.postingListEventListener());
         }
+    }
+
+    @VisibleForTesting
+    public class RangeQuery
+    {
+        private final IndexInput postingsInput;
+        private final IndexInput postingsSummaryInput;
+        private final QueryEventListener.TrieIndexEventListener listener;
+        private final long lookupStartTime;
+        private final QueryContext context;
+
+        private ByteComparable lower;
+        private ByteComparable upper;
+
+        RangeQuery(ByteComparable lower, ByteComparable upper, QueryEventListener.TrieIndexEventListener listener, QueryContext context)
+        {
+            this.listener = listener;
+            postingsInput = IndexFileUtils.instance.openInput(postingsFile);
+            postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
+            this.lower = lower;
+            this.upper = upper;
+            lookupStartTime = System.nanoTime();
+            this.context = context;
+        }
+
+        public PostingList execute()
+        {
+            try (TrieRangeIterator reader = new TrieRangeIterator(termDictionaryFile.instantiateRebufferer(), termDictionaryRoot, lower, upper,
+                                                                  false, false))
+            {
+                var iter = reader.iterator();
+                if (!iter.hasNext())
+                {
+                    FileUtils.closeQuietly(postingsInput);
+                    FileUtils.closeQuietly(postingsSummaryInput);
+                    return PostingList.EMPTY;
+                }
+
+                context.checkpoint();
+
+                return new PostingsReader(postingsInput, new PostingsReader.BlocksSummary(postingsSummaryInput, iter.next().right), listener.postingListEventListener());
+            }
+            catch (Throwable e)
+            {
+                //TODO Is there an equivalent of AOE in OS?
+                if (!(e instanceof AbortedOperationException))
+                    logger.error(indexContext.logMessage("Failed to execute term query"), e);
+
+                closeOnException();
+                throw Throwables.cleaned(e);
+            }
+        }
+
+        private void closeOnException()
+        {
+            FileUtils.closeQuietly(postingsInput);
+            FileUtils.closeQuietly(postingsSummaryInput);
+        }
+
     }
 
     // currently only used for testing

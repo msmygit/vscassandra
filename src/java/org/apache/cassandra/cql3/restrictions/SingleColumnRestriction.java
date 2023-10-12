@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.lang3.NotImplementedException;
+
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.*;
@@ -437,6 +439,95 @@ public abstract class SingleColumnRestriction implements SingleRestriction
         {
             super(columnDef);
             this.slice = slice;
+        }
+    }
+
+    public static class MapSliceRestriction extends SingleColumnRestriction
+    {
+        private final Term key;
+        private final TermSlice slice;
+
+        public MapSliceRestriction(ColumnMetadata columnDef, Bound bound, boolean inclusive, Term key, Term value)
+        {
+            super(columnDef);
+            this.key = key;
+            slice = TermSlice.newInstance(bound, inclusive, value);
+        }
+
+        @Override
+        public void addFunctionsTo(List<Function> functions)
+        {
+            slice.addFunctionsTo(functions);
+        }
+
+        @Override
+        MultiColumnRestriction toMultiColumnRestriction()
+        {
+            throw new NotImplementedException();
+        }
+
+        @Override
+        public boolean isSlice()
+        {
+            return true;
+        }
+
+        @Override
+        public MultiCBuilder appendTo(MultiCBuilder builder, QueryOptions options)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean hasBound(Bound b)
+        {
+            return slice.hasBound(b);
+        }
+
+        @Override
+        public MultiCBuilder appendBoundTo(MultiCBuilder builder, Bound bound, QueryOptions options)
+        {
+            Bound b = bound.reverseIfNeeded(getFirstColumn());
+
+            if (!hasBound(b))
+                return builder;
+
+            ByteBuffer value = slice.bound(b).bindAndGet(options);
+            checkBindValueSet(value, "Invalid unset value for column %s", columnDef.name);
+            return builder.addElementToAll(value);
+
+        }
+
+        @Override
+        public boolean isInclusive(Bound b)
+        {
+            return slice.isInclusive(b);
+        }
+
+        @Override
+        public SingleRestriction doMergeWith(SingleRestriction otherRestriction)
+        {
+            throw new NotImplementedException();
+        }
+
+        @Override
+        public void addToRowFilter(RowFilter.Builder filter, IndexRegistry indexRegistry, QueryOptions options)
+        {
+            for (Bound b : Bound.values())
+                if (hasBound(b))
+                    filter.add(columnDef, slice.getIndexOperator(b), slice.bound(b).bindAndGet(options));
+        }
+
+        @Override
+        protected boolean isSupportedBy(Index index)
+        {
+            return slice.isSupportedBy(columnDef, index);
+        }
+
+        @Override
+        public String toString()
+        {
+            return String.format("MAP_SLICE%s", slice);
         }
     }
 

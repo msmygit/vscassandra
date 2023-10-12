@@ -455,7 +455,8 @@ public class IndexContext
         {
             if (indexType == IndexTarget.Type.KEYS) return operator == Expression.Op.CONTAINS_KEY;
             if (indexType == IndexTarget.Type.VALUES) return operator == Expression.Op.CONTAINS_VALUE;
-            return indexType == IndexTarget.Type.KEYS_AND_VALUES && operator == Expression.Op.EQ;
+            return indexType == IndexTarget.Type.KEYS_AND_VALUES
+                   && (operator == Expression.Op.EQ || operator == Expression.Op.RANGE);
         }
 
         if (indexType == IndexTarget.Type.FULL)

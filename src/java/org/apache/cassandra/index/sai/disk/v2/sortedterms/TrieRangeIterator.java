@@ -39,7 +39,7 @@ import org.apache.cassandra.utils.bytecomparable.ByteSource;
  * The payload may be changed to something else.
  */
 @NotThreadSafe
-class TrieRangeIterator extends Walker<TrieRangeIterator>
+public class TrieRangeIterator extends Walker<TrieRangeIterator>
 {
     private final ByteSource limit;
     private final TrieTermsDictionaryReader.TransitionBytesCollector collector = new TrieTermsDictionaryReader.TransitionBytesCollector();
