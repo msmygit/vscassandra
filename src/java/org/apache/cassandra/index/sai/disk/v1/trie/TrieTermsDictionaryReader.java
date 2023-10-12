@@ -103,8 +103,9 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
             if (greaterBranch == -1)
                 return NOT_FOUND;
             goMin(greaterBranch);
+            return getCurrentPayload();
         }
-        return getCurrentPayload();
+        return NOT_FOUND;
     }
 
     public long floor(ByteComparable key)
@@ -115,8 +116,9 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
             if (lesserBranch == -1)
                 return NOT_FOUND;
             goMax(lesserBranch);
+            return getCurrentPayload();
         }
-        return getCurrentPayload();
+        return NOT_FOUND;
     }
 
     public Iterator<Pair<ByteComparable, Long>> iterator()
