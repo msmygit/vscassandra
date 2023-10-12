@@ -38,6 +38,7 @@ import org.apache.cassandra.index.sai.disk.v1.trie.TrieTermsDictionaryReader;
 import org.apache.cassandra.index.sai.disk.v2.sortedterms.SortedTermsReader;
 import org.apache.cassandra.index.sai.disk.v2.sortedterms.TrieRangeIterator;
 import org.apache.cassandra.index.sai.metrics.QueryEventListener;
+import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.AbortedOperationException;
 import org.apache.cassandra.index.sai.utils.IndexFileUtils;
 import org.apache.cassandra.io.util.FileHandle;
@@ -127,10 +128,10 @@ public class TermsReader implements Closeable
         return new TermQuery(term, perQueryEventListener, context).execute();
     }
 
-    public PostingList rangeMatch(ByteComparable lower, ByteComparable upper, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
+    public PostingList rangeMatch(Expression exp, QueryEventListener.TrieIndexEventListener perQueryEventListener, QueryContext context)
     {
         perQueryEventListener.onSegmentHit();
-        return new RangeQuery(lower, upper, perQueryEventListener, context).execute();
+        return new RangeQuery(exp, perQueryEventListener, context).execute();
     }
 
     @VisibleForTesting
@@ -220,24 +221,28 @@ public class TermsReader implements Closeable
         private final long lookupStartTime;
         private final QueryContext context;
 
-        private ByteComparable lower;
-        private ByteComparable upper;
+        private Expression exp;
 
-        RangeQuery(ByteComparable lower, ByteComparable upper, QueryEventListener.TrieIndexEventListener listener, QueryContext context)
+        RangeQuery(Expression exp, QueryEventListener.TrieIndexEventListener listener, QueryContext context)
         {
             this.listener = listener;
             postingsInput = IndexFileUtils.instance.openInput(postingsFile);
             postingsSummaryInput = IndexFileUtils.instance.openInput(postingsFile);
-            this.lower = lower;
-            this.upper = upper;
+            this.exp = exp;
             lookupStartTime = System.nanoTime();
             this.context = context;
         }
 
         public PostingList execute()
         {
-            try (TrieRangeIterator reader = new TrieRangeIterator(termDictionaryFile.instantiateRebufferer(), termDictionaryRoot, lower, upper,
-                                                                  false, false))
+            final ByteComparable lower = exp.lower != null ? ByteComparable.fixedLength(exp.lower.value.encoded) : null;
+            final ByteComparable upper = exp.upper != null ? ByteComparable.fixedLength(exp.upper.value.encoded) : null;
+            try (TrieRangeIterator reader = new TrieRangeIterator(termDictionaryFile.instantiateRebufferer(),
+                                                                  termDictionaryRoot,
+                                                                  lower,
+                                                                  upper,
+                                                                  exp.lowerInclusive,
+                                                                  exp.upperInclusive))
             {
                 var iter = reader.iterator();
                 if (!iter.hasNext())

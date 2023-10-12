@@ -1067,7 +1067,7 @@ public abstract class RowFilter implements Iterable<RowFilter.Expression>
         public String toString()
         {
             MapType<?, ?> mt = (MapType<?, ?>)column.type;
-            return String.format("%s[%s] = %s", column.name, mt.nameComparator().getString(key), mt.valueComparator().getString(value));
+            return String.format("%s[%s] %s %s", column.name, mt.nameComparator().getString(key), operator, mt.valueComparator().getString(value));
         }
 
         @Override

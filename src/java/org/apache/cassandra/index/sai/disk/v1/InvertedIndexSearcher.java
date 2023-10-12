@@ -102,11 +102,8 @@ public class InvertedIndexSearcher extends IndexSearcher
         }
         else if (exp.getOp() == Expression.Op.RANGE)
         {
-            // TODO how to get suffix for range inclusivity??
-            final ByteComparable lower = ByteComparable.fixedLength(exp.lower.value.encoded);
-            final ByteComparable upper = null;
             QueryEventListener.TrieIndexEventListener listener = MulticastQueryEventListeners.of(context, perColumnEventListener);
-            return reader.rangeMatch(lower, upper, listener, context);
+            return reader.rangeMatch(exp, listener, context);
         }
         throw new IllegalArgumentException("you failed");
     }
