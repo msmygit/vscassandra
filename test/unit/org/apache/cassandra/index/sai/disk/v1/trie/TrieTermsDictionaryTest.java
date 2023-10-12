@@ -98,20 +98,25 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
             writer.add(asByteComparable("abc"), 2);
             writer.add(asByteComparable("abcd"), 3);
             writer.add(asByteComparable("abd"), 4);
+            writer.add(asByteComparable("cbbb"), 5);
             fp = writer.complete(new MutableLong());
         }
 
         try (FileHandle input = indexDescriptor.createPerIndexFileHandle(IndexComponent.TERMS_DATA, indexContext);
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
-            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("a")));
+            assertEquals(0, reader.ceiling(asByteComparable("A")));
+            assertEquals(0, reader.ceiling(asByteComparable("a")));
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("z")));
             assertEquals(0, reader.ceiling(asByteComparable("ab")));
             assertEquals(2, reader.ceiling(asByteComparable("abbb")));
             assertEquals(2, reader.ceiling(asByteComparable("abc")));
             assertEquals(3, reader.ceiling(asByteComparable("abca")));
             assertEquals(1, reader.ceiling(asByteComparable("abb")));
             assertEquals(2, reader.ceiling(asByteComparable("abba")));
-            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("abda")));
+            assertEquals(5, reader.ceiling(asByteComparable("cb")));
+            assertEquals(5, reader.ceiling(asByteComparable("c")));
+            assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.ceiling(asByteComparable("cbbbb")));
         }
     }
 
@@ -126,6 +131,7 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
             writer.add(asByteComparable("abc"), 2);
             writer.add(asByteComparable("abcd"), 3);
             writer.add(asByteComparable("abd"), 4);
+            writer.add(asByteComparable("ca"), 5);
             fp = writer.complete(new MutableLong());
         }
 
@@ -133,12 +139,14 @@ public class TrieTermsDictionaryTest extends SaiRandomizedTest
              TrieTermsDictionaryReader reader = new TrieTermsDictionaryReader(input.instantiateRebufferer(), fp))
         {
             assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.floor(asByteComparable("a")));
+            assertEquals(5, reader.floor(asByteComparable("z")));
             assertEquals(0, reader.floor(asByteComparable("ab")));
             assertEquals(2, reader.floor(asByteComparable("abc")));
             assertEquals(1, reader.floor(asByteComparable("abca")));
             assertEquals(1, reader.floor(asByteComparable("abb")));
             assertEquals(TrieTermsDictionaryReader.NOT_FOUND, reader.floor(asByteComparable("abba")));
             assertEquals(3, reader.floor(asByteComparable("abda")));
+            assertEquals(4, reader.floor(asByteComparable("c")));
         }
     }
 

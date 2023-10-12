@@ -98,7 +98,7 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
     public long ceiling(ByteComparable key)
     {
         int b = followWithGreater(key);
-        if (b != ByteSource.END_OF_STREAM)
+        if (b != ByteSource.END_OF_STREAM || getCurrentPayload() == NOT_FOUND)
         {
             if (greaterBranch == -1)
                 return NOT_FOUND;
@@ -110,7 +110,7 @@ public class TrieTermsDictionaryReader extends Walker<TrieTermsDictionaryReader>
     public long floor(ByteComparable key)
     {
         int b = followWithLesser(key);
-        if (b != ByteSource.END_OF_STREAM)
+        if (b != ByteSource.END_OF_STREAM || getCurrentPayload() == NOT_FOUND)
         {
             if (lesserBranch == -1)
                 return NOT_FOUND;
