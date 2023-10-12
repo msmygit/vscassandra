@@ -52,5 +52,11 @@ public class EntriesIndexTest extends SAITester
         execute("INSERT INTO %s (partition, item_cost) VALUES (3, {'apple': 1, 'orange': 3})");
 
         assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] > 0"), row(1), row(2), row(3));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] >= 1"), row(1), row(2), row(3));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] > 1"), row(2));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] > 2"));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] < 2"), row(1), row(3));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] <= 1"), row(1), row(3));
+        assertRows(execute("SELECT partition FROM %s WHERE item_cost['apple'] < 1"));
     }
 }
