@@ -26,18 +26,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import org.apache.commons.lang3.tuple.Triple;
 
+import org.apache.cassandra.concurrent.Stage;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
@@ -51,7 +51,6 @@ import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator;
 import org.apache.cassandra.db.rows.BaseRowIterator;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
-import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.SecondaryIndexManager;
 import org.apache.cassandra.index.sai.IndexContext;
@@ -80,15 +79,8 @@ import org.apache.cassandra.utils.Pair;
  */
 public class VectorTopKProcessor
 {
-
-    final static int numThreads = 2 * Runtime.getRuntime().availableProcessors();
-
-    final static ForkJoinPool customPool = new ForkJoinPool(numThreads);
-
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(customPool::shutdownNow));
-    }
-
+    private static final Stage PARALLEL_STAGE = Strings.isNullOrEmpty(System.getProperty("use_read_for_index_stage"))
+                                          ? Stage.INDEX_READ : Stage.READ;
     private final ReadCommand command;
     private final IndexContext indexContext;
     private final float[] queryVector;
@@ -123,21 +115,30 @@ public class VectorTopKProcessor
         if (partitions instanceof ParallelizablePartitionIterator) {
             ParallelizablePartitionIterator pIter = (ParallelizablePartitionIterator) partitions;
             var commands = pIter.getUninitializedCommands();
-            customPool.submit(() -> {
-                var listOfListOfTriples = commands.parallelStream()
-                          .map(tuple -> {
-                              try (var part = pIter.commandToIterator(tuple.left(), tuple.right()))
-                              {
-                                  if (part == null) return null;
-                                  return processPart(part, unfilteredByPartition, topK, true);
-                              }
-                          })
-                          .filter(Objects::nonNull)
-                          .collect(Collectors.toList());
-                for (var triples: listOfListOfTriples) {
-                    moveToPq(topK, triples);
-                }
-            }).join();
+            List<CompletableFuture<List<Triple<PartitionInfo, Row, Float>>>> results = new LinkedList<>();
+
+            for (var command: commands) {
+                CompletableFuture<List<Triple<PartitionInfo, Row, Float>>> future = new CompletableFuture<>();
+                results.add(future);
+
+                PARALLEL_STAGE.maybeExecuteImmediately(() -> {
+                    try (var part = pIter.commandToIterator(command.left(), command.right()))
+                    {
+                        future.complete(part == null ? null : processPart(part, unfilteredByPartition, topK, true));
+                    }
+                    catch (Throwable t)
+                    {
+                        future.completeExceptionally(t);
+                    }
+                });
+            }
+
+            for (var triplesFuture: results) {
+                var triples = triplesFuture.join();
+                if (triples == null)
+                    continue;
+                moveToPq(topK, triples);
+            }
         } else {
             // FilteredPartitions does implement ParallelizablePartitionIterator.
             // Realistically, this won't benefit from parallelizm as these are coming from in-memory/memetable data.
