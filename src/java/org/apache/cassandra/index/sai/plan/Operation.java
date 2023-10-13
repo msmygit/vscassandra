@@ -211,7 +211,8 @@ public class Operation
         var orderings = controller.filterOperation().expressions()
                                   .stream().filter(e -> e.operator() == Operator.ANN).collect(Collectors.toList());
         assert orderings.size() <= 1;
-        if (controller.filterOperation().expressions().size() == 1 && orderings.size() == 1)
+        var filterOperation = controller.filterOperation();
+        if (filterOperation.expressions().size() == 1 && filterOperation.children().isEmpty() && orderings.size() == 1)
             // If we only have one expression, we just use the ANN index to order and limit.
             return controller.getTopKRows(orderings.get(0));
         var iter = Node.buildTree(controller.filterOperation()).analyzeTree(controller).rangeIterator(controller);
@@ -259,7 +260,11 @@ public class Operation
         {
             OperatorNode node = filterOperation.isDisjunction() ? new OrNode() : new AndNode();
             for (RowFilter.Expression expression : filterOperation.expressions())
+            {
+                if (expression.operator() == Operator.ANN)
+                    continue;
                 node.add(buildExpression(expression));
+            }
             for (RowFilter.FilterElement child : filterOperation.children())
                 node.add(buildTree(child));
             return node;
