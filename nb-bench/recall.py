@@ -75,7 +75,7 @@ test_cycles_map = {
     "deep1b": 10000
 }
 
-nb5_path = os.path.join(library_dir, "./nb5")
+nb5_path = os.path.join(library_dir, "./nb5.jar")
 yaml_path = os.path.join(library_dir, "ann_benchmarks.yaml")
 username = "cassandra"
 password = "cassandra"
@@ -98,7 +98,9 @@ def get_label_map(dataset: str, workload_configs: dict) -> dict:
 
 def run_nosqlbench_cmd(config: NoSQLBenchConfig, output_dir: Optional[str] = None):
     cmd = []
-    cmd.append(f"{nb5_path}")
+    cmd.append("java")
+    cmd.append("-jar")
+    cmd.append(nb5_path)
     cmd.append("start")
     cmd.append(f"host={config.host}")
     cmd.append(f"localdc={config.localdc}")
@@ -132,7 +134,8 @@ def run_nosqlbench_cmd(config: NoSQLBenchConfig, output_dir: Optional[str] = Non
     output_file_name += ".log"
     nb_output_path = os.path.join(output_dir, output_file_name)
 
-    print(f"cmd: {cmd}")
+    cmd_str = " ".join(cmd)
+    print(f"cmd: {cmd_str}")
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True) as proc:
         try:
             for line in iter(proc.stdout.readline, ''):

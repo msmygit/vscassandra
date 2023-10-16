@@ -1,8 +1,9 @@
 #!/bin/bash
 
-if [ ! -e "nb5" ]; then
-    curl -OL https://github.com/nosqlbench/nosqlbench/releases/download/5.17.5-preview/nb5
-    chmod +x ./nb5
+if [ ! -e "library/nb5.jar" ]; then
+    cd library 
+    curl -OL https://github.com/nosqlbench/nosqlbench/releases/download/5.17.5-preview/nb5.jar
+    cd ../
 fi
 
 if [ ! -d "testdata" ]; then
