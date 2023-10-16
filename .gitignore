@@ -84,3 +84,8 @@ venv/
 # build-scripts will put cassandra-builds into the directory
 cassandra-builds/
 cassandra-dtest/
+
+*.hdf5
+nb5
+testdata/
+nb-bench/artifacts
